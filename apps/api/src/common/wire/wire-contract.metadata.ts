@@ -8,4 +8,5 @@ export type RequestContract = ZodType<unknown> | 'class-dto';
 export interface WireContract {
   readonly request: Partial<Record<RequestPart, RequestContract>>;
   readonly response?: ZodType<unknown>;
+  readonly sse?: ZodType<unknown>;
 }

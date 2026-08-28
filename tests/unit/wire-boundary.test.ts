@@ -1,12 +1,13 @@
 import { request } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Body, Controller, Module, Post } from '@nestjs/common';
+import { Body, Controller, Module, Post, Sse } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { IsString } from 'class-validator';
+import { of } from 'rxjs';
 import { z } from 'zod';
 import { ZodRequestPipe } from '../../apps/api/src/common/wire/zod-request.pipe';
 import { ApiWireBoundaryMiddleware } from '../../apps/api/src/common/wire/api-wire-boundary.middleware';
-import { ClassDtoBody, ZodBody, ZodResponse, createSsePublisher, validateSseEnvelope } from '../../apps/api/src/common/wire/zod.decorators';
+import { ClassDtoBody, ZodBody, ZodResponse, ZodSseEnvelope, createSsePublisher, validateSseEnvelope } from '../../apps/api/src/common/wire/zod.decorators';
 import { configureApiApplication } from '../../apps/api/src/main';
 
 describe('ZodRequestPipe', () => {
@@ -73,6 +74,18 @@ class WireTestController {
   public classDto(body: TestDto): TestDto {
     return body;
   }
+
+  public validSse() {
+    return of({ data: { id: 'event-1', streamId: 'run-1', type: 'progress', timestamp: '2026-08-28T15:00:00.000Z', version: 1, payload: {} } });
+  }
+
+  public invalidSse() {
+    return of({ data: { id: 'event-1', streamId: 'run-1', type: 'progress', timestamp: '2026-08-28T15:00:00.000Z', version: 1, payload: {}, hidden: true } });
+  }
+
+  public undecoratedSse() {
+    return of({ data: { id: 'event-1', streamId: 'run-1', type: 'progress', timestamp: '2026-08-28T15:00:00.000Z', version: 1, payload: {} } });
+  }
 }
 
 class TestDto {
@@ -98,6 +111,15 @@ ZodResponse(payloadSchema)(WireTestController.prototype, 'classDto', classDtoDes
 ClassDtoBody()(WireTestController.prototype, 'classDto', 0);
 Reflect.defineMetadata('design:paramtypes', [TestDto], WireTestController.prototype, 'classDto');
 IsString()(TestDto.prototype, 'id');
+for (const [method, path, schema] of [
+  ['validSse', 'sse-valid', true],
+  ['invalidSse', 'sse-invalid', true],
+  ['undecoratedSse', 'sse-undecorated', false]
+] as const) {
+  const descriptor = Object.getOwnPropertyDescriptor(WireTestController.prototype, method)!;
+  Sse(path)(WireTestController.prototype, method, descriptor);
+  if (schema) ZodSseEnvelope()(WireTestController.prototype, method, descriptor);
+}
 Module({ controllers: [WireTestController] })(WireTestModule);
 
 describe('configured API wire boundary', () => {
@@ -160,6 +182,25 @@ describe('configured API wire boundary', () => {
     const invalidEncoding = await requestWithHeaders(`${baseUrl}/wire-test/echo`, '{"id":"run-1"}', { 'content-type': 'application/json', 'content-encoding': 'gzip' });
     expect(invalidEncoding.statusCode).toBe(400);
     expect(JSON.parse(invalidEncoding.body)).toMatchObject({ code: 'INVALID_REQUEST' });
+  });
+
+  it('passes a valid explicitly declared SSE envelope through the HTTP stream', async () => {
+    const response = await fetch(`${baseUrl}/wire-test/sse-valid`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    await expect(response.text()).resolves.toContain('"id":"event-1"');
+  });
+
+  it('fails an invalid SSE envelope before it reaches the response', async () => {
+    const response = await fetch(`${baseUrl}/wire-test/sse-invalid`);
+    expect(response.status).toBe(500);
+    await expect(response.text()).resolves.not.toContain('"id":"event-1"');
+  });
+
+  it('fails a @Sse handler closed when its envelope schema is undeclared', async () => {
+    const response = await fetch(`${baseUrl}/wire-test/sse-undecorated`);
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({ code: 'WIRE_SCHEMA_REQUIRED' });
   });
 });
 

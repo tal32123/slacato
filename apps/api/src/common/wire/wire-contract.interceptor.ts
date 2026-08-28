@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, InternalServerErrorException, type CallHandler, type ExecutionContext, type NestInterceptor } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { SSE_METADATA } from '@nestjs/common/constants';
 import { map, type Observable } from 'rxjs';
 import { WIRE_CONTRACT_METADATA, type RequestContract, type RequestPart, type WireContract } from './wire-contract.metadata.js';
 
@@ -20,6 +21,13 @@ export class WireContractInterceptor implements NestInterceptor<unknown, unknown
 
     for (const part of ['body', 'query', 'params'] as const) this.validateRequestPart(part, request[part], contract?.request[part]);
 
+    if (this.reflector.get<boolean>(SSE_METADATA, context.getHandler())) {
+      if (!contract?.sse) {
+        throw new InternalServerErrorException({ code: 'WIRE_SCHEMA_REQUIRED', message: 'SSE envelope schema is required' });
+      }
+      return next.handle().pipe(map((emitted) => this.validateSseEnvelope(emitted, contract.sse!)));
+    }
+
     return next.handle().pipe(map((payload) => {
       if (!contract?.response) {
         throw new InternalServerErrorException({ code: 'WIRE_SCHEMA_REQUIRED', message: 'Controller response schema is required' });
@@ -28,6 +36,16 @@ export class WireContractInterceptor implements NestInterceptor<unknown, unknown
       if (result.success) return result.data;
       throw new InternalServerErrorException({ code: 'INVALID_RESPONSE', message: 'Response validation failed' });
     }));
+  }
+
+  private validateSseEnvelope(emitted: unknown, schema: Exclude<WireContract['sse'], undefined>): unknown {
+    const message = asRecord(emitted);
+    const envelope = message?.data ?? emitted;
+    const result = schema.safeParse(envelope);
+    if (!result.success) {
+      throw new InternalServerErrorException({ code: 'INVALID_SSE_ENVELOPE', message: 'SSE envelope validation failed' });
+    }
+    return message ? { ...message, data: result.data } : result.data;
   }
 
   private validateRequestPart(part: RequestPart, value: unknown, declaration: RequestContract | undefined): void {
@@ -50,4 +68,8 @@ function hasValues(value: unknown): boolean {
   if (value === undefined || value === null) return false;
   if (typeof value !== 'object') return true;
   return Object.keys(value).length > 0;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }

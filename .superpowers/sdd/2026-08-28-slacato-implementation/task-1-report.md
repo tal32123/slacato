@@ -194,3 +194,44 @@ Observed GREEN output: ESLint and project type checking exited 0; Vitest reporte
 - Verified the configured HTTP test application uses the same `configureApiApplication` path as production, so middleware, parser filter, global Zod contract enforcement, and class fallback are all exercised on actual requests.
 - Verified every installed shadcn semantic utility token is registered, including popover values used by dialog/select/dropdown primitives.
 - The SSE primitive is intentionally a reusable transport boundary awaiting Task 10; Task 1 does not introduce a business SSE stream.
+
+## Review Fix Round 3/5
+
+### RED → GREEN evidence
+
+Added actual Nest `@Sse()` handlers to the configured HTTP test controller before implementation: one with a valid declared envelope, one emitting an invalid envelope, and one with no envelope declaration.
+
+RED command:
+
+```bash
+pnpm vitest run tests/unit/wire-boundary.test.ts
+```
+
+Observed RED output: the first run failed because the test-only RxJS dependency was absent; after adding the test dependency, the focused command failed with `TypeError: ZodSseEnvelope is not a function`. This confirmed the global boundary had no mandatory SSE metadata path.
+
+GREEN command:
+
+```bash
+pnpm vitest run tests/unit/wire-boundary.test.ts
+```
+
+Observed GREEN output: `1 passed` file, `13 passed` tests.
+
+### Fixes applied
+
+- Extended the shared wire-contract metadata with an explicit SSE envelope schema and added `ZodSseEnvelope`.
+- The global `WireContractInterceptor` now detects Nest's `SSE_METADATA`. It requires a declared envelope schema for every `@Sse()` handler, validates each emitted `MessageEvent.data` before Nest serializes it, and rejects invalid envelopes with `INVALID_SSE_ENVELOPE`.
+- Normal HTTP response validation is preserved on non-SSE handlers. No business stream or Task 10 run event was added.
+
+### Round verification
+
+```bash
+pnpm lint && pnpm typecheck && pnpm vitest run && pnpm build
+```
+
+Observed GREEN output: ESLint and project type checking exited 0; Vitest reported `6 passed` files and `21 passed` tests; recursive web, API, worker, contracts, core, and infrastructure builds exited 0; `git diff --check` exited 0.
+
+### Round self-review and concerns
+
+- Valid SSE test output contains the validated envelope; invalid envelope output contains no validated event data; an undeclared SSE handler returns typed `WIRE_SCHEMA_REQUIRED` before a stream opens.
+- The global interceptor uses Nest's public `SSE_METADATA` constant rather than route-name conventions.

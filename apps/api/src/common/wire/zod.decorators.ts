@@ -20,7 +20,22 @@ export const ZodResponse = <TOutput>(schema: ZodType<TOutput>): MethodDecorator 
   const handler = descriptor.value;
   if (!handler) throw new TypeError('ZodResponse requires a method descriptor');
   const existing = Reflect.getMetadata(WIRE_CONTRACT_METADATA, handler) as WireContract | undefined;
-  Reflect.defineMetadata(WIRE_CONTRACT_METADATA, { request: existing?.request ?? {}, response: schema } satisfies WireContract, handler);
+  const contract: WireContract = existing?.sse
+    ? { request: existing.request, response: schema, sse: existing.sse }
+    : { request: existing?.request ?? {}, response: schema };
+  Reflect.defineMetadata(WIRE_CONTRACT_METADATA, contract, handler);
+  return descriptor;
+};
+
+/** Declares the envelope schema required by the global interceptor for a Nest @Sse handler. */
+export const ZodSseEnvelope = (schema: ZodType<unknown> = sseEnvelopeSchema): MethodDecorator => (target, propertyKey, descriptor) => {
+  const handler = descriptor.value;
+  if (!handler) throw new TypeError('ZodSseEnvelope requires a method descriptor');
+  const existing = Reflect.getMetadata(WIRE_CONTRACT_METADATA, handler) as WireContract | undefined;
+  const contract: WireContract = existing?.response
+    ? { request: existing.request, response: existing.response, sse: schema }
+    : { request: existing?.request ?? {}, sse: schema };
+  Reflect.defineMetadata(WIRE_CONTRACT_METADATA, contract, handler);
   return descriptor;
 };
 
@@ -37,7 +52,9 @@ function requestPart(part: RequestPart, declaration: RequestContract, nestDecora
     if (typeof handler !== 'function') throw new TypeError('Wire request schemas require a controller method');
     const existing = Reflect.getMetadata(WIRE_CONTRACT_METADATA, handler) as WireContract | undefined;
     const request = { ...existing?.request, [part]: declaration };
-    const nextContract: WireContract = existing?.response ? { request, response: existing.response } : { request };
+    const nextContract: WireContract = existing?.response
+      ? existing.sse ? { request, response: existing.response, sse: existing.sse } : { request, response: existing.response }
+      : existing?.sse ? { request, sse: existing.sse } : { request };
     Reflect.defineMetadata(WIRE_CONTRACT_METADATA, nextContract, handler);
     nestDecorator(target, propertyKey, parameterIndex);
   };
