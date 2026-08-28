@@ -19,7 +19,7 @@
 - Slack influences collaboration patterns only; do not copy Slack marks or trade dress.
 - Enforce authorization before retrieval, prompting, citation resolution, logging, and rendering; unauthorized responses reveal no hidden counts or metadata.
 - Persist run IDs before model calls and persist every attempt, usage record, validated artifact, checkpoint, approval, and final brief.
-- Default to Ollama Cloud with server-only credentials; provider and transport modules contain no Cato or sales rules. Probe chat, embedding, dimension, and native structured-output capabilities before schema/migration work.
+- Default initial-release development/demo mode to the deterministic mock provider; provider and transport modules contain no Cato or sales rules. Ollama stays a server-only, credentialed production-AI gate and must not be claimed compatible until its live probe succeeds.
 - Stream safe workflow progress and completed validated sections over SSE; never stream or store raw chain of thought.
 - Embedding model is deployment configuration and cannot be changed in the UI.
 - Part 1 uses PostgreSQL FTS, exact cosine over the authorized pgvector subset, and RRF; HNSW, pg_trgm, and cross-encoder reranking remain deferred until baseline metrics justify them.
@@ -66,7 +66,7 @@ tests/{unit,integration,contract,e2e}/**
 
 ## Binding Execution Order and Review Decisions
 
-Task numbers below remain stable references, but execution MUST follow this dependency order: **1 → 2 → 7 → 3 → 4 → 5 → 6 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17**. Task 7's compatibility probe pins the embedding dimension before Task 3 creates the vector migration; Task 4 ingests records only and Task 6 creates embeddings/indexes.
+Task numbers below remain stable references, but execution MUST follow this dependency order: **1 → 2 → 7 → 3 → 4 → 5 → 6 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17**. Task 7's mock profile enables development/demo work; Task 3 must use a dimension-flexible vector column and persist profile metadata rather than pinning its typmod to mock or unverified live dimensions. Task 4 ingests records only and Task 6 creates embeddings/indexes.
 
 The architecture, AI/RAG, and UI/UX reviews resolved these choices: NestJS plus BullMQ and a PostgreSQL transactional outbox instead of in-request work or a general workflow platform; exact authorized vector search instead of HNSW; capability-aware native schema or prompted-JSON generation; immutable versioned approval subjects; provider-neutral context budgeting; read-only diagnostics instead of model/theme controls; and mandatory live artifacts before packaging.
 
@@ -246,7 +246,7 @@ Expected: FAIL because tables do not exist.
 
 - [ ] **Step 3: Implement schema and migration**
 
-Create the `vector` extension. Add normalized tables for personas, permission grants, accounts, opportunities, contacts, immutable document/evidence versions, immutable run evidence manifests, runs, outbox commands, leased step invocations, checkpoints, generation attempts, context checkpoints, specialist artifacts, claims, citations, approval subjects/decisions, briefs, trace spans, run events, and audit events. Task 7's live probe pins the embedding model and dimension in `docs/compatibility.md` before this migration. Use a generated `tsvector`; exact cosine needs no HNSW index for this fixture-sized corpus.
+Create the `vector` extension. Add normalized tables for personas, permission grants, accounts, opportunities, contacts, immutable document/evidence versions, immutable run evidence manifests, runs, outbox commands, leased step invocations, checkpoints, generation attempts, context checkpoints, specialist artifacts, claims, citations, approval subjects/decisions, briefs, trace spans, run events, and audit events. Use a dimension-flexible vector column and persist provider/model/dimension/profile metadata; reject mixed-profile comparisons in application invariants. Do not pin a pgvector typmod to the mock profile or an unverified Ollama dimension. Use a generated `tsvector`; exact cosine needs no HNSW index for this fixture-sized corpus. A later real-model activation requires full re-embedding and an explicit pre-production migration/operational gate.
 
 - [ ] **Step 4: Implement repository adapters with transactions and idempotency keys**
 
@@ -436,7 +436,7 @@ it('returns Zod issues to the model before succeeding', async () => {
 
 - [ ] **Step 3: Implement Ollama Cloud registry**
 
-Create `createOllama({ baseURL: env.OLLAMA_BASE_URL, headers: { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } })`. Compile against the pinned AI SDK 7/provider tuple and its actual embedding factory. Register language and embedding aliases centrally; do not hardcode model IDs outside configuration. A live probe records exact model IDs, embedding dimension/normalization, and native schema support in `docs/compatibility.md`; it must pass before Task 3.
+Create the deterministic mock provider as the initial-release default and `createOllama({ baseURL: env.OLLAMA_BASE_URL, headers: { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } })` as the strictly configured production-AI mode. Compile Ollama against the pinned AI SDK 7/provider tuple and its actual embedding factory. Register aliases centrally; mock aliases are explicit `mock-*` IDs and must not be confused with live capability metadata. A live probe records exact Ollama model IDs, embedding dimension/normalization, and native schema support in `docs/compatibility.md`; it is required before production AI activation, not before Task 3's dimension-flexible migration.
 
 - [ ] **Step 4: Implement structured generation and bounded repair**
 

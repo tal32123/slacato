@@ -276,11 +276,13 @@ The Part 1 agents perform bounded analyses, so pruning and retrieval limits are 
 
 The canonical brief JSON includes all nine sections, stable claim IDs, citation IDs, confidence values, and review warnings. The UI renders this model with shadcn components. Markdown and JSON exports are supported.
 
-## 10. Ollama Cloud
+## 10. Model Providers
 
-Ollama Cloud is the default direct provider. Configuration uses server-side `OLLAMA_API_KEY`, base URL, generation model, and embedding model. The provider registry isolates Ollama-specific request behavior from agents and domain services.
+The initial-release development/demo default is the deterministic `AI_PROVIDER=mock` adapter. It is provider-neutral infrastructure, uses generic scriptable responses through the same budgeted gateway, and emits a documented `mock-*` profile with 64-dimensional deterministic unit-normalized non-empty embeddings. It is not live Ollama compatibility and cannot be used to infer a real-model dimension.
 
-The initial design assumes an appropriate Ollama Cloud generation model and embedding model are available. Startup health checks verify both capabilities and fail with actionable configuration errors. The embedding model is deployment configuration and cannot be changed in the application.
+`AI_PROVIDER=ollama` is the production AI mode. It uses server-side `OLLAMA_API_KEY`, base URL, generation model, and embedding model; all three required Ollama variables are strictly validated only in this mode. Ollama remains explicitly unverified until its credentialed discovery, schema, and embedding probe succeeds.
+
+Task 3 stores embeddings in a dimension-flexible pgvector column with persisted provider/model/dimension/profile metadata. Exact authorized-subset cosine search remains the baseline and HNSW remains deferred. Application invariants reject mixed profiles; activating a real provider requires full re-embedding plus an explicit pre-production migration/operational gate, not runtime switching.
 
 ## 11. Evaluation and Testing
 
