@@ -148,3 +148,49 @@ Observed: ESLint and TypeScript exited 0; Vitest reported `6 passed` files and `
 - API and worker now import the infrastructure package through real workspace dependencies and package project references, so built runtime code consumes compiled configuration exports.
 - No Task 3 database, Redis, migration, index, or model adapters were added; only the injected migration readiness port was introduced.
 - pnpm continues to report ignored optional transitive build scripts, while the full quality and build commands complete successfully.
+
+## Review Fix Round 2/5
+
+### RED → GREEN evidence
+
+Before implementation, expanded `tests/unit/wire-boundary.test.ts` with real HTTP coverage for an undecorated body handler, explicit class-DTO fallback, unsupported content type, correct declared oversized JSON, generic parser failure, and a non-emitting invalid SSE publisher. Expanded `tests/unit/theme-tokens.test.ts` to enumerate the full semantic token set used by installed shadcn primitives, including popover tokens.
+
+RED command:
+
+```bash
+pnpm vitest run tests/unit/wire-boundary.test.ts tests/unit/theme-tokens.test.ts
+```
+
+Observed RED output: the missing class-DTO/SSE publisher decorators prevented the wire suite from loading, and the theme test failed on missing `--color-popover: var(--popover);`. The pre-fix boundary had no real HTTP request-schema enforcement for an undecorated handler.
+
+GREEN command:
+
+```bash
+pnpm vitest run tests/unit/wire-boundary.test.ts tests/unit/theme-tokens.test.ts
+```
+
+Observed GREEN output: `2 passed` files, `11 passed` tests.
+
+### Fixes applied
+
+- Added a single global `WireContractInterceptor`. It reads explicit controller metadata, validates declared Zod body/query/params before handlers, validates every response, and rejects non-empty undecorated request parts with typed `WIRE_SCHEMA_REQUIRED`. A handler without a response schema likewise cannot serialize a response.
+- Reworked `ZodBody`, `ZodQuery`, `ZodParam`, and `ZodResponse` into metadata declaration helpers consumed by that global mechanism; they no longer create optional per-route interceptors/pipes. Added explicit `ClassDtoBody` metadata and restored strict global Nest `ValidationPipe` for that deliberate legacy fallback only.
+- Added `createSsePublisher`, the transport-facing primitive that validates all envelopes before invoking an emitter; no business events were added.
+- Mounted the safe wire middleware and typed parser-error handler directly in `configureApiApplication`, which is used by the real API and HTTP test applications. It now provides typed responses for unsupported media type, declared/chunked oversized input, malformed JSON, and remaining parser failures.
+- Added complete semantic color mappings and values for popover and destructive foreground tokens while retaining the verified amber color.
+
+### Round verification
+
+Final command:
+
+```bash
+pnpm lint && pnpm typecheck && pnpm vitest run && pnpm build
+```
+
+Observed GREEN output: ESLint and project type checking exited 0; Vitest reported `6 passed` files and `18 passed` tests; recursive web, API, worker, contracts, core, and infrastructure builds exited 0.
+
+### Round self-review and concerns
+
+- Verified the configured HTTP test application uses the same `configureApiApplication` path as production, so middleware, parser filter, global Zod contract enforcement, and class fallback are all exercised on actual requests.
+- Verified every installed shadcn semantic utility token is registered, including popover values used by dialog/select/dropdown primitives.
+- The SSE primitive is intentionally a reusable transport boundary awaiting Task 10; Task 1 does not introduce a business SSE stream.

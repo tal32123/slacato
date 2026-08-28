@@ -1,17 +1,25 @@
 import 'reflect-metadata';
 import { pathToFileURL } from 'node:url';
 import { json } from 'express';
-import { NestFactory } from '@nestjs/core';
+import { HttpException, ValidationPipe } from '@nestjs/common';
+import { NestFactory, Reflector } from '@nestjs/core';
 import type { ErrorRequestHandler } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { loadRuntimeEnv } from '@slacato/infrastructure';
 import { AppModule } from './app.module.js';
+import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
+import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
 
 export interface ApiApplicationOptions {
   environment?: NodeJS.ProcessEnv;
 }
 
 const bodyParserErrorHandler: ErrorRequestHandler = (error: unknown, _request, response, next) => {
+  void next;
+  if (error instanceof HttpException) {
+    response.status(error.getStatus()).json(error.getResponse());
+    return;
+  }
   const parserError = error as { type?: string };
   if (parserError.type === 'entity.too.large') {
     response.status(413).json({ code: 'REQUEST_TOO_LARGE', message: 'Request body exceeds the 1 MiB limit' });
@@ -21,13 +29,17 @@ const bodyParserErrorHandler: ErrorRequestHandler = (error: unknown, _request, r
     response.status(400).json({ code: 'INVALID_JSON', message: 'Malformed JSON request body' });
     return;
   }
-  next(error);
+  response.status(400).json({ code: 'INVALID_REQUEST', message: 'Request body could not be processed' });
 };
 
 /** Installs the runtime wire boundary for all Nest HTTP applications. */
 export function configureApiApplication(app: NestExpressApplication): void {
+  const wireMiddleware = new ApiWireBoundaryMiddleware();
   app.use(json({ limit: '1mb', type: 'application/json' }));
+  app.use(wireMiddleware.use.bind(wireMiddleware));
   app.use(bodyParserErrorHandler);
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
+  app.useGlobalInterceptors(new WireContractInterceptor(app.get(Reflector)));
   app.enableShutdownHooks();
 }
 
