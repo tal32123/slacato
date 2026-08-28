@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { envSchema } from '@slacato/infrastructure/config/env';
+import { envSchema, parseEnv } from '@slacato/infrastructure/config/env';
 import { createConfiguredModelGateways, createDatabaseClient, PostgresProviderAttemptLedger } from '@slacato/infrastructure';
 
 describe('envSchema', () => {
@@ -9,6 +9,16 @@ describe('envSchema', () => {
 
   it('defaults to mock mode without Ollama credentials or model IDs', () => {
     expect(envSchema.parse(baseEnvironment)).toMatchObject({ AI_PROVIDER: 'mock' });
+  });
+
+  it('reads known server configuration from a real process environment containing unrelated keys', () => {
+    expect(parseEnv({ ...baseEnvironment, PATH: '/usr/bin', SHELL: '/bin/zsh' })).toMatchObject({
+      NODE_ENV: 'test', AI_PROVIDER: 'mock', WEB_ORIGIN: 'http://127.0.0.1:4173'
+    });
+  });
+
+  it('rejects a web allowlist entry that is not an exact URL origin', () => {
+    expect(() => envSchema.parse({ ...baseEnvironment, WEB_ORIGIN: 'http://127.0.0.1:4173/path' })).toThrow();
   });
 
   it('requires the complete Ollama credential/model tuple only in ollama mode', () => {

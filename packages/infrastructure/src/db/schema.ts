@@ -20,8 +20,11 @@ const now = () => timestamp('created_at', { withTimezone: true }).notNull().defa
 const json = <T>(name: string) => jsonb(name).$type<T>().notNull();
 
 export const personas = pgTable('personas', {
-  id: text('id').primaryKey(), displayName: text('display_name').notNull(), role: text('role').notNull(), createdAt: now()
-});
+  id: text('id').primaryKey(), displayName: text('display_name').notNull(), role: text('role').notNull(), sourceCommit: text('source_commit'), createdAt: now()
+}, (table) => [
+  index('personas_source_commit_display_name_idx').on(table.sourceCommit, table.displayName, table.id),
+  check('personas_source_commit_check', sql`${table.sourceCommit} is null or ${table.sourceCommit} ~ '^[0-9a-f]{40}$'`)
+]);
 export const permissionGrants = pgTable('permission_grants', {
   id: text('id').primaryKey(), personaId: text('persona_id').notNull().references(() => personas.id),
   accountId: text('account_id').references(() => accounts.id), sourceType: text('source_type'), canRead: boolean('can_read').notNull().default(false), canReadRestricted: boolean('can_read_restricted').notNull().default(false),

@@ -5,7 +5,7 @@ import { HttpException, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import type { ErrorRequestHandler } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { loadRuntimeEnv } from '@slacato/infrastructure';
+import { createDatabaseClient, loadRuntimeEnv, PostgresCanonicalPersonaDirectory } from '@slacato/infrastructure';
 import { AppModule } from './app.module.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
@@ -45,8 +45,15 @@ export function configureApiApplication(app: NestExpressApplication): void {
 
 /** Creates the API only after server-only configuration has validated successfully. */
 export async function createApiApplication(options: ApiApplicationOptions = {}): Promise<NestExpressApplication> {
-  loadRuntimeEnv(options.environment ?? process.env);
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+  const env = loadRuntimeEnv(options.environment ?? process.env);
+  const database = createDatabaseClient(env.DATABASE_URL, 5);
+  const personas = new PostgresCanonicalPersonaDirectory(database);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule.register({
+    sessionSecret: env.SESSION_SECRET,
+    environment: env.NODE_ENV,
+    allowedOrigins: [env.WEB_ORIGIN],
+    personaDirectory: personas
+  }), { bodyParser: false });
   configureApiApplication(app);
   return app;
 }

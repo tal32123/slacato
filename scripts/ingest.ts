@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import postgres from 'postgres';
-import { buildEvidenceDocuments, chunkDocument, parseFixtureSet } from '../packages/core/src/index.js';
+import { buildEvidenceDocuments, CANONICAL_FIXTURE_COMMIT, chunkDocument, parseFixtureSet } from '../packages/core/src/index.js';
 
 const DEFAULT_DATABASE_URL = 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 type InsertCounts = Readonly<{ personas: number; grants: number; accounts: number; opportunities: number; contacts: number; documents: number; chunks: number }>;
@@ -43,9 +43,9 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
         counts.contacts += inserted.length;
       }
       for (const permission of fixtures.permissions) {
-        const insertedPersona = await transaction`insert into personas (id, display_name, role) values (${permission.userId}, ${permission.userName}, ${permission.role})
-          on conflict (id) do update set display_name = excluded.display_name, role = excluded.role
-          where (personas.display_name, personas.role) is distinct from (excluded.display_name, excluded.role) returning id`;
+        const insertedPersona = await transaction`insert into personas (id, display_name, role, source_commit) values (${permission.userId}, ${permission.userName}, ${permission.role}, ${CANONICAL_FIXTURE_COMMIT})
+          on conflict (id) do update set display_name = excluded.display_name, role = excluded.role, source_commit = excluded.source_commit
+          where (personas.display_name, personas.role, personas.source_commit) is distinct from (excluded.display_name, excluded.role, excluded.source_commit) returning id`;
         counts.personas += insertedPersona.length;
         for (const accountId of permission.allowedAccountIds) for (const fixtureSource of permission.allowedSourceTypes) for (const sourceType of permissionSources(fixtureSource)) {
           const grantId = `grant:${permission.userId}:${accountId}:${sourceType}`;
