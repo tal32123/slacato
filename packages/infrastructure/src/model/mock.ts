@@ -24,7 +24,7 @@ export const MOCK_EMBEDDING_PROFILE = Object.freeze({
 export type MockGenerationResolver = <Value>(request: ModelTransportRequest<Value>) => Promise<TransportGeneration<Value>> | TransportGeneration<Value>;
 
 /** Construction options for the deterministic development/demo provider. */
-export type MockModelGatewayOptions = Readonly<{ resolve: MockGenerationResolver; attemptLedger?: ProviderAttemptLedger }>;
+export type MockModelGatewayOptions = Readonly<{ resolve: MockGenerationResolver; attemptLedger: ProviderAttemptLedger }>;
 
 class MockTransport implements ModelTransport {
   public readonly capabilities = { nativeStructuredOutput: false } as const;

@@ -1,7 +1,7 @@
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { UnrecoverableError, Worker } from 'bullmq';
-import type { CommandQueue, WorkflowCommand } from '@slacato/core';
+import type { CommandQueue, StartRunInput, WorkflowCommand } from '@slacato/core';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresWorkflowStore } from '@slacato/infrastructure/db/repositories/workflow-store';
 import { BullMqCommandQueue } from '@slacato/infrastructure/queue/bullmq';
@@ -11,7 +11,14 @@ import { PostgresCommandReconciler } from '@slacato/infrastructure/queue/reconci
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:56379';
 const database = createDatabaseClient(databaseUrl, 4);
-const store = new PostgresWorkflowStore(database);
+function budgetedStore(client: typeof database): PostgresWorkflowStore {
+  const store = new PostgresWorkflowStore(client);
+  return new Proxy(store, { get(target, property, receiver) {
+    if (property === 'startRun') return (input: Omit<StartRunInput, 'budget'>) => target.startRun({ ...input, budget: { scope: input.id, maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 10_000, deadlineMs: 1_000 } });
+    return Reflect.get(target, property, receiver);
+  } });
+}
+const store = budgetedStore(database);
 const queue = new BullMqCommandQueue(redisUrl, 'slacato-workflow-integration');
 
 function suffix(): string { return crypto.randomUUID().replaceAll('-', ''); }

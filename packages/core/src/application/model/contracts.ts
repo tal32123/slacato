@@ -71,8 +71,8 @@ export type GenerateObjectRequest<Value> = Readonly<{
   operation: string;
   limits: RetryLimits;
   budget?: SharedRunBudget;
-  /** Enables restart-safe accounting around every provider transport invocation. */
-  durableAttempt?: ProviderAttemptContext;
+  /** Required durable accounting context for every provider transport invocation. */
+  durableAttempt: ProviderAttemptContext;
   context?: ContextWindowInput;
 }>;
 

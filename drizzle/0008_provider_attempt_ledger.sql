@@ -24,7 +24,10 @@ ALTER TABLE run_budget_reservations ADD COLUMN IF NOT EXISTS failure_category te
 ALTER TABLE run_budget_reservations ADD COLUMN IF NOT EXISTS failure_code text;
 
 UPDATE run_budget_reservations SET granted_output_tokens = reserved_output_tokens WHERE granted_output_tokens IS NULL;
-UPDATE run_budget_reservations SET operation = 'legacy', ordinal = 1 WHERE operation IS NULL OR ordinal IS NULL;
+-- 0008 is unreleased: repair its original non-unique legacy backfill in place.
+-- A stable per-row operation preserves every pre-0008 reservation before the
+-- NULLS NOT DISTINCT unique index is created; deployed databases need no reset.
+UPDATE run_budget_reservations SET operation = 'legacy:' || id, ordinal = 1 WHERE operation IS NULL OR ordinal IS NULL;
 ALTER TABLE run_budget_reservations ALTER COLUMN granted_output_tokens SET NOT NULL;
 ALTER TABLE run_budget_reservations ALTER COLUMN operation SET NOT NULL;
 ALTER TABLE run_budget_reservations ALTER COLUMN ordinal SET NOT NULL;

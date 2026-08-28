@@ -21,7 +21,7 @@ export type OllamaGatewayConfig = Readonly<{
   apiKey: string;
   generationModelId: string;
   embeddingModelId: string;
-  attemptLedger?: ProviderAttemptLedger;
+  attemptLedger: ProviderAttemptLedger;
 }>;
 
 function warningText(warning: unknown): string {

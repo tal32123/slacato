@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { BoundedRetryController, createBudgetedModelGateway, type ModelTransport } from '@slacato/core';
+import { BoundedRetryController, createBudgetedModelGateway, type ModelTransport, type ProviderAttemptLedger } from '@slacato/core';
 import { normalizeOllamaTransportError } from '@slacato/infrastructure/model/ollama';
 import { z } from 'zod';
 
 const schema = z.object({ stakeholders: z.array(z.unknown()) }).strict();
+const probeLedger: ProviderAttemptLedger = {
+  async beginAttempt() { return { reservationId: 'probe-reservation', attemptId: 'probe-attempt', ordinal: 1, grantedOutputTokens: 20 }; },
+  async settleAttempt() {}, async releaseAttempt() {}
+};
 
 function apiCallError(statusCode: number | undefined, isRetryable: boolean, extra: Record<PropertyKey, unknown> = {}): Error & Record<PropertyKey, unknown> {
   return Object.assign(new Error('provider request failed'), {
@@ -26,8 +30,9 @@ describe('Ollama transport error boundary', () => {
       }
     };
 
-    await expect(createBudgetedModelGateway(transport).generateObject({
+    await expect(createBudgetedModelGateway(transport, undefined, probeLedger).generateObject({
       schema, messages: [{ role: 'user', content: 'Return JSON.' }], operation: 'retry-network',
+      durableAttempt: { runScope: 'probe-run', provider: 'probe', model: 'probe-model' },
       limits: { maxCalls: 2, maxSchemaRepairs: 0, maxTransportRetries: 1, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 20 }
     })).resolves.toMatchObject({ value: { stakeholders: [] } });
 

@@ -12,6 +12,8 @@ export type ProviderAttemptContext = Readonly<{
 export type ProviderAttemptReservation = Readonly<{
   reservationId: string;
   attemptId: string;
+  /** Authoritative ordinal assigned by the durable ledger, never by a process. */
+  ordinal: number;
   grantedOutputTokens: number;
 }>;
 
@@ -39,7 +41,6 @@ export class ProviderAttemptFinalizationConflict extends Error {
 export interface ProviderAttemptLedger {
   beginAttempt(input: ProviderAttemptContext & Readonly<{
     operation: string;
-    ordinal: number;
     inputTokens: number;
     requestedOutputTokens: number;
   }>): Promise<ProviderAttemptReservation>;

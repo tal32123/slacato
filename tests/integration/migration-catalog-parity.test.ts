@@ -118,8 +118,17 @@ describe('durable migration catalog', () => {
     const upgrade = postgres(urlForDatabase(upgradeName), { max: 1 });
     try {
       await applyMigrations(clean, migrationFiles);
-      await applyMigrations(upgrade, migrationFiles.slice(0, 2));
-      await applyMigrations(upgrade, migrationFiles.slice(2));
+      await applyMigrations(upgrade, migrationFiles.slice(0, 8));
+      await upgrade`insert into personas (id, display_name, role) values ('legacy-user', 'Legacy user', 'seller')`;
+      await upgrade`insert into accounts (id, name) values ('legacy-account', 'Legacy account')`;
+      await upgrade`insert into opportunities (id, account_id, name) values ('legacy-opportunity', 'legacy-account', 'Legacy opportunity')`;
+      await upgrade`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values ('legacy-run', 'legacy-opportunity', 'legacy-user', 'created', 'mock', 'mock-chat', 0)`;
+      await upgrade`insert into run_budget_reservations (id, run_id, reserved_output_tokens, status) values ('legacy-reservation-a', 'legacy-run', 1, 'reserved'), ('legacy-reservation-b', 'legacy-run', 1, 'reserved')`;
+      await applyMigrations(upgrade, migrationFiles.slice(8));
+      expect(await upgrade<{ id: string; operation: string; ordinal: number }[]>`select id, operation, ordinal from run_budget_reservations where run_id = 'legacy-run' order by id`).toEqual([
+        { id: 'legacy-reservation-a', operation: 'legacy:legacy-reservation-a', ordinal: 1 },
+        { id: 'legacy-reservation-b', operation: 'legacy:legacy-reservation-b', ordinal: 1 }
+      ]);
       const [cleanCatalog, upgradeCatalog] = await Promise.all([catalog(clean), catalog(upgrade)]);
       expect(cleanCatalog).toEqual(upgradeCatalog);
 

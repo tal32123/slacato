@@ -4,6 +4,7 @@ import {
   createBudgetedModelGateway,
   ModelGatewayTransportError,
   RunBudgetLedger,
+  type GenerateObjectRequest,
   type ProviderAttemptLedger,
   type ModelTransport,
   type TransportGeneration
@@ -14,13 +15,62 @@ const schema = z.object({
   stakeholders: z.array(z.object({ role: z.enum(['champion', 'economic_buyer']) }))
 }).strict();
 
+function ephemeralLedger(): ProviderAttemptLedger {
+  let ordinal = 0;
+  return {
+    async beginAttempt() { ordinal += 1; return { reservationId: `ephemeral-reservation-${ordinal}`, attemptId: `ephemeral-attempt-${ordinal}`, ordinal, grantedOutputTokens: 100 }; },
+    async settleAttempt() {}, async releaseAttempt() {}
+  };
+}
+
+/** Explicit test-only accounting; production composition supplies PostgreSQL. */
+function createTestGateway(transport: ModelTransport, policy?: ConstructorParameters<typeof createBudgetedModelGateway>[1]) {
+  const gateway = createBudgetedModelGateway(transport, policy, ephemeralLedger());
+  return {
+    generateObject<Value>(request: Omit<GenerateObjectRequest<Value>, 'durableAttempt'>) {
+      return gateway.generateObject({ ...request, durableAttempt: { runScope: 'test-run', provider: 'test', model: 'test-model' } });
+    }
+  };
+}
+
 describe('BudgetedModelGateway', () => {
+  it('rejects an unmetered request before its transport can run even when JavaScript bypasses the types', async () => {
+    let calls = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate() { calls += 1; return { text: '{"stakeholders":[]}' }; }
+    };
+    const gateway = createBudgetedModelGateway(transport, undefined, ephemeralLedger());
+    await expect(gateway.generateObject({
+      schema, messages: [{ role: 'user', content: 'Extract.' }], operation: 'unmetered',
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 100 }
+    } as never)).rejects.toThrow('Durable attempt context');
+    expect(calls).toBe(0);
+  });
+
+  it('rejects a gateway constructed without a ledger before its transport can run', async () => {
+    let calls = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate() { calls += 1; return { text: '{"stakeholders":[]}' }; }
+    };
+    const gateway = createBudgetedModelGateway(transport, undefined, undefined as never);
+    await expect(gateway.generateObject({
+      schema, messages: [{ role: 'user', content: 'Extract.' }], operation: 'missing-ledger',
+      durableAttempt: { runScope: 'test-run', provider: 'test', model: 'test-model' },
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 100 }
+    })).rejects.toThrow('Provider attempt ledger');
+    expect(calls).toBe(0);
+  });
+
   it('durably begins and settles every schema-repair transport attempt before calling the provider', async () => {
     const events: string[] = [];
+    let ordinal = 0;
     const ledger: ProviderAttemptLedger = {
-      async beginAttempt(input) {
-        events.push(`begin:${input.ordinal}`);
-        return { reservationId: `reservation-${input.ordinal}`, attemptId: `attempt-${input.ordinal}`, grantedOutputTokens: 100 };
+      async beginAttempt() {
+        ordinal += 1;
+        events.push(`begin:${ordinal}`);
+        return { reservationId: `reservation-${ordinal}`, attemptId: `attempt-${ordinal}`, ordinal, grantedOutputTokens: 100 };
       },
       async settleAttempt(input) { events.push(`settle:${input.reservationId}`); },
       async releaseAttempt(input) { events.push(`release:${input.reservationId}`); }
@@ -47,8 +97,9 @@ describe('BudgetedModelGateway', () => {
 
   it('releases only trusted not-sent failures and conservatively charges ambiguous transport failures', async () => {
     const outcomes: string[] = [];
+    let ordinal = 0;
     const ledger: ProviderAttemptLedger = {
-      async beginAttempt(input) { return { reservationId: `reservation-${input.ordinal}`, attemptId: `attempt-${input.ordinal}`, grantedOutputTokens: 50 }; },
+      async beginAttempt() { ordinal += 1; return { reservationId: `reservation-${ordinal}`, attemptId: `attempt-${ordinal}`, ordinal, grantedOutputTokens: 50 }; },
       async settleAttempt() { outcomes.push('settled'); },
       async releaseAttempt(input) { outcomes.push(input.disposition); }
     };
@@ -82,7 +133,7 @@ describe('BudgetedModelGateway', () => {
           : { text: '{"stakeholders":[{"role":"champion"}]}', usage: { outputTokens: 10 } };
       }
     };
-    const gateway = createBudgetedModelGateway(transport);
+    const gateway = createTestGateway(transport);
 
     const result = await gateway.generateObject({
       schema,
@@ -105,7 +156,7 @@ describe('BudgetedModelGateway', () => {
       async generate() { return { text: outputs.shift() ?? '', usage: { outputTokens: 10 } }; }
     };
 
-    const result = await createBudgetedModelGateway(transport).generateObject({
+    const result = await createTestGateway(transport).generateObject({
       schema,
       messages: [{ role: 'user', content: 'Extract stakeholders.' }],
       operation: 'strict-json',
@@ -128,7 +179,7 @@ describe('BudgetedModelGateway', () => {
       async generate() { return { text: outputs.shift() ?? '', usage: { outputTokens: 10 } }; }
     };
 
-    const result = await createBudgetedModelGateway(transport).generateObject({
+    const result = await createTestGateway(transport).generateObject({
       schema,
       messages: [{ role: 'user', content: 'Extract stakeholders.' }],
       operation: 'strict-json-security',
@@ -144,7 +195,7 @@ describe('BudgetedModelGateway', () => {
     const outputs = ['{"__proto__":{"stakeholders":[]}}', '{}'];
     const transport: ModelTransport = { capabilities: { nativeStructuredOutput: false }, async generate() { return { text: outputs.shift() ?? '', usage: { outputTokens: 10 } }; } };
 
-    const result = await createBudgetedModelGateway(transport).generateObject({
+    const result = await createTestGateway(transport).generateObject({
       schema: inheritedSchema, messages: [{ role: 'user', content: 'Return JSON.' }], operation: 'prototype-security',
       limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 100 }
     });
@@ -160,7 +211,7 @@ describe('BudgetedModelGateway', () => {
       async generate(request) { receivedSchema = request.schema === schema; return { output: { stakeholders: [] }, usage: { outputTokens: 10 } }; }
     };
 
-    const result = await createBudgetedModelGateway(transport).generateObject({
+    const result = await createTestGateway(transport).generateObject({
       schema, messages: [{ role: 'user', content: 'Extract.' }], operation: 'native-schema',
       limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 100 }
     });
@@ -175,7 +226,7 @@ describe('BudgetedModelGateway', () => {
       async generate() { return { text: '{"stakeholders":[]}', usage: { inputTokens: 1, outputTokens: 1 } }; }
     };
     const shared = new RunBudgetLedger({ scope: 'run_1', maxCalls: 1, maxInputTokens: 100, maxOutputTokens: 100, deadlineMs: 1_000 });
-    const gateway = createBudgetedModelGateway(transport);
+    const gateway = createTestGateway(transport);
     const request = { schema, messages: [{ role: 'user' as const, content: 'Extract.' }], operation: 'shared-budget', budget: shared,
       limits: { maxCalls: 2, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 100 } };
 
@@ -194,12 +245,14 @@ describe('BudgetedModelGateway', () => {
       }
     };
     const shared = new RunBudgetLedger({ scope: 'run_output', maxCalls: 2, maxInputTokens: 1_000, maxOutputTokens: 100, deadlineMs: 1_000 });
-    const gateway = createBudgetedModelGateway(transport);
+    const gateway = createTestGateway(transport);
     const request = { schema, messages: [{ role: 'user' as const, content: 'Extract.' }], operation: 'shared-output', budget: shared,
       limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 1_000, maxOutputTokens: 100 } };
 
     const first = gateway.generateObject(request);
     const second = gateway.generateObject(request);
+    await Promise.resolve();
+    await Promise.resolve();
     expect(calls).toBe(1);
     releases.forEach((release) => release());
 
@@ -218,7 +271,7 @@ describe('BudgetedModelGateway', () => {
       }
     };
     const shared = new RunBudgetLedger({ scope: 'run_release', maxCalls: 2, maxInputTokens: 1_000, maxOutputTokens: 100, deadlineMs: 1_000 });
-    const gateway = createBudgetedModelGateway(transport);
+    const gateway = createTestGateway(transport);
     const request = { schema, messages: [{ role: 'user' as const, content: 'Extract.' }], operation: 'release-output', budget: shared,
       limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 1_000, maxOutputTokens: 100 } };
 
@@ -234,7 +287,7 @@ describe('BudgetedModelGateway', () => {
       capabilities: { nativeStructuredOutput: false },
       async generate() { return new Promise((done) => { resolve = done; }); }
     };
-    const pending = createBudgetedModelGateway(transport).generateObject({
+    const pending = createTestGateway(transport).generateObject({
       schema, messages: [{ role: 'user', content: 'Extract.' }], operation: 'deadline',
       limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1, maxInputTokens: 10_000, maxOutputTokens: 100 }
     });
@@ -251,7 +304,7 @@ describe('BudgetedModelGateway', () => {
       async generate() { return { text: '{"stakeholders":[]}', usage: { inputTokens: 2_000, outputTokens: 1 } }; }
     };
 
-    await expect(createBudgetedModelGateway(transport).generateObject({
+    await expect(createTestGateway(transport).generateObject({
       schema, messages: [{ role: 'user', content: 'Extract.' }], operation: 'actual-input-budget',
       limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 1_000, maxOutputTokens: 100 }
     })).rejects.toThrow('Input token budget');
@@ -272,7 +325,7 @@ describe('BudgetedModelGateway', () => {
       contextWindowTokens: 100, reservedOutputTokens: 20,
       sectionTokenBudgets: { instructions: 8, currentTask: 8, evidence: 8, artifacts: 8, history: 8 }
     });
-    await createBudgetedModelGateway(transport, policy).generateObject({
+    await createTestGateway(transport, policy).generateObject({
       schema, messages: [], operation: 'repair-invariants',
       context: { instructions: 'INSTRUCT', currentTask: 'TASK', evidence: [{ id: 'e1', content: 'evidence' }] },
       limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 100 }

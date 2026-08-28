@@ -1,6 +1,7 @@
 import type { RunEvent, RunStatus } from '../../domain/runs/contracts.js';
 import type { OpportunityId, RunId, UserId } from '../../domain/shared/ids.js';
 import type { WorkflowCommand } from './command-queue.js';
+import type { RunBudgetLimits } from '../model/contracts.js';
 
 export type WorkflowRun = Readonly<{
   id: RunId;
@@ -23,7 +24,7 @@ export type StepLease = Readonly<{
   attempt: number;
 }>;
 
-export type StartRunInput = Readonly<Omit<WorkflowRun, 'version'> & { command: WorkflowCommand }>;
+export type StartRunInput = Readonly<Omit<WorkflowRun, 'version'> & { command: WorkflowCommand; budget: RunBudgetLimits }>;
 export type CommitStepInput = Readonly<{
   runId: RunId;
   expectedVersion: number;

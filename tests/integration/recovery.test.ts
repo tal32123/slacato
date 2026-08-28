@@ -1,6 +1,6 @@
 import postgres from 'postgres';
 import { afterAll, describe, expect, it } from 'vitest';
-import type { WorkflowCommand } from '@slacato/core';
+import type { StartRunInput, WorkflowCommand } from '@slacato/core';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresWorkflowStore } from '@slacato/infrastructure/db/repositories/workflow-store';
 import { OutboxDispatcherLoop } from '@slacato/infrastructure/queue/outbox-dispatcher';
@@ -8,7 +8,14 @@ import { PostgresCommandReconciler } from '@slacato/infrastructure/queue/reconci
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const database = createDatabaseClient(databaseUrl, 3);
-const store = new PostgresWorkflowStore(database);
+function budgetedStore(client: typeof database): PostgresWorkflowStore {
+  const store = new PostgresWorkflowStore(client);
+  return new Proxy(store, { get(target, property, receiver) {
+    if (property === 'startRun') return (input: Omit<StartRunInput, 'budget'>) => target.startRun({ ...input, budget: { scope: input.id, maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 10_000, deadlineMs: 1_000 } });
+    return Reflect.get(target, property, receiver);
+  } });
+}
+const store = budgetedStore(database);
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function id(prefix: string): string { return `${prefix}_${crypto.randomUUID().replaceAll('-', '')}`; }

@@ -1,4 +1,4 @@
-import { ProviderAttemptFinalizationConflict, type ProviderAttemptLedger, type ProviderAttemptReservation } from '@slacato/core';
+import { ProviderAttemptFinalizationConflict, type ProviderAttemptLedger, type ProviderAttemptReservation, type RunBudgetLimits } from '@slacato/core';
 import type { TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../client.js';
 
@@ -15,6 +15,13 @@ function same(left: string | number | null | undefined, right: string | number |
 export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
   public constructor(private readonly database: DatabaseClient) {}
 
+  /** Verifies the atomically-created workflow budget before exposing a run gateway. */
+  public async assertRunBudget(input: Pick<RunBudgetLimits, 'scope' | 'maxCalls' | 'maxInputTokens' | 'maxOutputTokens'>): Promise<void> {
+    const budget = (await this.database.sql<Pick<BudgetRow, 'max_calls' | 'max_input_tokens' | 'max_output_tokens'>[]>`select max_calls, max_input_tokens, max_output_tokens from run_budgets where run_id = ${input.scope}`)[0];
+    if (budget === undefined) throw new Error('Run budget does not exist');
+    if (budget.max_calls !== input.maxCalls || budget.max_input_tokens !== input.maxInputTokens || budget.max_output_tokens !== input.maxOutputTokens) throw new Error('Run budget does not match the requested run scope');
+  }
+
   public async beginAttempt(input: Parameters<ProviderAttemptLedger['beginAttempt']>[0]): Promise<ProviderAttemptReservation> {
     return this.database.sql.begin(async (sql) => {
       const budget = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
@@ -23,6 +30,12 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
         from run_budget_reservations where run_id = ${input.runScope} and invocation_id is not distinct from ${input.invocationId ?? null} and operation = ${input.operation} and status = 'reserved' for update`;
       for (const row of abandoned) await this.finalizePossibleDuplicate(sql, row);
 
+      const ordinalRow = (await sql<{ ordinal: number }[]>`select coalesce(max(ordinal), 0)::integer + 1 as ordinal
+        from run_budget_reservations
+        where run_id = ${input.runScope} and invocation_id is not distinct from ${input.invocationId ?? null} and operation = ${input.operation}`)[0];
+      if (ordinalRow === undefined) throw new Error('Could not allocate provider attempt ordinal');
+      const ordinal = ordinalRow.ordinal;
+
       const refreshed = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
       if (refreshed === undefined || refreshed.used_calls >= refreshed.max_calls || refreshed.used_input_tokens + input.inputTokens > refreshed.max_input_tokens) throw new Error('Run budget is exhausted');
       const grant = Math.min(input.requestedOutputTokens, refreshed.max_output_tokens - refreshed.used_output_tokens - refreshed.reserved_output_tokens);
@@ -30,11 +43,11 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
       const attemptId = crypto.randomUUID();
       const reservationId = crypto.randomUUID();
       await sql`insert into generation_attempts (id, run_id, invocation_id, operation, ordinal, status, provider, model)
-        values (${attemptId}, ${input.runScope}, ${input.invocationId ?? null}, ${input.operation}, ${input.ordinal}, 'attempt_started', ${input.provider}, ${input.model})`;
+        values (${attemptId}, ${input.runScope}, ${input.invocationId ?? null}, ${input.operation}, ${ordinal}, 'attempt_started', ${input.provider}, ${input.model})`;
       await sql`insert into run_budget_reservations (id, attempt_id, run_id, invocation_id, operation, ordinal, reserved_output_tokens, granted_output_tokens, reserved_input_tokens, status)
-        values (${reservationId}, ${attemptId}, ${input.runScope}, ${input.invocationId ?? null}, ${input.operation}, ${input.ordinal}, ${grant}, ${grant}, ${input.inputTokens}, 'reserved')`;
+        values (${reservationId}, ${attemptId}, ${input.runScope}, ${input.invocationId ?? null}, ${input.operation}, ${ordinal}, ${grant}, ${grant}, ${input.inputTokens}, 'reserved')`;
       await sql`update run_budgets set used_calls = used_calls + 1, used_input_tokens = used_input_tokens + ${input.inputTokens}, reserved_output_tokens = reserved_output_tokens + ${grant} where run_id = ${input.runScope}`;
-      return { reservationId, attemptId, grantedOutputTokens: grant };
+      return { reservationId, attemptId, ordinal, grantedOutputTokens: grant };
     });
   }
 

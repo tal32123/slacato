@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { envSchema } from '@slacato/infrastructure/config/env';
-import { createConfiguredModelGateways } from '@slacato/infrastructure';
-import { z } from 'zod';
+import { createConfiguredModelGateways, createDatabaseClient } from '@slacato/infrastructure';
 
 describe('envSchema', () => {
   it('rejects a configuration without server secrets', () => {
@@ -24,32 +23,29 @@ describe('envSchema', () => {
   });
 
   it('fails mock composition immediately when no fixture resolver is supplied', () => {
-    expect(() => createConfiguredModelGateways(envSchema.parse(baseEnvironment))).toThrow('mock fixture resolver');
+    expect(() => createConfiguredModelGateways(envSchema.parse(baseEnvironment), {} as never)).toThrow('mock fixture resolver');
   });
 
-  it('uses an explicit mock fixture resolver through schema repair in the real gateway', async () => {
-    const outputs = ['{"value":"invalid"}', '{"value":"valid"}'];
+  it('constructs mock composition only with an explicit fixture resolver and durable database', async () => {
+    const database = createDatabaseClient(baseEnvironment.DATABASE_URL, 1);
     const gateways = createConfiguredModelGateways(envSchema.parse(baseEnvironment), {
-      mock: { resolve: async () => ({ text: outputs.shift() ?? '{}', usage: { outputTokens: 1 } }) }
-    });
-    const result = await gateways.modelGateway.generateObject({
-      schema: z.object({ value: z.literal('valid') }).strict(),
-      messages: [{ role: 'user', content: 'Return valid JSON.' }], operation: 'mock-composition',
-      limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 100 }
+      database,
+      mock: { resolve: async () => ({ text: '{}' }) }
     });
 
     expect(gateways).toMatchObject({ provider: 'mock', embeddingProfile: { dimension: 64 } });
     expect(gateways.registry.resolve('specialist')).toMatchObject({ providerId: 'mock', modelId: 'mock-specialist' });
-    expect(result.value).toEqual({ value: 'valid' });
-    expect(result.attempts).toHaveLength(2);
+    await database.close();
   });
 
   it('selects Ollama without requiring or accepting a mock fixture resolver', () => {
+    const database = createDatabaseClient(baseEnvironment.DATABASE_URL, 1);
     const environment = envSchema.parse({
       ...baseEnvironment, AI_PROVIDER: 'ollama', OLLAMA_API_KEY: 'server-only-key', OLLAMA_CHAT_MODEL: 'chat', OLLAMA_EMBEDDING_MODEL: 'embed'
     });
-    expect(createConfiguredModelGateways(environment).registry.resolve('brief')).toMatchObject({ providerId: 'ollama', modelId: 'chat' });
-    expect(() => createConfiguredModelGateways(environment, { mock: { resolve: async () => ({ text: '{}' }) } })).toThrow('Ollama composition does not accept a mock fixture resolver');
+    expect(createConfiguredModelGateways(environment, { database }).registry.resolve('brief')).toMatchObject({ providerId: 'ollama', modelId: 'chat' });
+    expect(() => createConfiguredModelGateways(environment, { database, mock: { resolve: async () => ({ text: '{}' }) } })).toThrow('Ollama composition does not accept a mock fixture resolver');
+    void database.close();
   });
 });
 

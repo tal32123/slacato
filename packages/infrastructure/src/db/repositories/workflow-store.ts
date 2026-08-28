@@ -50,6 +50,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
 
   public async startRun(input: StartRunInput): Promise<WorkflowRun> {
     if (input.command.runId !== input.id) throw new DomainConflictError('Outbox command run does not match workflow run');
+    if (input.budget.scope !== input.id) throw new DomainConflictError('Run budget scope does not match workflow run');
     return this.database.sql.begin(async (sql) => {
       const inserted = await sql<RunRow[]>`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version)
         values (${input.id}, ${input.opportunityId}, ${input.requestedBy}, ${input.status}, ${input.generationProvider}, ${input.generationModel}, 0)
@@ -58,6 +59,11 @@ export class PostgresWorkflowStore implements WorkflowStore {
       if (row === undefined) throw new DomainNotFoundError('run');
       if (row.opportunity_id !== input.opportunityId || row.requested_by !== input.requestedBy) throw new DomainConflictError('Run ID is already bound to another request');
       if (inserted.length === 0 && (row.status !== input.status || row.generation_provider !== input.generationProvider || row.generation_model !== input.generationModel)) throw new DomainConflictError('Run ID is already bound to another workflow configuration');
+      if (inserted.length === 1) await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens)
+        values (${input.id}, ${input.budget.maxCalls}, ${input.budget.maxInputTokens}, ${input.budget.maxOutputTokens})`;
+      const budget = (await sql<{ max_calls: number; max_input_tokens: number; max_output_tokens: number }[]>`select max_calls, max_input_tokens, max_output_tokens from run_budgets where run_id = ${input.id} for update`)[0];
+      if (budget === undefined) throw new DomainConflictError('Run has no durable budget');
+      if (budget.max_calls !== input.budget.maxCalls || budget.max_input_tokens !== input.budget.maxInputTokens || budget.max_output_tokens !== input.budget.maxOutputTokens) throw new DomainConflictError('Run ID is already bound to different budget limits');
       if (inserted.length === 1) {
         await insertCommand(sql, input.command);
         await appendEvent(sql, input.id, 'run_created', { status: input.status });
