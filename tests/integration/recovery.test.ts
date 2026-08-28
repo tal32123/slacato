@@ -61,4 +61,16 @@ describe('durable recovery regressions', () => {
     expect(first).toBeDefined();
     expect(second).toBeUndefined();
   });
+
+  it('consumes and completes the causal lease at the approval boundary', async () => {
+    const run = await seededRun(); const next = command(run.runId);
+    await store.startRun({ id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+    await database.sql`update runs set status = 'validating' where id = ${run.runId}`;
+    await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${next.id}`;
+    const lease = await store.claimStep({ runId: run.runId as never, step: 'validate', invocationId: id('invocation'), causalCommandId: next.id, owner: 'worker', leaseMs: 10_000 });
+    if (lease === undefined) throw new Error('Expected lease');
+    await store.awaitApproval({ runId: run.runId as never, expectedVersion: 0, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: next.id, approvalSubjectId: id('subject'), subjectHash: id('hash'), payload: {}, policyTriggers: [] });
+    expect((await database.sql<{ status: string; consumed_at: string | null }[]>`select command.status, command.consumed_at from outbox_commands command where id = ${next.id}`)[0]?.consumed_at).not.toBeNull();
+    expect((await database.sql<{ status: string }[]>`select status from step_invocations where id = ${lease.invocationId}`)[0]?.status).toBe('completed');
+  });
 });

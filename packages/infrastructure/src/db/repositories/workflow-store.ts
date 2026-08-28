@@ -128,11 +128,17 @@ export class PostgresWorkflowStore implements WorkflowStore {
     });
   }
 
-  public async awaitApproval(input: Readonly<{ runId: WorkflowRun['id']; expectedVersion: number; approvalSubjectId: string; subjectHash: string; payload: Readonly<Record<string, unknown>>; policyTriggers: readonly string[] }>): Promise<WorkflowRun> {
+  public async awaitApproval(input: Readonly<{ runId: WorkflowRun['id']; expectedVersion: number; invocationId: string; invocationOwner: string; leaseToken: string; causalCommandId: string; approvalSubjectId: string; subjectHash: string; payload: Readonly<Record<string, unknown>>; policyTriggers: readonly string[] }>): Promise<WorkflowRun> {
     return this.database.sql.begin(async (sql) => {
       const current = (await sql<RunRow[]>`select id, opportunity_id, requested_by, status, version, generation_provider, generation_model from runs where id = ${input.runId} for update`)[0];
       if (current === undefined) throw new DomainNotFoundError('run');
       if (current.version !== input.expectedVersion) throw new DomainConflictError('Run version is stale');
+      const invocation = (await sql<{ causal_command_id: string }[]>`update step_invocations set status = 'completed', completed_at = now()
+        where id = ${input.invocationId} and run_id = ${input.runId} and owner = ${input.invocationOwner} and lease_token = ${input.leaseToken}
+          and causal_command_id = ${input.causalCommandId} and status = 'leased' and lease_expires_at > now() returning causal_command_id`)[0];
+      if (invocation === undefined) throw new DomainConflictError('Step lease is no longer owned by this worker');
+      const consumed = await sql`update outbox_commands set consumed_at = now() where id = ${input.causalCommandId} and run_id = ${input.runId} and status = 'published' and consumed_at is null`;
+      if (consumed.count !== 1) throw new DomainConflictError('Causal command was already consumed');
       const status = transitionRun(current.status, 'validation_requires_approval');
       const updated = await sql<RunRow[]>`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`;
       const row = updated[0]; if (row === undefined) throw new DomainConflictError('Run version is stale');

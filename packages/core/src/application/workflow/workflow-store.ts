@@ -54,6 +54,6 @@ export interface WorkflowStore {
   claimStep(input: Readonly<{ runId: RunId; step: string; invocationId: string; causalCommandId: string; owner: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
   heartbeatStep(input: Readonly<{ invocationId: string; owner: string; leaseToken: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
   commitStepAndEnqueueNext(input: CommitStepInput): Promise<WorkflowRun>;
-  awaitApproval(input: Readonly<{ runId: RunId; expectedVersion: number; approvalSubjectId: string; subjectHash: string; payload: Readonly<Record<string, unknown>>; policyTriggers: readonly string[] }>): Promise<WorkflowRun>;
+  awaitApproval(input: Readonly<{ runId: RunId; expectedVersion: number; invocationId: string; invocationOwner: string; leaseToken: string; causalCommandId: string; approvalSubjectId: string; subjectHash: string; payload: Readonly<Record<string, unknown>>; policyTriggers: readonly string[] }>): Promise<WorkflowRun>;
   recordDecisionAndEnqueueFinalization(input: ApprovalDecisionInput): Promise<WorkflowRun>;
 }
