@@ -1,5 +1,5 @@
 import type { Env } from '../config/env.js';
-import type { BudgetedModelGateway, EmbeddingGateway, ModelRegistry } from '@slacato/core';
+import type { BudgetedModelGateway, EmbeddingGateway, ModelRegistry, ProviderAttemptLedger } from '@slacato/core';
 import { createMockModelGateways, MOCK_EMBEDDING_PROFILE, type MockModelGatewayOptions } from './mock.js';
 import { createOllamaModelGateways } from './ollama.js';
 import type { OllamaCapabilities } from './capabilities.js';
@@ -13,7 +13,7 @@ export type ConfiguredModelGateways = Readonly<{
 }>;
 
 export type MockCompositionOptions = Readonly<{ mock: MockModelGatewayOptions; ollamaCapabilities?: never }>;
-export type OllamaCompositionOptions = Readonly<{ mock?: undefined; ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'> }>;
+export type OllamaCompositionOptions = Readonly<{ mock?: undefined; ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'>; attemptLedger?: ProviderAttemptLedger }>;
 
 /**
  * Selects the configured infrastructure adapter at composition time. Ollama
@@ -38,7 +38,8 @@ export function createConfiguredModelGateways(
     baseURL: environment.OLLAMA_BASE_URL,
     apiKey: environment.OLLAMA_API_KEY,
     generationModelId: environment.OLLAMA_CHAT_MODEL,
-    embeddingModelId: environment.OLLAMA_EMBEDDING_MODEL
+    embeddingModelId: environment.OLLAMA_EMBEDDING_MODEL,
+    ...(options.attemptLedger === undefined ? {} : { attemptLedger: options.attemptLedger })
   }, options.ollamaCapabilities ?? { nativeStructuredOutput: false });
   return { provider: 'ollama', ...ollama };
 }

@@ -50,7 +50,8 @@ export function normalizeModelError(error: unknown): ModelGatewayTransportError 
     category,
     ...(safeDiagnosticCode(source) === undefined ? {} : { diagnosticCode: safeDiagnosticCode(source)! }),
     ...(status === undefined ? {} : { statusCode: status }),
-    message: 'Model transport request failed'
+    message: 'Model transport request failed',
+    delivery: 'possibly_sent'
   });
 }
 

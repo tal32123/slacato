@@ -11,6 +11,7 @@ import {
   type EmbeddingGateway,
   type ModelTransport,
   type ModelTransportRequest,
+  type ProviderAttemptLedger,
   type TransportGeneration
 } from '@slacato/core';
 import type { OllamaCapabilities, OllamaCapabilityProbe } from './capabilities.js';
@@ -20,6 +21,7 @@ export type OllamaGatewayConfig = Readonly<{
   apiKey: string;
   generationModelId: string;
   embeddingModelId: string;
+  attemptLedger?: ProviderAttemptLedger;
 }>;
 
 function warningText(warning: unknown): string {
@@ -111,7 +113,7 @@ export function createOllamaModelGateways(config: OllamaGatewayConfig, capabilit
   registry.register('compaction', languageModel);
   registry.register('embedding', { providerId: 'ollama', modelId: config.embeddingModelId });
   return {
-    modelGateway: createBudgetedModelGateway(new OllamaTransport(provider(config.generationModelId), capabilities)),
+    modelGateway: createBudgetedModelGateway(new OllamaTransport(provider(config.generationModelId), capabilities), undefined, config.attemptLedger),
     embeddingGateway: {
       async embed(values: readonly string[]): Promise<number[][]> {
         if (values.length === 0) return [];

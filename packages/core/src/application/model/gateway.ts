@@ -11,6 +11,7 @@ import type {
   OutputMode,
   TransportGeneration
 } from './contracts.js';
+import type { ProviderAttemptLedger, ProviderAttemptReservation } from './provider-attempt-ledger.js';
 import { BoundedRetryController, normalizeModelError, RetryLimitExceededError } from './retry.js';
 
 const MAX_RESPONSE_BYTES = 128 * 1024;
@@ -163,12 +164,13 @@ function defaultContextSettings(): ContextWindowSettings {
 }
 
 /** Generic bounded structured-output gateway; it contains no provider or domain imports. */
-export function createBudgetedModelGateway(transport: ModelTransport, contextPolicy = new ContextWindowPolicy(defaultContextSettings())): BudgetedModelGateway {
+export function createBudgetedModelGateway(transport: ModelTransport, contextPolicy: ContextWindowPolicy | undefined = new ContextWindowPolicy(defaultContextSettings()), attemptLedger?: ProviderAttemptLedger): BudgetedModelGateway {
   return {
     async generateObject<Value>(request: GenerateObjectRequest<Value>): Promise<GenerationResult<Value>> {
       const controller = new BoundedRetryController(request.limits, request.budget);
       const outputMode: OutputMode = transport.capabilities.nativeStructuredOutput ? 'native_schema' : 'prompted_json';
-      const prepared = request.context === undefined ? undefined : contextPolicy.prepare(request.context);
+      const policy = contextPolicy ?? new ContextWindowPolicy(defaultContextSettings());
+      const prepared = request.context === undefined ? undefined : policy.prepare(request.context);
       const baseMessages = prepared?.messages ?? request.messages;
       const attempts: GenerationAttempt[] = [];
       let prior: Readonly<{ text: string; issues: readonly NormalizedValidationIssue[] }> | undefined;
@@ -178,10 +180,22 @@ export function createBudgetedModelGateway(transport: ModelTransport, contextPol
           ? baseMessages
           : promptedMessages(baseMessages, request.schema, prior);
         const messages = prepared === undefined
-          ? contextPolicy.rebudgetRaw(candidateMessages)
-          : contextPolicy.rebudget(prepared, candidateMessages.slice(baseMessages.length));
+          ? policy.rebudgetRaw(candidateMessages)
+          : policy.rebudget(prepared, candidateMessages.slice(baseMessages.length));
         const inputTokens = estimateMessagesTokens(messages);
         const reservation = controller.beginCall(inputTokens, request.limits.maxOutputTokens);
+        const durableReservation: ProviderAttemptReservation | undefined = request.durableAttempt === undefined
+          ? undefined
+          : await requireLedger(attemptLedger).beginAttempt({
+            ...request.durableAttempt,
+            operation: request.operation,
+            ordinal: attempts.length + controller.snapshot().transportRetries + 1,
+            inputTokens,
+            requestedOutputTokens: reservation.grantedOutputTokens
+          });
+        const grantedOutputTokens = durableReservation === undefined
+          ? reservation.grantedOutputTokens
+          : Math.min(reservation.grantedOutputTokens, durableReservation.grantedOutputTokens);
         let response: TransportGeneration<Value>;
         try {
           response = await transport.generate({
@@ -189,18 +203,32 @@ export function createBudgetedModelGateway(transport: ModelTransport, contextPol
             operation: request.operation,
             outputMode,
             ...(outputMode === 'native_schema' ? { schema: request.schema } : {}),
-            maxOutputTokens: reservation.grantedOutputTokens,
+            maxOutputTokens: grantedOutputTokens,
             deadlineAt: controller.deadlineAt()
           });
         } catch (error) {
-          controller.releaseAttempt(reservation);
           const normalized = normalizeModelError(error);
+          if (durableReservation !== undefined) await requireLedger(attemptLedger).releaseAttempt({
+            ...durableReservation,
+            disposition: normalized.normalized.delivery === 'safe_not_sent' ? 'safe_not_sent' : 'possibly_sent',
+            category: normalized.category,
+            ...(normalized.normalized.diagnosticCode === undefined ? {} : { diagnosticCode: normalized.normalized.diagnosticCode })
+          });
+          controller.releaseAttempt(reservation);
           if (!controller.canRetryTransport(normalized)) throw normalized;
           const delayMs = controller.recordTransportRetry(normalized);
           await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
           continue;
         }
-        controller.settleAttempt(reservation, response.usage?.outputTokens);
+        if (durableReservation !== undefined) await requireLedger(attemptLedger).settleAttempt({
+          ...durableReservation,
+          reservedInputTokens: inputTokens,
+          actualInputTokens: response.usage?.inputTokens,
+          actualOutputTokens: response.usage?.outputTokens,
+          requestId: response.requestId,
+          responseId: response.responseId
+        });
+        controller.settleAttempt(reservation, response.usage?.outputTokens ?? grantedOutputTokens);
         controller.assertDeadline();
         controller.recordInputTokens(inputTokens, response.usage?.inputTokens);
         const warnings = response.warnings ?? [];
@@ -230,6 +258,11 @@ export function createBudgetedModelGateway(transport: ModelTransport, contextPol
       }
     }
   };
+}
+
+function requireLedger(ledger: ProviderAttemptLedger | undefined): ProviderAttemptLedger {
+  if (ledger === undefined) throw new RetryLimitExceededError('Durable attempt context requires a provider attempt ledger');
+  return ledger;
 }
 
 export { StrictJsonError, RetryLimitExceededError };

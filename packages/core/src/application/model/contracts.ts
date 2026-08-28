@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ContextWindowInput, ModelMessage } from '../context/contracts.js';
+import type { ProviderAttemptContext } from './provider-attempt-ledger.js';
 
 export type { ModelMessage } from '../context/contracts.js';
 
@@ -70,6 +71,8 @@ export type GenerateObjectRequest<Value> = Readonly<{
   operation: string;
   limits: RetryLimits;
   budget?: SharedRunBudget;
+  /** Enables restart-safe accounting around every provider transport invocation. */
+  durableAttempt?: ProviderAttemptContext;
   context?: ContextWindowInput;
 }>;
 
@@ -78,6 +81,8 @@ export type TransportGeneration<Value = unknown> = Readonly<{
   output?: Value;
   usage?: Readonly<{ inputTokens?: number | undefined; outputTokens?: number | undefined }>;
   warnings?: readonly string[];
+  requestId?: string;
+  responseId?: string;
 }>;
 
 export type NormalizedModelError = Readonly<{
@@ -85,6 +90,8 @@ export type NormalizedModelError = Readonly<{
   diagnosticCode?: string;
   statusCode?: number;
   message?: string;
+  /** Only adapters with reliable delivery evidence may mark a request as not sent. */
+  delivery?: 'safe_not_sent' | 'possibly_sent';
 }>;
 
 export type ModelTransportRequest<Value> = Readonly<{

@@ -9,6 +9,7 @@
     { "idx": 4, "version": "7", "when": 1787945400000, "tag": "0004_persisted_run_budgets", "breakpoints": true },
     { "idx": 5, "version": "7", "when": 1787946300000, "tag": "0005_active_causal_command", "breakpoints": true },
     { "idx": 6, "version": "7", "when": 1787947200000, "tag": "0006_restricted_opportunity_grants", "breakpoints": true },
-    { "idx": 7, "version": "7", "when": 1787948100000, "tag": "0007_dead_letter_claim_recovery", "breakpoints": true }
+    { "idx": 7, "version": "7", "when": 1787948100000, "tag": "0007_dead_letter_claim_recovery", "breakpoints": true },
+    { "idx": 8, "version": "7", "when": 1787949000000, "tag": "0008_provider_attempt_ledger", "breakpoints": true }
   ]
 }

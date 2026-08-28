@@ -4,6 +4,7 @@ import {
   createBudgetedModelGateway,
   ModelGatewayTransportError,
   RunBudgetLedger,
+  type ProviderAttemptLedger,
   type ModelTransport,
   type TransportGeneration
 } from '@slacato/core';
@@ -14,6 +15,62 @@ const schema = z.object({
 }).strict();
 
 describe('BudgetedModelGateway', () => {
+  it('durably begins and settles every schema-repair transport attempt before calling the provider', async () => {
+    const events: string[] = [];
+    const ledger: ProviderAttemptLedger = {
+      async beginAttempt(input) {
+        events.push(`begin:${input.ordinal}`);
+        return { reservationId: `reservation-${input.ordinal}`, attemptId: `attempt-${input.ordinal}`, grantedOutputTokens: 100 };
+      },
+      async settleAttempt(input) { events.push(`settle:${input.reservationId}`); },
+      async releaseAttempt(input) { events.push(`release:${input.reservationId}`); }
+    };
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate(request) {
+        events.push(`transport:${request.maxOutputTokens}`);
+        return events.filter((event) => event.startsWith('transport')).length === 1
+          ? { text: '{"stakeholders":[{"role":"buyer"}]}' }
+          : { text: '{"stakeholders":[]}' };
+      }
+    };
+
+    const result = await createBudgetedModelGateway(transport, undefined, ledger).generateObject({
+      schema, messages: [{ role: 'user', content: 'Extract.' }], operation: 'durable-schema-repair',
+      durableAttempt: { runScope: 'run-durable', invocationId: 'invocation-durable', provider: 'mock', model: 'mock-chat' },
+      limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 200 }
+    });
+
+    expect(result.value).toEqual({ stakeholders: [] });
+    expect(events).toEqual(['begin:1', 'transport:100', 'settle:reservation-1', 'begin:2', 'transport:100', 'settle:reservation-2']);
+  });
+
+  it('releases only trusted not-sent failures and conservatively charges ambiguous transport failures', async () => {
+    const outcomes: string[] = [];
+    const ledger: ProviderAttemptLedger = {
+      async beginAttempt(input) { return { reservationId: `reservation-${input.ordinal}`, attemptId: `attempt-${input.ordinal}`, grantedOutputTokens: 50 }; },
+      async settleAttempt() { outcomes.push('settled'); },
+      async releaseAttempt(input) { outcomes.push(input.disposition); }
+    };
+    let call = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate() {
+        call += 1;
+        throw new ModelGatewayTransportError({ category: 'transient_transport', delivery: call === 1 ? 'safe_not_sent' : undefined });
+      }
+    };
+    const gateway = createBudgetedModelGateway(transport, undefined, ledger);
+    const request = {
+      schema, messages: [{ role: 'user' as const, content: 'Extract.' }], operation: 'durable-delivery',
+      durableAttempt: { runScope: 'run-durable', provider: 'mock', model: 'mock-chat' },
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 100 }
+    };
+    await expect(gateway.generateObject(request)).rejects.toThrow('transport');
+    await expect(gateway.generateObject(request)).rejects.toThrow('transport');
+    expect(outcomes).toEqual(['safe_not_sent', 'possibly_sent']);
+  });
+
   it('returns normalized Zod issues to the model before succeeding', async () => {
     const calls: TransportGeneration[] = [];
     const transport: ModelTransport = {

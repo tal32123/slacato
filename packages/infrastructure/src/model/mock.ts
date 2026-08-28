@@ -5,6 +5,7 @@ import {
   type EmbeddingGateway,
   type ModelTransport,
   type ModelTransportRequest,
+  type ProviderAttemptLedger,
   type TransportGeneration
 } from '@slacato/core';
 
@@ -23,7 +24,7 @@ export const MOCK_EMBEDDING_PROFILE = Object.freeze({
 export type MockGenerationResolver = <Value>(request: ModelTransportRequest<Value>) => Promise<TransportGeneration<Value>> | TransportGeneration<Value>;
 
 /** Construction options for the deterministic development/demo provider. */
-export type MockModelGatewayOptions = Readonly<{ resolve: MockGenerationResolver }>;
+export type MockModelGatewayOptions = Readonly<{ resolve: MockGenerationResolver; attemptLedger?: ProviderAttemptLedger }>;
 
 class MockTransport implements ModelTransport {
   public readonly capabilities = { nativeStructuredOutput: false } as const;
@@ -73,7 +74,7 @@ export function createMockModelGateways(options: MockModelGatewayOptions): Reado
   registry.register('compaction', { providerId: 'mock', modelId: 'mock-compaction', nativeStructuredOutput: false });
   registry.register('embedding', { providerId: 'mock', modelId: MOCK_EMBEDDING_PROFILE.modelId });
   return {
-    modelGateway: createBudgetedModelGateway(new MockTransport(options.resolve)),
+    modelGateway: createBudgetedModelGateway(new MockTransport(options.resolve), undefined, options.attemptLedger),
     embeddingGateway: { async embed(values: readonly string[]): Promise<number[][]> { return values.map(embeddingFor); } },
     registry,
     embeddingProfile: MOCK_EMBEDDING_PROFILE

@@ -1,9 +1,10 @@
 import postgres from 'postgres';
 import { afterEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresEvidenceRepository } from '@slacato/infrastructure/db/repositories/evidence-repository';
-import { PostgresGenerationAttemptStore } from '@slacato/infrastructure/db/repositories/generation-attempt-store';
-import { PostgresRunBudgetStore } from '@slacato/infrastructure/db/repositories/run-budget-store';
+import { PostgresProviderAttemptLedger } from '@slacato/infrastructure/db/repositories/provider-attempt-ledger';
+import { createBudgetedModelGateway, ProviderAttemptFinalizationConflict, type ModelTransport } from '@slacato/core';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const clients: ReturnType<typeof postgres>[] = [];
@@ -19,6 +20,34 @@ afterEach(async () => {
 });
 
 describe('PostgreSQL repository contract', () => {
+  it('persists attempt_started before the real generic gateway invokes its mock provider', async () => {
+    const sql = openDatabase(); const id = crypto.randomUUID().replaceAll('-', '');
+    const userId = `user_gateway_${id}`; const accountId = `account_gateway_${id}`; const opportunityId = `opportunity_gateway_${id}`; const runId = `run_gateway_${id}`;
+    await sql`insert into personas (id, display_name, role) values (${userId}, 'Gateway user', 'seller')`;
+    await sql`insert into accounts (id, name) values (${accountId}, 'Gateway account')`;
+    await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Gateway opportunity')`;
+    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
+    await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 1, 100, 20)`;
+    const database = createDatabaseClient(databaseUrl, 1);
+    const ledger = new PostgresProviderAttemptLedger(database);
+    let startedBeforeTransport = false;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate() {
+        const rows = await sql<{ count: string }[]>`select count(*)::text as count from generation_attempts where run_id = ${runId} and status = 'attempt_started'`;
+        startedBeforeTransport = rows[0]?.count === '1';
+        return { text: '{"items":[]}', usage: { inputTokens: 1, outputTokens: 2 } };
+      }
+    };
+    await createBudgetedModelGateway(transport, undefined, ledger).generateObject({
+      schema: z.object({ items: z.array(z.string()) }).strict(), messages: [{ role: 'user', content: 'Return items.' }], operation: 'gateway-ledger',
+      durableAttempt: { runScope: runId, provider: 'mock', model: 'mock-chat' },
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 20 }
+    });
+    expect(startedBeforeTransport).toBe(true);
+    await database.close();
+  });
+
   it('persists the run before any generation attempt can exist', async () => {
     const sql = openDatabase();
     const runId = `run_repository_${crypto.randomUUID().replaceAll('-', '')}`;
@@ -123,47 +152,52 @@ describe('PostgreSQL repository contract', () => {
     })).rejects.toThrow('dimension');
   });
 
-  it('records attempt_started before settling provider IDs and usage', async () => {
+  it('atomically starts, reserves, settles, and rejects conflicting duplicate finalization', async () => {
     const sql = openDatabase();
     const id = crypto.randomUUID().replaceAll('-', '');
     const userId = `user_attempt_${id}`;
     const accountId = `account_attempt_${id}`;
     const opportunityId = `opportunity_attempt_${id}`;
     const runId = `run_attempt_${id}`;
-    const attemptId = `attempt_${id}`;
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Attempt user', 'seller')`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Attempt account')`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Attempt opportunity')`;
     await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
+    await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 2, 20, 10)`;
     const database = createDatabaseClient(databaseUrl, 1);
-    const attempts = new PostgresGenerationAttemptStore(database);
-    await attempts.recordAttemptStarted({ id: attemptId, runId: runId as never, operation: 'specialist', provider: 'mock', model: 'mock-chat' });
-    expect((await sql<{ status: string; response_id: string | null }[]>`select status, response_id from generation_attempts where id = ${attemptId}`)[0]).toEqual({ status: 'attempt_started', response_id: null });
-    await attempts.completeAttempt({ id: attemptId, status: 'possible_duplicate', possibleDuplicate: true, requestId: 'provider-request', responseId: 'provider-response', inputTokens: 12, outputTokens: 34 });
-    expect((await sql<{ status: string; possible_duplicate: boolean; input_tokens: number; output_tokens: number }[]>`select status, possible_duplicate, input_tokens, output_tokens from generation_attempts where id = ${attemptId}`)[0]).toEqual({ status: 'possible_duplicate', possible_duplicate: true, input_tokens: 12, output_tokens: 34 });
+    const ledger = new PostgresProviderAttemptLedger(database);
+    const reservation = await ledger.beginAttempt({ runScope: runId, operation: 'specialist', ordinal: 1, provider: 'mock', model: 'mock-chat', inputTokens: 5, requestedOutputTokens: 8 });
+    expect((await sql<{ status: string; reserved_output_tokens: number }[]>`select generation_attempts.status, run_budgets.reserved_output_tokens from generation_attempts join run_budgets on run_budgets.run_id = generation_attempts.run_id where generation_attempts.id = ${reservation.attemptId}`)[0]).toEqual({ status: 'attempt_started', reserved_output_tokens: 8 });
+    await ledger.settleAttempt({ ...reservation, reservedInputTokens: 5, actualInputTokens: 7, actualOutputTokens: 12, requestId: 'provider-request', responseId: 'provider-response' });
+    expect((await sql<{ status: string; possible_duplicate: boolean; input_tokens: number; output_tokens: number; used_input_tokens: number; used_output_tokens: number; reserved_output_tokens: number }[]>`select generation_attempts.status, generation_attempts.possible_duplicate, generation_attempts.input_tokens, generation_attempts.output_tokens, run_budgets.used_input_tokens, run_budgets.used_output_tokens, run_budgets.reserved_output_tokens from generation_attempts join run_budgets on run_budgets.run_id = generation_attempts.run_id where generation_attempts.id = ${reservation.attemptId}`)[0]).toEqual({ status: 'completed', possible_duplicate: false, input_tokens: 7, output_tokens: 12, used_input_tokens: 7, used_output_tokens: 12, reserved_output_tokens: 0 });
+    await expect(ledger.beginAttempt({ runScope: runId, operation: 'exhausted', ordinal: 1, provider: 'mock', model: 'mock-chat', inputTokens: 1, requestedOutputTokens: 1 })).rejects.toThrow('output budget');
+    await ledger.settleAttempt({ ...reservation, reservedInputTokens: 5, actualInputTokens: 7, actualOutputTokens: 12, requestId: 'provider-request', responseId: 'provider-response' });
+    await expect(ledger.settleAttempt({ ...reservation, reservedInputTokens: 5, actualInputTokens: 7, actualOutputTokens: 8, requestId: 'provider-request', responseId: 'provider-response' })).rejects.toBeInstanceOf(ProviderAttemptFinalizationConflict);
     await database.close();
   });
 
-  it('serializes persisted run-budget reservations across store instances', async () => {
+  it('serializes durable reservations and reconciles an abandoned call as a possible duplicate', async () => {
     const sql = openDatabase(); const id = crypto.randomUUID().replaceAll('-', '');
     const userId = `user_budget_${id}`; const accountId = `account_budget_${id}`; const opportunityId = `opportunity_budget_${id}`; const runId = `run_budget_${id}`;
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Budget user', 'seller')`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Budget account')`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Budget opportunity')`;
     await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
-    await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 1, 10, 10)`;
+    await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 3, 9, 20)`;
     const firstDatabase = createDatabaseClient(databaseUrl, 1); const secondDatabase = createDatabaseClient(databaseUrl, 1);
-    const first = new PostgresRunBudgetStore(firstDatabase);
-    const second = new PostgresRunBudgetStore(secondDatabase);
+    const first = new PostgresProviderAttemptLedger(firstDatabase);
+    const second = new PostgresProviderAttemptLedger(secondDatabase);
     const results = await Promise.allSettled([
-      first.reserve({ id: `reservation_a_${id}`, runId: runId as never, inputTokens: 5, requestedOutputTokens: 8 }),
-      second.reserve({ id: `reservation_b_${id}`, runId: runId as never, inputTokens: 5, requestedOutputTokens: 8 })
+      first.beginAttempt({ runScope: runId, operation: `specialist_a_${id}`, ordinal: 1, provider: 'mock', model: 'mock-chat', inputTokens: 5, requestedOutputTokens: 8 }),
+      second.beginAttempt({ runScope: runId, operation: `specialist_b_${id}`, ordinal: 1, provider: 'mock', model: 'mock-chat', inputTokens: 5, requestedOutputTokens: 8 })
     ]);
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    const reservation = results.find((result): result is PromiseFulfilledResult<{ id: string; grantedOutputTokens: number }> => result.status === 'fulfilled')?.value;
+    const reservation = results.find((result): result is PromiseFulfilledResult<{ reservationId: string; attemptId: string; grantedOutputTokens: number }> => result.status === 'fulfilled')?.value;
     if (reservation === undefined) throw new Error('Expected one reservation');
-    await first.settle({ id: reservation.id, actualOutputTokens: 8, possibleDuplicate: true });
-    expect(await second.get(runId as never)).toMatchObject({ usedCalls: 1, usedInputTokens: 5, usedOutputTokens: 8 });
+    const outstanding = (await sql<{ invocation_id: string | null; operation: string }[]>`select invocation_id, operation from run_budget_reservations where id = ${reservation.reservationId}`)[0];
+    if (outstanding === undefined) throw new Error('Expected outstanding reservation');
+    await second.beginAttempt({ runScope: runId, ...(outstanding.invocation_id === null ? {} : { invocationId: outstanding.invocation_id }), operation: outstanding.operation, ordinal: 2, provider: 'mock', model: 'mock-chat', inputTokens: 1, requestedOutputTokens: 1 });
+    expect((await sql<{ status: string; possible_duplicate: boolean; actual_output_tokens: number }[]>`select run_budget_reservations.status, generation_attempts.possible_duplicate, run_budget_reservations.actual_output_tokens from run_budget_reservations join generation_attempts on generation_attempts.id = run_budget_reservations.attempt_id where run_budget_reservations.id = ${reservation.reservationId}`)[0]).toEqual({ status: 'possible_duplicate', possible_duplicate: true, actual_output_tokens: 8 });
     await firstDatabase.close();
     await secondDatabase.close();
   });
