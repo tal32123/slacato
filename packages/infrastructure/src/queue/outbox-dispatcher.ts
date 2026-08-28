@@ -1,5 +1,6 @@
 import type { CommandQueue, WorkflowCommand } from '@slacato/core';
 import type { DatabaseClient } from '../db/client.js';
+import type { CommandInspection } from './bullmq.js';
 
 type OutboxRow = Readonly<{ id: string; run_id: string; type: string; payload: Record<string, unknown>; idempotency_key: string; delivery_attempts: number; claim_token: string }>;
 
@@ -24,10 +25,15 @@ export class OutboxDispatcher {
       const command: WorkflowCommand = { id: row.id, runId: row.run_id as WorkflowCommand['runId'], type: row.type, payload: row.payload, idempotencyKey: row.idempotency_key };
       try {
         await this.commandQueue.publish(command);
-        const marked = await this.database.sql`update outbox_commands set status = 'published', published_at = now(), claim_owner = null, claim_token = null, claim_expires_at = null where id = ${row.id} and status = 'claimed' and claim_token = ${row.claim_token}`;
-        if (marked.count > 0) published += 1;
+        if (await this.markPublished(row)) published += 1;
       } catch (error) {
-        if (row.delivery_attempts >= this.maxAttempts) {
+        const acceptance = await this.inspectAcceptance(row.id);
+        if (acceptance === 'accepted') {
+          if (await this.markPublished(row)) published += 1;
+        } else if (acceptance === 'ambiguous') {
+          await this.database.sql`update outbox_commands set delivery_attempts = greatest(delivery_attempts - 1, 0)
+            where id = ${row.id} and status = 'claimed' and claim_token = ${row.claim_token}`;
+        } else if (row.delivery_attempts >= this.maxAttempts) {
           const safeCommand: WorkflowCommand = { ...command, payload: { commandId: row.id, type: row.type, delivery: 'exhausted' } };
           await this.deadLetterQueue.publish(safeCommand);
           await this.database.sql`update outbox_commands set status = 'dead_letter', claim_owner = null, claim_token = null, claim_expires_at = null where id = ${row.id} and status = 'claimed' and claim_token = ${row.claim_token}`;
@@ -39,6 +45,23 @@ export class OutboxDispatcher {
       }
     }
     return { claimed: claimed.length, published, deadLettered };
+  }
+
+  private async markPublished(row: OutboxRow): Promise<boolean> {
+    const marked = await this.database.sql`update outbox_commands set status = 'published', published_at = now(), claim_owner = null, claim_token = null, claim_expires_at = null where id = ${row.id} and status = 'claimed' and claim_token = ${row.claim_token}`;
+    return marked.count > 0;
+  }
+
+  /** A failed publish response is not evidence that BullMQ rejected the stable job ID. */
+  private async inspectAcceptance(commandId: string): Promise<'accepted' | 'rejected' | 'ambiguous'> {
+    const inspector = this.commandQueue as CommandQueue & { inspect?: (id: string) => Promise<CommandInspection> };
+    if (inspector.inspect === undefined) return 'ambiguous';
+    try {
+      const inspection = await inspector.inspect(commandId);
+      return inspection.state === 'missing' ? 'rejected' : 'accepted';
+    } catch {
+      return 'ambiguous';
+    }
   }
 }
 

@@ -54,6 +54,12 @@ export class BullMqCommandQueue implements CommandQueue {
 
   public async state(commandId: string): Promise<CommandInspection['state']> { return (await this.inspect(commandId)).state; }
 
+  /** Removes only a retained completed job so its stable ID can be delivered again. */
+  public async reopenCompleted(commandId: string): Promise<void> {
+    const job = await this.queue.getJob(commandId);
+    if (job !== undefined && await job.getState() === 'completed') await job.remove();
+  }
+
   public async isLive(commandId: string): Promise<boolean> { return (await this.state(commandId)) === 'live'; }
 
   public close(): Promise<void> { return this.queue.close(); }

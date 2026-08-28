@@ -51,6 +51,14 @@ async function waitForCompletedJob(commandQueue: BullMqCommandQueue, commandId: 
   throw new Error(`Timed out waiting for ${commandId} to complete`);
 }
 
+async function waitFor(check: () => boolean, description: string): Promise<void> {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (check()) return;
+    await pause(50);
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
 beforeAll(async () => { await queue.queue.waitUntilReady(); });
 afterAll(async () => { await queue.close(); await database.close(); });
 
@@ -141,6 +149,60 @@ describe('PostgreSQL outbox and workflow leases', () => {
     }
   });
 
+  it('reopens a retained completed but unconsumed primary job and executes the stable command again', async () => {
+    const queueName = `slacato-workflow-completed-unconsumed-${suffix()}`;
+    const primary = new BullMqCommandQueue(redisUrl, queueName);
+    let executions = 0;
+    const worker = new Worker(queueName, async () => { executions += 1; return {}; }, { connection: { url: redisUrl } });
+    await Promise.all([primary.queue.waitUntilReady(), worker.waitUntilReady()]);
+    try {
+      const seeded = await seedRun(); const next = command(seeded.runId);
+      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await new OutboxDispatcher(database, primary, primary).dispatchBatch();
+      await waitForCompletedJob(primary, next.id);
+      const executionsBeforeRecovery = executions;
+
+      const restored = await new PostgresCommandReconciler(database, primary).reconcile();
+
+      expect(restored).toBeGreaterThanOrEqual(1);
+      await waitFor(() => executions > executionsBeforeRecovery, 'the reopened completed command to execute');
+      expect((await database.sql<{ status: string; consumed_at: string | null }[]>`select status, consumed_at from outbox_commands where id = ${next.id}`)[0]).toMatchObject({ status: 'published', consumed_at: null });
+      expect((await primary.queue.getJob(next.id))?.data.id).toBe(next.id);
+    } finally {
+      await worker.close(); await primary.close();
+    }
+  });
+
+  it('recovers a crash after completed-job removal but before republication', async () => {
+    const queueName = `slacato-workflow-completed-recovery-crash-${suffix()}`;
+    const primary = new BullMqCommandQueue(redisUrl, queueName);
+    let executions = 0;
+    const worker = new Worker(queueName, async () => { executions += 1; return {}; }, { connection: { url: redisUrl } });
+    await Promise.all([primary.queue.waitUntilReady(), worker.waitUntilReady()]);
+    try {
+      const seeded = await seedRun(); const next = command(seeded.runId);
+      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await new OutboxDispatcher(database, primary, primary).dispatchBatch();
+      await waitForCompletedJob(primary, next.id);
+      const executionsBeforeRecovery = executions;
+
+      const crashAfterRemoval = {
+        inspect: primary.inspect.bind(primary),
+        state: primary.state.bind(primary),
+        reopenCompleted: async (commandId: string) => { await primary.reopenCompleted(commandId); throw new Error('simulated crash after completed-job removal'); }
+      };
+      await expect(new PostgresCommandReconciler(database, crashAfterRemoval).reconcile()).rejects.toThrow('simulated crash after completed-job removal');
+      expect(await primary.queue.getJob(next.id)).toBeUndefined();
+      expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('claimed');
+
+      await new PostgresCommandReconciler(database, primary).reconcile();
+      await waitFor(() => executions > executionsBeforeRecovery, 'the recovered command to execute');
+      expect((await primary.queue.getJob(next.id))?.data.id).toBe(next.id);
+    } finally {
+      await worker.close(); await primary.close();
+    }
+  });
+
   it('rejects an approval subject owned by another run', async () => {
     const first = await seedRun();
     const second = await seedRun();
@@ -161,12 +223,63 @@ describe('PostgreSQL outbox and workflow leases', () => {
     const next = command(seeded.runId);
     await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
     const deadLetters: WorkflowCommand[] = [];
-    const failingQueue: CommandQueue = { publish: async () => { throw new Error('redis unavailable'); } };
+    const failingQueue = { publish: async () => { throw new Error('redis unavailable'); }, inspect: async () => ({ state: 'missing' as const, attemptsMade: 0, maxAttempts: 0, exhausted: false }) };
     const deadLetterQueue: CommandQueue = { publish: async (entry) => { deadLetters.push(entry); } };
     const outcome = await new OutboxDispatcher(database, failingQueue, deadLetterQueue, 1).dispatchBatch();
     expect(outcome.deadLettered).toBeGreaterThanOrEqual(1);
     expect(deadLetters).toContainEqual(expect.objectContaining({ id: next.id, payload: { commandId: next.id, type: 'process-step', delivery: 'exhausted' } }));
     expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('dead_letter');
+  });
+
+  it('accepts a primary job when publication throws after BullMQ acceptance without dead-lettering it', async () => {
+    const queueName = `slacato-workflow-accept-then-throw-${suffix()}`;
+    const primary = new BullMqCommandQueue(redisUrl, queueName);
+    const deadLetters: WorkflowCommand[] = [];
+    const acceptThenThrow = {
+      publish: async (entry: WorkflowCommand) => { await primary.publish(entry); throw new Error('simulated response loss after BullMQ acceptance'); },
+      inspect: primary.inspect.bind(primary)
+    };
+    const deadLetterQueue: CommandQueue = { publish: async (entry) => { deadLetters.push(entry); } };
+    await primary.queue.waitUntilReady();
+    try {
+      const seeded = await seedRun(); const next = command(seeded.runId);
+      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+
+      const outcome = await new OutboxDispatcher(database, acceptThenThrow, deadLetterQueue, 1).dispatchBatch();
+
+      expect(outcome).toMatchObject({ published: 1, deadLettered: 0 });
+      expect(deadLetters).toEqual([]);
+      expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('published');
+      expect(await primary.queue.getJob(next.id)).toBeDefined();
+    } finally {
+      await primary.close();
+    }
+  });
+
+  it('leaves an ambiguous primary publication claim recoverable when inspection also fails', async () => {
+    const seeded = await seedRun(); const next = command(seeded.runId);
+    await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+    const deadLetters: WorkflowCommand[] = [];
+    const unavailable = {
+      publish: async () => { throw new Error('primary unavailable'); },
+      inspect: async () => { throw new Error('primary inspection unavailable'); }
+    };
+    const deadLetterQueue: CommandQueue = { publish: async (entry) => { deadLetters.push(entry); } };
+
+    const outcome = await new OutboxDispatcher(database, unavailable, deadLetterQueue, 1, 1).dispatchBatch();
+
+    expect(outcome).toMatchObject({ published: 0, deadLettered: 0 });
+    expect(deadLetters).toEqual([]);
+    expect((await database.sql<{ status: string; delivery_attempts: number }[]>`select status, delivery_attempts from outbox_commands where id = ${next.id}`)[0]).toEqual({ status: 'claimed', delivery_attempts: 0 });
+    await pause(5);
+    const primary = new BullMqCommandQueue(redisUrl, `slacato-workflow-ambiguous-retry-${suffix()}`);
+    await primary.queue.waitUntilReady();
+    try {
+      await new OutboxDispatcher(database, primary, primary, 1).dispatchBatch();
+      expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('published');
+    } finally {
+      await primary.close();
+    }
   });
 
   it('moves a real exhausted processor failure out of the primary outbox', async () => {
