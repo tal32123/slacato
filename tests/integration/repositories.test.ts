@@ -152,6 +152,52 @@ describe('PostgreSQL repository contract', () => {
     })).rejects.toThrow('dimension');
   });
 
+  it('returns each authorized evidence version once before exact-cosine top-K ranking', async () => {
+    const sql = openDatabase();
+    const id = crypto.randomUUID().replaceAll('-', '');
+    const accountId = `account_authorized_${id}`;
+    const userId = `user_authorized_${id}`;
+    const opportunityId = `opportunity_authorized_${id}`;
+    const restrictedOpportunityId = `opportunity_restricted_${id}`;
+    const documentId = `document_authorized_${id}`;
+    const firstId = `evidence_authorized_first_${id}`;
+    const secondId = `evidence_authorized_second_${id}`;
+    const thirdId = `evidence_authorized_third_${id}`;
+    const deniedSourceId = `evidence_authorized_denied_source_${id}`;
+    const deniedSensitivityId = `evidence_authorized_denied_sensitivity_${id}`;
+    const deniedRestrictedOpportunityId = `evidence_authorized_denied_restricted_${id}`;
+    const profile = { provider: 'mock', model: 'mock-embedding', dimension: 2, profile: 'mock-profile', version: 'v1', normalization: 'l2' };
+
+    await sql`insert into accounts (id, name) values (${accountId}, 'Authorized account')`;
+    await sql`insert into personas (id, display_name, role) values (${userId}, 'Authorized user', 'seller')`;
+    await sql`insert into opportunities (id, account_id, name, restricted) values (${opportunityId}, ${accountId}, 'Authorized opportunity', false), (${restrictedOpportunityId}, ${accountId}, 'Restricted opportunity', true)`;
+    await sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read, sensitive_pricing, can_read_restricted) values
+      (${`grant_authorized_a_${id}`}, ${userId}, ${accountId}, 'crm', true, false, false),
+      (${`grant_authorized_b_${id}`}, ${userId}, ${accountId}, 'crm', true, false, false)`;
+    await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content) values (${documentId}, ${documentId}, 1, 'crm', 'authorized document hash', 'search content')`;
+    await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, embedding, embedding_provider, embedding_model, embedding_dimension, embedding_profile, embedding_version, embedding_normalization) values
+      (${firstId}, ${documentId}, ${accountId}, ${opportunityId}, 0, 'crm', 'internal', 'authorized-first', 'first', '[1,0]'::vector, 'mock', 'mock-embedding', 2, 'mock-profile', 'v1', 'l2'),
+      (${secondId}, ${documentId}, ${accountId}, ${opportunityId}, 1, 'crm', 'internal', 'authorized-second', 'second', '[0.8,0.6]'::vector, 'mock', 'mock-embedding', 2, 'mock-profile', 'v1', 'l2'),
+      (${thirdId}, ${documentId}, ${accountId}, ${opportunityId}, 2, 'crm', 'internal', 'authorized-third', 'third', '[0,1]'::vector, 'mock', 'mock-embedding', 2, 'mock-profile', 'v1', 'l2'),
+      (${deniedSourceId}, ${documentId}, ${accountId}, ${opportunityId}, 3, 'slack', 'internal', 'authorized-denied-source', 'source denied', '[1,0]'::vector, 'mock', 'mock-embedding', 2, 'mock-profile', 'v1', 'l2'),
+      (${deniedSensitivityId}, ${documentId}, ${accountId}, ${opportunityId}, 4, 'crm', 'restricted', 'authorized-denied-sensitivity', 'sensitivity denied', '[1,0]'::vector, 'mock', 'mock-embedding', 2, 'mock-profile', 'v1', 'l2'),
+      (${deniedRestrictedOpportunityId}, ${documentId}, ${accountId}, ${restrictedOpportunityId}, 5, 'crm', 'internal', 'authorized-denied-restricted', 'restricted opportunity denied', '[1,0]'::vector, 'mock', 'mock-embedding', 2, 'mock-profile', 'v1', 'l2')`;
+
+    const database = createDatabaseClient(databaseUrl, 1);
+    const repository = new PostgresEvidenceRepository(database);
+    const access = { personaId: userId as never, allowSensitivePricing: true };
+    const allPublicMatches = await repository.searchExactCosine({ access, accountId: accountId as never, opportunityId: opportunityId as never, embedding: [1, 0], limit: 5, profile });
+    const topTwoPublicMatches = await repository.searchExactCosine({ access, accountId: accountId as never, opportunityId: opportunityId as never, embedding: [1, 0], limit: 2, profile });
+    const restrictedOpportunityMatches = await repository.searchExactCosine({ access, accountId: accountId as never, opportunityId: restrictedOpportunityId as never, embedding: [1, 0], limit: 5, profile });
+    await database.close();
+
+    expect(allPublicMatches.map((match) => match.evidenceId)).toEqual([firstId, secondId, thirdId]);
+    expect(topTwoPublicMatches.map((match) => match.evidenceId)).toEqual([firstId, secondId]);
+    expect(allPublicMatches.map((match) => match.evidenceId)).not.toContain(deniedSourceId);
+    expect(allPublicMatches.map((match) => match.evidenceId)).not.toContain(deniedSensitivityId);
+    expect(restrictedOpportunityMatches).toEqual([]);
+  });
+
   it('atomically starts, reserves, settles, and rejects conflicting duplicate finalization', async () => {
     const sql = openDatabase();
     const id = crypto.randomUUID().replaceAll('-', '');

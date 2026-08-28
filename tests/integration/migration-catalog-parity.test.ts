@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import postgres, { type Sql } from 'postgres';
 import { afterEach, describe, expect, it } from 'vitest';
+import { getTableConfig } from '../../packages/infrastructure/node_modules/drizzle-orm/pg-core/utils.js';
 import {
   approvalSubjects, briefs, claims, evidenceVersions, outboxCommands, runBudgetReservations,
   permissionGrants, runBudgets, runEvidenceManifestEntries, runEvidenceManifests, stepInvocations
@@ -147,6 +148,8 @@ describe('durable migration catalog', () => {
     expect(approvalSubjects.policyTriggers.getSQLType()).toBe('jsonb');
     expect(Object.keys(briefs)).toEqual(expect.arrayContaining(['approvalSubjectId', 'runId', 'subjectHash']));
     expect(Object.keys(outboxCommands)).toEqual(expect.arrayContaining(['claimOwner', 'claimToken', 'claimExpiresAt', 'consumedAt']));
+    const pendingIndex = getTableConfig(outboxCommands).indexes.find((entry) => entry.config.name === 'outbox_commands_pending_idx');
+    expect(pendingIndex?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['status', 'available_at', 'id']);
     expect(Object.keys(stepInvocations)).toEqual(expect.arrayContaining(['causalCommandId', 'leaseToken']));
     expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens']));
     expect(Object.keys(runBudgetReservations)).toEqual(expect.arrayContaining([
