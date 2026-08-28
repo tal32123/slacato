@@ -8,18 +8,18 @@ import { getTableConfig } from '../../packages/infrastructure/node_modules/drizz
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresProviderAttemptLedger } from '@slacato/infrastructure/db/repositories/provider-attempt-ledger';
 import {
-  approvalSubjects, briefs, claims, evidenceVersions, outboxCommands, runBudgetReservations,
+  approvalSubjects, briefs, claims, documentVersions, evidenceVersions, outboxCommands, runBudgetReservations,
   permissionGrants, runBudgets, runEvidenceManifestEntries, runEvidenceManifests, stepInvocations
 } from '@slacato/infrastructure/db/schema';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 10 }, (_, index) =>
+const migrationFiles = Array.from({ length: 11 }, (_, index) =>
   resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
     'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
     'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
-    'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline'
+    'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance'
   ][index]}.sql`)
 );
 const temporaryDatabases: string[] = [];
@@ -143,6 +143,14 @@ describe('durable migration catalog', () => {
       expect(serialized).toContain('step_invocations_one_active_causal_command_uq');
       expect(serialized).toContain('run_budget_reservations_attempt_fk');
       expect(serialized).toContain('run_budget_reservations_invocation_operation_ordinal_uq');
+      expect(serialized).toContain('document_versions_provenance_ck');
+      expect(serialized).toContain('evidence_versions_provenance_ck');
+      expect(serialized).toContain('evidence_versions_provenance_idx');
+      expect(serialized).toContain('"column_name":"event_date"');
+      expect(serialized).toContain('"column_name":"reliability_class"');
+      expect(serialized).toContain('"column_name":"source_locator"');
+      expect(serialized).toContain('"column_name":"classification_reason"');
+      expect(serialized).toContain('"column_name":"policy_hash"');
       expect(serialized).toContain('nulls not distinct');
       expect((cleanCatalog.constraints as readonly { table_name: string; name: string; definition: string }[])).toEqual(expect.arrayContaining([
         expect.objectContaining({ table_name: 'run_budget_reservations', name: 'run_budget_reservations_invocation_operation_ordinal_uq', definition: expect.stringContaining('NULLS NOT DISTINCT') })
@@ -196,6 +204,20 @@ describe('durable migration catalog', () => {
   it('exposes the final SQL columns and constraints through the runtime mapping', () => {
     expect(evidenceVersions.embedding.getSQLType()).toBe('vector');
     expect(evidenceVersions.lexicalContent.generated?.as).toBeDefined();
+    expect(Object.keys(documentVersions)).toEqual(expect.arrayContaining([
+      'eventDate', 'reliabilityClass', 'sourceLocator', 'classificationReason', 'policyHash'
+    ]));
+    expect(Object.keys(evidenceVersions)).toEqual(expect.arrayContaining([
+      'eventDate', 'reliabilityClass', 'sourceLocator', 'classificationReason', 'policyHash'
+    ]));
+    const documentProvenanceCheck = getTableConfig(documentVersions).checks.find((entry) => entry.name === 'document_versions_provenance_ck');
+    expect(documentProvenanceCheck).toBeDefined();
+    const evidenceConfig = getTableConfig(evidenceVersions);
+    expect(evidenceConfig.checks.find((entry) => entry.name === 'evidence_versions_provenance_ck')).toBeDefined();
+    expect(evidenceConfig.indexes.find((entry) => entry.config.name === 'evidence_versions_provenance_idx')?.config.columns
+      .map((column) => 'name' in column ? column.name : undefined)).toEqual([
+        'account_id', 'opportunity_id', 'source_type', 'sensitivity', 'event_date', 'id'
+      ]);
     expect(Object.keys(permissionGrants)).toEqual(expect.arrayContaining(['personaId', 'accountId', 'canReadRestricted']));
     expect(Object.keys(runEvidenceManifests)).toEqual(expect.arrayContaining(['runId']));
     expect(Object.keys(runEvidenceManifestEntries)).toEqual(expect.arrayContaining(['manifestId', 'evidenceVersionId']));

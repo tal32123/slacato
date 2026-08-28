@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   assertSlackCoverage,
   classifyEvidenceSensitivity,
+  opportunityFixtureSchema,
   parseFixtureSet,
   slackUpdatesSchema,
   type OpportunityFixture,
@@ -131,6 +132,74 @@ describe('canonical fixture schemas', () => {
       const accountPath = join(root, 'salesforce/accounts.tsv');
       writeFileSync(accountPath, readFileSync(accountPath, 'utf8').replace('Northstar Foods Cooperative', 'Changed Fixture'));
       expect(() => parseFixtureSet(root)).toThrow(/canonical source hash/i);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('hard-binds canonical attribution and Slack generation to the pinned source', () => {
+    const root = mkdtempSync(join(tmpdir(), 'slacato-fixture-binding-'));
+    try {
+      cpSync('fixtures/cato', root, { recursive: true });
+      const attributionPath = join(root, 'source-attribution.json');
+      const attribution = JSON.parse(readFileSync(attributionPath, 'utf8')) as Record<string, unknown>;
+      writeFileSync(attributionPath, JSON.stringify({ ...attribution, repository: 'https://example.com/not-canonical.git' }));
+      expect(() => parseFixtureSet(root)).toThrow(/canonical repository/i);
+
+      writeFileSync(attributionPath, JSON.stringify({ ...attribution, commit: '0'.repeat(40) }));
+      expect(() => parseFixtureSet(root)).toThrow(/canonical commit/i);
+
+      writeFileSync(attributionPath, JSON.stringify(attribution));
+      const generationPath = join(root, 'slack/generation.json');
+      const generation = JSON.parse(readFileSync(generationPath, 'utf8')) as Record<string, unknown>;
+      writeFileSync(generationPath, JSON.stringify({ ...generation, sourceCommit: '0'.repeat(40) }));
+      expect(() => parseFixtureSet(root)).toThrow(/Slack source commit/i);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects impossible calendar dates instead of allowing Date normalization', () => {
+    const valid = opportunityFixtureSchema.parse({
+      opportunityId: 'OPP-9001', opportunityName: 'Fixture', accountId: 'ACC-9001', accountName: 'Fixture Account',
+      stage: 'Test', type: 'Renewal', region: 'EMEA', country: 'Test', industry: 'Test', owner: 'Owner',
+      closeDate: '2024-02-29', acv: 1, tcv: 1, renewalTermMonths: 1, probability: 1, forecastCategory: 'Pipeline',
+      nextStep: 'Test', primaryCompetitor: 'None', riskLevel: 'low', approvalRequired: false, restrictedAccess: false
+    });
+    expect(valid.closeDate).toBe('2024-02-29');
+    expect(() => opportunityFixtureSchema.parse({ ...valid, closeDate: '2026-02-29' })).toThrow(/ISO date/i);
+  });
+
+  it('rejects cross-account and transcript-summary integrity mismatches', () => {
+    const root = mkdtempSync(join(tmpdir(), 'slacato-fixture-crossrefs-'));
+    try {
+      cpSync('fixtures/cato', root, { recursive: true });
+      const opportunityPath = 'salesforce/opportunities.tsv';
+      rewriteAttributedSource(root, opportunityPath, readFileSync(join(root, opportunityPath), 'utf8')
+        .replace('OPP-1001\tNorthstar Foods Cooperative - Global Access Renewal\tACC-2001\tNorthstar Foods Cooperative',
+          'OPP-1001\tNorthstar Foods Cooperative - Global Access Renewal\tACC-2001\tWrong Account Name'));
+      expect(() => parseFixtureSet(root)).toThrow(/account name/i);
+
+      cpSync('fixtures/cato', root, { recursive: true });
+      const gongPath = 'gong/gong_call_summaries.tsv';
+      rewriteAttributedSource(root, gongPath, readFileSync(join(root, gongPath), 'utf8').replace('CON-3001, CON-3002, CON-3004', 'CON-3006'));
+      expect(() => parseFixtureSet(root)).toThrow(/participant.*account/i);
+
+      cpSync('fixtures/cato', root, { recursive: true });
+      const transcriptPath = 'gong/transcripts/OPP-1001_CALL-001.md';
+      rewriteAttributedSource(root, transcriptPath, readFileSync(join(root, transcriptPath), 'utf8').replace('**Date:** 2026-03-11', '**Date:** 2026-03-12'));
+      expect(() => parseFixtureSet(root)).toThrow(/transcript.*summary/i);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects transcript files outside the pinned inventory', () => {
+    const root = mkdtempSync(join(tmpdir(), 'slacato-fixture-inventory-'));
+    try {
+      cpSync('fixtures/cato', root, { recursive: true });
+      writeFileSync(join(root, 'gong/transcripts/EXTRA.md'), '# unexpected');
+      expect(() => parseFixtureSet(root)).toThrow(/transcript inventory/i);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

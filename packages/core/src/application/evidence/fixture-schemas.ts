@@ -4,9 +4,16 @@ import { join } from 'node:path';
 import { z } from 'zod';
 
 const identifier = (prefix: string) => z.string().regex(new RegExp(`^${prefix}-\\d+$`));
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)), 'Invalid ISO date');
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const [year, month, day] = value.split('-').map(Number);
+  if (year === undefined || month === undefined || day === undefined) return false;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}, 'Invalid ISO date');
 const nonEmpty = z.string().trim().min(1);
 const accessLevelSchema = z.enum(['standard', 'restricted', 'sensitive_pricing']);
+export const CANONICAL_FIXTURE_REPOSITORY = 'https://github.com/danaabramov/Cato-IS-AI-Engineer-Exam.git';
+export const CANONICAL_FIXTURE_COMMIT = '076c659c3c7afd416f8d26729774b67042a55761';
 export const CANONICAL_SOURCE_FILES = [
   'salesforce/accounts.tsv', 'salesforce/contacts.tsv', 'salesforce/opportunities.tsv',
   'gong/gong_call_summaries.tsv',
@@ -98,7 +105,7 @@ export type SlackGenerationInput = Readonly<{
 
 export type PolicyFixture = Readonly<{ content: string; contentHash: string }>;
 export type TranscriptFixture = Readonly<{
-  callId: string; opportunityId: string; accountId: string; callDate: string;
+  callId: string; title: string; opportunityId: string; accountId: string; callDate: string;
   sourceAccessLevel: z.infer<typeof accessLevelSchema>; content: string; sourceLocator: string;
 }>;
 
@@ -258,8 +265,10 @@ function uniqueBy(records: readonly Record<string, unknown>[], key: string, labe
 
 function sha256(content: string): string { return createHash('sha256').update(content).digest('hex'); }
 
-function verifySourceAttribution(root: string): void {
+function verifySourceAttribution(root: string): z.infer<typeof sourceAttributionSchema> {
   const attribution = sourceAttributionSchema.parse(JSON.parse(readFileSync(join(root, 'source-attribution.json'), 'utf8')));
+  if (attribution.repository !== CANONICAL_FIXTURE_REPOSITORY) throw new Error('Canonical repository does not match the pinned fixture source');
+  if (attribution.commit !== CANONICAL_FIXTURE_COMMIT) throw new Error('Canonical commit does not match the pinned fixture source');
   const hashes = new Map(attribution.files.map((file) => [file.path, file.sha256]));
   if (hashes.size !== CANONICAL_SOURCE_FILES.length) throw new Error('Canonical source attribution contains duplicate or missing paths');
   for (const path of CANONICAL_SOURCE_FILES) {
@@ -267,28 +276,31 @@ function verifySourceAttribution(root: string): void {
     const actual = createHash('sha256').update(readFileSync(join(root, path))).digest('hex');
     if (expected !== actual) throw new Error(`Canonical source hash does not match pinned attribution: ${path}`);
   }
+  return attribution;
 }
 
 function parseTranscript(path: string, locator: string): TranscriptFixture {
   const content = readFileSync(path, 'utf8').trim();
   const read = (label: string) => new RegExp(`^\\*\\*${label}:\\*\\*\\s*(.+)$`, 'mi').exec(content)?.[1]?.trim();
-  const callId = /^# Transcript: (CALL-\d+)/m.exec(content)?.[1];
+  const heading = /^# Transcript: (CALL-\d+) - (.+)$/m.exec(content);
+  const callId = heading?.[1];
+  const title = heading?.[2]?.trim();
   const opportunityId = read('Opportunity');
   const accountId = read('Account');
   const callDate = read('Date');
   const sourceAccessLevel = read('Source access level');
-  if (callId === undefined || opportunityId === undefined || accountId === undefined || callDate === undefined || sourceAccessLevel === undefined) {
+  if (callId === undefined || title === undefined || opportunityId === undefined || accountId === undefined || callDate === undefined || sourceAccessLevel === undefined) {
     throw new Error(`Transcript metadata is incomplete: ${locator}`);
   }
   return z.strictObject({
-    callId: identifier('CALL'), opportunityId: identifier('OPP'), accountId: identifier('ACC'), callDate: isoDate,
+    callId: identifier('CALL'), title: nonEmpty, opportunityId: identifier('OPP'), accountId: identifier('ACC'), callDate: isoDate,
     sourceAccessLevel: accessLevelSchema, content: nonEmpty, sourceLocator: nonEmpty
-  }).parse({ callId, opportunityId, accountId, callDate, sourceAccessLevel, content, sourceLocator: locator });
+  }).parse({ callId, title, opportunityId, accountId, callDate, sourceAccessLevel, content, sourceLocator: locator });
 }
 
 /** Loads and cross-validates the exact canonical fixture layout. */
 export function parseFixtureSet(root: string): FixtureSet {
-  verifySourceAttribution(root);
+  const attribution = verifySourceAttribution(root);
   const accounts = z.array(accountFixtureSchema).parse(parseTsv(join(root, 'salesforce/accounts.tsv')));
   const opportunities = z.array(opportunityFixtureSchema).parse(parseTsv(join(root, 'salesforce/opportunities.tsv')));
   const contacts = z.array(contactFixtureSchema).parse(parseTsv(join(root, 'salesforce/contacts.tsv')));
@@ -298,12 +310,19 @@ export function parseFixtureSet(root: string): FixtureSet {
   const slackPath = join(root, 'slack/account_team_updates.tsv');
   const slackContent = readFileSync(slackPath, 'utf8');
   const slackGeneration = slackGenerationMetadataSchema.parse(JSON.parse(readFileSync(join(root, 'slack/generation.json'), 'utf8')));
+  if (slackGeneration.sourceCommit !== attribution.commit) throw new Error('Slack source commit does not match canonical attribution');
   if (slackGeneration.outputHash !== sha256(slackContent)) throw new Error('Reviewed Slack fixture hash does not match generation provenance');
   const slackUpdates = slackUpdatesSchema.parse(parseTsv(slackPath));
   const policyContent = readFileSync(join(root, 'policies/deal_desk_policy.md'), 'utf8').trim();
   const policy = { content: policyContent, contentHash: sha256(policyContent) };
   const transcriptDirectory = join(root, 'gong/transcripts');
-  const transcripts = readdirSync(transcriptDirectory).filter((file) => file.endsWith('.md')).sort()
+  const transcriptFiles = readdirSync(transcriptDirectory).sort();
+  const expectedTranscriptFiles = CANONICAL_SOURCE_FILES.filter((path) => path.startsWith('gong/transcripts/'))
+    .map((path) => path.slice('gong/transcripts/'.length)).sort();
+  if (transcriptFiles.length !== expectedTranscriptFiles.length || transcriptFiles.some((file, index) => file !== expectedTranscriptFiles[index])) {
+    throw new Error('Transcript inventory does not match the pinned allowlist');
+  }
+  const transcripts = transcriptFiles
     .map((file) => parseTranscript(join(transcriptDirectory, file), `gong/transcripts/${file}`));
 
   uniqueBy(accounts, 'accountId', 'account ID'); uniqueBy(opportunities, 'opportunityId', 'opportunity ID');
@@ -311,10 +330,15 @@ export function parseFixtureSet(root: string): FixtureSet {
   uniqueBy(pricingNotes, 'pricingNoteId', 'pricing note ID'); uniqueBy(permissions, 'userId', 'user ID');
   uniqueBy(slackUpdates, 'updateId', 'Slack update ID'); uniqueBy(transcripts, 'callId', 'transcript call ID');
 
-  const accountIds = new Set(accounts.map((row) => row.accountId));
+  const accountById = new Map(accounts.map((row) => [row.accountId, row]));
+  const accountIds = new Set(accountById.keys());
   const opportunityById = new Map(opportunities.map((row) => [row.opportunityId, row]));
-  const contactIds = new Set(contacts.map((row) => row.contactId));
-  for (const row of opportunities) if (!accountIds.has(row.accountId)) throw new Error(`Unknown account ${row.accountId}`);
+  const contactById = new Map(contacts.map((row) => [row.contactId, row]));
+  for (const row of opportunities) {
+    const account = accountById.get(row.accountId);
+    if (account === undefined) throw new Error(`Unknown account ${row.accountId}`);
+    if (row.accountName !== account.accountName) throw new Error(`Opportunity account name does not match account ${row.accountId}`);
+  }
   for (const row of contacts) if (!accountIds.has(row.accountId)) throw new Error(`Unknown account ${row.accountId}`);
   for (const row of [...gongSummaries, ...transcripts, ...slackUpdates]) {
     const opportunity = opportunityById.get(row.opportunityId);
@@ -323,7 +347,17 @@ export function parseFixtureSet(root: string): FixtureSet {
     if ('updateDate' in row && row.updateDate >= opportunity.closeDate) throw new Error(`Slack chronology exceeds close date for ${row.opportunityId}`);
   }
   for (const summary of gongSummaries) for (const participant of summary.participants) {
-    if (!contactIds.has(participant)) throw new Error(`Unknown Gong participant ${participant}`);
+    const contact = contactById.get(participant);
+    if (contact === undefined) throw new Error(`Unknown Gong participant ${participant}`);
+    if (contact.accountId !== summary.accountId) throw new Error(`Gong participant account does not match call ${summary.callId}`);
+  }
+  const summaryByCallId = new Map(gongSummaries.map((summary) => [summary.callId, summary]));
+  for (const transcript of transcripts) {
+    const summary = summaryByCallId.get(transcript.callId);
+    if (summary === undefined || transcript.opportunityId !== summary.opportunityId || transcript.accountId !== summary.accountId
+      || transcript.callDate !== summary.callDate || transcript.sourceAccessLevel !== summary.sourceAccessLevel || transcript.title !== summary.title) {
+      throw new Error(`Transcript does not match canonical Gong summary: ${transcript.callId}`);
+    }
   }
   const latestEvidenceDate = new Map<string, string>();
   for (const summary of gongSummaries) {

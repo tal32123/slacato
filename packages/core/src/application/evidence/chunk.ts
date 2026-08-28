@@ -63,6 +63,11 @@ export function buildEvidenceDocuments(fixtures: FixtureSet): EvidenceDocument[]
   const documents: EvidenceDocument[] = [];
   const opportunityById = new Map(fixtures.opportunities.map((opportunity) => [opportunity.opportunityId, opportunity]));
   const accountById = new Map(fixtures.accounts.map((account) => [account.accountId, account]));
+  const opportunitiesByAccount = new Map<string, typeof fixtures.opportunities>();
+  for (const opportunity of fixtures.opportunities) {
+    const existing = opportunitiesByAccount.get(opportunity.accountId) ?? [];
+    opportunitiesByAccount.set(opportunity.accountId, [...existing, opportunity].sort((left, right) => left.opportunityId.localeCompare(right.opportunityId)));
+  }
   const policy = fixtures.policy;
   const add = (
     source: Omit<EvidenceDocument, 'accessLevel' | 'classificationReason' | 'policyHash'>,
@@ -73,10 +78,11 @@ export function buildEvidenceDocuments(fixtures: FixtureSet): EvidenceDocument[]
     documents.push({ ...source, accessLevel: classification.accessLevel, classificationReason: classification.reason, policyHash: classification.policyHash });
   };
 
-  for (const account of fixtures.accounts) add({
-    externalId: account.accountId, sourceType: 'salesforce', accountId: account.accountId,
-    reliability: 'authoritative_system', sourceLocator: `salesforce/accounts.tsv#${account.accountId}`, content: recordContent(account)
-  }, { sourceType: 'salesforce', sourceAccessLevel: account.accessLevel });
+  for (const account of fixtures.accounts) for (const opportunity of opportunitiesByAccount.get(account.accountId) ?? []) add({
+    externalId: `${account.accountId}:${opportunity.opportunityId}:account`, sourceType: 'salesforce', accountId: account.accountId,
+    opportunityId: opportunity.opportunityId, reliability: 'authoritative_system',
+    sourceLocator: `salesforce/accounts.tsv#${account.accountId}/opportunity/${opportunity.opportunityId}`, content: recordContent(account)
+  }, { sourceType: 'salesforce', sourceAccessLevel: account.accessLevel }, opportunity);
   for (const opportunity of fixtures.opportunities) add({
     externalId: opportunity.opportunityId, sourceType: 'salesforce', accountId: opportunity.accountId,
     opportunityId: opportunity.opportunityId, reliability: 'authoritative_system',
@@ -84,11 +90,12 @@ export function buildEvidenceDocuments(fixtures: FixtureSet): EvidenceDocument[]
   }, { sourceType: 'salesforce' }, opportunity);
   for (const contact of fixtures.contacts) {
     const account = accountById.get(contact.accountId);
-    add({
-      externalId: contact.contactId, sourceType: 'salesforce', accountId: contact.accountId,
+    for (const opportunity of opportunitiesByAccount.get(contact.accountId) ?? []) add({
+      externalId: `${contact.contactId}:${opportunity.opportunityId}:contact`, sourceType: 'salesforce', accountId: contact.accountId,
+      opportunityId: opportunity.opportunityId,
       eventDate: contact.lastInteractionDate, reliability: 'authoritative_system',
-      sourceLocator: `salesforce/contacts.tsv#${contact.contactId}`, content: recordContent(contact)
-    }, { sourceType: 'salesforce', sourceAccessLevel: account?.accessLevel });
+      sourceLocator: `salesforce/contacts.tsv#${contact.contactId}/opportunity/${opportunity.opportunityId}`, content: recordContent(contact)
+    }, { sourceType: 'salesforce', sourceAccessLevel: account?.accessLevel }, opportunity);
   }
   for (const summary of fixtures.gongSummaries) add({
     externalId: `${summary.callId}:summary`, sourceType: 'gong_summary', accountId: summary.accountId,
@@ -114,9 +121,10 @@ export function buildEvidenceDocuments(fixtures: FixtureSet): EvidenceDocument[]
     opportunityId: update.opportunityId, eventDate: update.updateDate, reliability: 'internal_collaboration',
     sourceLocator: `slack/account_team_updates.tsv#${update.updateId}`, content: recordContent(update)
   }, { sourceType: 'slack', sourceAccessLevel: update.sourceAccessLevel }, opportunityById.get(update.opportunityId));
-  for (const account of fixtures.accounts) add({
-    externalId: `deal-desk-policy:${account.accountId}`, sourceType: 'policy', accountId: account.accountId,
-    reliability: 'authoritative_policy', sourceLocator: 'policies/deal_desk_policy.md', content: policy.content
-  }, { sourceType: 'policy', sourceAccessLevel: 'standard' });
+  for (const opportunity of fixtures.opportunities) add({
+    externalId: `deal-desk-policy:${opportunity.opportunityId}`, sourceType: 'policy', accountId: opportunity.accountId,
+    opportunityId: opportunity.opportunityId, reliability: 'authoritative_policy',
+    sourceLocator: `policies/deal_desk_policy.md#opportunity/${opportunity.opportunityId}`, content: policy.content
+  }, { sourceType: 'policy', sourceAccessLevel: 'standard' }, opportunity);
   return documents;
 }

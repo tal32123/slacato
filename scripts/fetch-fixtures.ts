@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { CANONICAL_SOURCE_FILES } from '../packages/core/src/index.js';
+import { CANONICAL_FIXTURE_COMMIT, CANONICAL_FIXTURE_REPOSITORY, CANONICAL_SOURCE_FILES } from '../packages/core/src/index.js';
 
-export const PINNED_REPOSITORY = 'https://github.com/danaabramov/Cato-IS-AI-Engineer-Exam.git';
-export const PINNED_COMMIT = '076c659c3c7afd416f8d26729774b67042a55761';
+export const PINNED_REPOSITORY = CANONICAL_FIXTURE_REPOSITORY;
+export const PINNED_COMMIT = CANONICAL_FIXTURE_COMMIT;
 export const CANONICAL_FILES = CANONICAL_SOURCE_FILES;
 
 export type FixtureAttribution = Readonly<{
