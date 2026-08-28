@@ -1,0 +1,47 @@
+{
+  "name": "slacato",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.25.0",
+  "engines": {
+    "node": ">=22.23.1"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @slacato/web --filter @slacato/api --filter @slacato/worker dev",
+    "build": "pnpm -r build",
+    "start": "pnpm --parallel --filter @slacato/api --filter @slacato/worker start",
+    "lint": "eslint .",
+    "typecheck": "tsc -b apps/web apps/api apps/worker packages/contracts packages/core packages/infrastructure --pretty false",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "fixtures:fetch": "tsx scripts/fetch-fixtures.ts",
+    "fixtures:slack": "tsx scripts/generate-slack-fixtures.ts",
+    "ingest:records": "tsx scripts/ingest.ts",
+    "index:embeddings": "tsx scripts/index-embeddings.ts",
+    "eval:deterministic": "promptfoo eval",
+    "eval:live": "promptfoo eval -c evals/promptfooconfig.yaml",
+    "demo:generate-live": "tsx scripts/generate-live-demo.ts",
+    "verify:live-artifacts": "tsx scripts/verify-live-artifacts.ts"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^26.4.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "drizzle-kit": "0.31.10",
+    "eslint": "^10.9.1",
+    "eslint-plugin-boundaries": "^7.2.0",
+    "jsdom": "^30.0.1",
+    "tsx": "^4.23.12",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^4.1.11",
+    "zod": "4.4.3"
+  }
+}
