@@ -14,6 +14,15 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.9.1(jiti@2.7.0))
+      '@nestjs/common':
+        specifier: 12.0.1
+        version: 12.0.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/platform-express':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
@@ -38,9 +47,15 @@ importers:
       eslint-plugin-boundaries:
         specifier: ^7.2.0
         version: 7.2.0(@typescript-eslint/parser@8.68.0(eslint@10.9.1(jiti@2.7.0))(typescript@5.9.3))(eslint@10.9.1(jiti@2.7.0))
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
       tsx:
         specifier: ^4.23.12
         version: 4.23.12
@@ -74,6 +89,9 @@ importers:
       '@slacato/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@slacato/infrastructure':
+        specifier: workspace:*
+        version: link:../../packages/infrastructure
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1

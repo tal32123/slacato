@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    "./config/env": "./src/config/env.ts",
-    ".": "./src/index.ts"
+    "./config/env": { "types": "./dist/config/env.d.ts", "default": "./dist/config/env.js" },
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
   },
   "scripts": {
     "build": "tsc -b"

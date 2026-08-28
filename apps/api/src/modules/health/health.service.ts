@@ -4,6 +4,7 @@ export interface ReadinessCheck {
 
 export interface ReadinessDependencies {
   database: ReadinessCheck;
+  migration: ReadinessCheck;
   redis: ReadinessCheck;
   index: ReadinessCheck;
   model: ReadinessCheck;
@@ -31,9 +32,13 @@ export class HealthService {
 
   public async readiness(): Promise<ReadinessHealth> {
     const entries = await Promise.all(
-      (Object.entries(this.dependencies) as Array<[ReadinessCheckName, ReadinessCheck]>).map(async ([name, check]) =>
-        [name, (await check.isReady()) ? 'ready' : 'unavailable'] as const
-      )
+      (Object.entries(this.dependencies) as Array<[ReadinessCheckName, ReadinessCheck]>).map(async ([name, check]) => {
+        try {
+          return [name, (await check.isReady()) ? 'ready' : 'unavailable'] as const;
+        } catch {
+          return [name, 'unavailable'] as const;
+        }
+      })
     );
     const checks = Object.fromEntries(entries) as Record<ReadinessCheckName, ReadinessCheckStatus>;
     const unavailable = (Object.entries(checks) as Array<[ReadinessCheckName, ReadinessCheckStatus]>).find(([, status]) => status === 'unavailable');

@@ -12,7 +12,7 @@ class UnconfiguredReadinessCheck implements ReadinessCheck {
     provide: HealthService,
     useFactory: () => {
       const unavailable = new UnconfiguredReadinessCheck();
-      return new HealthService({ database: unavailable, redis: unavailable, index: unavailable, model: unavailable });
+      return new HealthService({ database: unavailable, migration: unavailable, redis: unavailable, index: unavailable, model: unavailable });
     }
   }]
 })
