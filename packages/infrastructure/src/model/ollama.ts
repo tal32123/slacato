@@ -27,31 +27,6 @@ function warningText(warning: unknown): string {
     ? warning.type : 'provider_warning';
 }
 
-const MODEL_ERROR_CATEGORIES: readonly ModelErrorCategory[] = [
-  'transient_transport', 'rate_limited', 'server', 'authorization', 'policy',
-  'content_filter', 'deterministic_validation', 'deterministic_citation',
-  'nonretryable_client', 'unknown'
-];
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined;
-}
-
-function explicitProviderCategory(error: unknown): ModelErrorCategory | undefined {
-  const source = record(error);
-  const data = record(source?.data);
-  const category = source?.category ?? data?.category;
-  return typeof category === 'string' && MODEL_ERROR_CATEGORIES.includes(category as ModelErrorCategory)
-    ? category as ModelErrorCategory : undefined;
-}
-
-function providerDiagnosticCode(error: unknown): string | undefined {
-  const source = record(error);
-  const data = record(source?.data);
-  const code = source?.code ?? data?.code;
-  return typeof code === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(code) ? code : undefined;
-}
-
 function categoryForApiCallError(error: InstanceType<typeof APICallError>): ModelErrorCategory {
   const status = error.statusCode;
   if (status === 401 || status === 403) return 'authorization';
@@ -67,15 +42,13 @@ export function normalizeOllamaTransportError(error: unknown): ModelGatewayTrans
   if (error instanceof ModelGatewayTransportError) return error;
   const generic = normalizeModelError(error).normalized;
   const apiError = APICallError.isInstance(error) ? error : undefined;
-  const diagnosticCode = providerDiagnosticCode(error);
-  const category = explicitProviderCategory(error)
-    ?? (apiError === undefined ? generic.category : categoryForApiCallError(apiError));
+  const category = apiError === undefined ? generic.category : categoryForApiCallError(apiError);
   return new ModelGatewayTransportError({
     category,
     ...(generic.statusCode === undefined ? {} : { statusCode: generic.statusCode }),
-    ...(diagnosticCode === undefined ? {} : { diagnosticCode }),
-    message: `Ollama provider request failed (${category})`
-  }, error);
+    diagnosticCode: apiError === undefined ? 'ollama_unknown_error' : 'ollama_api_error',
+    message: 'Ollama provider request failed'
+  });
 }
 
 class OllamaTransport implements ModelTransport {

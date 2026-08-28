@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 import {
   createBudgetedModelGateway,
+  ModelGatewayTransportError,
   RunBudgetLedger,
   type ModelTransport,
   type TransportGeneration
@@ -155,7 +156,7 @@ describe('BudgetedModelGateway', () => {
       capabilities: { nativeStructuredOutput: false },
       async generate() {
         calls += 1;
-        if (calls === 1) throw { category: 'transient_transport', code: 'ECONNRESET' };
+        if (calls === 1) throw new ModelGatewayTransportError({ category: 'transient_transport', diagnosticCode: 'ECONNRESET' });
         return { text: '{"stakeholders":[]}', usage: { outputTokens: 10 } };
       }
     };
@@ -164,7 +165,7 @@ describe('BudgetedModelGateway', () => {
     const request = { schema, messages: [{ role: 'user' as const, content: 'Extract.' }], operation: 'release-output', budget: shared,
       limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 1_000, maxOutputTokens: 100 } };
 
-    await expect(gateway.generateObject(request)).rejects.toEqual(expect.objectContaining({ category: 'transient_transport' }));
+    await expect(gateway.generateObject(request)).rejects.toMatchObject({ normalized: { category: 'transient_transport' } });
     await expect(gateway.generateObject(request)).resolves.toMatchObject({ value: { stakeholders: [] } });
     expect(calls).toBe(2);
   });

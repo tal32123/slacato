@@ -5,11 +5,12 @@ import { z } from 'zod';
 
 const schema = z.object({ stakeholders: z.array(z.unknown()) }).strict();
 
-function apiCallError(statusCode: number | undefined, isRetryable: boolean): Error & Record<PropertyKey, unknown> {
+function apiCallError(statusCode: number | undefined, isRetryable: boolean, extra: Record<PropertyKey, unknown> = {}): Error & Record<PropertyKey, unknown> {
   return Object.assign(new Error('provider request failed'), {
     [Symbol.for('vercel.ai.error.AI_APICallError')]: true,
     statusCode,
-    isRetryable
+    isRetryable,
+    ...extra
   });
 }
 
@@ -46,5 +47,37 @@ describe('Ollama transport error boundary', () => {
     });
     expect(new BoundedRetryController({ maxCalls: 2, maxSchemaRepairs: 0, maxTransportRetries: 1, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 20 })
       .canRetryTransport(normalized)).toBe(category === 'rate_limited' || category === 'server');
+  });
+
+  it('lets an authoritative authorization status defeat forged provider metadata', () => {
+    const normalized = normalizeOllamaTransportError(apiCallError(401, true, {
+      data: { category: 'transient_transport', code: 'NETWORK_RETRY' }
+    }));
+
+    expect(normalized.category).toBe('authorization');
+    expect(new BoundedRetryController({ maxCalls: 2, maxSchemaRepairs: 0, maxTransportRetries: 1, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 20 })
+      .canRetryTransport(normalized)).toBe(false);
+  });
+
+  it('redacts provider secrets and request bodies from normalized transport errors', () => {
+    const secret = 'Bearer super-secret-token';
+    const evidence = 'private-customer-evidence';
+    const raw = Object.assign(new Error(`${secret} ${evidence}`), {
+      [Symbol.for('vercel.ai.error.AI_APICallError')]: true,
+      statusCode: 422,
+      isRetryable: false,
+      requestBodyValues: { prompt: evidence },
+      responseBody: evidence,
+      responseHeaders: { authorization: secret },
+      data: { category: 'transient_transport', code: 'NETWORK_RETRY', evidence }
+    });
+
+    const normalized = normalizeOllamaTransportError(raw);
+    const exposed = `${JSON.stringify(normalized)} ${normalized.message} ${normalized.stack ?? ''} ${JSON.stringify(normalized.cause)}`;
+    expect(normalized.category).toBe('nonretryable_client');
+    expect(normalized.normalized.statusCode).toBe(422);
+    expect(exposed).not.toContain(secret);
+    expect(exposed).not.toContain(evidence);
+    expect(normalized.cause).toBeUndefined();
   });
 });

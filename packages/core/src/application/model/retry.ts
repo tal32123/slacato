@@ -14,40 +14,44 @@ export class OutputBudgetOverrunError extends RetryLimitExceededError {
 }
 
 export class ModelGatewayTransportError extends Error {
-  public constructor(public readonly normalized: NormalizedModelError, cause?: unknown) {
+  public constructor(public readonly normalized: NormalizedModelError) {
     super(normalized.message ?? `Model transport error: ${normalized.category}`);
     this.name = 'ModelGatewayTransportError';
-    if (cause !== undefined) this.cause = cause;
   }
   public get category(): ModelErrorCategory { return this.normalized.category; }
 }
 
 type RetrySnapshot = Readonly<{ calls: number; inputTokens: number; schemaRepairs: number; transportRetries: number; outputTokens: number; reservedOutputTokens: number }>;
 type AttemptReservation = Readonly<{ id: number; grantedOutputTokens: number; shared?: OutputReservation | undefined }>;
-const CATEGORIES: readonly ModelErrorCategory[] = ['transient_transport', 'rate_limited', 'server', 'authorization', 'policy', 'content_filter', 'deterministic_validation', 'deterministic_citation', 'nonretryable_client', 'unknown'];
 const TRANSIENT_CATEGORIES = new Set<ModelErrorCategory>(['transient_transport', 'rate_limited', 'server']);
+const SAFE_DIAGNOSTIC_CODES = new Set(['ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'EPIPE']);
 
 function record(value: unknown): Record<string, unknown> | undefined { return typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined; }
+function trustedStatus(value: unknown): number | undefined { return typeof value === 'number' && Number.isInteger(value) && value >= 400 && value <= 599 ? value : undefined; }
+function categoryForStatus(status: number | undefined, retryable: boolean): ModelErrorCategory {
+  if (status === 401 || status === 403) return 'authorization';
+  if (status === 429) return 'rate_limited';
+  if (status !== undefined && status >= 400 && status < 500) return 'nonretryable_client';
+  if (status !== undefined && status >= 500 && retryable) return 'server';
+  return 'unknown';
+}
+function safeDiagnosticCode(source: Record<string, unknown> | undefined): string | undefined {
+  const code = source?.['code'];
+  return typeof code === 'string' && SAFE_DIAGNOSTIC_CODES.has(code) ? code : undefined;
+}
 
 /** Provider-neutral normalization: categories govern retries; codes remain diagnostics only. */
 export function normalizeModelError(error: unknown): ModelGatewayTransportError {
   if (error instanceof ModelGatewayTransportError) return error;
   const source = record(error);
-  const declared = source?.['category'];
-  const status = typeof source?.['statusCode'] === 'number' ? source.statusCode : undefined;
-  const category: ModelErrorCategory = typeof declared === 'string' && CATEGORIES.includes(declared as ModelErrorCategory)
-    ? declared as ModelErrorCategory
-    : status === 401 || status === 403 ? 'authorization'
-      : status === 429 ? 'rate_limited'
-        : status !== undefined && status >= 500 ? 'server'
-          : status !== undefined && status >= 400 ? 'nonretryable_client'
-            : 'unknown';
+  const status = trustedStatus(source?.['statusCode']);
+  const category = categoryForStatus(status, source?.['retryable'] === true);
   return new ModelGatewayTransportError({
     category,
-    ...(typeof source?.['code'] === 'string' ? { diagnosticCode: source.code } : {}),
+    ...(safeDiagnosticCode(source) === undefined ? {} : { diagnosticCode: safeDiagnosticCode(source)! }),
     ...(status === undefined ? {} : { statusCode: status }),
-    ...(error instanceof Error ? { message: error.message } : {})
-  }, error);
+    message: 'Model transport request failed'
+  });
 }
 
 /** Shared synchronous reservations make cross-specialist output capacity safe under concurrency. */
@@ -168,7 +172,9 @@ export class BoundedRetryController {
   }
   public canRetryTransport(error: unknown): boolean {
     const normalized = normalizeModelError(error);
-    return TRANSIENT_CATEGORIES.has(normalized.category) && this.transportRetries < this.limits.maxTransportRetries && this.calls < this.limits.maxCalls && !this.deadlineExceeded();
+    const status = normalized.normalized.statusCode;
+    const nonRetryableStatus = status === 401 || status === 403 || (status !== undefined && status >= 400 && status < 500 && status !== 429);
+    return !nonRetryableStatus && TRANSIENT_CATEGORIES.has(normalized.category) && this.transportRetries < this.limits.maxTransportRetries && this.calls < this.limits.maxCalls && !this.deadlineExceeded();
   }
   public recordTransportRetry(error: unknown): number {
     if (!this.canRetryTransport(error)) throw new RetryLimitExceededError('Transport retry limit reached or error is not retryable');

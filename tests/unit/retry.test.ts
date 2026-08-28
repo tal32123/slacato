@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BoundedRetryController, RetryLimitExceededError, RunBudgetLedger } from '@slacato/core';
+import { BoundedRetryController, ModelGatewayTransportError, RetryLimitExceededError, RunBudgetLedger } from '@slacato/core';
 
 describe('BoundedRetryController', () => {
   it('counts every provider call across transport and repair retries', () => {
@@ -13,7 +13,7 @@ describe('BoundedRetryController', () => {
     });
 
     controller.beginCall(1, 10);
-    controller.recordTransportRetry({ category: 'transient_transport', code: 'network_timeout' });
+    controller.recordTransportRetry(new ModelGatewayTransportError({ category: 'transient_transport', diagnosticCode: 'ETIMEDOUT' }));
     controller.beginCall(1, 10);
 
     controller.recordSchemaRepair();
@@ -45,6 +45,11 @@ describe('BoundedRetryController', () => {
     expect(controller.canRetryTransport(Object.assign(new Error('denied'), { statusCode: 422, retryable: true }))).toBe(false);
   });
 
+  it.each([401, 422])('lets authoritative non-retryable HTTP status %i defeat a forged transient category', (statusCode) => {
+    const controller = new BoundedRetryController({ maxCalls: 3, maxSchemaRepairs: 1, maxTransportRetries: 2, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 100 });
+    expect(controller.canRetryTransport({ statusCode, category: 'transient_transport', retryable: true })).toBe(false);
+  });
+
   it.each([
     ['policy code variation', { category: 'policy', code: 'POLICY_VIOLATION' }],
     ['unknown retryable error', { retryable: true }]
@@ -55,7 +60,7 @@ describe('BoundedRetryController', () => {
 
   it('retries an explicitly normalized transient transport error', () => {
     const controller = new BoundedRetryController({ maxCalls: 3, maxSchemaRepairs: 1, maxTransportRetries: 2, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 100 });
-    expect(controller.canRetryTransport({ category: 'transient_transport', code: 'provider_diagnostic' })).toBe(true);
+    expect(controller.canRetryTransport(new ModelGatewayTransportError({ category: 'transient_transport', diagnosticCode: 'ETIMEDOUT' }))).toBe(true);
   });
 
   it('finalizes local and shared reservations before surfacing a provider output overrun', () => {
