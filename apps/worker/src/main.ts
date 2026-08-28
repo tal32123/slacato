@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { pathToFileURL } from 'node:url';
 import { NestFactory } from '@nestjs/core';
-import { BullMqCommandQueue, createDatabaseClient, loadRuntimeEnv, OutboxDispatcher, OutboxDispatcherLoop, PostgresCommandReconciler, ReconcilerLoop } from '@slacato/infrastructure';
+import { BullMqCommandQueue, createDatabaseClient, loadRuntimeEnv, OutboxDispatcher, OutboxDispatcherLoop, PostgresCommandReconciler, ReconcilerLoop, WORKFLOW_DEAD_LETTER_QUEUE_NAME } from '@slacato/infrastructure';
 import { WorkerModule } from './worker.module.js';
 
 export interface WorkerApplicationOptions {
@@ -14,10 +14,10 @@ export async function createWorkerApplication(options: WorkerApplicationOptions 
   const app = await NestFactory.createApplicationContext(WorkerModule);
   const database = createDatabaseClient(environment.DATABASE_URL, 10);
   const commands = new BullMqCommandQueue(environment.REDIS_URL);
-  const deadLetters = new BullMqCommandQueue(environment.REDIS_URL, 'slacato-workflow-dead-letter');
+  const deadLetters = new BullMqCommandQueue(environment.REDIS_URL, WORKFLOW_DEAD_LETTER_QUEUE_NAME);
   const dispatcher = new OutboxDispatcher(database, commands, deadLetters);
   const loop = new OutboxDispatcherLoop(dispatcher, 1_000, 25);
-  const reconciler = new ReconcilerLoop(new PostgresCommandReconciler(database, commands), 5_000, 25);
+  const reconciler = new ReconcilerLoop(new PostgresCommandReconciler(database, commands, deadLetters), 5_000, 25);
   loop.start();
   reconciler.start();
   const close = async () => { await reconciler.stop(); await loop.stop(); await commands.close(); await deadLetters.close(); await database.close(); };

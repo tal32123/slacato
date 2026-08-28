@@ -37,6 +37,7 @@
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "bullmq": "6.3.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "drizzle-kit": "0.31.10",
