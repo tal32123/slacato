@@ -65,3 +65,39 @@ pnpm build
 ## Concerns
 
 None. Task 8 can build agent implementations over the exported contracts without changing their canonical shapes.
+
+## Fix round 1 — approval reachability and immutable outputs
+
+### RED
+
+```sh
+pnpm vitest run tests/unit/brief-schema.test.ts tests/unit/run-state-machine.test.ts
+```
+
+Result: 2 files failed, with 2 of 11 tests failing as expected. `validating + validation_requires_approval` threw `InvalidRunTransitionError`, demonstrating the missing route to `awaiting_approval`. The immutable-output test failed because `Object.isFrozen(brief)` was `false`.
+
+### GREEN and full verification
+
+```sh
+pnpm vitest run tests/unit/brief-schema.test.ts tests/unit/run-state-machine.test.ts
+# 2 files passed, 11 tests passed
+
+pnpm typecheck
+# exited 0; exported compile-time readonly assertions passed
+
+pnpm lint
+# exited 0
+
+pnpm vitest run
+# 8 files passed, 32 tests passed
+
+pnpm build
+# exited 0; all workspace builds completed
+```
+
+### Fix-round self-review
+
+- `validation_requires_approval` is the sole validating-to-approval transition; `validation_completed` is the sole no-approval route to `finalizing`.
+- Approval grant/rejection are valid only in `awaiting_approval`; `finalizing` remains complete/fail only.
+- The post-parse transform deeply freezes only Zod's parsed output, with runtime coverage for the brief and all four artifact schemas; caller input remains unfrozen.
+- `DeepReadonly` retains primitive branded IDs while rendering nested objects and arrays readonly. Type-level assertions are built with core and checked by `pnpm typecheck`.

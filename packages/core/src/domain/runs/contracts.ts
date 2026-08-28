@@ -20,12 +20,15 @@ export const runEventSchema = z.enum([
   'retrieval_completed',
   'specialists_completed',
   'synthesis_completed',
-  'approval_not_required',
+  'validation_requires_approval',
+  'validation_completed',
   'approval_granted',
   'approval_rejected',
   'complete',
   'fail'
 ]);
 
+/** Union of persisted lifecycle states accepted by the run state machine. */
 export type RunStatus = z.infer<typeof runStatusSchema>;
+/** Union of workflow events accepted by the run state machine. */
 export type RunEvent = z.infer<typeof runEventSchema>;

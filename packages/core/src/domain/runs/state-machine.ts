@@ -12,7 +12,7 @@ const transitions: Readonly<Record<RunStatus, TransitionRow>> = {
   retrieving: { retrieval_completed: 'specialists_running', fail: 'failed' },
   specialists_running: { specialists_completed: 'synthesizing', fail: 'failed' },
   synthesizing: { synthesis_completed: 'validating', fail: 'failed' },
-  validating: { approval_not_required: 'finalizing', approval_granted: 'finalizing', fail: 'failed' },
+  validating: { validation_requires_approval: 'awaiting_approval', validation_completed: 'finalizing', fail: 'failed' },
   awaiting_approval: { approval_granted: 'finalizing', approval_rejected: 'rejected', fail: 'failed' },
   finalizing: { complete: 'completed', fail: 'failed' },
   completed: {},

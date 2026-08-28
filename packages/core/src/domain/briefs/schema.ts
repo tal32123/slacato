@@ -1,5 +1,8 @@
 import { z } from 'zod';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- required for declaration emission of branded IDs.
+import type { $brand } from 'zod/v4/core';
 import { citationIdSchema, claimIdSchema, evidenceIdSchema } from '../shared/ids.js';
+import { immutableSchema } from '../shared/readonly.js';
 import { MAX_SERIALIZED_ARTIFACT_BYTES, withSerializedByteLimit } from '../shared/serialized-size.js';
 
 /** Maximum length for a generated label, summary, warning, or other short text field. */
@@ -19,31 +22,31 @@ const dateSchema = z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected an 
 const evidenceManifestIdSchema = z.string().min(1).max(128).regex(/^manifest_[A-Za-z0-9][A-Za-z0-9_-]*$/);
 
 /** Stable, bounded reference from a claim to an immutable authorized evidence version. */
-export const citationSchema = z.object({
+export const citationSchema = immutableSchema(z.object({
   id: citationIdSchema,
   evidenceId: evidenceIdSchema,
   locator: shortTextSchema,
   rationale: shortTextSchema.optional()
-}).strict();
+}).strict());
 
 /** A generated statement whose confidence and evidence links remain inspectable. */
-export const claimSchema = z.object({
+export const claimSchema = immutableSchema(z.object({
   id: claimIdSchema,
   statement: shortTextSchema,
   confidence: z.number().finite().min(0).max(1),
   citations: z.array(citationSchema).max(MAX_CITATIONS_PER_CLAIM)
-}).strict();
+}).strict());
 
 /** A review warning that keeps unsupported or contradictory output explicit. */
-export const reviewWarningSchema = z.object({
+export const reviewWarningSchema = immutableSchema(z.object({
   code: z.string().min(1).max(128).regex(/^[A-Z][A-Z0-9_]*$/),
   severity: z.enum(['info', 'warning', 'critical']),
   message: shortTextSchema,
   claimIds: z.array(claimIdSchema).max(MAX_LIST_ITEMS)
-}).strict();
+}).strict());
 
 /** Named stakeholder with bounded relationship and influence context. */
-export const stakeholderSchema = z.object({
+export const stakeholderSchema = immutableSchema(z.object({
   name: shortTextSchema,
   title: shortTextSchema.optional(),
   organization: shortTextSchema.optional(),
@@ -53,26 +56,26 @@ export const stakeholderSchema = z.object({
   goals: z.array(shortTextSchema).max(MAX_LIST_ITEMS),
   concerns: z.array(shortTextSchema).max(MAX_LIST_ITEMS),
   claims: z.array(claimSchema).max(MAX_LIST_ITEMS)
-}).strict();
+}).strict());
 
 /** Prioritized concrete action recommended for the deal team. */
-export const recommendedActionSchema = z.object({
+export const recommendedActionSchema = immutableSchema(z.object({
   action: shortTextSchema,
   owner: shortTextSchema.optional(),
   priority: z.enum(['low', 'medium', 'high', 'critical']),
   rationale: shortTextSchema,
   dueDate: dateSchema.optional(),
   claims: z.array(claimSchema).max(MAX_LIST_ITEMS)
-}).strict();
+}).strict());
 
 /** Authorized source evidence summarized without copying unbounded source text. */
-export const evidenceSummarySchema = z.object({
+export const evidenceSummarySchema = immutableSchema(z.object({
   evidenceId: evidenceIdSchema,
   sourceType: z.enum(['crm', 'conversation', 'policy', 'pricing', 'slack', 'other']),
   summary: shortTextSchema,
   capturedAt: z.string().datetime().max(MAX_TIMESTAMP_LENGTH),
   claims: z.array(claimSchema).max(MAX_LIST_ITEMS)
-}).strict();
+}).strict());
 
 const dealSnapshotSchema = z.object({
   accountName: shortTextSchema,
@@ -134,7 +137,7 @@ const confidenceAndReviewWarningsSchema = z.object({
  * Canonical immutable DealBrief contract. Each explicit field maps to one of the
  * nine assignment sections, preserving evidence and review context for later rendering.
  */
-export const dealBriefSchema = withSerializedByteLimit(z.object({
+export const dealBriefSchema = immutableSchema(withSerializedByteLimit(z.object({
   dealSnapshot: dealSnapshotSchema,
   executiveSummary: executiveSummarySchema,
   buyerGoalsAndBusinessDrivers: buyerGoalsAndBusinessDriversSchema,
@@ -144,10 +147,10 @@ export const dealBriefSchema = withSerializedByteLimit(z.object({
   missingInformation: missingInformationSchema,
   sourceEvidence: sourceEvidenceSchema,
   confidenceAndReviewWarnings: confidenceAndReviewWarningsSchema
-}).strict());
+}).strict()));
 
 /** Bounded conversation-specialist result prior to strategy synthesis. */
-export const conversationArtifactSchema = withSerializedByteLimit(z.object({
+export const conversationArtifactSchema = immutableSchema(withSerializedByteLimit(z.object({
   evidenceManifestId: evidenceManifestIdSchema,
   goals: z.array(shortTextSchema).max(MAX_LIST_ITEMS),
   concerns: z.array(shortTextSchema).max(MAX_LIST_ITEMS),
@@ -156,19 +159,19 @@ export const conversationArtifactSchema = withSerializedByteLimit(z.object({
   missingContext: z.array(shortTextSchema).max(MAX_LIST_ITEMS),
   claims: z.array(claimSchema).max(MAX_LIST_ITEMS),
   reviewWarnings: z.array(reviewWarningSchema).max(MAX_LIST_ITEMS)
-}).strict());
+}).strict()));
 
 /** Bounded stakeholder-specialist result prior to strategy synthesis. */
-export const stakeholderArtifactSchema = withSerializedByteLimit(z.object({
+export const stakeholderArtifactSchema = immutableSchema(withSerializedByteLimit(z.object({
   evidenceManifestId: evidenceManifestIdSchema,
   stakeholders: z.array(stakeholderSchema).max(MAX_LIST_ITEMS),
   coverageGaps: z.array(shortTextSchema).max(MAX_LIST_ITEMS),
   claims: z.array(claimSchema).max(MAX_LIST_ITEMS),
   reviewWarnings: z.array(reviewWarningSchema).max(MAX_LIST_ITEMS)
-}).strict());
+}).strict()));
 
 /** Bounded commercial-and-policy-specialist result prior to strategy synthesis. */
-export const commercialArtifactSchema = withSerializedByteLimit(z.object({
+export const commercialArtifactSchema = immutableSchema(withSerializedByteLimit(z.object({
   evidenceManifestId: evidenceManifestIdSchema,
   commercialTerms: z.array(z.object({
     term: shortTextSchema,
@@ -179,21 +182,44 @@ export const commercialArtifactSchema = withSerializedByteLimit(z.object({
   policyTriggers: z.array(shortTextSchema).max(MAX_LIST_ITEMS),
   claims: z.array(claimSchema).max(MAX_LIST_ITEMS),
   reviewWarnings: z.array(reviewWarningSchema).max(MAX_LIST_ITEMS)
-}).strict());
+}).strict()));
 
 /** Strategy is the canonical DealBrief rather than a second, divergent output contract. */
 export const strategyArtifactSchema = dealBriefSchema;
 
+/** Immutable validated citation reference. */
 export type Citation = z.infer<typeof citationSchema>;
+/** Immutable validated factual claim. */
 export type Claim = z.infer<typeof claimSchema>;
+/** Immutable validated output-review warning. */
 export type ReviewWarning = z.infer<typeof reviewWarningSchema>;
+/** Immutable validated stakeholder record. */
 export type Stakeholder = z.infer<typeof stakeholderSchema>;
+/** Immutable validated recommended action. */
 export type RecommendedAction = z.infer<typeof recommendedActionSchema>;
+/** Immutable validated authorized evidence summary. */
 export type EvidenceSummary = z.infer<typeof evidenceSummarySchema>;
+/** Immutable canonical DealBrief with all nine assignment sections. */
 export type DealBrief = z.infer<typeof dealBriefSchema>;
+/** Immutable bounded conversation-specialist artifact. */
 export type ConversationArtifact = z.infer<typeof conversationArtifactSchema>;
+/** Immutable bounded stakeholder-specialist artifact. */
 export type StakeholderArtifact = z.infer<typeof stakeholderArtifactSchema>;
+/** Immutable bounded commercial-specialist artifact. */
 export type CommercialArtifact = z.infer<typeof commercialArtifactSchema>;
+/** Immutable strategy artifact, represented by the canonical DealBrief. */
 export type StrategyArtifact = z.infer<typeof strategyArtifactSchema>;
+
+type Assert<Condition extends true> = Condition;
+type IsReadonlyArray<Value> = Value extends readonly unknown[]
+  ? Value extends unknown[] ? false : true
+  : false;
+/** Compile-time checks that generated nested arrays remain readonly in public outputs. */
+export type ReadonlyContractAssertions = [
+  Assert<IsReadonlyArray<DealBrief['buyerGoalsAndBusinessDrivers']['goals']>>,
+  Assert<IsReadonlyArray<DealBrief['stakeholderMap']['stakeholders']>>,
+  Assert<IsReadonlyArray<ConversationArtifact['claims']>>,
+  Assert<IsReadonlyArray<CommercialArtifact['commercialTerms']>>
+];
 
 export { MAX_SERIALIZED_ARTIFACT_BYTES };

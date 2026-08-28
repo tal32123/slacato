@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_SERIALIZED_ARTIFACT_BYTES,
+  commercialArtifactSchema,
   conversationArtifactSchema,
   dealBriefSchema,
   evidenceSummarySchema,
   evidenceIdSchema,
+  stakeholderArtifactSchema,
+  strategyArtifactSchema,
   userIdSchema
 } from '@slacato/core';
 
@@ -62,5 +65,64 @@ describe('DealBrief schema', () => {
       capturedAt: '2026-08-28T18:44:53.123456789012345678901234567890123456789012345678901234567890Z',
       claims: []
     })).toThrow();
+  });
+
+  it('deeply freezes parsed briefs and specialist artifacts without freezing caller input', () => {
+    const input = {
+      ...validBrief,
+      stakeholderMap: {
+        stakeholders: [{
+          name: 'Alex',
+          role: 'champion' as const,
+          influence: 'high' as const,
+          relationship: 'positive' as const,
+          goals: ['Accelerate rollout'],
+          concerns: [],
+          claims: []
+        }]
+      }
+    };
+    const brief = dealBriefSchema.parse(input);
+    const conversation = conversationArtifactSchema.parse({
+      evidenceManifestId: 'manifest_1',
+      goals: [],
+      concerns: [],
+      commitments: [],
+      objections: [],
+      missingContext: [],
+      claims: [],
+      reviewWarnings: []
+    });
+    const stakeholder = stakeholderArtifactSchema.parse({
+      evidenceManifestId: 'manifest_1',
+      stakeholders: input.stakeholderMap.stakeholders,
+      coverageGaps: [],
+      claims: [],
+      reviewWarnings: []
+    });
+    const commercial = commercialArtifactSchema.parse({
+      evidenceManifestId: 'manifest_1',
+      commercialTerms: [{ term: 'Term', status: 'proposed', detail: 'Detail', claims: [] }],
+      policyTriggers: [],
+      claims: [],
+      reviewWarnings: []
+    });
+    const strategy = strategyArtifactSchema.parse(input);
+
+    expect(Object.isFrozen(brief)).toBe(true);
+    expect(Object.isFrozen(brief.stakeholderMap)).toBe(true);
+    expect(Object.isFrozen(brief.stakeholderMap.stakeholders)).toBe(true);
+    expect(Object.isFrozen(brief.stakeholderMap.stakeholders[0])).toBe(true);
+    expect(Object.isFrozen(conversation)).toBe(true);
+    expect(Object.isFrozen(conversation.goals)).toBe(true);
+    expect(Object.isFrozen(stakeholder)).toBe(true);
+    expect(Object.isFrozen(stakeholder.stakeholders)).toBe(true);
+    expect(Object.isFrozen(commercial)).toBe(true);
+    expect(Object.isFrozen(commercial.commercialTerms[0])).toBe(true);
+    expect(Object.isFrozen(strategy)).toBe(true);
+    expect(Reflect.set(brief.stakeholderMap.stakeholders, 0, input.stakeholderMap.stakeholders[0])).toBe(false);
+    expect(brief.stakeholderMap.stakeholders[0]?.name).toBe('Alex');
+    expect(Object.isFrozen(input)).toBe(false);
+    expect(Object.isFrozen(input.stakeholderMap.stakeholders)).toBe(false);
   });
 });
