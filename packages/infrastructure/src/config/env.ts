@@ -3,6 +3,7 @@ import { z } from 'zod';
 const commonEnvironment = {
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().url(),
+  REDIS_URL: z.string().url().default('redis://127.0.0.1:56379'),
   SESSION_SECRET: z.string().min(32),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info')
 };

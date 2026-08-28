@@ -1,0 +1,37 @@
+services:
+  db:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_DB: slacato
+      POSTGRES_USER: slacato
+      POSTGRES_PASSWORD: slacato
+    ports:
+      - '127.0.0.1:54329:5432'
+    volumes:
+      - slacato_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U slacato -d slacato']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.2-alpine
+    command: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec', '--maxmemory', '256mb', '--maxmemory-policy', 'noeviction']
+    ports:
+      - '127.0.0.1:56379:6379'
+    volumes:
+      - slacato_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  slacato_postgres_data:
+  slacato_redis_data:

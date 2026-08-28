@@ -59,6 +59,9 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
