@@ -4,16 +4,26 @@ export class RetryLimitExceededError extends Error {
   public constructor(message: string) { super(message); this.name = 'RetryLimitExceededError'; }
 }
 
+/** The provider used more output than the capacity reserved before transport. */
+export class OutputBudgetOverrunError extends RetryLimitExceededError {
+  public constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'OutputBudgetOverrunError';
+    if (cause !== undefined) this.cause = cause;
+  }
+}
+
 export class ModelGatewayTransportError extends Error {
-  public constructor(public readonly normalized: NormalizedModelError) {
+  public constructor(public readonly normalized: NormalizedModelError, cause?: unknown) {
     super(normalized.message ?? `Model transport error: ${normalized.category}`);
     this.name = 'ModelGatewayTransportError';
+    if (cause !== undefined) this.cause = cause;
   }
   public get category(): ModelErrorCategory { return this.normalized.category; }
 }
 
 type RetrySnapshot = Readonly<{ calls: number; inputTokens: number; schemaRepairs: number; transportRetries: number; outputTokens: number; reservedOutputTokens: number }>;
-type AttemptReservation = Readonly<{ grantedOutputTokens: number; shared?: OutputReservation | undefined }>;
+type AttemptReservation = Readonly<{ id: number; grantedOutputTokens: number; shared?: OutputReservation | undefined }>;
 const CATEGORIES: readonly ModelErrorCategory[] = ['transient_transport', 'rate_limited', 'server', 'authorization', 'policy', 'content_filter', 'deterministic_validation', 'deterministic_citation', 'nonretryable_client', 'unknown'];
 const TRANSIENT_CATEGORIES = new Set<ModelErrorCategory>(['transient_transport', 'rate_limited', 'server']);
 
@@ -37,7 +47,7 @@ export function normalizeModelError(error: unknown): ModelGatewayTransportError 
     ...(typeof source?.['code'] === 'string' ? { diagnosticCode: source.code } : {}),
     ...(status === undefined ? {} : { statusCode: status }),
     ...(error instanceof Error ? { message: error.message } : {})
-  });
+  }, error);
 }
 
 /** Shared synchronous reservations make cross-specialist output capacity safe under concurrency. */
@@ -79,7 +89,9 @@ export class RunBudgetLedger implements SharedRunBudget {
     const actual = actualOutputTokens ?? granted;
     this.reservedOutputTokens -= granted;
     this.outputTokens += actual;
-    if (this.outputTokens + this.reservedOutputTokens > this.limits.maxOutputTokens) throw new RetryLimitExceededError('Shared run output token budget reached');
+    if (actual > granted || this.outputTokens + this.reservedOutputTokens > this.limits.maxOutputTokens) {
+      throw new OutputBudgetOverrunError('Provider output overrun exceeds the shared granted token budget');
+    }
   }
 
   public releaseAttempt(reservation: OutputReservation): void { this.reservedOutputTokens -= this.takeReservation(reservation); }
@@ -102,6 +114,8 @@ export class BoundedRetryController {
   private transportRetries = 0;
   private outputTokens = 0;
   private reservedOutputTokens = 0;
+  private nextReservationId = 0;
+  private readonly reservations = new Map<number, AttemptReservation>();
 
   public constructor(private readonly limits: RetryLimits, private readonly shared?: SharedRunBudget) {}
 
@@ -114,22 +128,34 @@ export class BoundedRetryController {
     if (requested <= 0) throw new RetryLimitExceededError('Output token budget reached');
     const sharedReservation = this.shared?.reserveAttempt(inputTokens, requested);
     const grantedOutputTokens = sharedReservation?.grantedOutputTokens ?? requested;
+    const reservation: AttemptReservation = {
+      id: this.nextReservationId++,
+      grantedOutputTokens,
+      ...(sharedReservation === undefined ? {} : { shared: sharedReservation })
+    };
     this.calls += 1;
     this.inputTokens += inputTokens;
     this.reservedOutputTokens += grantedOutputTokens;
-    return { grantedOutputTokens, ...(sharedReservation === undefined ? {} : { shared: sharedReservation }) };
+    this.reservations.set(reservation.id, reservation);
+    return reservation;
   }
 
   public settleAttempt(reservation: AttemptReservation, actualOutputTokens: number | undefined): void {
-    const actual = actualOutputTokens ?? reservation.grantedOutputTokens;
-    this.reservedOutputTokens -= reservation.grantedOutputTokens;
+    const granted = this.closeReservation(reservation);
+    const actual = actualOutputTokens ?? granted;
     this.outputTokens += actual;
-    if (this.outputTokens + this.reservedOutputTokens > this.limits.maxOutputTokens) throw new RetryLimitExceededError('Output token budget reached');
-    if (reservation.shared !== undefined) this.shared?.settleAttempt(reservation.shared, actualOutputTokens);
+    let sharedFailure: unknown;
+    if (reservation.shared !== undefined) {
+      try { this.shared?.settleAttempt(reservation.shared, actualOutputTokens); }
+      catch (error) { sharedFailure = error; }
+    }
+    if (actual > granted || this.outputTokens + this.reservedOutputTokens > this.limits.maxOutputTokens || sharedFailure !== undefined) {
+      throw new OutputBudgetOverrunError('Provider output overrun exceeds the granted token budget', sharedFailure);
+    }
   }
 
   public releaseAttempt(reservation: AttemptReservation): void {
-    this.reservedOutputTokens -= reservation.grantedOutputTokens;
+    this.closeReservation(reservation);
     if (reservation.shared !== undefined) this.shared?.releaseAttempt(reservation.shared);
   }
 
@@ -153,5 +179,12 @@ export class BoundedRetryController {
   public assertDeadline(): void { if (this.deadlineExceeded()) throw new RetryLimitExceededError('Generation deadline reached'); this.shared?.assertDeadline(); }
   public deadlineAt(): number { return this.startedAt + this.limits.deadlineMs; }
   public snapshot(): RetrySnapshot { return { calls: this.calls, inputTokens: this.inputTokens, schemaRepairs: this.schemaRepairs, transportRetries: this.transportRetries, outputTokens: this.outputTokens, reservedOutputTokens: this.reservedOutputTokens }; }
+  private closeReservation(reservation: AttemptReservation): number {
+    const active = this.reservations.get(reservation.id);
+    if (active !== reservation) throw new RetryLimitExceededError('Unknown or settled local output reservation');
+    this.reservations.delete(reservation.id);
+    this.reservedOutputTokens -= reservation.grantedOutputTokens;
+    return reservation.grantedOutputTokens;
+  }
   private deadlineExceeded(): boolean { return Date.now() >= this.deadlineAt(); }
 }

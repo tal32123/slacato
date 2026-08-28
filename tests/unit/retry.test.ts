@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BoundedRetryController, RetryLimitExceededError } from '@slacato/core';
+import { BoundedRetryController, RetryLimitExceededError, RunBudgetLedger } from '@slacato/core';
 
 describe('BoundedRetryController', () => {
   it('counts every provider call across transport and repair retries', () => {
@@ -56,5 +56,16 @@ describe('BoundedRetryController', () => {
   it('retries an explicitly normalized transient transport error', () => {
     const controller = new BoundedRetryController({ maxCalls: 3, maxSchemaRepairs: 1, maxTransportRetries: 2, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 100 });
     expect(controller.canRetryTransport({ category: 'transient_transport', code: 'provider_diagnostic' })).toBe(true);
+  });
+
+  it('finalizes local and shared reservations before surfacing a provider output overrun', () => {
+    const shared = new RunBudgetLedger({ scope: 'overrun', maxCalls: 2, maxInputTokens: 10, maxOutputTokens: 10, deadlineMs: 1_000 });
+    const controller = new BoundedRetryController({ maxCalls: 2, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10, maxOutputTokens: 10 }, shared);
+    const reservation = controller.beginCall(1, 10);
+
+    expect(() => controller.settleAttempt(reservation, 11)).toThrow(/output.*overrun/i);
+    expect(controller.snapshot()).toMatchObject({ calls: 1, inputTokens: 1, outputTokens: 11, reservedOutputTokens: 0 });
+    expect(() => shared.releaseAttempt(reservation.shared!)).toThrow('Unknown or settled');
+    expect(() => shared.reserveAttempt(1, 1)).toThrow('output token budget');
   });
 });

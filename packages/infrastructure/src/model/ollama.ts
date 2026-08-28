@@ -1,9 +1,12 @@
-import { embedMany, generateText, jsonSchema, Output, type LanguageModel } from 'ai';
+import { APICallError, embedMany, generateText, jsonSchema, Output, type LanguageModel } from 'ai';
 import { createOllama } from 'ollama-ai-provider-v2';
 import { z } from 'zod';
 import {
   createBudgetedModelGateway,
+  ModelGatewayTransportError,
   ModelRegistry,
+  normalizeModelError,
+  type ModelErrorCategory,
   type BudgetedModelGateway,
   type EmbeddingGateway,
   type ModelTransport,
@@ -24,6 +27,57 @@ function warningText(warning: unknown): string {
     ? warning.type : 'provider_warning';
 }
 
+const MODEL_ERROR_CATEGORIES: readonly ModelErrorCategory[] = [
+  'transient_transport', 'rate_limited', 'server', 'authorization', 'policy',
+  'content_filter', 'deterministic_validation', 'deterministic_citation',
+  'nonretryable_client', 'unknown'
+];
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined;
+}
+
+function explicitProviderCategory(error: unknown): ModelErrorCategory | undefined {
+  const source = record(error);
+  const data = record(source?.data);
+  const category = source?.category ?? data?.category;
+  return typeof category === 'string' && MODEL_ERROR_CATEGORIES.includes(category as ModelErrorCategory)
+    ? category as ModelErrorCategory : undefined;
+}
+
+function providerDiagnosticCode(error: unknown): string | undefined {
+  const source = record(error);
+  const data = record(source?.data);
+  const code = source?.code ?? data?.code;
+  return typeof code === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(code) ? code : undefined;
+}
+
+function categoryForApiCallError(error: InstanceType<typeof APICallError>): ModelErrorCategory {
+  const status = error.statusCode;
+  if (status === 401 || status === 403) return 'authorization';
+  if (status === 429) return 'rate_limited';
+  if (status !== undefined && status >= 400 && status < 500) return 'nonretryable_client';
+  if (status !== undefined && status >= 500 && error.isRetryable) return 'server';
+  if (status === undefined && error.isRetryable) return 'transient_transport';
+  return 'unknown';
+}
+
+/** Converts SDK/provider structured errors to the provider-neutral core contract. */
+export function normalizeOllamaTransportError(error: unknown): ModelGatewayTransportError {
+  if (error instanceof ModelGatewayTransportError) return error;
+  const generic = normalizeModelError(error).normalized;
+  const apiError = APICallError.isInstance(error) ? error : undefined;
+  const diagnosticCode = providerDiagnosticCode(error);
+  const category = explicitProviderCategory(error)
+    ?? (apiError === undefined ? generic.category : categoryForApiCallError(apiError));
+  return new ModelGatewayTransportError({
+    category,
+    ...(generic.statusCode === undefined ? {} : { statusCode: generic.statusCode }),
+    ...(diagnosticCode === undefined ? {} : { diagnosticCode }),
+    message: `Ollama provider request failed (${category})`
+  }, error);
+}
+
 class OllamaTransport implements ModelTransport {
   public constructor(
     private readonly model: LanguageModel,
@@ -40,22 +94,26 @@ class OllamaTransport implements ModelTransport {
       maxOutputTokens: request.maxOutputTokens,
       abortSignal: AbortSignal.timeout(timeout)
     };
-    if (request.outputMode === 'native_schema') {
-      if (request.schema === undefined) throw new Error('Native structured generation requires a schema');
-      const inputJsonSchema = z.toJSONSchema(request.schema, { io: 'input' }) as unknown as Parameters<typeof jsonSchema>[0];
-      const result = await generateText({
-        ...common,
-        output: Output.object({ schema: jsonSchema(inputJsonSchema) })
-      });
-      return {
-        text: result.text,
-        output: result.output as Value,
-        usage: result.usage,
-        warnings: (result.warnings ?? []).map(warningText)
-      };
+    try {
+      if (request.outputMode === 'native_schema') {
+        if (request.schema === undefined) throw new Error('Native structured generation requires a schema');
+        const inputJsonSchema = z.toJSONSchema(request.schema, { io: 'input' }) as unknown as Parameters<typeof jsonSchema>[0];
+        const result = await generateText({
+          ...common,
+          output: Output.object({ schema: jsonSchema(inputJsonSchema) })
+        });
+        return {
+          text: result.text,
+          output: result.output as Value,
+          usage: result.usage,
+          warnings: (result.warnings ?? []).map(warningText)
+        };
+      }
+      const result = await generateText(common);
+      return { text: result.text, usage: result.usage, warnings: (result.warnings ?? []).map(warningText) };
+    } catch (error) {
+      throw normalizeOllamaTransportError(error);
     }
-    const result = await generateText(common);
-    return { text: result.text, usage: result.usage, warnings: (result.warnings ?? []).map(warningText) };
   }
 }
 
@@ -84,8 +142,12 @@ export function createOllamaModelGateways(config: OllamaGatewayConfig, capabilit
     embeddingGateway: {
       async embed(values: readonly string[]): Promise<number[][]> {
         if (values.length === 0) return [];
-        const result = await embedMany({ model: provider.embedding(config.embeddingModelId), values: [...values], maxRetries: 0 });
-        return result.embeddings.map((embedding) => [...embedding]);
+        try {
+          const result = await embedMany({ model: provider.embedding(config.embeddingModelId), values: [...values], maxRetries: 0 });
+          return result.embeddings.map((embedding) => [...embedding]);
+        } catch (error) {
+          throw normalizeOllamaTransportError(error);
+        }
       }
     },
     registry
@@ -93,15 +155,19 @@ export function createOllamaModelGateways(config: OllamaGatewayConfig, capabilit
 }
 
 async function listModelIds(config: OllamaGatewayConfig): Promise<readonly string[]> {
-  const response = await fetch(`${config.baseURL.replace(/\/$/, '')}/tags`, {
-    headers: { Authorization: `Bearer ${config.apiKey}` }, signal: AbortSignal.timeout(10_000)
-  });
-  if (!response.ok) throw new Error(`Ollama model discovery failed with HTTP ${response.status}`);
-  const payload: unknown = await response.json();
-  if (typeof payload !== 'object' || payload === null || !('models' in payload) || !Array.isArray(payload.models)) {
-    throw new Error('Ollama model discovery returned an invalid response');
+  try {
+    const response = await fetch(`${config.baseURL.replace(/\/$/, '')}/tags`, {
+      headers: { Authorization: `Bearer ${config.apiKey}` }, signal: AbortSignal.timeout(10_000)
+    });
+    if (!response.ok) throw { statusCode: response.status };
+    const payload: unknown = await response.json();
+    if (typeof payload !== 'object' || payload === null || !('models' in payload) || !Array.isArray(payload.models)) {
+      throw new Error('Ollama model discovery returned an invalid response');
+    }
+    return payload.models.flatMap((model) => typeof model === 'object' && model !== null && 'name' in model && typeof model.name === 'string' ? [model.name] : []);
+  } catch (error) {
+    throw normalizeOllamaTransportError(error);
   }
-  return payload.models.flatMap((model) => typeof model === 'object' && model !== null && 'name' in model && typeof model.name === 'string' ? [model.name] : []);
 }
 
 function isUnitNormalized(vector: readonly number[]): boolean {
@@ -132,14 +198,19 @@ export async function probeOllamaCapabilities(config: OllamaGatewayConfig): Prom
     nativeStructuredOutput = result.output.ready === true;
     warnings.push(...(result.warnings ?? []).map(warningText));
   } catch (error) {
-    warnings.push(`native_schema_probe_failed:${error instanceof Error ? error.name : 'unknown'}`);
+    warnings.push(`native_schema_probe_failed:${normalizeOllamaTransportError(error).category}`);
   }
-  const embedding = await embedMany({
-    model: provider.embedding(config.embeddingModelId),
-    values: ['SlaCato capability probe'],
-    maxRetries: 0,
-    abortSignal: AbortSignal.timeout(15_000)
-  });
+  let embedding;
+  try {
+    embedding = await embedMany({
+      model: provider.embedding(config.embeddingModelId),
+      values: ['SlaCato capability probe'],
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(15_000)
+    });
+  } catch (error) {
+    throw normalizeOllamaTransportError(error);
+  }
   const vector = embedding.embeddings[0];
   if (vector === undefined || vector.length === 0) throw new Error('Ollama embedding probe returned no vector');
   warnings.push(...embedding.warnings.map(warningText));
