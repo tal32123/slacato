@@ -27,6 +27,7 @@ function asLease(row: InvocationRow): StepLease {
   return { invocationId: row.id, causalCommandId: row.causal_command_id, runId: row.run_id as StepLease['runId'], step: row.step, owner: row.owner, leaseToken: row.lease_token, leaseExpiresAt: new Date(row.lease_expires_at), attempt: row.attempt };
 }
 async function insertCommand(sql: SqlExecutor, command: WorkflowCommand): Promise<void> {
+  await sql`select pg_advisory_xact_lock(hashtext(${`outbox:${command.idempotencyKey}`}))`;
   const existing = await sql<{ id: string; run_id: string; type: string; payload: Record<string, unknown>; idempotency_key: string }[]>`select id, run_id, type, payload, idempotency_key from outbox_commands where id = ${command.id} or idempotency_key = ${command.idempotencyKey} for update`;
   if (existing.length > 0) {
     const row = existing[0];
@@ -60,7 +61,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
       if (inserted.length === 1) {
         await insertCommand(sql, input.command);
         await appendEvent(sql, input.id, 'run_created', { status: input.status });
-      }
+      } else await insertCommand(sql, input.command);
       return asRun(row);
     });
   }

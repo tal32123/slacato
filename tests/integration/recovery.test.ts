@@ -73,4 +73,11 @@ describe('durable recovery regressions', () => {
     expect((await database.sql<{ status: string; consumed_at: string | null }[]>`select command.status, command.consumed_at from outbox_commands command where id = ${next.id}`)[0]?.consumed_at).not.toBeNull();
     expect((await database.sql<{ status: string }[]>`select status from step_invocations where id = ${lease.invocationId}`)[0]?.status).toBe('completed');
   });
+
+  it('serializes concurrent idempotency-key replays without duplicate events', async () => {
+    const run = await seededRun(); const stable = command(run.runId, id('command'));
+    const input = { id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created' as const, generationProvider: 'mock', generationModel: 'mock-chat', command: stable };
+    await Promise.all([store.startRun(input), store.startRun(input)]);
+    expect((await database.sql<{ count: string }[]>`select count(*)::text as count from run_events where run_id = ${run.runId}`)[0]?.count).toBe('1');
+  });
 });
