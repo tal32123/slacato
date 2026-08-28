@@ -16,7 +16,9 @@ export class PostgresCommandReconciler {
     for (const row of rows) {
       const state = await this.commands.state(row.id);
       if (state === 'missing' || state === 'failed') {
-        const result = await this.database.sql`update outbox_commands set status = 'pending', available_at = now(), claimed_at = null where id = ${row.id} and status = 'published'`;
+        const result = await this.database.sql`update outbox_commands command set status = 'pending', available_at = now(), claimed_at = null
+          where command.id = ${row.id} and command.status = 'published' and command.consumed_at is null
+            and not exists (select 1 from step_invocations invocation where invocation.causal_command_id = command.id and (invocation.status = 'completed' or (invocation.status = 'leased' and invocation.lease_expires_at > now())))`;
         if (result.count > 0) restored += 1;
       }
     }

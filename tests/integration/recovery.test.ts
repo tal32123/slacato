@@ -51,4 +51,14 @@ describe('durable recovery regressions', () => {
     const first = await seededRun(); const second = await seededRun();
     await expect(store.startRun({ id: first.runId as never, opportunityId: first.opportunityId as never, requestedBy: first.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: command(second.runId) })).rejects.toThrow('run');
   });
+
+  it('does not allow one published command to lease two different steps', async () => {
+    const run = await seededRun(); const next = command(run.runId);
+    await store.startRun({ id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+    await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${next.id}`;
+    const first = await store.claimStep({ runId: run.runId as never, step: 'retrieve', invocationId: id('invocation'), causalCommandId: next.id, owner: 'a', leaseMs: 10_000 });
+    const second = await store.claimStep({ runId: run.runId as never, step: 'synthesize', invocationId: id('invocation'), causalCommandId: next.id, owner: 'b', leaseMs: 10_000 });
+    expect(first).toBeDefined();
+    expect(second).toBeUndefined();
+  });
 });

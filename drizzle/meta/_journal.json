@@ -6,6 +6,8 @@
     { "idx": 1, "version": "7", "when": 1787942700000, "tag": "0001_delivery_claim_leases", "breakpoints": true },
     { "idx": 2, "version": "7", "when": 1787943600000, "tag": "0002_causal_command_consumption", "breakpoints": true },
     { "idx": 3, "version": "7", "when": 1787944500000, "tag": "0003_approval_snapshot_linkage", "breakpoints": true },
-    { "idx": 4, "version": "7", "when": 1787945400000, "tag": "0004_persisted_run_budgets", "breakpoints": true }
+    { "idx": 4, "version": "7", "when": 1787945400000, "tag": "0004_persisted_run_budgets", "breakpoints": true },
+    { "idx": 5, "version": "7", "when": 1787946300000, "tag": "0005_active_causal_command", "breakpoints": true },
+    { "idx": 6, "version": "7", "when": 1787947200000, "tag": "0006_restricted_opportunity_grants", "breakpoints": true }
   ]
 }

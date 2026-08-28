@@ -13,10 +13,12 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
     const rows = await this.database.sql<MatchRow[]>`
       select evidence.id, (1 - (evidence.embedding <=> ${vectorLiteral(input.embedding)}::vector)) as similarity
       from evidence_versions evidence
+      join opportunities opportunity on opportunity.id = evidence.opportunity_id
       join permission_grants permission on permission.persona_id = ${input.access.personaId} and permission.can_read = true
         and (permission.account_id is null or permission.account_id = evidence.account_id)
         and (permission.source_type is null or permission.source_type = evidence.source_type)
         and (permission.sensitive_pricing = true or evidence.sensitivity <> 'restricted')
+        and (opportunity.restricted = false or permission.can_read_restricted = true)
       where evidence.account_id = ${input.accountId}
         and opportunity_id is not distinct from ${input.opportunityId ?? null}
         and (${input.access.allowSensitivePricing} = true or evidence.sensitivity <> 'restricted')

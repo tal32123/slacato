@@ -72,10 +72,13 @@ export class PostgresWorkflowStore implements WorkflowStore {
       await sql`select pg_advisory_xact_lock(hashtext(${`${input.runId}:${input.step}`}))`;
       const command = await sql<{ id: string }[]>`select id from outbox_commands where id = ${input.causalCommandId} and run_id = ${input.runId} and status = 'published' and consumed_at is null for update`;
       if (command.length !== 1) throw new DomainConflictError('Causal command is not available for invocation');
+      const activeForCommand = (await sql<InvocationRow[]>`select id, run_id, step, owner, lease_token, causal_command_id, lease_expires_at, attempt from step_invocations where causal_command_id = ${input.causalCommandId} and status = 'leased' order by attempt desc limit 1 for update`)[0];
+      if (activeForCommand !== undefined && new Date(activeForCommand.lease_expires_at) > now) return undefined;
+      if (activeForCommand !== undefined) await sql`update step_invocations set status = 'abandoned', completed_at = ${now.toISOString()}::timestamptz where id = ${activeForCommand.id} and status = 'leased'`;
       const active = await sql<InvocationRow[]>`select id, run_id, step, owner, lease_token, causal_command_id, lease_expires_at, attempt from step_invocations where run_id = ${input.runId} and step = ${input.step} and status = 'leased' order by attempt desc limit 1 for update`;
       const current = active[0];
       if (current !== undefined && new Date(current.lease_expires_at) > now) return undefined;
-      if (current !== undefined) await sql`update step_invocations set status = 'abandoned', completed_at = ${now.toISOString()}::timestamptz where id = ${current.id} and status = 'leased'`;
+      if (current !== undefined && current.id !== activeForCommand?.id) await sql`update step_invocations set status = 'abandoned', completed_at = ${now.toISOString()}::timestamptz where id = ${current.id} and status = 'leased'`;
       const attempts = await sql<{ attempt: number }[]>`select coalesce(max(attempt), 0) + 1 as attempt from step_invocations where run_id = ${input.runId} and step = ${input.step}`;
       const attempt = attempts[0]?.attempt;
       if (attempt === undefined) throw new DomainConflictError('Unable to allocate step attempt');

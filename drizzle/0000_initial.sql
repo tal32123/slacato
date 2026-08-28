@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS contacts (
 );
 CREATE TABLE IF NOT EXISTS permission_grants (
   id text PRIMARY KEY, persona_id text NOT NULL REFERENCES personas(id), account_id text REFERENCES accounts(id), source_type text,
-  can_read boolean NOT NULL DEFAULT false, can_approve boolean NOT NULL DEFAULT false, sensitive_pricing boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now()
+  can_read boolean NOT NULL DEFAULT false, can_read_restricted boolean NOT NULL DEFAULT false, can_approve boolean NOT NULL DEFAULT false, sensitive_pricing boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS document_versions (
   id text PRIMARY KEY, external_id text NOT NULL, version integer NOT NULL CHECK (version > 0), source_type text NOT NULL,

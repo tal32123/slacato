@@ -17,6 +17,21 @@ export class PostgresRunBudgetStore implements RunBudgetStore {
       return { id: input.id, grantedOutputTokens };
     });
   }
-  public async settle(input: Readonly<{ id: string; actualOutputTokens?: number | undefined; possibleDuplicate: boolean }>): Promise<void> { await this.database.sql`update run_budget_reservations set status = ${input.possibleDuplicate ? 'possible_duplicate' : 'settled'}, actual_output_tokens = ${input.actualOutputTokens ?? null}, settled_at = now() where id = ${input.id} and status = 'reserved'`; }
-  public async release(id: string): Promise<void> { await this.database.sql`update run_budget_reservations set status = 'released', settled_at = now() where id = ${id} and status = 'reserved'`; }
+  public async settle(input: Readonly<{ id: string; actualOutputTokens?: number | undefined; possibleDuplicate: boolean }>): Promise<void> {
+    await this.database.sql.begin(async (sql) => {
+      const reservation = (await sql<{ run_id: string; reserved_output_tokens: number }[]>`select run_id, reserved_output_tokens from run_budget_reservations where id = ${input.id} and status = 'reserved' for update`)[0];
+      if (reservation === undefined) return;
+      const actual = input.actualOutputTokens ?? reservation.reserved_output_tokens;
+      await sql`update run_budgets set used_output_tokens = used_output_tokens - ${reservation.reserved_output_tokens} + ${actual} where run_id = ${reservation.run_id}`;
+      await sql`update run_budget_reservations set status = ${input.possibleDuplicate ? 'possible_duplicate' : 'settled'}, actual_output_tokens = ${actual}, settled_at = now() where id = ${input.id} and status = 'reserved'`;
+    });
+  }
+  public async release(id: string): Promise<void> {
+    await this.database.sql.begin(async (sql) => {
+      const reservation = (await sql<{ run_id: string; reserved_output_tokens: number }[]>`select run_id, reserved_output_tokens from run_budget_reservations where id = ${id} and status = 'reserved' for update`)[0];
+      if (reservation === undefined) return;
+      await sql`update run_budgets set used_output_tokens = used_output_tokens - ${reservation.reserved_output_tokens} where run_id = ${reservation.run_id}`;
+      await sql`update run_budget_reservations set status = 'released', settled_at = now() where id = ${id} and status = 'reserved'`;
+    });
+  }
 }
