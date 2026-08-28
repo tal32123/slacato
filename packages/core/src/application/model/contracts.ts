@@ -10,8 +10,25 @@ export type RetryLimits = Readonly<{
   maxSchemaRepairs: number;
   maxTransportRetries: number;
   deadlineMs: number;
+  maxInputTokens: number;
   maxOutputTokens: number;
 }>;
+
+export type RunBudgetLimits = Readonly<{
+  scope: string;
+  maxCalls: number;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  deadlineMs: number;
+}>;
+
+export interface SharedRunBudget {
+  readonly scope: string;
+  reserveCall(inputTokens: number): void;
+  reconcileInputTokens(reservedTokens: number, consumedTokens: number | undefined): void;
+  recordOutputTokens(outputTokens: number | undefined): void;
+  assertDeadline(): void;
+}
 
 export type NormalizedValidationIssue = Readonly<{
   path: string;
@@ -37,6 +54,7 @@ export type GenerateObjectRequest<Value> = Readonly<{
   messages: readonly ModelMessage[];
   operation: string;
   limits: RetryLimits;
+  budget?: SharedRunBudget;
   context?: ContextWindowInput;
 }>;
 

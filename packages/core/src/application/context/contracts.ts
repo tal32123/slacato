@@ -29,6 +29,8 @@ export type ContextWindowSettings = Readonly<{
 
 export type PreparedContext = Readonly<{
   messages: readonly ModelMessage[];
+  invariantMessages: readonly ModelMessage[];
+  optionalMessages: readonly ModelMessage[];
   inputTokens: number;
   reservedOutputTokens: number;
 }>;
@@ -44,18 +46,19 @@ export type ContextCheckpoint = Readonly<{
   schemaHash: string;
   modelHash: string;
   validationHash: string;
+  validationState: 'validated';
 }>;
 
-/** A compactor deliberately has no recursive access to itself. */
-export interface ContextCompactor {
-  compact(input: Readonly<{ history: readonly ModelMessage[]; maxOutputTokens: number }>): Promise<ContextCheckpoint>;
-}
+export type ContextCheckpointBindings = Readonly<Pick<ContextCheckpoint,
+  'scopeHash' | 'policyHash' | 'evidenceHash' | 'promptHash' | 'schemaHash' | 'modelHash' | 'validationHash'>>;
 
 export type NonRecursiveCompactionInput = Readonly<{
   mode: 'non_recursive';
-  history: readonly ModelMessage[];
+  context: PreparedContext;
   maxInputTokens: number;
   maxOutputTokens: number;
+  maxSteps: 1;
+  maxRetries: 0;
 }>;
 
 /** This narrow port prevents a compaction call from re-entering the compactor. */
@@ -65,7 +68,17 @@ export interface NonRecursiveCompactionGateway {
 
 export type BoundedCompactionInput = Readonly<{
   history: readonly ModelMessage[];
+  context: Omit<ContextWindowInput, 'history'>;
   maxInputTokens: number;
   maxOutputTokens: number;
   priorInvocations: number;
+  maxSteps: 1;
+  maxRetries: 0;
+  coveredMessageRange: Readonly<{ from: number; to: number }>;
+  bindings: ContextCheckpointBindings;
 }>;
+
+/** A compactor deliberately has no recursive access to itself. */
+export interface ContextCompactor {
+  compact(input: BoundedCompactionInput): Promise<ContextCheckpoint>;
+}

@@ -39,18 +39,21 @@ describe('ContextWindowPolicy', () => {
 
   it('uses a non-recursive compaction gateway once and leaves raw history unchanged', async () => {
     const history = [{ role: 'user' as const, content: 'raw history' }];
+    const bindings = { scopeHash: 'scope', policyHash: 'policy', evidenceHash: 'evidence', promptHash: 'prompt', schemaHash: 'schema', modelHash: 'model', validationHash: 'valid' } as const;
     const fakeGateway: NonRecursiveCompactionGateway = {
       async compact(input) {
         expect(input.mode).toBe('non_recursive');
         return {
-          coveredMessageRange: { from: 0, to: 0 }, summary: 'checkpoint', scopeHash: 'scope', policyHash: 'policy',
-          evidenceHash: 'evidence', promptHash: 'prompt', schemaHash: 'schema', modelHash: 'model', validationHash: 'valid'
+          coveredMessageRange: { from: 0, to: 0 }, summary: 'checkpoint', ...bindings, validationState: 'validated'
         };
       }
     };
-    const compactor = createNonRecursiveContextCompactor(fakeGateway);
+    const compactor = createNonRecursiveContextCompactor(fakeGateway, new ContextWindowPolicy({
+      contextWindowTokens: 30, reservedOutputTokens: 4,
+      sectionTokenBudgets: { instructions: 4, currentTask: 8, evidence: 0, artifacts: 0, history: 4 }
+    }));
 
-    const checkpoint = await compactor.compact({ history, maxInputTokens: 20, maxOutputTokens: 10, priorInvocations: 0 });
+    const checkpoint = await compactor.compact({ history, context: { instructions: 'ok', currentTask: 'ok' }, maxInputTokens: 20, maxOutputTokens: 10, priorInvocations: 0, maxSteps: 1, maxRetries: 0, coveredMessageRange: { from: 0, to: 0 }, bindings });
 
     expect(checkpoint.summary).toBe('checkpoint');
     expect(history).toEqual([{ role: 'user', content: 'raw history' }]);
@@ -59,10 +62,54 @@ describe('ContextWindowPolicy', () => {
   it('rejects a checkpoint when the authorization scope narrows', () => {
     const checkpoint = {
       coveredMessageRange: { from: 0, to: 0 }, summary: 'checkpoint', scopeHash: 'old-scope', policyHash: 'policy',
-      evidenceHash: 'evidence', promptHash: 'prompt', schemaHash: 'schema', modelHash: 'model', validationHash: 'valid'
+      evidenceHash: 'evidence', promptHash: 'prompt', schemaHash: 'schema', modelHash: 'model', validationHash: 'valid', validationState: 'validated'
     } as const;
 
     expect(isContextCheckpointReusable(checkpoint, { ...checkpoint, scopeHash: 'old-scope' })).toBe(true);
     expect(isContextCheckpointReusable(checkpoint, { ...checkpoint, scopeHash: 'narrower-scope' })).toBe(false);
+  });
+
+  it('fails deterministically when an oversized evidence ID cannot fit its invariant budget', () => {
+    const policy = new ContextWindowPolicy({
+      contextWindowTokens: 20, reservedOutputTokens: 4,
+      sectionTokenBudgets: { instructions: 2, currentTask: 2, evidence: 2, artifacts: 2, history: 2 }
+    });
+
+    expect(() => policy.prepare({ instructions: 'ok', currentTask: 'ok', evidence: [{ id: 'evidence_identifier_that_cannot_fit', content: '' }] })).toThrow('invariant');
+  });
+
+  it('rejects malformed checkpoints and never forwards huge raw history beyond maxInputTokens', async () => {
+    let calls = 0;
+    const policy = new ContextWindowPolicy({
+      contextWindowTokens: 8, reservedOutputTokens: 4,
+      sectionTokenBudgets: { instructions: 1, currentTask: 1, evidence: 0, artifacts: 0, history: 1 }
+    });
+    const compactor = createNonRecursiveContextCompactor({
+      async compact() {
+        calls += 1;
+        return { coveredMessageRange: { from: -1, to: 0 }, summary: '', scopeHash: '', policyHash: '', evidenceHash: '', promptHash: '', schemaHash: '', modelHash: '', validationHash: '' };
+      }
+    }, policy);
+    const history = [{ role: 'user' as const, content: 'x'.repeat(10_000) }];
+
+    await expect(compactor.compact({ history, context: { instructions: '', currentTask: '' }, maxInputTokens: 1, maxOutputTokens: 1, priorInvocations: 0, maxSteps: 1, maxRetries: 0, coveredMessageRange: { from: 0, to: 0 }, bindings: { scopeHash: 'scope', policyHash: 'policy', evidenceHash: 'evidence', promptHash: 'prompt', schemaHash: 'schema', modelHash: 'model', validationHash: 'valid' } })).rejects.toThrow('input');
+    expect(calls).toBe(0);
+    expect(history[0]?.content).toHaveLength(10_000);
+  });
+
+  it('rejects malformed compactor results and repeated or multi-step compaction', async () => {
+    const policy = new ContextWindowPolicy({
+      contextWindowTokens: 40, reservedOutputTokens: 4,
+      sectionTokenBudgets: { instructions: 4, currentTask: 8, evidence: 0, artifacts: 0, history: 4 }
+    });
+    const bindings = { scopeHash: 'scope', policyHash: 'policy', evidenceHash: 'evidence', promptHash: 'prompt', schemaHash: 'schema', modelHash: 'model', validationHash: 'valid' } as const;
+    const base = { history: [{ role: 'user' as const, content: 'raw' }], context: { instructions: 'ok', currentTask: 'ok' }, maxInputTokens: 20, maxOutputTokens: 10, priorInvocations: 0, maxSteps: 1 as const, maxRetries: 0 as const, coveredMessageRange: { from: 0, to: 0 }, bindings };
+    const malformed = createNonRecursiveContextCompactor({
+      async compact() { return { coveredMessageRange: { from: 0, to: 0 }, summary: 'bad', ...bindings, validationState: 'invalid' as unknown as 'validated' }; }
+    }, policy);
+
+    await expect(malformed.compact(base)).rejects.toThrow('unvalidated');
+    await expect(malformed.compact({ ...base, priorInvocations: 1 })).rejects.toThrow('Repeated');
+    await expect(malformed.compact({ ...base, maxSteps: 2 as unknown as 1 })).rejects.toThrow('exactly one step');
   });
 });

@@ -45,7 +45,7 @@ describe.runIf(runLive)('Ollama Cloud live compatibility', () => {
         schema,
         messages: [{ role: 'user', content: `Return this exact JSON and no other content: ${exactJson}` }],
         operation: 'ollama-live-schema',
-        limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 30_000, maxOutputTokens: 1_024 }
+        limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 30_000, maxInputTokens: 32_000, maxOutputTokens: 1_024 }
       });
       expect(result.outputMode).toBe(capability.nativeStructuredOutput ? 'native_schema' : 'prompted_json');
       expect(result.attempts.length).toBeLessThanOrEqual(2);

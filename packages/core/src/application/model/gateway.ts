@@ -52,13 +52,14 @@ class StrictJsonParser {
   private parseObject(depth: number): Record<string, unknown> {
     this.index += 1;
     this.skipWhitespace();
-    const value: Record<string, unknown> = {};
+    const value: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
     const keys = new Set<string>();
     if (this.source[this.index] === '}') { this.index += 1; return value; }
     while (true) {
       this.skipWhitespace();
       if (this.source[this.index] !== '"') throw new StrictJsonError('Expected an object key');
       const key = this.parseString();
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') throw new StrictJsonError(`Dangerous JSON key: ${key}`);
       if (keys.has(key)) throw new StrictJsonError(`Duplicate JSON key: ${key}`);
       keys.add(key);
       this.skipWhitespace();
@@ -118,8 +119,12 @@ class StrictJsonParser {
   }
 
   private skipWhitespace(): void {
-    while (/\s/.test(this.source[this.index] ?? '')) this.index += 1;
+    while ([' ', '\t', '\n', '\r'].includes(this.source[this.index] ?? '')) this.index += 1;
   }
+}
+
+function estimateMessagesTokens(messages: readonly ModelMessage[]): number {
+  return messages.reduce((total, message) => total + Math.ceil(message.content.length / 4), 0);
 }
 
 function normalizedIssues(error: z.ZodError): readonly NormalizedValidationIssue[] {
@@ -161,18 +166,21 @@ function defaultContextSettings(): ContextWindowSettings {
 export function createBudgetedModelGateway(transport: ModelTransport, contextPolicy = new ContextWindowPolicy(defaultContextSettings())): BudgetedModelGateway {
   return {
     async generateObject<Value>(request: GenerateObjectRequest<Value>): Promise<GenerationResult<Value>> {
-      const controller = new BoundedRetryController(request.limits);
+      const controller = new BoundedRetryController(request.limits, request.budget);
       const outputMode: OutputMode = transport.capabilities.nativeStructuredOutput ? 'native_schema' : 'prompted_json';
-      const baseMessages = request.context === undefined ? request.messages : contextPolicy.prepare(request.context).messages;
+      const prepared = request.context === undefined ? undefined : contextPolicy.prepare(request.context);
+      const baseMessages = prepared?.messages ?? request.messages;
       const attempts: GenerationAttempt[] = [];
       let prior: Readonly<{ text: string; issues: readonly NormalizedValidationIssue[] }> | undefined;
 
       while (true) {
-        controller.beginCall();
         const candidateMessages = outputMode === 'native_schema'
           ? baseMessages
           : promptedMessages(baseMessages, request.schema, prior);
-        const messages = contextPolicy.rebudget(candidateMessages);
+        const messages = prepared === undefined
+          ? contextPolicy.rebudgetRaw(candidateMessages)
+          : contextPolicy.rebudget(prepared, candidateMessages.slice(baseMessages.length));
+        controller.beginCall(estimateMessagesTokens(messages));
         let response: TransportGeneration<Value>;
         try {
           response = await transport.generate({
@@ -189,6 +197,8 @@ export function createBudgetedModelGateway(transport: ModelTransport, contextPol
           await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
           continue;
         }
+        controller.assertDeadline();
+        controller.recordInputTokens(estimateMessagesTokens(messages), response.usage?.inputTokens);
         controller.recordOutputTokens(response.usage?.outputTokens);
         const warnings = response.warnings ?? [];
         const usage = response.usage ?? {};
