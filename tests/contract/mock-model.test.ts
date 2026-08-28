@@ -29,7 +29,7 @@ describe('deterministic mock model provider', () => {
   });
 
   it('creates stable, normalized, fixed-profile embeddings without network state', async () => {
-    const { embeddingGateway } = createMockModelGateways();
+    const { embeddingGateway } = createMockModelGateways({ resolve: async () => ({ text: '{}' }) });
     const [first, second, different, empty, whitespace] = await embeddingGateway.embed(['alpha beta', 'alpha beta', 'gamma delta', '', '   ']);
 
     expect(MOCK_EMBEDDING_PROFILE).toMatchObject({ providerId: 'mock', modelId: 'mock-embedding', dimension: 64, unitNormalized: true });
@@ -40,6 +40,14 @@ describe('deterministic mock model provider', () => {
     expect(vectorMagnitude(first!)).toBeCloseTo(1, 12);
     expect(empty).toEqual(Array(MOCK_EMBEDDING_DIMENSION).fill(0));
     expect(whitespace).toEqual(Array(MOCK_EMBEDDING_DIMENSION).fill(0));
+  });
+
+  it('normalizes the known signed-hash collision input instead of cancelling it to zero', async () => {
+    const { embeddingGateway } = createMockModelGateways({ resolve: async () => ({ text: '{}' }) });
+    const [collision] = await embeddingGateway.embed(['token9 token12']);
+
+    expect(collision).not.toEqual(Array(MOCK_EMBEDDING_DIMENSION).fill(0));
+    expect(vectorMagnitude(collision!)).toBeCloseTo(1, 12);
   });
 });
 

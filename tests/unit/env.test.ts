@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { envSchema } from '@slacato/infrastructure/config/env';
 import { createConfiguredModelGateways } from '@slacato/infrastructure';
+import { z } from 'zod';
 
 describe('envSchema', () => {
   it('rejects a configuration without server secrets', () => {
@@ -22,10 +23,33 @@ describe('envSchema', () => {
     })).toMatchObject({ AI_PROVIDER: 'ollama', OLLAMA_CHAT_MODEL: 'chat-model' });
   });
 
-  it('selects the deterministic mock adapter for the default environment', () => {
-    const gateways = createConfiguredModelGateways(envSchema.parse(baseEnvironment));
+  it('fails mock composition immediately when no fixture resolver is supplied', () => {
+    expect(() => createConfiguredModelGateways(envSchema.parse(baseEnvironment))).toThrow('mock fixture resolver');
+  });
+
+  it('uses an explicit mock fixture resolver through schema repair in the real gateway', async () => {
+    const outputs = ['{"value":"invalid"}', '{"value":"valid"}'];
+    const gateways = createConfiguredModelGateways(envSchema.parse(baseEnvironment), {
+      mock: { resolve: async () => ({ text: outputs.shift() ?? '{}', usage: { outputTokens: 1 } }) }
+    });
+    const result = await gateways.modelGateway.generateObject({
+      schema: z.object({ value: z.literal('valid') }).strict(),
+      messages: [{ role: 'user', content: 'Return valid JSON.' }], operation: 'mock-composition',
+      limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 100 }
+    });
+
     expect(gateways).toMatchObject({ provider: 'mock', embeddingProfile: { dimension: 64 } });
     expect(gateways.registry.resolve('specialist')).toMatchObject({ providerId: 'mock', modelId: 'mock-specialist' });
+    expect(result.value).toEqual({ value: 'valid' });
+    expect(result.attempts).toHaveLength(2);
+  });
+
+  it('selects Ollama without requiring or accepting a mock fixture resolver', () => {
+    const environment = envSchema.parse({
+      ...baseEnvironment, AI_PROVIDER: 'ollama', OLLAMA_API_KEY: 'server-only-key', OLLAMA_CHAT_MODEL: 'chat', OLLAMA_EMBEDDING_MODEL: 'embed'
+    });
+    expect(createConfiguredModelGateways(environment).registry.resolve('brief')).toMatchObject({ providerId: 'ollama', modelId: 'chat' });
+    expect(() => createConfiguredModelGateways(environment, { mock: { resolve: async () => ({ text: '{}' }) } })).toThrow('Ollama composition does not accept a mock fixture resolver');
   });
 });
 

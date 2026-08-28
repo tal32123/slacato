@@ -9,7 +9,9 @@ documented profile is `mock/mock-embedding`, dimension **64**, deterministic
 token-hashing/bag-of-words, unit-normalized for non-empty strings. Empty or
 whitespace-only strings produce the zero vector. It uses no network, key, or
 randomness. This dimension is a mock-only profile, not an inferred or approved
-Ollama dimension.
+Ollama dimension. `mock` is the default provider mode, not a self-generating
+model: composition must supply a type-safe scriptable fixture resolver (Task 8
+or API composition owns those fixtures) and fails immediately if it is absent.
 
 Task 3 must use a dimension-flexible pgvector column, persist model, dimension,
 and profile metadata with embeddings, and reject cross-profile comparisons in

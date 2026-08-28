@@ -23,7 +23,7 @@ export const MOCK_EMBEDDING_PROFILE = Object.freeze({
 export type MockGenerationResolver = <Value>(request: ModelTransportRequest<Value>) => Promise<TransportGeneration<Value>> | TransportGeneration<Value>;
 
 /** Construction options for the deterministic development/demo provider. */
-export type MockModelGatewayOptions = Readonly<{ resolve?: MockGenerationResolver }>;
+export type MockModelGatewayOptions = Readonly<{ resolve: MockGenerationResolver }>;
 
 class MockTransport implements ModelTransport {
   public readonly capabilities = { nativeStructuredOutput: false } as const;
@@ -34,10 +34,6 @@ class MockTransport implements ModelTransport {
     const response = await this.resolve(request);
     return { ...response, warnings: [...(response.warnings ?? []), 'mock_provider'] };
   }
-}
-
-function defaultResponse<Value>(): TransportGeneration<Value> {
-  return { text: '{}', usage: { inputTokens: 0, outputTokens: 1 } };
 }
 
 function tokenHash(token: string): number {
@@ -54,7 +50,7 @@ function embeddingFor(value: string): number[] {
   const tokens = value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [];
   for (const token of tokens) {
     const hash = tokenHash(token);
-    vector[hash % MOCK_EMBEDDING_DIMENSION]! += (hash & 0x80000000) === 0 ? 1 : -1;
+    vector[hash % MOCK_EMBEDDING_DIMENSION]! += 1;
   }
   const magnitude = Math.sqrt(vector.reduce((sum, entry) => sum + entry * entry, 0));
   return magnitude === 0 ? vector : vector.map((entry) => entry / magnitude);
@@ -64,19 +60,20 @@ function embeddingFor(value: string): number[] {
  * Creates a deterministic non-network provider for development and demos.
  * Its output is intentionally generic; callers script it through `resolve`.
  */
-export function createMockModelGateways(options: MockModelGatewayOptions = {}): Readonly<{
+export function createMockModelGateways(options: MockModelGatewayOptions): Readonly<{
   modelGateway: BudgetedModelGateway;
   embeddingGateway: EmbeddingGateway;
   registry: ModelRegistry;
   embeddingProfile: typeof MOCK_EMBEDDING_PROFILE;
 }> {
+  if (typeof options?.resolve !== 'function') throw new Error('Mock model gateways require a fixture resolver');
   const registry = new ModelRegistry();
   registry.register('brief', { providerId: 'mock', modelId: 'mock-brief', nativeStructuredOutput: false });
   registry.register('specialist', { providerId: 'mock', modelId: 'mock-specialist', nativeStructuredOutput: false });
   registry.register('compaction', { providerId: 'mock', modelId: 'mock-compaction', nativeStructuredOutput: false });
   registry.register('embedding', { providerId: 'mock', modelId: MOCK_EMBEDDING_PROFILE.modelId });
   return {
-    modelGateway: createBudgetedModelGateway(new MockTransport(options.resolve ?? defaultResponse)),
+    modelGateway: createBudgetedModelGateway(new MockTransport(options.resolve)),
     embeddingGateway: { async embed(values: readonly string[]): Promise<number[][]> { return values.map(embeddingFor); } },
     registry,
     embeddingProfile: MOCK_EMBEDDING_PROFILE
