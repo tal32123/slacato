@@ -19,8 +19,8 @@ The submission must satisfy every mandatory requirement in `Cato_GTM_AI_Engineer
 - Use real indexed retrieval with stable, resolvable evidence citations.
 - Persist runs, checkpoints, approvals, outputs, attempts, and audit events in PostgreSQL.
 - Let a user close the tab and later rejoin the same run without losing progress.
-- Support direct Ollama Cloud by default through a provider-neutral AI boundary.
-- Provide a polished desktop and mobile experience using Next.js, React, and shadcn/ui.
+- Support direct Ollama Cloud by default through a provider-neutral, capability-aware AI boundary.
+- Provide a polished desktop and mobile experience using React, Vite, and shadcn/ui.
 - Verify retrieval quality, groundedness, policy handling, and non-leakage with TypeScript tooling.
 - Keep modules cohesive and business rules out of generic infrastructure services.
 
@@ -47,7 +47,7 @@ SlaCato will provide:
 - Persistent runs and artifacts across process and browser restarts.
 - Traceable specialist steps, tool activity, retries, validation failures, and final output.
 - Two or more synthetic Slack updates per opportunity in a documented TSV format.
-- Demonstrations for authorized OPP1001/OPP1002, restricted OPP1003 with approval, unauthorized OPP1003 with no leakage, and a brief citing Slack.
+- Demonstrations for authorized OPP-1001/OPP-1002, restricted OPP-1003 with approval, unauthorized OPP-1003 with no leakage, and a brief citing Slack.
 - A README describing architecture, setup, models, environment variables, commands, assumptions, and demo flow.
 
 Every brief contains:
@@ -92,7 +92,7 @@ It does not expose hidden chain of thought. User-facing reasoning is a concise, 
 
 ### Approval Experience
 
-There is no pause/resume button. When policy requires approval, the workflow persists `awaiting_approval` and stops consuming model work. The assigned approver sees the item in an inbox and can approve, reject, or edit the proposed output. Approval automatically resumes the workflow. Closing and reopening the browser simply rejoins the same persisted run.
+There is no pause/resume button. When policy requires approval, the workflow persists an immutable, versioned approval subject and stops consuming model work. The assigned approver can approve unchanged, edit and approve with rationale, or reject with rationale. Compare-and-swap prevents stale decisions; edited content is revalidated for schema, citations, authorization, claim support, policy, and unsafe language. Approval finalizes that exact snapshot without another model synthesis. Closing and reopening the browser rejoins the persisted run.
 
 ### Demo Login and Settings
 
@@ -102,12 +102,9 @@ Settings includes:
 
 - Active persona selector
 - Read-only permission matrix by account, source, sensitive pricing, approval authority, and restricted-opportunity access
-- Generation provider and model selection
-- Read-only embedding provider/model and index-health display
-- Theme and audit-visibility preferences
-- Runtime and configuration information
+- Read-only permission, provider/model, index-health, and runtime diagnostics in a clearly secondary Demo Diagnostics area
 
-Changing persona affects subsequent server-authorized behavior. Existing runs retain their originating identity.
+Changing persona affects subsequent server-authorized behavior. Existing runs retain their originating identity, but the current persona must still be authorized to view them. Switching persona aborts live streams, closes overlays, clears client state, and reauthorizes the current route.
 
 ### Visual Direction
 
@@ -143,12 +140,12 @@ The implementation will use Geist or another freely distributable modern sans-se
 
 ### Runtime Shape
 
-A single TypeScript codebase uses Next.js App Router and React. NestJS is intentionally omitted: the workload does not justify a second application framework, deployment unit, or duplicate dependency-injection system. Next.js server modules host application services, route handlers, server actions where appropriate, and the SSE endpoint.
+A TypeScript workspace uses a React/Vite single-page application, a NestJS HTTP API, and a separately deployable NestJS BullMQ worker. The authenticated sales workspace does not require SSR or SEO, so keeping presentation static and placing all server behavior behind an explicit API produces a cleaner deployment-neutral seam than Next.js server actions or route handlers.
 
 The architecture is a modular monolith with explicit boundaries:
 
-- Presentation: pages, React components, view models, SSE client
-- Application: use cases, workflow coordination, authorization orchestration
+- Presentation: React routes, components, view models, query/mutation clients, SSE client
+- Application: NestJS controllers, use cases, workflow coordination, authorization orchestration
 - Domain: deal briefs, claims, citations, approval policy, permissions, run state
 - Infrastructure: Drizzle repositories, provider adapters, retrieval indexes, SSE transport, logging
 
@@ -204,6 +201,12 @@ Domain repository ports describe concepts such as runs, approvals, evidence, per
 
 The SSE service transports generic envelopes containing event ID, stream/run ID, event type, timestamp, version, and typed payload. It handles replay cursors, heartbeats, and disconnection. It contains no deal or policy decisions.
 
+### Job Execution
+
+BullMQ is a generic execution adapter backed by Redis. Queue processors deserialize a command and invoke an application use case; they contain no deal, policy, retrieval, or model logic. PostgreSQL remains authoritative for business workflow state. A transactional outbox prevents a committed run from being lost between the database transaction and queue publication. A PostgreSQL reconciler republishes nonterminal steps that have neither a committed invocation nor a live command, so accepted Redis jobs are not the sole recovery record. Redis uses persistence and `maxmemory-policy=noeviction`.
+
+Jobs use stable idempotency keys, bounded delivery attempts with jittered backoff, dead-letter handling, and correlation metadata. Step invocations have an owner, lease expiry, heartbeat, and safe takeover rules. Queue delivery is at least once; external LLM inference can also be repeated if a process dies after receiving a provider response but before committing it. Provider-supported idempotency is used when available, and indeterminate attempts are persisted and counted against the run budget. Human approval never suspends a worker: the current job ends after persisting `awaiting_approval`, and the approval API atomically records the decision and enqueues any required deterministic continuation.
+
 ### Logging
 
 Structured logs use stable event names, correlation IDs, run IDs, provider/model metadata, durations, retry counts, token usage, and safe error classifications. Prompts, source content, secrets, and restricted metadata are not logged by default. Domain services decide which redacted audit facts are safe to emit.
@@ -218,6 +221,7 @@ Primary persisted concepts include:
 - Permission grants
 - Opportunities and source documents
 - Chunks, metadata, embeddings, and lexical index fields
+- Immutable run evidence manifests containing the authorized chunk versions, ranks, hashes, model/index version, policy hash, and scope hash used by a run
 - Runs, workflow checkpoints, and current state
 - Specialist attempts and validated artifacts
 - Claims and stable citations
@@ -225,7 +229,7 @@ Primary persisted concepts include:
 - Final briefs and exports
 - Audit events and model usage
 
-State transitions are explicit and validated. Repeated commands are idempotent using stable operation keys. A run can resume from its last completed checkpoint after a browser or server restart.
+State transitions are explicit and validated. PostgreSQL stores checkpoints, attempts, outbox records, invocation leases, and the current business state; BullMQ/Redis provides durable distributed delivery to a separate worker process. Repeated commands are idempotent using stable operation and invocation keys. A run resumes from its last committed checkpoint after a browser, API, worker, or Redis connection restart. Workflow correctness is exposed through a deep `WorkflowStore` seam whose atomic operations commit state, events, artifacts, and the next outbox command together.
 
 ## 8. Retrieval and Authorization
 
@@ -244,7 +248,7 @@ Authorization is checked again when resolving citations and before rendering per
 ### Part 1 Retrieval
 
 - PostgreSQL full-text search for lexical and keyword matching
-- Bi-encoder embeddings in `pgvector` for semantic similarity
+- Exact cosine search over the already-authorized `pgvector` subset for semantic similarity
 - Permission and metadata filters applied inside retrieval queries
 - Parallel lexical and semantic retrieval
 - Reciprocal Rank Fusion for deterministic result merging
@@ -258,11 +262,17 @@ After implementing and evaluating the baseline retrieval system, pause to discus
 
 ## 9. Structured Generation and Reliability
 
-AI SDK structured output uses Zod schemas and the current `Output.object` pattern. Each final specialist artifact and brief must validate completely before persistence as a completed result.
+The model adapter probes the configured provider/model capabilities. It prefers AI SDK native structured output with Zod when the live model proves support; otherwise it uses ordinary generation with a trusted JSON-Schema instruction, deterministic JSON extraction, Zod validation, and bounded corrective retries. Every attempt records `native_schema` or `prompted_json`. Each final specialist artifact and brief must validate completely before persistence as a completed result.
 
-Model retries are bounded, normally to three attempts. On a schema failure, the next attempt receives the prior invalid output plus precise Zod issue paths and correction instructions. Transport and rate-limit retries use exponential backoff with jitter. Business authorization and policy failures are not blindly retried.
+Model retries are owned by one application retry controller; SDK-level retries are disabled. Total provider calls, transport retries, schema repairs, deadline, and token budget are bounded. On a schema failure, the next attempt receives a bounded prior invalid output plus precise Zod issue paths and correction instructions. Transport and rate-limit retries use exponential backoff with jitter. Business authorization and policy failures are not retried.
 
 Each attempt persists safe metadata, validation issues, duration, and usage. If repair fails, the run enters a typed failure state with a safe user-facing recovery action.
+
+### Context Budgeting and Compaction
+
+`BudgetedModelGateway` is the only model-call interface exposed to agents and scripts. It always applies a deterministic, model-free `ContextWindowPolicy`, which reserves output capacity, budgets system instructions, current task input, validated specialist artifacts, and authorized retrieved evidence, and prevents large tool or retrieval payloads from entering context unbounded. Provider adapters remain private. Generated schemas bound every array, string, claim, citation, and total serialized artifact size. Specialist artifacts reference one immutable evidence manifest rather than duplicating excerpts; strategy receives bounded artifacts and only their cited evidence.
+
+The Part 1 agents perform bounded analyses, so pruning and retrieval limits are the normal path. If a future multi-turn session crosses its configured threshold, a separate `ContextCompactor` makes a non-recursive budgeted summary call, validates a structured checkpoint, persists it alongside immutable raw history, and retains a recent tail. The checkpoint binds to covered message ranges, citations, evidence versions, authorization scope, policy, prompt, schema, model, and validation hashes. Authorization is recomputed before reuse; narrowed access invalidates and rebuilds the checkpoint from still-authorized raw history. Compaction has hard input-token, output-token, step, retry, and repeated-call limits. It is an application capability, not a reason to adopt a separate agent runtime; Vercel Eve and Workflow are not required.
 
 The canonical brief JSON includes all nine sections, stable claim IDs, citation IDs, confidence values, and review warnings. The UI renders this model with shadcn components. Markdown and JSON exports are supported.
 
@@ -316,12 +326,9 @@ Pull requests run deterministic lint, typecheck, unit, integration, and fixture-
 
 ## 13. Deployment and Operations
 
-The application supports two documented deployment paths:
+The local runnable path is Docker Compose with `web`, `api`, `worker`, PostgreSQL/pgvector, and Redis services. The production reference deployment is Railway. The public web container serves the React build and reverse-proxies same-origin `/api` and SSE requests to the private NestJS API. The API, BullMQ worker, PostgreSQL/pgvector, and Redis communicate over Railway private networking; only the web service receives a public domain. The same proxy contract is used in local development. This avoids cross-site cookie and EventSource behavior while retaining strict origin checks and session-bound CSRF protection for mutations. Vercel hosting, Vercel Workflow, and Eve are not runtime dependencies.
 
-- Docker Compose for application plus PostgreSQL/pgvector
-- Vercel for Next.js with a compatible managed PostgreSQL/pgvector database
-
-The same migrations, ingestion, evaluation, and demo commands work in both paths. SSE is selected over WebSockets because the browser only needs server-to-client progress events. Long-lived durable work is controlled by persisted checkpoints rather than browser connection lifetime.
+SSE is selected over WebSockets because the browser only needs server-to-client progress events. Browser lifetime never controls work: refreshing or reopening reads the persisted run and reconnects using a snapshot watermark. PostgreSQL events are authoritative for replay; `LISTEN/NOTIFY` only wakes every live API replica after the worker commits an event. Health checks distinguish liveness from readiness for PostgreSQL migrations, Redis, provider capability, and index state. Production deployment includes separate scaling controls for API and worker, bounded connection pools and worker/model concurrency, redacted structured logs, graceful shutdown, queue draining, migration jobs, backups, outbox-age/queue-depth alerts, retention, and dead-letter inspection.
 
 ## 14. Error Handling
 
@@ -361,14 +368,17 @@ These assumptions must be validated during setup and surfaced clearly when unmet
 ## 17. Decision Summary
 
 - Product: responsive web application named SlaCato
-- Framework: Next.js App Router, React, TypeScript, shadcn/ui
+- Framework: React, Vite, NestJS, TypeScript, shadcn/ui
 - Orchestration: deterministic workflow, no LLM orchestrator
 - Agents: four specialists with validated structured artifacts
 - AI: Vercel AI SDK, provider-neutral gateway, Ollama Cloud default
 - Data: PostgreSQL, pgvector, PostgreSQL full-text search, Drizzle
 - Retrieval: authorized hybrid lexical + semantic with RRF
-- Progress: SSE, durable checkpoints, resumable URLs
-- Approval: durable inbox workflow, no pause/resume button
+- Progress: PostgreSQL workflow state/outbox/checkpoints, BullMQ/Redis delivery, separate worker, SSE projection, resumable URLs
+- Approval: immutable versioned inbox subject, approve unchanged/edit-and-approve/reject, no post-approval synthesis
 - Evaluation: Vitest, Playwright, Promptfoo, focused TypeScript evaluators
 - Theme: Cato production green palette with Slack-inspired collaboration patterns
+- Context: provider-aware budgeting and pruning, with persisted structured compaction only when thresholds require it
+- Deployment: Docker Compose locally; Railway `web` + `api` + `worker` + PostgreSQL/pgvector + Redis in production
+- Submission: sanitized mandatory live briefs, specialist artifacts, approvals, traces, usage, and evaluation reports
 - Deferred: cross-encoder reranking discussion after Part 1 baseline evaluation
