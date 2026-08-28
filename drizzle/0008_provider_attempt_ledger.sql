@@ -36,4 +36,5 @@ ALTER TABLE run_budget_reservations ADD CONSTRAINT run_budget_reservations_grant
 ALTER TABLE generation_attempts ADD COLUMN IF NOT EXISTS ordinal integer NOT NULL DEFAULT 1;
 ALTER TABLE run_budget_reservations ADD CONSTRAINT run_budget_reservations_attempt_fk FOREIGN KEY (attempt_id) REFERENCES generation_attempts(id);
 CREATE UNIQUE INDEX IF NOT EXISTS run_budget_reservations_attempt_uq ON run_budget_reservations (attempt_id) WHERE attempt_id IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS run_budget_reservations_invocation_operation_ordinal_uq ON run_budget_reservations (run_id, invocation_id, operation, ordinal) NULLS NOT DISTINCT;
+ALTER TABLE run_budget_reservations ADD CONSTRAINT run_budget_reservations_invocation_operation_ordinal_uq
+  UNIQUE NULLS NOT DISTINCT (run_id, invocation_id, operation, ordinal);

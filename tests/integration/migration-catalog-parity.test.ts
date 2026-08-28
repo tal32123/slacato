@@ -5,6 +5,8 @@ import { promisify } from 'node:util';
 import postgres, { type Sql } from 'postgres';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getTableConfig } from '../../packages/infrastructure/node_modules/drizzle-orm/pg-core/utils.js';
+import { createDatabaseClient } from '@slacato/infrastructure/db/client';
+import { PostgresProviderAttemptLedger } from '@slacato/infrastructure/db/repositories/provider-attempt-ledger';
 import {
   approvalSubjects, briefs, claims, evidenceVersions, outboxCommands, runBudgetReservations,
   permissionGrants, runBudgets, runEvidenceManifestEntries, runEvidenceManifests, stepInvocations
@@ -142,13 +144,47 @@ describe('durable migration catalog', () => {
       expect(serialized).toContain('run_budget_reservations_attempt_fk');
       expect(serialized).toContain('run_budget_reservations_invocation_operation_ordinal_uq');
       expect(serialized).toContain('nulls not distinct');
-      expect((cleanCatalog.indexes as readonly { table_name: string; name: string; definition: string }[])).toEqual(expect.arrayContaining([
+      expect((cleanCatalog.constraints as readonly { table_name: string; name: string; definition: string }[])).toEqual(expect.arrayContaining([
         expect.objectContaining({ table_name: 'run_budget_reservations', name: 'run_budget_reservations_invocation_operation_ordinal_uq', definition: expect.stringContaining('NULLS NOT DISTINCT') })
       ]));
       expect(serialized).not.toContain('hnsw');
     } finally {
       await clean.end({ timeout: 1 });
       await upgrade.end({ timeout: 1 });
+    }
+  });
+
+  it('lets a restarted legacy run atomically adopt its previously unknown deadline', async () => {
+    const name = makeDatabaseName();
+    await createTemporaryDatabase(name);
+    const url = urlForDatabase(name);
+    const sql = postgres(url, { max: 1 });
+    try {
+      await applyMigrations(sql, migrationFiles.slice(0, 9));
+      await sql`insert into personas (id, display_name, role) values ('legacy-deadline-user', 'Legacy deadline user', 'seller')`;
+      await sql`insert into accounts (id, name) values ('legacy-deadline-account', 'Legacy deadline account')`;
+      await sql`insert into opportunities (id, account_id, name) values ('legacy-deadline-opportunity', 'legacy-deadline-account', 'Legacy deadline opportunity')`;
+      await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values ('legacy-deadline-run', 'legacy-deadline-opportunity', 'legacy-deadline-user', 'created', 'mock', 'mock-chat', 0)`;
+      await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values ('legacy-deadline-run', 2, 100, 20)`;
+      await applyMigrations(sql, migrationFiles.slice(9));
+      expect(await sql<{ deadline_ms: number | null }[]>`select deadline_ms from run_budgets where run_id = 'legacy-deadline-run'`).toEqual([{ deadline_ms: null }]);
+
+      const firstDatabase = createDatabaseClient(url, 1);
+      const secondDatabase = createDatabaseClient(url, 1);
+      try {
+        const attempts = await Promise.allSettled([
+          new PostgresProviderAttemptLedger(firstDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 }),
+          new PostgresProviderAttemptLedger(secondDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 2_000 })
+        ]);
+        expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1);
+        const [{ deadline_ms: adoptedDeadline }] = await sql<{ deadline_ms: number }[]>`select deadline_ms from run_budgets where run_id = 'legacy-deadline-run'`;
+        expect([1_000, 2_000]).toContain(adoptedDeadline);
+        await new PostgresProviderAttemptLedger(firstDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: adoptedDeadline });
+      } finally {
+        await Promise.all([firstDatabase.close(), secondDatabase.close()]);
+      }
+    } finally {
+      await sql.end({ timeout: 1 });
     }
   });
 
@@ -166,9 +202,9 @@ describe('durable migration catalog', () => {
     expect(pendingIndex?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['status', 'available_at', 'id']);
     expect(Object.keys(stepInvocations)).toEqual(expect.arrayContaining(['causalCommandId', 'leaseToken']));
     expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens', 'deadlineMs']));
-    const reservationIndex = getTableConfig(runBudgetReservations).indexes.find((entry) => entry.config.name === 'run_budget_reservations_invocation_operation_ordinal_uq');
-    expect(reservationIndex?.config.unique).toBe(true);
-    expect(reservationIndex?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['run_id', 'invocation_id', 'operation', 'ordinal']);
+    const reservationConstraint = getTableConfig(runBudgetReservations).uniqueConstraints.find((entry) => entry.name === 'run_budget_reservations_invocation_operation_ordinal_uq');
+    expect(reservationConstraint?.nullsNotDistinct).toBe(true);
+    expect(reservationConstraint?.columns.map((column) => column.name)).toEqual(['run_id', 'invocation_id', 'operation', 'ordinal']);
     expect(Object.keys(runBudgetReservations)).toEqual(expect.arrayContaining([
       'attemptId', 'invocationId', 'operation', 'ordinal', 'grantedOutputTokens', 'reservedInputTokens',
       'actualInputTokens', 'actualOutputTokens', 'requestId', 'responseId', 'failureCategory', 'failureCode'

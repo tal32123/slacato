@@ -2,7 +2,7 @@ import { ProviderAttemptFinalizationConflict, type ProviderAttemptLedger, type P
 import type { TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../client.js';
 
-type BudgetRow = Readonly<{ run_id: string; max_calls: number; max_input_tokens: number; max_output_tokens: number; deadline_ms: number; used_calls: number; used_input_tokens: number; used_output_tokens: number; reserved_output_tokens: number }>;
+type BudgetRow = Readonly<{ run_id: string; max_calls: number; max_input_tokens: number; max_output_tokens: number; deadline_ms: number | null; used_calls: number; used_input_tokens: number; used_output_tokens: number; reserved_output_tokens: number }>;
 type ReservationRow = Readonly<{
   id: string; attempt_id: string; run_id: string; granted_output_tokens: number; reserved_input_tokens: number;
   status: 'reserved' | 'settled' | 'released' | 'possible_duplicate'; actual_input_tokens: number | null; actual_output_tokens: number | null;
@@ -17,7 +17,10 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
 
   /** Verifies the atomically-created workflow budget before exposing a run gateway. */
   public async assertRunBudget(input: Pick<RunBudgetLimits, 'scope' | 'maxCalls' | 'maxInputTokens' | 'maxOutputTokens' | 'deadlineMs'>): Promise<void> {
-    const budget = (await this.database.sql<Pick<BudgetRow, 'max_calls' | 'max_input_tokens' | 'max_output_tokens' | 'deadline_ms'>[]>`select max_calls, max_input_tokens, max_output_tokens, deadline_ms from run_budgets where run_id = ${input.scope}`)[0];
+    const budget = (await this.database.sql<Pick<BudgetRow, 'max_calls' | 'max_input_tokens' | 'max_output_tokens' | 'deadline_ms'>[]>`update run_budgets
+      set deadline_ms = coalesce(deadline_ms, ${input.deadlineMs})
+      where run_id = ${input.scope}
+      returning max_calls, max_input_tokens, max_output_tokens, deadline_ms`)[0];
     if (budget === undefined) throw new Error('Run budget does not exist');
     if (budget.max_calls !== input.maxCalls || budget.max_input_tokens !== input.maxInputTokens || budget.max_output_tokens !== input.maxOutputTokens || budget.deadline_ms !== input.deadlineMs) throw new Error('Run budget does not match the requested run scope');
   }

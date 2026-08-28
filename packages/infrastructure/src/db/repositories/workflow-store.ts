@@ -61,7 +61,10 @@ export class PostgresWorkflowStore implements WorkflowStore {
       if (inserted.length === 0 && (row.status !== input.status || row.generation_provider !== input.generationProvider || row.generation_model !== input.generationModel)) throw new DomainConflictError('Run ID is already bound to another workflow configuration');
       if (inserted.length === 1) await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens, deadline_ms)
         values (${input.id}, ${input.budget.maxCalls}, ${input.budget.maxInputTokens}, ${input.budget.maxOutputTokens}, ${input.budget.deadlineMs})`;
-      const budget = (await sql<{ max_calls: number; max_input_tokens: number; max_output_tokens: number; deadline_ms: number }[]>`select max_calls, max_input_tokens, max_output_tokens, deadline_ms from run_budgets where run_id = ${input.id} for update`)[0];
+      const budget = (await sql<{ max_calls: number; max_input_tokens: number; max_output_tokens: number; deadline_ms: number }[]>`update run_budgets
+        set deadline_ms = coalesce(deadline_ms, ${input.budget.deadlineMs})
+        where run_id = ${input.id}
+        returning max_calls, max_input_tokens, max_output_tokens, deadline_ms`)[0];
       if (budget === undefined) throw new DomainConflictError('Run has no durable budget');
       if (budget.max_calls !== input.budget.maxCalls || budget.max_input_tokens !== input.budget.maxInputTokens || budget.max_output_tokens !== input.budget.maxOutputTokens || budget.deadline_ms !== input.budget.deadlineMs) throw new DomainConflictError('Run ID is already bound to different budget limits');
       if (inserted.length === 1) {
