@@ -1,5 +1,7 @@
+import { readFile, readdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import postgres from 'postgres';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { UnrecoverableError, Worker } from 'bullmq';
 import type { CommandQueue, StartRunInput, WorkflowCommand } from '@slacato/core';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
@@ -8,7 +10,15 @@ import { BullMqCommandQueue } from '@slacato/infrastructure/queue/bullmq';
 import { OutboxDispatcher } from '@slacato/infrastructure/queue/outbox-dispatcher';
 import { PostgresCommandReconciler } from '@slacato/infrastructure/queue/reconciler';
 
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const sourceDatabaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const databaseName = `catohw_outbox_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+const databaseNamePattern = /^catohw_outbox_[a-z0-9]{16}$/;
+function databaseUrlFor(name: string): string {
+  const url = new URL(sourceDatabaseUrl);
+  url.pathname = `/${name}`;
+  return url.toString();
+}
+const databaseUrl = databaseUrlFor(databaseName);
 const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:56379';
 const database = createDatabaseClient(databaseUrl, 4);
 function budgetedStore(client: typeof database): PostgresWorkflowStore {
@@ -19,7 +29,8 @@ function budgetedStore(client: typeof database): PostgresWorkflowStore {
   } });
 }
 const store = budgetedStore(database);
-const queue = new BullMqCommandQueue(redisUrl, 'slacato-workflow-integration');
+const queue = new BullMqCommandQueue(redisUrl, `slacato-workflow-integration-${crypto.randomUUID()}`);
+const seededRunIds: string[] = [];
 
 function suffix(): string { return crypto.randomUUID().replaceAll('-', ''); }
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,7 +48,38 @@ async function seedRun() {
   await raw`insert into accounts (id, name) values (${accountId}, 'Outbox account')`;
   await raw`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Outbox opportunity')`;
   await raw.end({ timeout: 1 });
+  seededRunIds.push(runId);
   return { userId, opportunityId, runId };
+}
+
+async function createTemporaryDatabase(): Promise<void> {
+  if (!databaseNamePattern.test(databaseName)) throw new Error(`Refusing to create non-test database ${databaseName}`);
+  const maintenance = postgres(databaseUrlFor('postgres'), { max: 1 });
+  try {
+    await maintenance.unsafe(`CREATE DATABASE "${databaseName}"`);
+  } finally {
+    await maintenance.end({ timeout: 1 });
+  }
+  const migrationFiles = (await readdir(resolve(process.cwd(), 'drizzle')))
+    .filter((file) => /^\d{4}_.+\.sql$/.test(file))
+    .sort();
+  const target = postgres(databaseUrl, { max: 1 });
+  try {
+    for (const file of migrationFiles) await target.unsafe(await readFile(resolve(process.cwd(), 'drizzle', file), 'utf8'));
+  } finally {
+    await target.end({ timeout: 1 });
+  }
+}
+
+async function dropTemporaryDatabase(): Promise<void> {
+  if (!databaseNamePattern.test(databaseName)) throw new Error(`Refusing to drop non-test database ${databaseName}`);
+  const maintenance = postgres(databaseUrlFor('postgres'), { max: 1 });
+  try {
+    await maintenance`select pg_terminate_backend(pid) from pg_stat_activity where datname = ${databaseName} and pid <> pg_backend_pid()`;
+    await maintenance.unsafe(`DROP DATABASE IF EXISTS "${databaseName}"`);
+  } finally {
+    await maintenance.end({ timeout: 1 });
+  }
 }
 
 async function waitForFailedJob(commandQueue: BullMqCommandQueue, commandId: string): Promise<void> {
@@ -66,8 +108,19 @@ async function waitFor(check: () => boolean, description: string): Promise<void>
   throw new Error(`Timed out waiting for ${description}`);
 }
 
-beforeAll(async () => { await queue.queue.waitUntilReady(); });
-afterAll(async () => { await queue.close(); await database.close(); });
+beforeAll(async () => { await createTemporaryDatabase(); await queue.queue.waitUntilReady(); });
+afterEach(async () => {
+  const runIds = seededRunIds.splice(0);
+  if (runIds.length === 0) return;
+  await database.sql`update outbox_commands set consumed_at = now() where run_id in ${database.sql(runIds)}`;
+  await database.sql`update runs set status = 'failed' where id in ${database.sql(runIds)}`;
+});
+afterAll(async () => {
+  await queue.queue.obliterate({ force: true });
+  await queue.close();
+  await database.close();
+  await dropTemporaryDatabase();
+});
 
 describe('PostgreSQL outbox and workflow leases', () => {
   it('recovers a command committed before queue publication and suppresses duplicate BullMQ delivery', async () => {
