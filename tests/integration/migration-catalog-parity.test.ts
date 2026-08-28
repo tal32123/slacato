@@ -172,6 +172,11 @@ describe('durable migration catalog', () => {
       const firstDatabase = createDatabaseClient(url, 1);
       const secondDatabase = createDatabaseClient(url, 1);
       try {
+        await expect(new PostgresProviderAttemptLedger(firstDatabase).assertRunBudget({
+          scope: 'legacy-deadline-run', maxCalls: 3, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 3_000
+        })).rejects.toThrow('does not match');
+        expect(await sql<{ deadline_ms: number | null }[]>`select deadline_ms from run_budgets where run_id = 'legacy-deadline-run'`).toEqual([{ deadline_ms: null }]);
+
         const attempts = await Promise.allSettled([
           new PostgresProviderAttemptLedger(firstDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 }),
           new PostgresProviderAttemptLedger(secondDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 2_000 })

@@ -20,9 +20,16 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
     const budget = (await this.database.sql<Pick<BudgetRow, 'max_calls' | 'max_input_tokens' | 'max_output_tokens' | 'deadline_ms'>[]>`update run_budgets
       set deadline_ms = coalesce(deadline_ms, ${input.deadlineMs})
       where run_id = ${input.scope}
+        and max_calls = ${input.maxCalls}
+        and max_input_tokens = ${input.maxInputTokens}
+        and max_output_tokens = ${input.maxOutputTokens}
       returning max_calls, max_input_tokens, max_output_tokens, deadline_ms`)[0];
-    if (budget === undefined) throw new Error('Run budget does not exist');
-    if (budget.max_calls !== input.maxCalls || budget.max_input_tokens !== input.maxInputTokens || budget.max_output_tokens !== input.maxOutputTokens || budget.deadline_ms !== input.deadlineMs) throw new Error('Run budget does not match the requested run scope');
+    if (budget === undefined) {
+      const exists = await this.database.sql<{ exists: boolean }[]>`select exists(select 1 from run_budgets where run_id = ${input.scope}) as exists`;
+      if (exists[0]?.exists === true) throw new Error('Run budget does not match the requested run scope');
+      throw new Error('Run budget does not exist');
+    }
+    if (budget.deadline_ms !== input.deadlineMs) throw new Error('Run budget does not match the requested run scope');
   }
 
   public async beginAttempt(input: Parameters<ProviderAttemptLedger['beginAttempt']>[0]): Promise<ProviderAttemptReservation> {
