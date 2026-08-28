@@ -259,6 +259,12 @@ importers:
 
   packages/infrastructure:
     dependencies:
+      '@slacato/core':
+        specifier: workspace:*
+        version: link:../core
+      ai:
+        specifier: 7.0.83
+        version: 7.0.83(zod@4.4.3)
       bullmq:
         specifier: 6.3.1
         version: 6.3.1(ioredis@6.0.0)

@@ -11,6 +11,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@slacato/core": "workspace:*",
+    "ai": "7.0.83",
     "bullmq": "6.3.1",
     "drizzle-orm": "0.45.2",
     "ioredis": "^6.0.0",
