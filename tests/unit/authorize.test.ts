@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authorizeOpportunity, type AuthorizationSession } from '@slacato/core';
+import { authorizeOpportunity, deriveApprovalAuthority, type AuthorizationSession } from '@slacato/core';
 
 const restrictedOpportunity = { accountId: 'ACC-2003', restricted: true } as const;
 
@@ -10,6 +10,7 @@ const harperSession: AuthorizationSession = {
     sourceType: 'salesforce',
     canRead: true,
     canReadRestricted: false,
+    canRequestApproval: false,
     canApprove: false,
     sensitivePricing: false
   }]
@@ -36,10 +37,10 @@ describe('authorizeOpportunity', () => {
     const result = authorizeOpportunity({
       userId: 'USR-5005',
       grants: [
-        { accountId: 'ACC-2001', sourceType: 'slack', canRead: true, canReadRestricted: false, canApprove: true, sensitivePricing: false },
-        { accountId: 'ACC-2003', sourceType: 'salesforce', canRead: true, canReadRestricted: true, canApprove: true, sensitivePricing: true },
-        { accountId: 'ACC-2003', sourceType: 'pricing', canRead: true, canReadRestricted: true, canApprove: true, sensitivePricing: true },
-        { accountId: 'ACC-2003', sourceType: 'gong_summary', canRead: false, canReadRestricted: true, canApprove: true, sensitivePricing: true }
+        { accountId: 'ACC-2001', sourceType: 'slack', canRead: true, canReadRestricted: false, canRequestApproval: true, canApprove: true, sensitivePricing: false },
+        { accountId: 'ACC-2003', sourceType: 'salesforce', canRead: true, canReadRestricted: true, canRequestApproval: true, canApprove: true, sensitivePricing: true },
+        { accountId: 'ACC-2003', sourceType: 'pricing', canRead: true, canReadRestricted: true, canRequestApproval: true, canApprove: true, sensitivePricing: true },
+        { accountId: 'ACC-2003', sourceType: 'gong_summary', canRead: false, canReadRestricted: true, canRequestApproval: true, canApprove: true, sensitivePricing: true }
       ]
     }, restrictedOpportunity);
 
@@ -48,8 +49,43 @@ describe('authorizeOpportunity', () => {
       accountIds: ['ACC-2003'],
       sourceTypes: ['pricing', 'salesforce'],
       canViewSensitivePricing: true,
+      canRequestApproval: true,
       canApprove: true,
       canViewRestrictedAccounts: true
     });
+  });
+
+  it('filters every source grant individually for a restricted opportunity', () => {
+    const result = authorizeOpportunity({ userId: 'USR-5003', grants: [
+      { accountId: 'ACC-2003', sourceType: 'salesforce', canRead: true, canReadRestricted: true, canRequestApproval: true, canApprove: false, sensitivePricing: true },
+      { accountId: 'ACC-2003', sourceType: 'slack', canRead: true, canReadRestricted: false, canRequestApproval: true, canApprove: true, sensitivePricing: true },
+      { accountId: 'ACC-2003', sourceType: 'pricing', canRead: true, canReadRestricted: true, canRequestApproval: true, canApprove: false, sensitivePricing: false }
+    ] }, restrictedOpportunity);
+
+    expect(result).toEqual({
+      allowed: true,
+      accountIds: ['ACC-2003'],
+      sourceTypes: ['pricing', 'salesforce'],
+      canViewSensitivePricing: false,
+      canRequestApproval: true,
+      canApprove: false,
+      canViewRestrictedAccounts: true
+    });
+  });
+});
+
+describe('deriveApprovalAuthority', () => {
+  const policy = 'Discounts require Deal Desk approval. Discounts over 15 percent require sales leader approval.';
+
+  it('never turns an account owner request permission into approval authority', () => {
+    expect(deriveApprovalAuthority('Account Owner', policy)).toBe(false);
+    expect(deriveApprovalAuthority('Restricted Account Owner', policy)).toBe(false);
+  });
+
+  it('recognizes only canonical approver roles documented by policy', () => {
+    expect(deriveApprovalAuthority('Deal Desk Approver', policy)).toBe(true);
+    expect(deriveApprovalAuthority('Sales Leader', policy)).toBe(true);
+    expect(deriveApprovalAuthority('Sales Leader', 'Only Deal Desk approval is permitted.')).toBe(false);
+    expect(deriveApprovalAuthority('Administrator', policy)).toBe(false);
   });
 });

@@ -46,6 +46,11 @@ describe('BrowserRequestPolicy', () => {
     })).toEqual({ allowed: true, origin: 'http://127.0.0.1:4173' });
   });
 
+  it.each(['same-site', 'cross-site'] as const)('allows an exact configured %s development origin', (secFetchSite) => {
+    expect(policy.evaluate({ method: 'POST', origin: 'http://127.0.0.1:4173', secFetchSite }))
+      .toEqual({ allowed: true, origin: 'http://127.0.0.1:4173' });
+  });
+
   it.each([
     { method: 'POST', origin: undefined, secFetchSite: 'same-origin' },
     { method: 'POST', origin: 'https://hostile.example', secFetchSite: 'cross-site' },

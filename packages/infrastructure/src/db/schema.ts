@@ -28,8 +28,12 @@ export const personas = pgTable('personas', {
 export const permissionGrants = pgTable('permission_grants', {
   id: text('id').primaryKey(), personaId: text('persona_id').notNull().references(() => personas.id),
   accountId: text('account_id').references(() => accounts.id), sourceType: text('source_type'), canRead: boolean('can_read').notNull().default(false), canReadRestricted: boolean('can_read_restricted').notNull().default(false),
-  canApprove: boolean('can_approve').notNull().default(false), sensitivePricing: boolean('sensitive_pricing').notNull().default(false), createdAt: now()
-});
+  canRequestApproval: boolean('can_request_approval').notNull().default(false), canApprove: boolean('can_approve').notNull().default(false), sensitivePricing: boolean('sensitive_pricing').notNull().default(false),
+  sourceCommit: text('source_commit'), createdAt: now()
+}, (table) => [
+  index('permission_grants_source_commit_persona_idx').on(table.sourceCommit, table.personaId, table.accountId, table.sourceType, table.id),
+  check('permission_grants_source_commit_check', sql`${table.sourceCommit} is null or ${table.sourceCommit} ~ '^[0-9a-f]{40}$'`)
+]);
 export const accounts = pgTable('accounts', { id: text('id').primaryKey(), name: text('name').notNull(), createdAt: now() });
 export const opportunities = pgTable('opportunities', {
   id: text('id').primaryKey(), accountId: text('account_id').notNull().references(() => accounts.id), name: text('name').notNull(), restricted: boolean('restricted').notNull().default(false), createdAt: now()

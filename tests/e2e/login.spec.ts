@@ -66,3 +66,23 @@ test('login and denial routes remain usable on a narrow mobile viewport', async 
   await page.goto('/forbidden');
   await expect(page.getByRole('heading', { name: 'This workspace is not available' })).toBeVisible();
 });
+
+test('preserves a safe intended destination through the unauthenticated route', async ({ page }) => {
+  await page.goto('/');
+  await expect(page).toHaveURL('/unauthorized?returnTo=%2F');
+  await page.getByRole('link', { name: 'Choose a persona' }).click();
+  await expect(page).toHaveURL('/login?returnTo=%2F');
+});
+
+test('retries canonical persona loading after a recoverable API failure', async ({ page }) => {
+  let unavailable = true;
+  await page.route('**/api/auth/personas', async (route) => {
+    if (unavailable) await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    else await route.continue();
+  });
+  await page.goto('/login');
+  await expect(page.getByText('Demo access is temporarily unavailable')).toBeVisible();
+  unavailable = false;
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('button', { name: /Continue as Maya Levin/ })).toBeVisible();
+});

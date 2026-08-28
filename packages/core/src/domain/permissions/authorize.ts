@@ -6,6 +6,7 @@ export type PermissionGrant = Readonly<{
   sourceType: AuthorizedSourceType;
   canRead: boolean;
   canReadRestricted: boolean;
+  canRequestApproval: boolean;
   canApprove: boolean;
   sensitivePricing: boolean;
 }>;
@@ -27,6 +28,7 @@ export type AccessScope =
       accountIds: readonly string[];
       sourceTypes: readonly AuthorizedSourceType[];
       canViewSensitivePricing: boolean;
+      canRequestApproval: boolean;
       canApprove: boolean;
       canViewRestrictedAccounts: boolean;
     }>;
@@ -36,8 +38,10 @@ export function authorizeOpportunity(
   session: AuthorizationSession,
   opportunity: OpportunityAuthorizationTarget
 ): AccessScope {
-  const readable = session.grants.filter((grant) => grant.accountId === opportunity.accountId && grant.canRead);
-  if (readable.length === 0 || (opportunity.restricted && !readable.some((grant) => grant.canReadRestricted))) {
+  const readable = session.grants.filter((grant) =>
+    grant.accountId === opportunity.accountId && grant.canRead && (!opportunity.restricted || grant.canReadRestricted)
+  );
+  if (readable.length === 0) {
     return { allowed: false, reason: 'forbidden' };
   }
 
@@ -45,8 +49,16 @@ export function authorizeOpportunity(
     allowed: true,
     accountIds: [opportunity.accountId],
     sourceTypes: [...new Set(readable.map((grant) => grant.sourceType))].sort(),
-    canViewSensitivePricing: readable.some((grant) => grant.sensitivePricing),
+    canViewSensitivePricing: readable.some((grant) => grant.sourceType === 'pricing' && grant.sensitivePricing),
+    canRequestApproval: readable.some((grant) => grant.canRequestApproval),
     canApprove: readable.some((grant) => grant.canApprove),
     canViewRestrictedAccounts: readable.some((grant) => grant.canReadRestricted)
   };
+}
+
+/** Maps canonical roles to least-privilege decision authority without conflating request permission. */
+export function deriveApprovalAuthority(role: string, policyContent: string): boolean {
+  if (role === 'Deal Desk Approver') return true;
+  if (role !== 'Sales Leader') return false;
+  return /sales leader approval/i.test(policyContent);
 }

@@ -24,6 +24,7 @@ type LoginState =
 export function LoginRoute(): React.JSX.Element {
   const [state, setState] = useState<LoginState>({ status: 'loading' });
   const [submitting, setSubmitting] = useState<string>();
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -35,7 +36,12 @@ export function LoginRoute(): React.JSX.Element {
         if (!(error instanceof DOMException && error.name === 'AbortError')) setState({ status: 'error' });
       });
     return () => abort.abort();
-  }, []);
+  }, [loadAttempt]);
+
+  const retry = (): void => {
+    setState({ status: 'loading' });
+    setLoadAttempt((attempt) => attempt + 1);
+  };
 
   const choose = async (persona: Persona): Promise<void> => {
     if (state.status !== 'ready') return;
@@ -86,7 +92,8 @@ export function LoginRoute(): React.JSX.Element {
         {state.status === 'error' && (
           <Alert variant="destructive">
             <AlertTitle>Demo access is temporarily unavailable</AlertTitle>
-            <AlertDescription>Check that the API and canonical fixture ingestion are ready, then refresh this page.</AlertDescription>
+            <AlertDescription>Check that the API and canonical fixture ingestion are ready, then try again.</AlertDescription>
+            <Button className="mt-4" variant="outline" onClick={retry}>Try again</Button>
           </Alert>
         )}
         {state.status === 'ready' && (

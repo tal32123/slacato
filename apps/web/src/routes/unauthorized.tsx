@@ -1,15 +1,19 @@
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { LogIn, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function UnauthorizedRoute(): React.JSX.Element {
+  const location = useLocation();
+  const returnTo = new URLSearchParams(location.search).get('returnTo');
+  const safeReturnTo = returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : undefined;
+  const loginTarget = safeReturnTo === undefined ? '/login' : `/login?${new URLSearchParams({ returnTo: safeReturnTo }).toString()}`;
   return (
     <AccessState
       eyebrow="Session required"
       title="Sign in to continue"
       detail="Choose one of the canonical demo personas to enter SlaCato. Your original destination stays out of the URL unless it is a safe application path."
       icon={LogIn}
-      action={<Button asChild><Link to="/login">Choose a persona</Link></Button>}
+      action={<Button asChild><Link to={loginTarget}>Choose a persona</Link></Button>}
     />
   );
 }

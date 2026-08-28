@@ -7,6 +7,7 @@ type GrantRow = Readonly<{
   source_type: string | null;
   can_read: boolean;
   can_read_restricted: boolean;
+  can_request_approval: boolean;
   can_approve: boolean;
   sensitive_pricing: boolean;
 }>;
@@ -49,8 +50,8 @@ export class PostgresCanonicalPersonaDirectory {
 
   private async hydrate(persona: PersonaRow): Promise<IngestedPersona> {
     const rows = await this.client.sql<GrantRow[]>`
-      select account_id, source_type, can_read, can_read_restricted, can_approve, sensitive_pricing
-      from permission_grants where persona_id = ${persona.id}
+      select account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing
+      from permission_grants where persona_id = ${persona.id} and source_commit = ${CANONICAL_FIXTURE_COMMIT}
       order by account_id, source_type, id
     `;
     const grants = rows.map((row): PermissionGrant => {
@@ -62,6 +63,7 @@ export class PostgresCanonicalPersonaDirectory {
         sourceType: row.source_type as AuthorizedSourceType,
         canRead: row.can_read,
         canReadRestricted: row.can_read_restricted,
+        canRequestApproval: row.can_request_approval,
         canApprove: row.can_approve,
         sensitivePricing: row.sensitive_pricing
       };

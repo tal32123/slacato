@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import postgres from 'postgres';
-import { buildEvidenceDocuments, CANONICAL_FIXTURE_COMMIT, chunkDocument, parseFixtureSet } from '../packages/core/src/index.js';
+import { buildEvidenceDocuments, CANONICAL_FIXTURE_COMMIT, chunkDocument, deriveApprovalAuthority, parseFixtureSet } from '../packages/core/src/index.js';
 
 const DEFAULT_DATABASE_URL = 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 type InsertCounts = Readonly<{ personas: number; grants: number; accounts: number; opportunities: number; contacts: number; documents: number; chunks: number }>;
@@ -25,6 +25,7 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
   try {
     return await sql.begin(async (transaction) => {
       const counts = { personas: 0, grants: 0, accounts: 0, opportunities: 0, contacts: 0, documents: 0, chunks: 0 };
+      const canonicalGrantIds: string[] = [];
       for (const account of fixtures.accounts) {
         const inserted = await transaction`insert into accounts (id, name) values (${account.accountId}, ${account.accountName})
           on conflict (id) do update set name = excluded.name where accounts.name is distinct from excluded.name returning id`;
@@ -47,19 +48,28 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
           on conflict (id) do update set display_name = excluded.display_name, role = excluded.role, source_commit = excluded.source_commit
           where (personas.display_name, personas.role, personas.source_commit) is distinct from (excluded.display_name, excluded.role, excluded.source_commit) returning id`;
         counts.personas += insertedPersona.length;
+        const canApprove = deriveApprovalAuthority(permission.role, fixtures.policy.content);
         for (const accountId of permission.allowedAccountIds) for (const fixtureSource of permission.allowedSourceTypes) for (const sourceType of permissionSources(fixtureSource)) {
           const grantId = `grant:${permission.userId}:${accountId}:${sourceType}`;
-          const insertedGrant = await transaction`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_approve, sensitive_pricing)
-            values (${grantId}, ${permission.userId}, ${accountId}, ${sourceType}, true, ${permission.canViewRestrictedAccount}, ${permission.canRequestApproval}, ${permission.canViewSensitivePricing})
+          canonicalGrantIds.push(grantId);
+          const insertedGrant = await transaction`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
+            values (${grantId}, ${permission.userId}, ${accountId}, ${sourceType}, true, ${permission.canViewRestrictedAccount}, ${permission.canRequestApproval}, ${canApprove}, ${permission.canViewSensitivePricing}, ${CANONICAL_FIXTURE_COMMIT})
             on conflict (id) do update set persona_id = excluded.persona_id, account_id = excluded.account_id, source_type = excluded.source_type,
-              can_read = excluded.can_read, can_read_restricted = excluded.can_read_restricted, can_approve = excluded.can_approve, sensitive_pricing = excluded.sensitive_pricing
+              can_read = excluded.can_read, can_read_restricted = excluded.can_read_restricted, can_request_approval = excluded.can_request_approval,
+              can_approve = excluded.can_approve, sensitive_pricing = excluded.sensitive_pricing, source_commit = excluded.source_commit
             where (permission_grants.persona_id, permission_grants.account_id, permission_grants.source_type, permission_grants.can_read,
-              permission_grants.can_read_restricted, permission_grants.can_approve, permission_grants.sensitive_pricing)
+              permission_grants.can_read_restricted, permission_grants.can_request_approval, permission_grants.can_approve, permission_grants.sensitive_pricing, permission_grants.source_commit)
               is distinct from (excluded.persona_id, excluded.account_id, excluded.source_type, excluded.can_read,
-                excluded.can_read_restricted, excluded.can_approve, excluded.sensitive_pricing) returning id`;
+                excluded.can_read_restricted, excluded.can_request_approval, excluded.can_approve, excluded.sensitive_pricing, excluded.source_commit) returning id`;
           counts.grants += insertedGrant.length;
         }
       }
+      await transaction`delete from permission_grants
+        where source_commit = ${CANONICAL_FIXTURE_COMMIT}
+          and not exists (
+            select 1 from jsonb_array_elements_text(${transaction.json(canonicalGrantIds)}::jsonb) expected(id)
+            where expected.id = permission_grants.id
+          )`;
       for (const { document, chunks } of chunksByDocument) {
         const documentId = `document:${document.sourceType}:${document.externalId}:v1`;
         const contentHash = sha256(document.content);

@@ -15,11 +15,12 @@ import {
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 11 }, (_, index) =>
+const migrationFiles = Array.from({ length: 12 }, (_, index) =>
   resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
     'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
     'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
-    'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance'
+    'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance',
+    'persona_provenance'
   ][index]}.sql`)
 );
 const temporaryDatabases: string[] = [];
@@ -146,6 +147,9 @@ describe('durable migration catalog', () => {
       expect(serialized).toContain('document_versions_provenance_ck');
       expect(serialized).toContain('evidence_versions_provenance_ck');
       expect(serialized).toContain('evidence_versions_provenance_idx');
+      expect(serialized).toContain('permission_grants_source_commit_check');
+      expect(serialized).toContain('permission_grants_source_commit_persona_idx');
+      expect(serialized).toContain('"column_name":"can_request_approval"');
       expect(serialized).toContain('"column_name":"event_date"');
       expect(serialized).toContain('"column_name":"reliability_class"');
       expect(serialized).toContain('"column_name":"source_locator"');
@@ -218,7 +222,9 @@ describe('durable migration catalog', () => {
       .map((column) => 'name' in column ? column.name : undefined)).toEqual([
         'account_id', 'opportunity_id', 'source_type', 'sensitivity', 'event_date', 'id'
       ]);
-    expect(Object.keys(permissionGrants)).toEqual(expect.arrayContaining(['personaId', 'accountId', 'canReadRestricted']));
+    expect(Object.keys(permissionGrants)).toEqual(expect.arrayContaining([
+      'personaId', 'accountId', 'canReadRestricted', 'canRequestApproval', 'canApprove', 'sourceCommit'
+    ]));
     expect(Object.keys(runEvidenceManifests)).toEqual(expect.arrayContaining(['runId']));
     expect(Object.keys(runEvidenceManifestEntries)).toEqual(expect.arrayContaining(['manifestId', 'evidenceVersionId']));
     expect(Object.keys(approvalSubjects)).toEqual(expect.arrayContaining(['policyTriggers', 'runId', 'subjectHash']));

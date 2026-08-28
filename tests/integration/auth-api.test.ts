@@ -6,13 +6,14 @@ import { configureApiApplication } from '../../apps/api/src/main';
 import { AuthModule } from '../../apps/api/src/modules/auth/auth.module';
 
 const origin = 'http://127.0.0.1:4173';
+const crossSiteOrigin = 'https://trusted.example';
 const maya = {
   userId: 'USR-5001',
   displayName: 'Maya Levin',
   role: 'Account Owner',
   grants: [{
     accountId: 'ACC-2001', sourceType: 'salesforce' as const, canRead: true,
-    canReadRestricted: false, canApprove: true, sensitivePricing: false
+    canReadRestricted: false, canRequestApproval: true, canApprove: false, sensitivePricing: false
   }]
 };
 
@@ -23,7 +24,7 @@ describe('auth API browser boundary', () => {
     app = await NestFactory.create<NestExpressApplication>(AuthModule.register({
       sessionSecret: 'a-session-secret-that-is-at-least-32-characters',
       environment: 'test',
-      allowedOrigins: [origin],
+      allowedOrigins: [origin, crossSiteOrigin],
       personaDirectory: {
         list: async () => [maya],
         findById: async (userId: string) => userId === maya.userId ? maya : undefined
@@ -37,16 +38,16 @@ describe('auth API browser boundary', () => {
 
   it('lists only canonical personas and creates a session after CSRF bootstrap', async () => {
     const agent = request.agent(app.getHttpServer());
-    const personas = await agent.get('/api/auth/personas').set('Sec-Fetch-Site', 'same-origin').expect(200);
+    const personas = await agent.get('/api/auth/personas').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
     expect(personas.body).toEqual({ personas: [{ userId: 'USR-5001', displayName: 'Maya Levin', role: 'Account Owner' }] });
 
-    const bootstrap = await agent.get('/api/auth/csrf').set('Sec-Fetch-Site', 'same-origin').expect(200);
+    const bootstrap = await agent.get('/api/auth/csrf').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
     const initialCsrf = bootstrap.body.csrfToken as string;
     expect(bootstrap.headers['set-cookie']?.join(';')).toContain('slacato_csrf_seed=');
     expect(bootstrap.headers['set-cookie']?.join(';')).toContain('HttpOnly');
 
     const selected = await agent.post('/api/auth/persona')
-      .set('Origin', origin).set('Sec-Fetch-Site', 'same-origin').set('X-CSRF-Token', initialCsrf)
+      .set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', initialCsrf)
       .send({ userId: 'USR-5001' }).expect(201);
     expect(selected.body.session).toMatchObject({ authenticated: true, persona: { userId: 'USR-5001' } });
     expect(selected.body.csrfToken).not.toBe(initialCsrf);
@@ -55,16 +56,16 @@ describe('auth API browser boundary', () => {
     expect(selected.headers['access-control-allow-origin']).toBe(origin);
     expect(selected.headers.vary).toContain('Origin');
 
-    const session = await agent.get('/api/auth/session').set('Sec-Fetch-Site', 'same-origin').expect(200);
+    const session = await agent.get('/api/auth/session').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
     expect(session.body).toMatchObject({ authenticated: true, persona: { displayName: 'Maya Levin' } });
   });
 
   it('rejects missing CSRF, hostile origins, and arbitrary personas opaquely', async () => {
     const agent = request.agent(app.getHttpServer());
-    const bootstrap = await agent.get('/api/auth/csrf').set('Sec-Fetch-Site', 'same-origin').expect(200);
+    const bootstrap = await agent.get('/api/auth/csrf').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
 
     await agent.post('/api/auth/persona')
-      .set('Origin', origin).set('Sec-Fetch-Site', 'same-origin')
+      .set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
       .send({ userId: 'USR-5001' }).expect(403, { code: 'INVALID_CSRF', message: 'Request could not be authorized' });
 
     await agent.post('/api/auth/persona')
@@ -73,31 +74,31 @@ describe('auth API browser boundary', () => {
       .send({ userId: 'USR-5001' }).expect(403, { code: 'FORBIDDEN', message: 'Request could not be authorized' });
 
     await agent.post('/api/auth/persona')
-      .set('Origin', origin).set('Sec-Fetch-Site', 'same-origin')
+      .set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
       .set('X-CSRF-Token', bootstrap.body.csrfToken as string)
       .send({ userId: 'USR-9999' }).expect(403, { code: 'FORBIDDEN', message: 'Request could not be authorized' });
   });
 
   it('rotates CSRF on logout and clears the session', async () => {
     const agent = request.agent(app.getHttpServer());
-    const bootstrap = await agent.get('/api/auth/csrf').set('Sec-Fetch-Site', 'same-origin').expect(200);
+    const bootstrap = await agent.get('/api/auth/csrf').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
     const selected = await agent.post('/api/auth/persona')
-      .set('Origin', origin).set('Sec-Fetch-Site', 'same-origin').set('X-CSRF-Token', bootstrap.body.csrfToken as string)
+      .set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', bootstrap.body.csrfToken as string)
       .send({ userId: 'USR-5001' }).expect(201);
 
     const loggedOut = await agent.post('/api/auth/logout')
-      .set('Origin', origin).set('Sec-Fetch-Site', 'same-origin').set('X-CSRF-Token', selected.body.csrfToken as string)
+      .set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', selected.body.csrfToken as string)
       .send({}).expect(201);
     expect(loggedOut.body).toEqual({ session: { authenticated: false }, csrfToken: expect.any(String) });
     expect(loggedOut.body.csrfToken).not.toBe(selected.body.csrfToken);
     expect(loggedOut.headers['set-cookie']?.join(';')).toContain('slacato_session=;');
 
-    await agent.get('/api/auth/session').set('Sec-Fetch-Site', 'same-origin').expect(200, { authenticated: false });
+    await agent.get('/api/auth/session').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200, { authenticated: false });
   });
 
   it('answers exact allowed-origin preflight and rejects hostile preflight', async () => {
     const allowed = await request(app.getHttpServer()).options('/api/auth/persona')
-      .set('Origin', origin).set('Sec-Fetch-Site', 'same-origin')
+      .set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
       .set('Access-Control-Request-Method', 'POST')
       .set('Access-Control-Request-Headers', 'content-type,x-csrf-token')
       .expect(204);
@@ -107,6 +108,20 @@ describe('auth API browser boundary', () => {
     await request(app.getHttpServer()).options('/api/auth/persona')
       .set('Origin', 'https://hostile.example').set('Sec-Fetch-Site', 'cross-site')
       .set('Access-Control-Request-Method', 'POST').expect(403);
+  });
+
+  it('permits a specifically configured cross-site development origin with CORS credentials', async () => {
+    const agent = request.agent(app.getHttpServer());
+    const bootstrap = await agent.get('/api/auth/csrf')
+      .set('Origin', crossSiteOrigin).set('Sec-Fetch-Site', 'cross-site').expect(200);
+    expect(bootstrap.headers['access-control-allow-origin']).toBe(crossSiteOrigin);
+
+    const selected = await agent.post('/api/auth/persona')
+      .set('Origin', crossSiteOrigin).set('Sec-Fetch-Site', 'cross-site')
+      .set('X-CSRF-Token', bootstrap.body.csrfToken as string)
+      .send({ userId: 'USR-5001' }).expect(201);
+    expect(selected.headers['access-control-allow-origin']).toBe(crossSiteOrigin);
+    expect(selected.headers['access-control-allow-credentials']).toBe('true');
   });
 });
 
@@ -120,7 +135,7 @@ describe('production demo cookies', () => {
     configureApiApplication(app);
     await app.init();
     try {
-      const bootstrap = await request(app.getHttpServer()).get('/api/auth/csrf').set('Sec-Fetch-Site', 'same-origin').expect(200);
+      const bootstrap = await request(app.getHttpServer()).get('/api/auth/csrf').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
       const seedCookie = bootstrap.headers['set-cookie']?.find((value: string) => value.startsWith('__Host-slacato_csrf_seed='));
       expect(seedCookie).toContain('Secure');
       expect(seedCookie).toContain('HttpOnly');
@@ -128,7 +143,7 @@ describe('production demo cookies', () => {
       expect(seedCookie).not.toContain('Domain=');
 
       const selected = await request(app.getHttpServer()).post('/api/auth/persona')
-        .set('Origin', origin).set('Sec-Fetch-Site', 'same-origin')
+        .set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
         .set('Cookie', seedCookie!.split(';')[0]!)
         .set('X-CSRF-Token', bootstrap.body.csrfToken as string)
         .send({ userId: 'USR-5001' }).expect(201);

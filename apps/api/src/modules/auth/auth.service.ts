@@ -59,12 +59,8 @@ export class AuthService {
 
   public async selectPersona(
     input: SelectPersonaRequest,
-    csrfToken: string | undefined,
-    request: Request,
     response: Response
   ): Promise<Readonly<{ session: Extract<AuthSessionResponse, { authenticated: true }>; csrfToken: string }>> {
-    const current = await this.resolveSession(request);
-    this.assertCsrf(csrfToken, request, current?.claims.version);
     const persona = await this.personas.findById(input.userId);
     if (persona === undefined) this.forbidden();
 
@@ -85,12 +81,8 @@ export class AuthService {
   }
 
   public async logout(
-    csrfToken: string | undefined,
-    request: Request,
     response: Response
   ): Promise<Readonly<{ session: { authenticated: false }; csrfToken: string }>> {
-    const current = await this.resolveSession(request);
-    this.assertCsrf(csrfToken, request, current?.claims.version);
     const seed = this.csrf.createSeed();
     response.clearCookie(this.sessionCookieName, this.baseCookieOptions);
     this.writeCookie(response, this.csrfCookieName, seed);
@@ -101,6 +93,15 @@ export class AuthService {
     const session = await this.resolveSession(request);
     if (session === undefined) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Authentication is required' });
     return session;
+  }
+
+  public async assertPublicMutationCsrf(request: Request, token: string | undefined): Promise<void> {
+    const session = await this.resolveSession(request);
+    this.assertCsrf(token, request, session?.claims.version);
+  }
+
+  public assertAuthenticatedMutationCsrf(request: Request, token: string | undefined, sessionVersion: string): void {
+    this.assertCsrf(token, request, sessionVersion);
   }
 
   private async resolveSession(request: Request) {

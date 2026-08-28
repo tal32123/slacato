@@ -109,9 +109,12 @@ export class BrowserRequestPolicy {
     const method = request.method.toUpperCase();
     const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(method);
     const requiresOrigin = mutation || method === 'OPTIONS';
-    if (request.secFetchSite !== 'same-origin') return { allowed: false, reason: 'forbidden' };
-    if (request.origin !== undefined && !this.allowedOrigins.has(request.origin)) return { allowed: false, reason: 'forbidden' };
-    if (requiresOrigin && request.origin === undefined) return { allowed: false, reason: 'forbidden' };
-    return request.origin === undefined ? { allowed: true } : { allowed: true, origin: request.origin };
+    if (!['same-origin', 'same-site', 'cross-site'].includes(request.secFetchSite ?? '')) return { allowed: false, reason: 'forbidden' };
+    if (request.origin === undefined) {
+      if (requiresOrigin || request.secFetchSite !== 'same-origin') return { allowed: false, reason: 'forbidden' };
+      return { allowed: true };
+    }
+    if (!this.allowedOrigins.has(request.origin)) return { allowed: false, reason: 'forbidden' };
+    return { allowed: true, origin: request.origin };
   }
 }

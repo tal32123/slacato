@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Options, Post, Req, Res, UseGuards, Inject, HttpCode } from '@nestjs/common';
+import { Controller, Get, Options, Post, Req, Res, Inject, HttpCode } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import {
   authSessionResponseSchema, authenticatedMutationResponseSchema, csrfResponseSchema,
@@ -7,12 +7,12 @@ import {
 } from '@slacato/contracts';
 import { z } from 'zod';
 import { ZodBody, ZodResponse } from '../../common/wire/zod.decorators.js';
+import { BrowserPublic } from '../../common/security/access.metadata.js';
 import { AuthService } from './auth.service.js';
 import { AUTH_OPTIONS, type AuthModuleOptions } from './contracts.js';
-import { applyCorsPreflightHeaders, BrowserOriginGuard } from './guard.js';
+import { applyCorsHeaders } from './guard.js';
 
 @Controller('api/auth')
-@UseGuards(BrowserOriginGuard)
 export class AuthController {
   public constructor(
     private readonly auth: AuthService,
@@ -20,45 +20,46 @@ export class AuthController {
   ) {}
 
   @Get('personas')
+  @BrowserPublic()
   @ZodResponse(personaListResponseSchema)
   public listPersonas() { return this.auth.listPersonas(); }
 
   @Get('session')
+  @BrowserPublic()
   @ZodResponse(authSessionResponseSchema)
   public getSession(@Req() request: Request) { return this.auth.getSession(request); }
 
   @Get('csrf')
+  @BrowserPublic()
   @ZodResponse(csrfResponseSchema)
   public csrf(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     return this.auth.bootstrapCsrf(request, response);
   }
 
   @Post('persona')
+  @BrowserPublic()
   @ZodResponse(authenticatedMutationResponseSchema)
   public selectPersona(
     @ZodBody(selectPersonaRequestSchema) input: SelectPersonaRequest,
-    @Headers('x-csrf-token') csrfToken: string | undefined,
-    @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ) {
-    return this.auth.selectPersona(input, csrfToken, request, response);
+    return this.auth.selectPersona(input, response);
   }
 
   @Post('logout')
   @ZodResponse(logoutResponseSchema)
   public logout(
-    @Headers('x-csrf-token') csrfToken: string | undefined,
-    @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ) {
-    return this.auth.logout(csrfToken, request, response);
+    return this.auth.logout(response);
   }
 
   @Options(['persona', 'logout'])
+  @BrowserPublic()
   @HttpCode(204)
   @ZodResponse(z.undefined())
   public preflight(@Req() request: Request, @Res({ passthrough: true }) response: Response): undefined {
-    applyCorsPreflightHeaders(request, response, this.options.allowedOrigins);
+    applyCorsHeaders(request, response, this.options.allowedOrigins);
     return undefined;
   }
 }

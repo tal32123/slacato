@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import type { AuthSessionResponse } from '@slacato/contracts';
 import { ArrowRight, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { getCsrf, getSession, logout } from '@/api/auth';
@@ -12,6 +12,7 @@ export function WorkspaceRoute(): React.JSX.Element {
   const [failed, setFailed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const abort = new AbortController();
@@ -21,9 +22,11 @@ export function WorkspaceRoute(): React.JSX.Element {
     return () => abort.abort();
   }, []);
 
-  if (failed) return <Navigate to="/unauthorized" replace />;
+  const intendedDestination = `${location.pathname}${location.search}`;
+  const unauthorizedTarget = `/unauthorized?${new URLSearchParams({ returnTo: intendedDestination }).toString()}`;
+  if (failed) return <Navigate to={unauthorizedTarget} replace />;
   if (session === undefined) return <main className="grid min-h-screen place-items-center"><LoaderCircle className="animate-spin text-[#158864]" aria-label="Loading session" /></main>;
-  if (!session.authenticated) return <Navigate to="/unauthorized" replace />;
+  if (!session.authenticated) return <Navigate to={unauthorizedTarget} replace />;
   const firstName = session.persona.displayName.split(/\s+/)[0];
   const endSession = async (): Promise<void> => {
     setLoggingOut(true);
