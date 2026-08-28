@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
-  boolean, check, customType, foreignKey, index, integer, jsonb, numeric, pgTable, primaryKey,
+  boolean, check, customType, date, foreignKey, index, integer, jsonb, numeric, pgTable, primaryKey,
   text, timestamp, unique, uniqueIndex
 } from 'drizzle-orm/pg-core';
 
@@ -33,22 +33,35 @@ export const opportunities = pgTable('opportunities', {
 });
 export const contacts = pgTable('contacts', { id: text('id').primaryKey(), accountId: text('account_id').notNull().references(() => accounts.id), name: text('name').notNull(), email: text('email'), createdAt: now() });
 export const documentVersions = pgTable('document_versions', {
-  id: text('id').primaryKey(), externalId: text('external_id').notNull(), version: integer('version').notNull(), sourceType: text('source_type').notNull(), contentHash: text('content_hash').notNull(), content: text('content').notNull(), createdAt: now()
+  id: text('id').primaryKey(), externalId: text('external_id').notNull(), version: integer('version').notNull(), sourceType: text('source_type').notNull(), contentHash: text('content_hash').notNull(), content: text('content').notNull(),
+  eventDate: date('event_date'), reliabilityClass: text('reliability_class'), sourceLocator: text('source_locator'), classificationReason: text('classification_reason'), policyHash: text('policy_hash'), createdAt: now()
 }, (table) => [
   uniqueIndex('document_versions_external_version_uq').on(table.externalId, table.version),
   check('document_versions_version_check', sql`${table.version} > 0`),
-  check('document_versions_content_hash_check', sql`length(${table.contentHash}) > 0`)
+  check('document_versions_content_hash_check', sql`length(${table.contentHash}) > 0`),
+  check('document_versions_provenance_ck', sql`(
+    num_nonnulls(${table.reliabilityClass}, ${table.sourceLocator}, ${table.classificationReason}, ${table.policyHash}) = 0
+    or (num_nulls(${table.reliabilityClass}, ${table.sourceLocator}, ${table.classificationReason}, ${table.policyHash}) = 0
+      and length(${table.reliabilityClass}) > 0 and length(${table.sourceLocator}) > 0 and length(${table.classificationReason}) > 0 and ${table.policyHash} ~ '^[0-9a-f]{64}$')
+  )`)
 ]);
 export const evidenceVersions = pgTable('evidence_versions', {
   id: text('id').primaryKey(), documentVersionId: text('document_version_id').notNull().references(() => documentVersions.id), accountId: text('account_id').notNull().references(() => accounts.id), opportunityId: text('opportunity_id').references(() => opportunities.id),
   chunkIndex: integer('chunk_index').notNull(), sourceType: text('source_type').notNull(), sensitivity: text('sensitivity').notNull(), contentHash: text('content_hash').notNull(), content: text('content').notNull(),
+  eventDate: date('event_date'), reliabilityClass: text('reliability_class'), sourceLocator: text('source_locator'), classificationReason: text('classification_reason'), policyHash: text('policy_hash'),
   embedding: vector('embedding'), embeddingProvider: text('embedding_provider'), embeddingModel: text('embedding_model'), embeddingDimension: integer('embedding_dimension'), embeddingProfile: text('embedding_profile'), embeddingVersion: text('embedding_version'), embeddingNormalization: text('embedding_normalization'), lexicalContent: tsvector('lexical_content').generatedAlwaysAs(sql`to_tsvector('english', coalesce(content, ''))`), createdAt: now()
 }, (table) => [
   uniqueIndex('evidence_versions_document_chunk_uq').on(table.documentVersionId, table.chunkIndex),
   index('evidence_versions_fts_idx').using('gin', table.lexicalContent),
   index('evidence_versions_authorized_exact_idx').on(table.accountId, table.opportunityId, table.sourceType, table.sensitivity, table.embeddingProfile, table.embeddingDimension, table.id),
+  index('evidence_versions_provenance_idx').on(table.accountId, table.opportunityId, table.sourceType, table.sensitivity, table.eventDate, table.id),
   check('evidence_versions_chunk_index_check', sql`${table.chunkIndex} >= 0`),
   check('evidence_versions_content_hash_check', sql`length(${table.contentHash}) > 0`),
+  check('evidence_versions_provenance_ck', sql`(
+    num_nonnulls(${table.reliabilityClass}, ${table.sourceLocator}, ${table.classificationReason}, ${table.policyHash}) = 0
+    or (num_nulls(${table.reliabilityClass}, ${table.sourceLocator}, ${table.classificationReason}, ${table.policyHash}) = 0
+      and length(${table.reliabilityClass}) > 0 and length(${table.sourceLocator}) > 0 and length(${table.classificationReason}) > 0 and ${table.policyHash} ~ '^[0-9a-f]{64}$')
+  )`),
   check('evidence_versions_embedding_profile_ck', sql`(
     (${table.embedding} is null and ${table.embeddingProvider} is null and ${table.embeddingModel} is null and ${table.embeddingDimension} is null and ${table.embeddingProfile} is null and ${table.embeddingVersion} is null and ${table.embeddingNormalization} is null)
     or (${table.embedding} is not null and ${table.embeddingProvider} is not null and ${table.embeddingModel} is not null and ${table.embeddingDimension} > 0 and ${table.embeddingProfile} is not null and ${table.embeddingVersion} is not null and ${table.embeddingNormalization} is not null and vector_dims(${table.embedding}) = ${table.embeddingDimension})

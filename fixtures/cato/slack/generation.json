@@ -1,0 +1,42 @@
+{
+  "provider": "mock",
+  "model": "mock-specialist",
+  "sourceCommit": "076c659c3c7afd416f8d26729774b67042a55761",
+  "promptHash": "3a9084b1813d599aea9f975e24dab5f95e8ff21626d1b1e5dcb6dbaaf70a9fec",
+  "outputHash": "5ca1f41a5b995224de1eed0975705e1b3c210cf18c4142d0f893e10dff835cbd",
+  "generatedAt": "2026-08-28T19:24:24.552Z",
+  "reviewStatus": "reviewed",
+  "validation": {
+    "passed": true,
+    "syntheticNotices": true,
+    "coverage": {
+      "OPP-1001": {
+        "count": 3,
+        "contextKinds": [
+          "reinforcing_fact",
+          "missing_context",
+          "ambiguity_or_conflict"
+        ],
+        "chronologyValid": true
+      },
+      "OPP-1002": {
+        "count": 3,
+        "contextKinds": [
+          "reinforcing_fact",
+          "missing_context",
+          "ambiguity_or_conflict"
+        ],
+        "chronologyValid": true
+      },
+      "OPP-1003": {
+        "count": 3,
+        "contextKinds": [
+          "reinforcing_fact",
+          "missing_context",
+          "ambiguity_or_conflict"
+        ],
+        "chronologyValid": true
+      }
+    }
+  }
+}

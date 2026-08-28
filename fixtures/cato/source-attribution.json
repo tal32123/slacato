@@ -1,0 +1,72 @@
+{
+  "repository": "https://github.com/danaabramov/Cato-IS-AI-Engineer-Exam.git",
+  "commit": "076c659c3c7afd416f8d26729774b67042a55761",
+  "sourceCommittedAt": "2026-06-14T18:40:43+03:00",
+  "files": [
+    {
+      "path": "salesforce/accounts.tsv",
+      "sha256": "2d067f5b3e46fb2cc538873f4649a61a7ba9e596e0612d7d3380dc013807a11c"
+    },
+    {
+      "path": "salesforce/contacts.tsv",
+      "sha256": "264898eb848f85fad5bdfd5f24453a1eb604f632aa570ae2f59704367056abb5"
+    },
+    {
+      "path": "salesforce/opportunities.tsv",
+      "sha256": "1be0c1540ac74e405604a548aaa71042ca7174a488d99afc2f7ad2bb52bc48b5"
+    },
+    {
+      "path": "gong/gong_call_summaries.tsv",
+      "sha256": "de45ba28b30a7fe4f0b2847d15a403302ba3c1182e9c6212e41083a022ac1f42"
+    },
+    {
+      "path": "gong/transcripts/OPP-1001_CALL-001.md",
+      "sha256": "9f7fad68f20cc024c5e957cbed6af1a5252adcfec9b001f6880e37d02b2e8981"
+    },
+    {
+      "path": "gong/transcripts/OPP-1001_CALL-004.md",
+      "sha256": "5a3f8514173df24650870092786887c34b55be0fdaf4862fead3ee8ac7ce6d37"
+    },
+    {
+      "path": "gong/transcripts/OPP-1001_CALL-008.md",
+      "sha256": "c920f596d423fb9d919f998302772e2037ef587eeea961ccda1e39c56cc02e53"
+    },
+    {
+      "path": "gong/transcripts/OPP-1002_CALL-010.md",
+      "sha256": "b14e26a979b7391d5fd4f5a040cadcf56829bb60a815c1d314a21ab033a41bc4"
+    },
+    {
+      "path": "gong/transcripts/OPP-1002_CALL-014.md",
+      "sha256": "3551f4a2748cc93a66faee3cf0d0564ae7f509c2115d4c18ab985896ad0c375a"
+    },
+    {
+      "path": "gong/transcripts/OPP-1002_CALL-018.md",
+      "sha256": "2dd087f408d812dc5602d7e4cf8201563ec372f610fc3d683d5662f6cf570a4a"
+    },
+    {
+      "path": "gong/transcripts/OPP-1003_CALL-019.md",
+      "sha256": "f5b67ce22eee1d17011d5a1e23696691f90a94921c548b680ace13d42eec8e6f"
+    },
+    {
+      "path": "gong/transcripts/OPP-1003_CALL-023.md",
+      "sha256": "a59eaea635be968b3fde40c6a32cca76a0ffeaede353de304143c1df16728b42"
+    },
+    {
+      "path": "gong/transcripts/OPP-1003_CALL-027.md",
+      "sha256": "9719e90db2b031dce93e961ceff5c01a2d9117e67eb78a894a5afc7ecf27fcf0"
+    },
+    {
+      "path": "pricing/pricing_notes.tsv",
+      "sha256": "607c6684125767d905390a91faef21afaa40b0557fedd934d8fb4794b815da34"
+    },
+    {
+      "path": "policies/access_permissions.tsv",
+      "sha256": "0c5ddc69e59de86a83b7d2ea987377ae3df4f246cca7eaf08149fc92ba636b4a"
+    },
+    {
+      "path": "policies/deal_desk_policy.md",
+      "sha256": "1544c01c437b2503169525cb4c5cbdbef7a2fa4e5c972320ab8fa235c817a5da"
+    }
+  ],
+  "note": "Canonical synthetic files copied verbatim. Slack fixtures are candidate-generated and attributed separately."
+}

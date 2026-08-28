@@ -1,2 +1,2 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Preserve pinned upstream fixtures byte-for-byte, including Markdown hard-break spaces.
+fixtures/cato/** -whitespace
