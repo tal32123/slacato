@@ -53,7 +53,7 @@ describe('ContextWindowPolicy', () => {
       sectionTokenBudgets: { instructions: 4, currentTask: 8, evidence: 0, artifacts: 0, history: 4 }
     }));
 
-    const checkpoint = await compactor.compact({ history, context: { instructions: 'ok', currentTask: 'ok' }, maxInputTokens: 20, maxOutputTokens: 10, priorInvocations: 0, maxSteps: 1, maxRetries: 0, coveredMessageRange: { from: 0, to: 0 }, bindings });
+    const checkpoint = await compactor.compact({ history, context: { instructions: 'ok', currentTask: 'ok' }, maxInputTokens: 20, maxOutputTokens: 200, priorInvocations: 0, maxSteps: 1, maxRetries: 0, coveredMessageRange: { from: 0, to: 0 }, bindings });
 
     expect(checkpoint.summary).toBe('checkpoint');
     expect(history).toEqual([{ role: 'user', content: 'raw history' }]);
@@ -103,7 +103,7 @@ describe('ContextWindowPolicy', () => {
       sectionTokenBudgets: { instructions: 4, currentTask: 8, evidence: 0, artifacts: 0, history: 4 }
     });
     const bindings = { scopeHash: 'scope', policyHash: 'policy', evidenceHash: 'evidence', promptHash: 'prompt', schemaHash: 'schema', modelHash: 'model', validationHash: 'valid' } as const;
-    const base = { history: [{ role: 'user' as const, content: 'raw' }], context: { instructions: 'ok', currentTask: 'ok' }, maxInputTokens: 20, maxOutputTokens: 10, priorInvocations: 0, maxSteps: 1 as const, maxRetries: 0 as const, coveredMessageRange: { from: 0, to: 0 }, bindings };
+    const base = { history: [{ role: 'user' as const, content: 'raw' }], context: { instructions: 'ok', currentTask: 'ok' }, maxInputTokens: 20, maxOutputTokens: 200, priorInvocations: 0, maxSteps: 1 as const, maxRetries: 0 as const, coveredMessageRange: { from: 0, to: 0 }, bindings };
     const malformed = createNonRecursiveContextCompactor({
       async compact() { return { coveredMessageRange: { from: 0, to: 0 }, summary: 'bad', ...bindings, validationState: 'invalid' as unknown as 'validated' }; }
     }, policy);
@@ -111,5 +111,15 @@ describe('ContextWindowPolicy', () => {
     await expect(malformed.compact(base)).rejects.toThrow('unvalidated');
     await expect(malformed.compact({ ...base, priorInvocations: 1 })).rejects.toThrow('Repeated');
     await expect(malformed.compact({ ...base, maxSteps: 2 as unknown as 1 })).rejects.toThrow('exactly one step');
+  });
+
+  it('rejects a checkpoint summary that exceeds the actual output token cap', async () => {
+    const policy = new ContextWindowPolicy({ contextWindowTokens: 40, reservedOutputTokens: 4, sectionTokenBudgets: { instructions: 4, currentTask: 8, evidence: 0, artifacts: 0, history: 4 } });
+    const bindings = { scopeHash: 'scope', policyHash: 'policy', evidenceHash: 'evidence', promptHash: 'prompt', schemaHash: 'schema', modelHash: 'model', validationHash: 'valid' } as const;
+    const compactor = createNonRecursiveContextCompactor({
+      async compact() { return { coveredMessageRange: { from: 0, to: 0 }, summary: 'x'.repeat(100), ...bindings, validationState: 'validated' as const }; }
+    }, policy);
+
+    await expect(compactor.compact({ history: [{ role: 'user', content: 'raw' }], context: { instructions: 'ok', currentTask: 'ok' }, maxInputTokens: 20, maxOutputTokens: 1, priorInvocations: 0, maxSteps: 1, maxRetries: 0, coveredMessageRange: { from: 0, to: 0 }, bindings })).rejects.toThrow('output');
   });
 });

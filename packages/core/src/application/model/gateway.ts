@@ -11,7 +11,7 @@ import type {
   OutputMode,
   TransportGeneration
 } from './contracts.js';
-import { BoundedRetryController, RetryLimitExceededError } from './retry.js';
+import { BoundedRetryController, normalizeModelError, RetryLimitExceededError } from './retry.js';
 
 const MAX_RESPONSE_BYTES = 128 * 1024;
 const MAX_REPAIR_OUTPUT_BYTES = 16 * 1024;
@@ -180,7 +180,8 @@ export function createBudgetedModelGateway(transport: ModelTransport, contextPol
         const messages = prepared === undefined
           ? contextPolicy.rebudgetRaw(candidateMessages)
           : contextPolicy.rebudget(prepared, candidateMessages.slice(baseMessages.length));
-        controller.beginCall(estimateMessagesTokens(messages));
+        const inputTokens = estimateMessagesTokens(messages);
+        const reservation = controller.beginCall(inputTokens, request.limits.maxOutputTokens);
         let response: TransportGeneration<Value>;
         try {
           response = await transport.generate({
@@ -188,18 +189,20 @@ export function createBudgetedModelGateway(transport: ModelTransport, contextPol
             operation: request.operation,
             outputMode,
             ...(outputMode === 'native_schema' ? { schema: request.schema } : {}),
-            maxOutputTokens: request.limits.maxOutputTokens,
+            maxOutputTokens: reservation.grantedOutputTokens,
             deadlineAt: controller.deadlineAt()
           });
         } catch (error) {
-          if (!controller.canRetryTransport(error)) throw error;
-          const delayMs = controller.recordTransportRetry(error);
+          controller.releaseAttempt(reservation);
+          const normalized = normalizeModelError(error);
+          if (!controller.canRetryTransport(normalized)) throw normalized;
+          const delayMs = controller.recordTransportRetry(normalized);
           await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
           continue;
         }
+        controller.settleAttempt(reservation, response.usage?.outputTokens);
         controller.assertDeadline();
-        controller.recordInputTokens(estimateMessagesTokens(messages), response.usage?.inputTokens);
-        controller.recordOutputTokens(response.usage?.outputTokens);
+        controller.recordInputTokens(inputTokens, response.usage?.inputTokens);
         const warnings = response.warnings ?? [];
         const usage = response.usage ?? {};
         let candidate: unknown;

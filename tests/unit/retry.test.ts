@@ -12,13 +12,13 @@ describe('BoundedRetryController', () => {
       maxOutputTokens: 100
     });
 
-    controller.beginCall(1);
-    controller.recordTransportRetry(Object.assign(new Error('network timeout'), { retryable: true }));
-    controller.beginCall(1);
+    controller.beginCall(1, 10);
+    controller.recordTransportRetry({ category: 'transient_transport', code: 'network_timeout' });
+    controller.beginCall(1, 10);
 
     controller.recordSchemaRepair();
 
-    expect(() => controller.beginCall(1)).toThrow(RetryLimitExceededError);
+    expect(() => controller.beginCall(1, 10)).toThrow(RetryLimitExceededError);
     expect(controller.snapshot()).toMatchObject({ calls: 2, transportRetries: 1, schemaRepairs: 1 });
   });
 
@@ -43,5 +43,18 @@ describe('BoundedRetryController', () => {
   it('does not retry non-retryable client status codes even when marked retryable', () => {
     const controller = new BoundedRetryController({ maxCalls: 3, maxSchemaRepairs: 1, maxTransportRetries: 2, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 100 });
     expect(controller.canRetryTransport(Object.assign(new Error('denied'), { statusCode: 422, retryable: true }))).toBe(false);
+  });
+
+  it.each([
+    ['policy code variation', { category: 'policy', code: 'POLICY_VIOLATION' }],
+    ['unknown retryable error', { retryable: true }]
+  ])('does not retry %s without an explicit transient category', (_name, detail) => {
+    const controller = new BoundedRetryController({ maxCalls: 3, maxSchemaRepairs: 1, maxTransportRetries: 2, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 100 });
+    expect(controller.canRetryTransport(detail)).toBe(false);
+  });
+
+  it('retries an explicitly normalized transient transport error', () => {
+    const controller = new BoundedRetryController({ maxCalls: 3, maxSchemaRepairs: 1, maxTransportRetries: 2, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 100 });
+    expect(controller.canRetryTransport({ category: 'transient_transport', code: 'provider_diagnostic' })).toBe(true);
   });
 });

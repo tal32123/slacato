@@ -20,8 +20,8 @@ describe('BudgetedModelGateway', () => {
       async generate(request) {
         calls.push({ text: request.messages.at(-1)?.content ?? '' });
         return calls.length === 1
-          ? { text: '{"stakeholders":[{"role":"buyer"}]}' }
-          : { text: '{"stakeholders":[{"role":"champion"}]}' };
+          ? { text: '{"stakeholders":[{"role":"buyer"}]}', usage: { outputTokens: 10 } }
+          : { text: '{"stakeholders":[{"role":"champion"}]}', usage: { outputTokens: 10 } };
       }
     };
     const gateway = createBudgetedModelGateway(transport);
@@ -44,7 +44,7 @@ describe('BudgetedModelGateway', () => {
     const outputs = ['{"stakeholders":[]}{"stakeholders":[]}', '{"stakeholders":[]}'];
     const transport: ModelTransport = {
       capabilities: { nativeStructuredOutput: false },
-      async generate() { return { text: outputs.shift() ?? '' }; }
+      async generate() { return { text: outputs.shift() ?? '', usage: { outputTokens: 10 } }; }
     };
 
     const result = await createBudgetedModelGateway(transport).generateObject({
@@ -67,7 +67,7 @@ describe('BudgetedModelGateway', () => {
     const outputs = [invalid, '{"stakeholders":[]}'];
     const transport: ModelTransport = {
       capabilities: { nativeStructuredOutput: false },
-      async generate() { return { text: outputs.shift() ?? '' }; }
+      async generate() { return { text: outputs.shift() ?? '', usage: { outputTokens: 10 } }; }
     };
 
     const result = await createBudgetedModelGateway(transport).generateObject({
@@ -84,7 +84,7 @@ describe('BudgetedModelGateway', () => {
   it('rejects prototype setter JSON before inherited values can satisfy a schema', async () => {
     const inheritedSchema = z.object({ stakeholders: z.array(z.unknown()).optional() }).strict();
     const outputs = ['{"__proto__":{"stakeholders":[]}}', '{}'];
-    const transport: ModelTransport = { capabilities: { nativeStructuredOutput: false }, async generate() { return { text: outputs.shift() ?? '' }; } };
+    const transport: ModelTransport = { capabilities: { nativeStructuredOutput: false }, async generate() { return { text: outputs.shift() ?? '', usage: { outputTokens: 10 } }; } };
 
     const result = await createBudgetedModelGateway(transport).generateObject({
       schema: inheritedSchema, messages: [{ role: 'user', content: 'Return JSON.' }], operation: 'prototype-security',
@@ -99,7 +99,7 @@ describe('BudgetedModelGateway', () => {
     let receivedSchema = false;
     const transport: ModelTransport = {
       capabilities: { nativeStructuredOutput: true },
-      async generate(request) { receivedSchema = request.schema === schema; return { output: { stakeholders: [] } }; }
+      async generate(request) { receivedSchema = request.schema === schema; return { output: { stakeholders: [] }, usage: { outputTokens: 10 } }; }
     };
 
     const result = await createBudgetedModelGateway(transport).generateObject({
@@ -123,6 +123,50 @@ describe('BudgetedModelGateway', () => {
 
     await gateway.generateObject(request);
     await expect(gateway.generateObject(request)).rejects.toThrow('call limit');
+  });
+
+  it('reserves shared output capacity before concurrent provider calls', async () => {
+    const releases: Array<() => void> = [];
+    let calls = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate() {
+        calls += 1;
+        return new Promise((resolve) => releases.push(() => resolve({ text: '{"stakeholders":[]}', usage: { outputTokens: 100 } })));
+      }
+    };
+    const shared = new RunBudgetLedger({ scope: 'run_output', maxCalls: 2, maxInputTokens: 1_000, maxOutputTokens: 100, deadlineMs: 1_000 });
+    const gateway = createBudgetedModelGateway(transport);
+    const request = { schema, messages: [{ role: 'user' as const, content: 'Extract.' }], operation: 'shared-output', budget: shared,
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 1_000, maxOutputTokens: 100 } };
+
+    const first = gateway.generateObject(request);
+    const second = gateway.generateObject(request);
+    expect(calls).toBe(1);
+    releases.forEach((release) => release());
+
+    await expect(first).resolves.toMatchObject({ value: { stakeholders: [] } });
+    await expect(second).rejects.toThrow('output token budget');
+  });
+
+  it('releases output capacity after a transport failure while retaining the call charge', async () => {
+    let calls = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate() {
+        calls += 1;
+        if (calls === 1) throw { category: 'transient_transport', code: 'ECONNRESET' };
+        return { text: '{"stakeholders":[]}', usage: { outputTokens: 10 } };
+      }
+    };
+    const shared = new RunBudgetLedger({ scope: 'run_release', maxCalls: 2, maxInputTokens: 1_000, maxOutputTokens: 100, deadlineMs: 1_000 });
+    const gateway = createBudgetedModelGateway(transport);
+    const request = { schema, messages: [{ role: 'user' as const, content: 'Extract.' }], operation: 'release-output', budget: shared,
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 1_000, maxOutputTokens: 100 } };
+
+    await expect(gateway.generateObject(request)).rejects.toEqual(expect.objectContaining({ category: 'transient_transport' }));
+    await expect(gateway.generateObject(request)).resolves.toMatchObject({ value: { stakeholders: [] } });
+    expect(calls).toBe(2);
   });
 
   it('fails a slow successful provider response after the deadline', async () => {
@@ -161,7 +205,9 @@ describe('BudgetedModelGateway', () => {
       capabilities: { nativeStructuredOutput: false },
       async generate(request) {
         received.push(request.messages.map((message) => message.content).join('\n'));
-        return received.length === 1 ? { text: '{"stakeholders":[{"role":"bad"}]}' } : { text: '{"stakeholders":[]}' };
+        return received.length === 1
+          ? { text: '{"stakeholders":[{"role":"bad"}]}', usage: { outputTokens: 10 } }
+          : { text: '{"stakeholders":[]}', usage: { outputTokens: 10 } };
       }
     };
     const policy = new (await import('@slacato/core')).ContextWindowPolicy({

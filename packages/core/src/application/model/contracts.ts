@@ -22,11 +22,26 @@ export type RunBudgetLimits = Readonly<{
   deadlineMs: number;
 }>;
 
+export type ModelErrorCategory =
+  | 'transient_transport'
+  | 'rate_limited'
+  | 'server'
+  | 'authorization'
+  | 'policy'
+  | 'content_filter'
+  | 'deterministic_validation'
+  | 'deterministic_citation'
+  | 'nonretryable_client'
+  | 'unknown';
+
+export type OutputReservation = Readonly<{ grantedOutputTokens: number; id: number }>;
+
 export interface SharedRunBudget {
   readonly scope: string;
-  reserveCall(inputTokens: number): void;
+  reserveAttempt(inputTokens: number, requestedOutputTokens: number): OutputReservation;
   reconcileInputTokens(reservedTokens: number, consumedTokens: number | undefined): void;
-  recordOutputTokens(outputTokens: number | undefined): void;
+  settleAttempt(reservation: OutputReservation, actualOutputTokens: number | undefined): void;
+  releaseAttempt(reservation: OutputReservation): void;
   assertDeadline(): void;
 }
 
@@ -63,6 +78,13 @@ export type TransportGeneration<Value = unknown> = Readonly<{
   output?: Value;
   usage?: Readonly<{ inputTokens?: number | undefined; outputTokens?: number | undefined }>;
   warnings?: readonly string[];
+}>;
+
+export type NormalizedModelError = Readonly<{
+  category: ModelErrorCategory;
+  diagnosticCode?: string;
+  statusCode?: number;
+  message?: string;
 }>;
 
 export type ModelTransportRequest<Value> = Readonly<{

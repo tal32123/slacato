@@ -173,6 +173,7 @@ export function createNonRecursiveContextCompactor(gateway: NonRecursiveCompacti
       if (prepared.inputTokens > input.maxInputTokens) throw new ContextBudgetError('Prepared compaction input exceeds maxInputTokens');
       const checkpoint = await gateway.compact({ mode: 'non_recursive', context: prepared, maxInputTokens: input.maxInputTokens, maxOutputTokens: input.maxOutputTokens, maxSteps: 1, maxRetries: 0 });
       assertCheckpoint(checkpoint, input);
+      if (estimateTokens(JSON.stringify(checkpoint)) > input.maxOutputTokens) throw new ContextBudgetError('Compactor output exceeds maxOutputTokens');
       return checkpoint;
     }
   };
