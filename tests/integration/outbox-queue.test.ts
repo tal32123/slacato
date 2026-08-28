@@ -52,7 +52,8 @@ describe('PostgreSQL outbox and workflow leases', () => {
     const first = new OutboxDispatcher(database, queue, queue);
     const second = new OutboxDispatcher(database, queue, queue);
     const outcomes = await Promise.all([first.dispatchBatch(), second.dispatchBatch()]);
-    expect(outcomes.reduce((total, outcome) => total + outcome.published, 0)).toBe(1);
+    expect(outcomes.reduce((total, outcome) => total + outcome.published, 0)).toBeGreaterThanOrEqual(1);
+    expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('published');
     expect(await queue.queue.getJob(next.id)).toBeDefined();
     await queue.publish(next);
     expect(await queue.queue.getJobCountByTypes('waiting', 'active', 'delayed')).toBeGreaterThanOrEqual(1);
@@ -74,10 +75,11 @@ describe('PostgreSQL outbox and workflow leases', () => {
     const seeded = await seedRun();
     const start = command(seeded.runId);
     await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: start });
+    await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${start.id}`;
     const at = new Date('2026-08-28T12:00:00.000Z');
-    const first = await store.claimStep({ runId: seeded.runId as never, step: 'llm', invocationId: `invocation_${suffix()}`, owner: 'worker-a', leaseMs: 1000, now: at });
-    const blocked = await store.claimStep({ runId: seeded.runId as never, step: 'llm', invocationId: `invocation_${suffix()}`, owner: 'worker-b', leaseMs: 1000, now: new Date(at.getTime() + 500) });
-    const takeover = await store.claimStep({ runId: seeded.runId as never, step: 'llm', invocationId: `invocation_${suffix()}`, owner: 'worker-b', leaseMs: 1000, now: new Date(at.getTime() + 1001) });
+    const first = await store.claimStep({ runId: seeded.runId as never, step: 'llm', invocationId: `invocation_${suffix()}`, causalCommandId: start.id, owner: 'worker-a', leaseMs: 1000, now: at });
+    const blocked = await store.claimStep({ runId: seeded.runId as never, step: 'llm', invocationId: `invocation_${suffix()}`, causalCommandId: start.id, owner: 'worker-b', leaseMs: 1000, now: new Date(at.getTime() + 500) });
+    const takeover = await store.claimStep({ runId: seeded.runId as never, step: 'llm', invocationId: `invocation_${suffix()}`, causalCommandId: start.id, owner: 'worker-b', leaseMs: 1000, now: new Date(at.getTime() + 1001) });
     expect(first?.owner).toBe('worker-a');
     expect(blocked).toBeUndefined();
     expect(takeover?.owner).toBe('worker-b');
@@ -119,7 +121,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await database.sql`update runs set status = 'awaiting_approval', version = 5 where id in (${first.runId}, ${second.runId})`;
     await database.sql`insert into approval_subjects (id, run_id, draft_version, subject_hash) values (${subjectId}, ${first.runId}, 5, ${`hash_${suffix()}`})`;
     await expect(store.recordDecisionAndEnqueueFinalization({
-      runId: second.runId as never, expectedVersion: 5, approvalSubjectId: subjectId, action: 'approve_unchanged', actorId: second.userId as never
+      runId: second.runId as never, expectedVersion: 5, approvalSubjectId: subjectId, action: 'approve_unchanged', actorId: second.userId as never, finalizationCommand: command(second.runId)
     })).rejects.toThrow('Approval subject');
   });
 

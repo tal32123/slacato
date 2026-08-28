@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresEvidenceRepository } from '@slacato/infrastructure/db/repositories/evidence-repository';
 import { PostgresGenerationAttemptStore } from '@slacato/infrastructure/db/repositories/generation-attempt-store';
+import { PostgresRunBudgetStore } from '@slacato/infrastructure/db/repositories/run-budget-store';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const clients: ReturnType<typeof postgres>[] = [];
@@ -94,11 +95,14 @@ describe('PostgreSQL repository contract', () => {
     const sql = openDatabase();
     const id = crypto.randomUUID().replaceAll('-', '');
     const accountId = `account_embedding_${id}`;
+    const userId = `user_embedding_${id}`;
     const opportunityId = `opportunity_embedding_${id}`;
     const documentId = `document_embedding_${id}`;
     const matchingId = `evidence_embedding_match_${id}`;
     const mismatchedId = `evidence_embedding_mismatch_${id}`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Embedding account')`;
+    await sql`insert into personas (id, display_name, role) values (${userId}, 'Embedding user', 'seller')`;
+    await sql`insert into permission_grants (id, persona_id, account_id, can_read, sensitive_pricing) values (${`grant_embedding_${id}`}, ${userId}, ${accountId}, true, false)`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Embedding opportunity')`;
     await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content) values (${documentId}, ${documentId}, 1, 'crm', 'embedding-document-hash', 'search content')`;
     await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, embedding, embedding_provider, embedding_model, embedding_dimension, embedding_profile, embedding_version, embedding_normalization)
@@ -108,13 +112,13 @@ describe('PostgreSQL repository contract', () => {
     const database = createDatabaseClient(databaseUrl, 1);
     const repository = new PostgresEvidenceRepository(database);
     const results = await repository.searchExactCosine({
-      accountId: accountId as never, opportunityId: opportunityId as never, embedding: [1, 0], limit: 5,
+      access: { personaId: userId as never, allowSensitivePricing: false }, accountId: accountId as never, opportunityId: opportunityId as never, embedding: [1, 0], limit: 5,
       profile: { provider: 'mock', model: 'mock-embedding', dimension: 2, profile: 'mock-profile', version: 'v1', normalization: 'l2' }
     });
     await database.close();
     expect(results).toEqual([{ evidenceId: matchingId, similarity: 1 }]);
     await expect(repository.searchExactCosine({
-      accountId: accountId as never, opportunityId: opportunityId as never, embedding: [1], limit: 5,
+      access: { personaId: userId as never, allowSensitivePricing: false }, accountId: accountId as never, opportunityId: opportunityId as never, embedding: [1], limit: 5,
       profile: { provider: 'mock', model: 'mock-embedding', dimension: 2, profile: 'mock-profile', version: 'v1', normalization: 'l2' }
     })).rejects.toThrow('dimension');
   });
@@ -138,5 +142,29 @@ describe('PostgreSQL repository contract', () => {
     await attempts.completeAttempt({ id: attemptId, status: 'possible_duplicate', possibleDuplicate: true, requestId: 'provider-request', responseId: 'provider-response', inputTokens: 12, outputTokens: 34 });
     expect((await sql<{ status: string; possible_duplicate: boolean; input_tokens: number; output_tokens: number }[]>`select status, possible_duplicate, input_tokens, output_tokens from generation_attempts where id = ${attemptId}`)[0]).toEqual({ status: 'possible_duplicate', possible_duplicate: true, input_tokens: 12, output_tokens: 34 });
     await database.close();
+  });
+
+  it('serializes persisted run-budget reservations across store instances', async () => {
+    const sql = openDatabase(); const id = crypto.randomUUID().replaceAll('-', '');
+    const userId = `user_budget_${id}`; const accountId = `account_budget_${id}`; const opportunityId = `opportunity_budget_${id}`; const runId = `run_budget_${id}`;
+    await sql`insert into personas (id, display_name, role) values (${userId}, 'Budget user', 'seller')`;
+    await sql`insert into accounts (id, name) values (${accountId}, 'Budget account')`;
+    await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Budget opportunity')`;
+    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
+    await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 1, 10, 10)`;
+    const firstDatabase = createDatabaseClient(databaseUrl, 1); const secondDatabase = createDatabaseClient(databaseUrl, 1);
+    const first = new PostgresRunBudgetStore(firstDatabase);
+    const second = new PostgresRunBudgetStore(secondDatabase);
+    const results = await Promise.allSettled([
+      first.reserve({ id: `reservation_a_${id}`, runId: runId as never, inputTokens: 5, requestedOutputTokens: 8 }),
+      second.reserve({ id: `reservation_b_${id}`, runId: runId as never, inputTokens: 5, requestedOutputTokens: 8 })
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const reservation = results.find((result): result is PromiseFulfilledResult<{ id: string; grantedOutputTokens: number }> => result.status === 'fulfilled')?.value;
+    if (reservation === undefined) throw new Error('Expected one reservation');
+    await first.settle({ id: reservation.id, actualOutputTokens: 8, possibleDuplicate: true });
+    expect(await second.get(runId as never)).toMatchObject({ usedCalls: 1, usedInputTokens: 5, usedOutputTokens: 8 });
+    await firstDatabase.close();
+    await secondDatabase.close();
   });
 });

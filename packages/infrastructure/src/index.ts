@@ -14,6 +14,7 @@ export { createDatabaseClient, type DatabaseClient } from './db/client.js';
 export { PostgresWorkflowStore } from './db/repositories/workflow-store.js';
 export { PostgresEvidenceRepository } from './db/repositories/evidence-repository.js';
 export { PostgresGenerationAttemptStore } from './db/repositories/generation-attempt-store.js';
+export { PostgresRunBudgetStore } from './db/repositories/run-budget-store.js';
 export { BullMqCommandQueue, WORKFLOW_QUEUE_NAME } from './queue/bullmq.js';
 export { OutboxDispatcher, OutboxDispatcherLoop } from './queue/outbox-dispatcher.js';
 export { PostgresCommandReconciler, ReconcilerLoop, type LiveCommandInspector } from './queue/reconciler.js';

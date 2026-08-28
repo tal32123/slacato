@@ -9,6 +9,7 @@ export * from './application/workflow/command-queue.js';
 export * from './application/workflow/workflow-store.js';
 export * from './application/workflow/evidence-repository.js';
 export * from './application/workflow/generation-attempt-store.js';
+export * from './application/workflow/run-budget-store.js';
 export * from './domain/briefs/schema.js';
 export * from './domain/runs/contracts.js';
 export * from './domain/runs/state-machine.js';

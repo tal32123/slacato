@@ -1,6 +1,6 @@
 import type { DatabaseClient } from '../db/client.js';
 
-export interface LiveCommandInspector { state(commandId: string): Promise<'live' | 'terminal' | 'missing'>; }
+export interface LiveCommandInspector { state(commandId: string): Promise<'live' | 'completed' | 'failed' | 'missing'>; }
 
 /** Repairs Redis-loss ambiguity by returning stranded, nonterminal commands to the PostgreSQL outbox. */
 export class PostgresCommandReconciler {
@@ -14,7 +14,8 @@ export class PostgresCommandReconciler {
     `;
     let restored = 0;
     for (const row of rows) {
-      if ((await this.commands.state(row.id)) === 'missing') {
+      const state = await this.commands.state(row.id);
+      if (state === 'missing' || state === 'failed') {
         const result = await this.database.sql`update outbox_commands set status = 'pending', available_at = now(), claimed_at = null where id = ${row.id} and status = 'published'`;
         if (result.count > 0) restored += 1;
       }
@@ -33,12 +34,13 @@ export class ReconcilerLoop {
   private timer: NodeJS.Timeout | undefined;
   private stopping = false;
   private running = false;
-  public constructor(private readonly reconciler: PostgresCommandReconciler, private readonly pollMs = 5_000, private readonly batchSize = 25) {}
+  public constructor(private readonly reconciler: PostgresCommandReconciler, private readonly pollMs = 5_000, private readonly batchSize = 25, private readonly onTransientError: () => void = () => {}) {}
   public start(): void { if (this.timer === undefined) void this.tick(); }
   public async stop(): Promise<void> { this.stopping = true; if (this.timer !== undefined) clearTimeout(this.timer); while (this.running) await new Promise((resolve) => setTimeout(resolve, 10)); }
   private async tick(): Promise<void> {
     this.running = true;
-    try { await this.reconciler.reconcile(this.batchSize); } finally { this.running = false; }
-    if (!this.stopping) this.timer = setTimeout(() => void this.tick(), this.pollMs);
+    let delay = this.pollMs;
+    try { await this.reconciler.reconcile(this.batchSize); } catch { delay = Math.min(this.pollMs * 2, 30_000); this.onTransientError(); } finally { this.running = false; }
+    if (!this.stopping) this.timer = setTimeout(() => void this.tick(), delay);
   }
 }

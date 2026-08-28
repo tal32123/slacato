@@ -47,12 +47,13 @@ export class OutboxDispatcherLoop {
   private timer: NodeJS.Timeout | undefined;
   private stopping = false;
   private running = false;
-  public constructor(private readonly dispatcher: OutboxDispatcher, private readonly pollMs = 1_000, private readonly batchSize = 25) {}
+  public constructor(private readonly dispatcher: OutboxDispatcher, private readonly pollMs = 1_000, private readonly batchSize = 25, private readonly onTransientError: () => void = () => {}) {}
   public start(): void { if (this.timer === undefined) void this.tick(); }
   public async stop(): Promise<void> { this.stopping = true; if (this.timer !== undefined) clearTimeout(this.timer); while (this.running) await new Promise((resolve) => setTimeout(resolve, 10)); }
   private async tick(): Promise<void> {
     this.running = true;
-    try { await this.dispatcher.dispatchBatch(this.batchSize); } finally { this.running = false; }
-    if (!this.stopping) this.timer = setTimeout(() => void this.tick(), this.pollMs);
+    let delay = this.pollMs;
+    try { await this.dispatcher.dispatchBatch(this.batchSize); } catch { delay = Math.min(this.pollMs * 2, 30_000); this.onTransientError(); } finally { this.running = false; }
+    if (!this.stopping) this.timer = setTimeout(() => void this.tick(), delay);
   }
 }

@@ -1,4 +1,4 @@
-import type { AccountId, EvidenceId, OpportunityId } from '../../domain/shared/ids.js';
+import type { AccountId, EvidenceId, OpportunityId, UserId } from '../../domain/shared/ids.js';
 
 /** Canonical embedding identity. Every element participates in comparison compatibility. */
 export type EmbeddingProfile = Readonly<{
@@ -10,6 +10,7 @@ export type EmbeddingProfile = Readonly<{
   normalization: string;
 }>;
 export type ExactEvidenceQuery = Readonly<{
+  access: Readonly<{ personaId: UserId; allowSensitivePricing: boolean }>;
   accountId: AccountId;
   opportunityId?: OpportunityId | undefined;
   embedding: readonly number[];

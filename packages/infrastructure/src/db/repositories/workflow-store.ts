@@ -4,7 +4,7 @@ import type { JSONValue, Sql, TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../client.js';
 
 type RunRow = Readonly<{ id: string; opportunity_id: string; requested_by: string; status: WorkflowRun['status']; version: number; generation_provider: string; generation_model: string }>;
-type InvocationRow = Readonly<{ id: string; run_id: string; step: string; owner: string; lease_token: string; lease_expires_at: string | Date; attempt: number }>;
+type InvocationRow = Readonly<{ id: string; run_id: string; step: string; owner: string; lease_token: string; causal_command_id: string; lease_expires_at: string | Date; attempt: number }>;
 
 type SqlExecutor = Sql | TransactionSql;
 
@@ -12,13 +12,27 @@ function jsonValue(value: unknown): JSONValue {
   return JSON.parse(JSON.stringify(value)) as JSONValue;
 }
 function jsonText(value: unknown): string { return JSON.stringify(jsonValue(value)); }
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
 function asRun(row: RunRow): WorkflowRun {
   return { id: row.id as WorkflowRun['id'], opportunityId: row.opportunity_id as WorkflowRun['opportunityId'], requestedBy: row.requested_by as WorkflowRun['requestedBy'], status: row.status, version: row.version, generationProvider: row.generation_provider, generationModel: row.generation_model };
 }
 function asLease(row: InvocationRow): StepLease {
-  return { invocationId: row.id, runId: row.run_id as StepLease['runId'], step: row.step, owner: row.owner, leaseToken: row.lease_token, leaseExpiresAt: new Date(row.lease_expires_at), attempt: row.attempt };
+  return { invocationId: row.id, causalCommandId: row.causal_command_id, runId: row.run_id as StepLease['runId'], step: row.step, owner: row.owner, leaseToken: row.lease_token, leaseExpiresAt: new Date(row.lease_expires_at), attempt: row.attempt };
 }
 async function insertCommand(sql: SqlExecutor, command: WorkflowCommand): Promise<void> {
+  const existing = await sql<{ id: string; run_id: string; type: string; payload: Record<string, unknown>; idempotency_key: string }[]>`select id, run_id, type, payload, idempotency_key from outbox_commands where id = ${command.id} or idempotency_key = ${command.idempotencyKey} for update`;
+  if (existing.length > 0) {
+    const row = existing[0];
+    if (row === undefined || row.id !== command.id || row.run_id !== command.runId || row.type !== command.type || row.idempotency_key !== command.idempotencyKey || canonicalJson(row.payload) !== canonicalJson(command.payload)) throw new DomainConflictError('Outbox idempotency key conflicts with another command');
+    return;
+  }
   await sql`insert into outbox_commands (id, run_id, type, payload, idempotency_key)
     values (${command.id}, ${command.runId}, ${command.type}, ${jsonText(command.payload)}::jsonb, ${command.idempotencyKey})
     on conflict (idempotency_key) do nothing`;
@@ -34,6 +48,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
   public constructor(private readonly database: DatabaseClient) {}
 
   public async startRun(input: StartRunInput): Promise<WorkflowRun> {
+    if (input.command.runId !== input.id) throw new DomainConflictError('Outbox command run does not match workflow run');
     return this.database.sql.begin(async (sql) => {
       const inserted = await sql<RunRow[]>`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version)
         values (${input.id}, ${input.opportunityId}, ${input.requestedBy}, ${input.status}, ${input.generationProvider}, ${input.generationModel}, 0)
@@ -50,12 +65,14 @@ export class PostgresWorkflowStore implements WorkflowStore {
     });
   }
 
-  public async claimStep(input: Readonly<{ runId: WorkflowRun['id']; step: string; invocationId: string; owner: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined> {
+  public async claimStep(input: Readonly<{ runId: WorkflowRun['id']; step: string; invocationId: string; causalCommandId: string; owner: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined> {
     const now = input.now ?? new Date();
     const expires = new Date(now.getTime() + input.leaseMs);
     return this.database.sql.begin(async (sql) => {
       await sql`select pg_advisory_xact_lock(hashtext(${`${input.runId}:${input.step}`}))`;
-      const active = await sql<InvocationRow[]>`select id, run_id, step, owner, lease_token, lease_expires_at, attempt from step_invocations where run_id = ${input.runId} and step = ${input.step} and status = 'leased' order by attempt desc limit 1 for update`;
+      const command = await sql<{ id: string }[]>`select id from outbox_commands where id = ${input.causalCommandId} and run_id = ${input.runId} and status = 'published' and consumed_at is null for update`;
+      if (command.length !== 1) throw new DomainConflictError('Causal command is not available for invocation');
+      const active = await sql<InvocationRow[]>`select id, run_id, step, owner, lease_token, causal_command_id, lease_expires_at, attempt from step_invocations where run_id = ${input.runId} and step = ${input.step} and status = 'leased' order by attempt desc limit 1 for update`;
       const current = active[0];
       if (current !== undefined && new Date(current.lease_expires_at) > now) return undefined;
       if (current !== undefined) await sql`update step_invocations set status = 'abandoned', completed_at = ${now.toISOString()}::timestamptz where id = ${current.id} and status = 'leased'`;
@@ -63,9 +80,9 @@ export class PostgresWorkflowStore implements WorkflowStore {
       const attempt = attempts[0]?.attempt;
       if (attempt === undefined) throw new DomainConflictError('Unable to allocate step attempt');
       const leaseToken = `lease_${crypto.randomUUID()}`;
-      const inserted = await sql<InvocationRow[]>`insert into step_invocations (id, run_id, step, owner, lease_token, lease_expires_at, heartbeat_at, attempt)
-        values (${input.invocationId}, ${input.runId}, ${input.step}, ${input.owner}, ${leaseToken}, ${expires.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${attempt})
-        returning id, run_id, step, owner, lease_token, lease_expires_at, attempt`;
+      const inserted = await sql<InvocationRow[]>`insert into step_invocations (id, run_id, step, owner, lease_token, causal_command_id, lease_expires_at, heartbeat_at, attempt)
+        values (${input.invocationId}, ${input.runId}, ${input.step}, ${input.owner}, ${leaseToken}, ${input.causalCommandId}, ${expires.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${attempt})
+        returning id, run_id, step, owner, lease_token, causal_command_id, lease_expires_at, attempt`;
       const row = inserted[0];
       if (row === undefined) throw new DomainConflictError('Unable to claim step');
       return asLease(row);
@@ -77,19 +94,23 @@ export class PostgresWorkflowStore implements WorkflowStore {
     const expires = new Date(now.getTime() + input.leaseMs);
     const rows = await this.database.sql<InvocationRow[]>`update step_invocations set heartbeat_at = ${now.toISOString()}::timestamptz, lease_expires_at = ${expires.toISOString()}::timestamptz
       where id = ${input.invocationId} and owner = ${input.owner} and lease_token = ${input.leaseToken} and status = 'leased' and lease_expires_at > ${now.toISOString()}::timestamptz
-      returning id, run_id, step, owner, lease_token, lease_expires_at, attempt`;
+      returning id, run_id, step, owner, lease_token, causal_command_id, lease_expires_at, attempt`;
     return rows[0] === undefined ? undefined : asLease(rows[0]);
   }
 
   public async commitStepAndEnqueueNext(input: CommitStepInput): Promise<WorkflowRun> {
+    if (input.nextCommand.runId !== input.runId) throw new DomainConflictError('Outbox command run does not match workflow run');
     return this.database.sql.begin(async (sql) => {
       const current = (await sql<RunRow[]>`select id, opportunity_id, requested_by, status, version, generation_provider, generation_model from runs where id = ${input.runId} for update`)[0];
       if (current === undefined) throw new DomainNotFoundError('run');
       if (current.version !== input.expectedVersion) throw new DomainConflictError('Run version is stale');
-      const completed = await sql`update step_invocations set status = 'completed', completed_at = now()
+      const completed = await sql<{ causal_command_id: string }[]>`update step_invocations set status = 'completed', completed_at = now()
         where id = ${input.invocationId} and run_id = ${input.runId} and owner = ${input.invocationOwner} and lease_token = ${input.leaseToken}
-          and status = 'leased' and lease_expires_at > now()`;
-      if (completed.count !== 1) throw new DomainConflictError('Step lease is no longer owned by this worker');
+          and status = 'leased' and lease_expires_at > now() returning causal_command_id`;
+      const invocation = completed[0];
+      if (invocation === undefined) throw new DomainConflictError('Step lease is no longer owned by this worker');
+      const consumed = await sql`update outbox_commands set consumed_at = now() where id = ${invocation.causal_command_id} and run_id = ${input.runId} and status = 'published' and consumed_at is null`;
+      if (consumed.count !== 1) throw new DomainConflictError('Causal command was already consumed');
       const nextStatus = transitionRun(current.status, input.event);
       const updated = await sql<RunRow[]>`update runs set status = ${nextStatus}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion}
         returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`;
@@ -119,6 +140,8 @@ export class PostgresWorkflowStore implements WorkflowStore {
   }
 
   public async recordDecisionAndEnqueueFinalization(input: ApprovalDecisionInput): Promise<WorkflowRun> {
+    if (input.action === 'reject' && input.finalizationCommand !== undefined) throw new DomainConflictError('Rejected approvals cannot enqueue finalization');
+    if (input.action !== 'reject' && input.finalizationCommand.runId !== input.runId) throw new DomainConflictError('Outbox command run does not match workflow run');
     return this.database.sql.begin(async (sql) => {
       const current = (await sql<RunRow[]>`select id, opportunity_id, requested_by, status, version, generation_provider, generation_model from runs where id = ${input.runId} for update`)[0];
       if (current === undefined) throw new DomainNotFoundError('run');
@@ -133,7 +156,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
       const row = updated[0]; if (row === undefined) throw new DomainConflictError('Run version is stale');
       await sql`insert into approval_decisions (id, approval_subject_id, action, actor_id, rationale, edited_payload) values (${`decision_${crypto.randomUUID()}`}, ${input.approvalSubjectId}, ${input.action}, ${input.actorId}, ${input.rationale ?? null}, ${input.editedPayload === undefined ? null : jsonText(input.editedPayload)}::jsonb)`;
       await appendEvent(sql, input.runId, event, { version: row.version, approvalSubjectId: input.approvalSubjectId });
-      if (input.finalizationCommand !== undefined && input.action !== 'reject') await insertCommand(sql, input.finalizationCommand);
+      if (input.action !== 'reject') await insertCommand(sql, input.finalizationCommand);
       return asRun(row);
     });
   }

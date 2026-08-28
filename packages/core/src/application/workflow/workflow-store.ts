@@ -14,6 +14,7 @@ export type WorkflowRun = Readonly<{
 
 export type StepLease = Readonly<{
   invocationId: string;
+  causalCommandId: string;
   runId: RunId;
   step: string;
   owner: string;
@@ -34,21 +35,23 @@ export type CommitStepInput = Readonly<{
   artifact?: Readonly<{ id: string; kind: string; content: Readonly<Record<string, unknown>>; evidenceManifestId?: string | undefined }>;
   nextCommand: WorkflowCommand;
 }>;
-export type ApprovalDecisionInput = Readonly<{
+type ApprovalDecisionBase = Readonly<{
   runId: RunId;
   expectedVersion: number;
   approvalSubjectId: string;
-  action: 'approve_unchanged' | 'edit_and_approve' | 'reject';
   actorId: UserId;
   rationale?: string | undefined;
   editedPayload?: Readonly<Record<string, unknown>> | undefined;
-  finalizationCommand?: WorkflowCommand | undefined;
 }>;
+export type ApprovalDecisionInput = ApprovalDecisionBase & (
+  | Readonly<{ action: 'approve_unchanged' | 'edit_and_approve'; finalizationCommand: WorkflowCommand }>
+  | Readonly<{ action: 'reject'; finalizationCommand?: never }>
+);
 
 /** Atomic workflow transition seam. Implementations persist state, events and commands in one transaction. */
 export interface WorkflowStore {
   startRun(input: StartRunInput): Promise<WorkflowRun>;
-  claimStep(input: Readonly<{ runId: RunId; step: string; invocationId: string; owner: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
+  claimStep(input: Readonly<{ runId: RunId; step: string; invocationId: string; causalCommandId: string; owner: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
   heartbeatStep(input: Readonly<{ invocationId: string; owner: string; leaseToken: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
   commitStepAndEnqueueNext(input: CommitStepInput): Promise<WorkflowRun>;
   awaitApproval(input: Readonly<{ runId: RunId; expectedVersion: number; approvalSubjectId: string; subjectHash: string; payload: Readonly<Record<string, unknown>>; policyTriggers: readonly string[] }>): Promise<WorkflowRun>;

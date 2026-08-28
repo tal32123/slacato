@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS outbox_commands (
 CREATE INDEX IF NOT EXISTS outbox_commands_pending_idx ON outbox_commands (status, available_at, id);
 CREATE TABLE IF NOT EXISTS step_invocations (
   id text PRIMARY KEY, run_id text NOT NULL REFERENCES runs(id), step text NOT NULL, owner text,
-  lease_token text, lease_expires_at timestamptz, heartbeat_at timestamptz, attempt integer NOT NULL DEFAULT 1 CHECK (attempt > 0),
+  lease_token text, causal_command_id text REFERENCES outbox_commands(id), lease_expires_at timestamptz, heartbeat_at timestamptz, attempt integer NOT NULL DEFAULT 1 CHECK (attempt > 0),
   status text NOT NULL DEFAULT 'leased' CHECK (status IN ('leased','completed','abandoned')), created_at timestamptz NOT NULL DEFAULT now(), completed_at timestamptz,
   CONSTRAINT step_invocations_run_step_attempt_uq UNIQUE (run_id, step, attempt),
   CONSTRAINT step_invocations_lease_ck CHECK ((status = 'leased' AND owner IS NOT NULL AND lease_expires_at IS NOT NULL) OR (status <> 'leased'))
@@ -96,7 +96,8 @@ CREATE TABLE IF NOT EXISTS citations (
 CREATE TABLE IF NOT EXISTS approval_subjects (
   id text PRIMARY KEY, run_id text NOT NULL REFERENCES runs(id), draft_version integer NOT NULL CHECK (draft_version >= 0), subject_hash text NOT NULL CHECK (length(subject_hash) > 0),
   payload jsonb NOT NULL DEFAULT '{}'::jsonb, policy_triggers jsonb NOT NULL DEFAULT '[]'::jsonb, created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT approval_subjects_run_version_uq UNIQUE (run_id, draft_version), CONSTRAINT approval_subjects_subject_hash_uq UNIQUE (subject_hash)
+  CONSTRAINT approval_subjects_run_version_uq UNIQUE (run_id, draft_version), CONSTRAINT approval_subjects_subject_hash_uq UNIQUE (subject_hash),
+  CONSTRAINT approval_subjects_id_run_hash_uq UNIQUE (id, run_id, subject_hash)
 );
 CREATE TABLE IF NOT EXISTS approval_decisions (
   id text PRIMARY KEY, approval_subject_id text NOT NULL REFERENCES approval_subjects(id),
@@ -108,7 +109,8 @@ CREATE TABLE IF NOT EXISTS approval_decisions (
 CREATE TABLE IF NOT EXISTS briefs (
   id text PRIMARY KEY, run_id text NOT NULL REFERENCES runs(id), approval_subject_id text REFERENCES approval_subjects(id),
   payload jsonb NOT NULL DEFAULT '{}'::jsonb, subject_hash text NOT NULL CHECK (length(subject_hash) > 0), finalized_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now(), CONSTRAINT briefs_run_uq UNIQUE (run_id)
+  created_at timestamptz NOT NULL DEFAULT now(), CONSTRAINT briefs_run_uq UNIQUE (run_id),
+  CONSTRAINT briefs_approval_subject_snapshot_fk FOREIGN KEY (approval_subject_id, run_id, subject_hash) REFERENCES approval_subjects(id, run_id, subject_hash)
 );
 CREATE TABLE IF NOT EXISTS trace_spans (
   id text PRIMARY KEY, run_id text NOT NULL REFERENCES runs(id), parent_id text, kind text NOT NULL, status text NOT NULL,

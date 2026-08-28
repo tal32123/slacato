@@ -11,20 +11,25 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
   public async searchExactCosine(input: ExactEvidenceQuery): Promise<readonly EvidenceMatch[]> {
     assertEmbeddingComparison(input);
     const rows = await this.database.sql<MatchRow[]>`
-      select id, (1 - (embedding <=> ${vectorLiteral(input.embedding)}::vector)) as similarity
-      from evidence_versions
-      where account_id = ${input.accountId}
+      select evidence.id, (1 - (evidence.embedding <=> ${vectorLiteral(input.embedding)}::vector)) as similarity
+      from evidence_versions evidence
+      join permission_grants permission on permission.persona_id = ${input.access.personaId} and permission.can_read = true
+        and (permission.account_id is null or permission.account_id = evidence.account_id)
+        and (permission.source_type is null or permission.source_type = evidence.source_type)
+        and (permission.sensitive_pricing = true or evidence.sensitivity <> 'restricted')
+      where evidence.account_id = ${input.accountId}
         and opportunity_id is not distinct from ${input.opportunityId ?? null}
-        and embedding is not null
-        and vector_dims(embedding) = ${input.profile.dimension}
-        and vector_norm(embedding) > 0
-        and embedding_provider = ${input.profile.provider}
-        and embedding_model = ${input.profile.model}
-        and embedding_dimension = ${input.profile.dimension}
-        and embedding_profile = ${input.profile.profile}
-        and embedding_version = ${input.profile.version}
-        and embedding_normalization = ${input.profile.normalization}
-      order by embedding <=> ${vectorLiteral(input.embedding)}::vector, id asc
+        and (${input.access.allowSensitivePricing} = true or evidence.sensitivity <> 'restricted')
+        and evidence.embedding is not null
+        and vector_dims(evidence.embedding) = ${input.profile.dimension}
+        and vector_norm(evidence.embedding) > 0
+        and evidence.embedding_provider = ${input.profile.provider}
+        and evidence.embedding_model = ${input.profile.model}
+        and evidence.embedding_dimension = ${input.profile.dimension}
+        and evidence.embedding_profile = ${input.profile.profile}
+        and evidence.embedding_version = ${input.profile.version}
+        and evidence.embedding_normalization = ${input.profile.normalization}
+      order by evidence.embedding <=> ${vectorLiteral(input.embedding)}::vector, evidence.id asc
       limit ${input.limit}
     `;
     return rows.map((row) => ({ evidenceId: row.id as EvidenceMatch['evidenceId'], similarity: Number(row.similarity) }));
