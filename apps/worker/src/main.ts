@@ -1,36 +1,40 @@
 import 'reflect-metadata';
 import { pathToFileURL } from 'node:url';
 import { NestFactory } from '@nestjs/core';
-import { BullMqCommandQueue, createConfiguredModelGateways, createDatabaseClient, loadRuntimeEnv, OutboxDispatcher, OutboxDispatcherLoop, PostgresCommandReconciler, ReconcilerLoop, WORKFLOW_DEAD_LETTER_QUEUE_NAME, type ConfiguredModelGateways, type DatabaseClient, type Env, type MockGenerationResolver, type OllamaCapabilities } from '@slacato/infrastructure';
-import type { Provider } from '@nestjs/common';
+import { BullMqCommandQueue, createConfiguredModelGateways, createDatabaseClient, loadRuntimeEnv, OutboxDispatcher, OutboxDispatcherLoop, PostgresCommandReconciler, PostgresProviderAttemptLedger, ReconcilerLoop, WORKFLOW_DEAD_LETTER_QUEUE_NAME, type ConfiguredModelGateways, type DatabaseClient, type Env, type MockGenerationResolver, type OllamaCapabilities } from '@slacato/infrastructure';
+import type { DynamicModule } from '@nestjs/common';
 import { WorkerModule } from './worker.module.js';
 
 export interface WorkerApplicationOptions {
   environment?: NodeJS.ProcessEnv;
 }
 
-export const WORKER_MODEL_GATEWAYS = Symbol('WORKER_MODEL_GATEWAYS');
 export type WorkerModelGatewayOptions = Readonly<{ mockFixtureResolver?: MockGenerationResolver; ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'> }>;
 
-/** Generic composition hook for Task 9; bootstrap never invents a mock resolver. */
-export function createWorkerModelGateways(environment: Env, database: DatabaseClient, options: WorkerModelGatewayOptions = {}): ConfiguredModelGateways {
-  if (environment.AI_PROVIDER === 'mock') {
-    if (options.mockFixtureResolver === undefined) throw new Error('Worker mock model composition requires a fixture resolver');
-    return createConfiguredModelGateways(environment, { database, mock: { resolve: options.mockFixtureResolver } });
+/** Injectable Task 9 seam; mock generation remains impossible without a fixture resolver. */
+export class WorkerModelGatewayFactory {
+  public constructor(private readonly environment: Env, private readonly attemptLedger: PostgresProviderAttemptLedger) {}
+
+  public create(options: WorkerModelGatewayOptions = {}): ConfiguredModelGateways {
+    if (this.environment.AI_PROVIDER === 'mock') {
+      if (options.mockFixtureResolver === undefined) throw new Error('Worker mock model composition requires a fixture resolver');
+      return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger, mock: { resolve: options.mockFixtureResolver } });
+    }
+    return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger, ...(options.ollamaCapabilities === undefined ? {} : { ollamaCapabilities: options.ollamaCapabilities }) });
   }
-  return createConfiguredModelGateways(environment, { database, ...(options.ollamaCapabilities === undefined ? {} : { ollamaCapabilities: options.ollamaCapabilities }) });
 }
 
-/** Nest provider factory intentionally remains unregistered until Task 9 supplies its processor. */
-export function createWorkerModelGatewayProvider(environment: Env, database: DatabaseClient, options: WorkerModelGatewayOptions = {}): Provider {
-  return { provide: WORKER_MODEL_GATEWAYS, useFactory: () => createWorkerModelGateways(environment, database, options) };
+/** The same module used by bootstrap and composition tests; its ledger shares the worker database lifecycle. */
+export function createWorkerCompositionModule(environment: Env, database: DatabaseClient): DynamicModule {
+  const factory = new WorkerModelGatewayFactory(environment, new PostgresProviderAttemptLedger(database));
+  return { module: WorkerModule, providers: [{ provide: WorkerModelGatewayFactory, useValue: factory }], exports: [WorkerModelGatewayFactory] };
 }
 
 /** Creates the worker context only after server-only configuration has validated successfully. */
 export async function createWorkerApplication(options: WorkerApplicationOptions = {}) {
   const environment = loadRuntimeEnv(options.environment ?? process.env);
-  const app = await NestFactory.createApplicationContext(WorkerModule);
   const database = createDatabaseClient(environment.DATABASE_URL, 10);
+  const app = await NestFactory.createApplicationContext(createWorkerCompositionModule(environment, database));
   const commands = new BullMqCommandQueue(environment.REDIS_URL);
   const deadLetters = new BullMqCommandQueue(environment.REDIS_URL, WORKFLOW_DEAD_LETTER_QUEUE_NAME);
   const dispatcher = new OutboxDispatcher(database, commands, deadLetters);

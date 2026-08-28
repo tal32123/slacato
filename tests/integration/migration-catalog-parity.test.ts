@@ -13,11 +13,11 @@ import {
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 9 }, (_, index) =>
+const migrationFiles = Array.from({ length: 10 }, (_, index) =>
   resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
     'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
     'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
-    'dead_letter_claim_recovery', 'provider_attempt_ledger'
+    'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline'
   ][index]}.sql`)
 );
 const temporaryDatabases: string[] = [];
@@ -140,6 +140,11 @@ describe('durable migration catalog', () => {
       expect(serialized).toContain('briefs_approval_subject_snapshot_fk');
       expect(serialized).toContain('step_invocations_one_active_causal_command_uq');
       expect(serialized).toContain('run_budget_reservations_attempt_fk');
+      expect(serialized).toContain('run_budget_reservations_invocation_operation_ordinal_uq');
+      expect(serialized).toContain('nulls not distinct');
+      expect((cleanCatalog.indexes as readonly { table_name: string; name: string; definition: string }[])).toEqual(expect.arrayContaining([
+        expect.objectContaining({ table_name: 'run_budget_reservations', name: 'run_budget_reservations_invocation_operation_ordinal_uq', definition: expect.stringContaining('NULLS NOT DISTINCT') })
+      ]));
       expect(serialized).not.toContain('hnsw');
     } finally {
       await clean.end({ timeout: 1 });
@@ -160,7 +165,10 @@ describe('durable migration catalog', () => {
     const pendingIndex = getTableConfig(outboxCommands).indexes.find((entry) => entry.config.name === 'outbox_commands_pending_idx');
     expect(pendingIndex?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['status', 'available_at', 'id']);
     expect(Object.keys(stepInvocations)).toEqual(expect.arrayContaining(['causalCommandId', 'leaseToken']));
-    expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens']));
+    expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens', 'deadlineMs']));
+    const reservationIndex = getTableConfig(runBudgetReservations).indexes.find((entry) => entry.config.name === 'run_budget_reservations_invocation_operation_ordinal_uq');
+    expect(reservationIndex?.config.unique).toBe(true);
+    expect(reservationIndex?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['run_id', 'invocation_id', 'operation', 'ordinal']);
     expect(Object.keys(runBudgetReservations)).toEqual(expect.arrayContaining([
       'attemptId', 'invocationId', 'operation', 'ordinal', 'grantedOutputTokens', 'reservedInputTokens',
       'actualInputTokens', 'actualOutputTokens', 'requestId', 'responseId', 'failureCategory', 'failureCode'

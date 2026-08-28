@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { envSchema } from '@slacato/infrastructure/config/env';
-import { createConfiguredModelGateways, createDatabaseClient } from '@slacato/infrastructure';
+import { createConfiguredModelGateways, createDatabaseClient, PostgresProviderAttemptLedger } from '@slacato/infrastructure';
 
 describe('envSchema', () => {
   it('rejects a configuration without server secrets', () => {
@@ -29,7 +29,7 @@ describe('envSchema', () => {
   it('constructs mock composition only with an explicit fixture resolver and durable database', async () => {
     const database = createDatabaseClient(baseEnvironment.DATABASE_URL, 1);
     const gateways = createConfiguredModelGateways(envSchema.parse(baseEnvironment), {
-      database,
+      attemptLedger: new PostgresProviderAttemptLedger(database),
       mock: { resolve: async () => ({ text: '{}' }) }
     });
 
@@ -43,8 +43,9 @@ describe('envSchema', () => {
     const environment = envSchema.parse({
       ...baseEnvironment, AI_PROVIDER: 'ollama', OLLAMA_API_KEY: 'server-only-key', OLLAMA_CHAT_MODEL: 'chat', OLLAMA_EMBEDDING_MODEL: 'embed'
     });
-    expect(createConfiguredModelGateways(environment, { database }).registry.resolve('brief')).toMatchObject({ providerId: 'ollama', modelId: 'chat' });
-    expect(() => createConfiguredModelGateways(environment, { database, mock: { resolve: async () => ({ text: '{}' }) } })).toThrow('Ollama composition does not accept a mock fixture resolver');
+    const attemptLedger = new PostgresProviderAttemptLedger(database);
+    expect(createConfiguredModelGateways(environment, { attemptLedger }).registry.resolve('brief')).toMatchObject({ providerId: 'ollama', modelId: 'chat' });
+    expect(() => createConfiguredModelGateways(environment, { attemptLedger, mock: { resolve: async () => ({ text: '{}' }) } })).toThrow('Ollama composition does not accept a mock fixture resolver');
     void database.close();
   });
 });

@@ -1,13 +1,14 @@
 import postgres from 'postgres';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { NestFactory } from '@nestjs/core';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
-import { createConfiguredModelGateways } from '@slacato/infrastructure/model/provider';
 import { envSchema } from '@slacato/infrastructure/config/env';
 import { PostgresEvidenceRepository } from '@slacato/infrastructure/db/repositories/evidence-repository';
 import { PostgresProviderAttemptLedger } from '@slacato/infrastructure/db/repositories/provider-attempt-ledger';
 import { PostgresWorkflowStore } from '@slacato/infrastructure/db/repositories/workflow-store';
 import { createBudgetedModelGateway, ProviderAttemptFinalizationConflict, type ModelTransport } from '@slacato/core';
+import { createWorkerCompositionModule, WorkerModelGatewayFactory } from '../../apps/worker/src/main';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const clients: ReturnType<typeof postgres>[] = [];
@@ -51,7 +52,7 @@ describe('PostgreSQL repository contract', () => {
     await database.close();
   });
 
-  it('configured production composition creates the PostgreSQL ledger and initializes the run budget before transport', async () => {
+  it('configured production composition exposes only a verified run-scoped gateway', async () => {
     const sql = openDatabase(); const id = crypto.randomUUID().replaceAll('-', '');
     const userId = `user_composed_${id}`; const accountId = `account_composed_${id}`; const opportunityId = `opportunity_composed_${id}`; const runId = `run_composed_${id}`;
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Composed user', 'seller')`;
@@ -63,16 +64,22 @@ describe('PostgreSQL repository contract', () => {
       command: { id: `command_composed_${id}`, runId: runId as never, type: 'process-step', payload: { step: 'start' }, idempotencyKey: `composed_${id}` },
       budget: { scope: runId as never, maxCalls: 1, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 }
     });
-    const gateways = createConfiguredModelGateways(envSchema.parse({
+    const environment = envSchema.parse({
       NODE_ENV: 'test', DATABASE_URL: databaseUrl, SESSION_SECRET: 'a-session-secret-that-is-at-least-32-characters'
-    }), { database, mock: { resolve: async () => ({ text: '{"items":[]}', usage: { inputTokens: 1, outputTokens: 2 } }) } });
-    const run = await gateways.startRun({ runScope: runId, budget: { scope: runId, maxCalls: 1, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 } });
-    await run.modelGateway.generateObject({
+    });
+    const app = await NestFactory.createApplicationContext(createWorkerCompositionModule(environment, database));
+    const factory = app.get(WorkerModelGatewayFactory);
+    expect(() => factory.create()).toThrow('fixture resolver');
+    const gateways = factory.create({ mockFixtureResolver: async () => ({ text: '{"items":[]}', usage: { inputTokens: 1, outputTokens: 2 } }) });
+    expect('modelGateway' in gateways).toBe(false);
+    await expect(gateways.forRun({ runScope: `missing_${id}`, budget: { scope: `missing_${id}`, maxCalls: 1, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 } })).rejects.toThrow('Run budget does not exist');
+    const run = await gateways.forRun({ runScope: runId, budget: { scope: runId, maxCalls: 1, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 } });
+    await run.generateObject({
       schema: z.object({ items: z.array(z.string()) }).strict(), messages: [{ role: 'user', content: 'Return items.' }], operation: 'composed-specialist',
       limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 20 }
     });
     expect(await sql<{ max_calls: number; status: string }[]>`select run_budgets.max_calls, generation_attempts.status from run_budgets join generation_attempts on generation_attempts.run_id = run_budgets.run_id where run_budgets.run_id = ${runId}`).toEqual([{ max_calls: 1, status: 'completed' }]);
-    await database.close();
+    await app.close(); await database.close();
   });
 
   it('atomically creates the run and its budget, validates exact replay, and rolls both back on a command conflict', async () => {
@@ -87,8 +94,9 @@ describe('PostgreSQL repository contract', () => {
     const input = { id: runId as never, opportunityId: opportunityId as never, requestedBy: userId as never, status: 'created' as const, generationProvider: 'mock', generationModel: 'mock-chat', command, budget };
     await store.startRun(input);
     await store.startRun(input);
-    expect(await sql<{ run_id: string; max_calls: number }[]>`select run_budgets.run_id, run_budgets.max_calls from run_budgets where run_id = ${runId}`).toEqual([{ run_id: runId, max_calls: 2 }]);
+    expect(await sql<{ run_id: string; max_calls: number; deadline_ms: number }[]>`select run_budgets.run_id, run_budgets.max_calls, run_budgets.deadline_ms from run_budgets where run_id = ${runId}`).toEqual([{ run_id: runId, max_calls: 2, deadline_ms: 1_000 }]);
     await expect(store.startRun({ ...input, budget: { ...budget, maxCalls: 3 } })).rejects.toThrow('budget limits');
+    await expect(store.startRun({ ...input, budget: { ...budget, deadlineMs: 2_000 } })).rejects.toThrow('budget limits');
     const rejectedCommand = { ...command, runId: rejectedRunId as never };
     await expect(store.startRun({ ...input, id: rejectedRunId as never, command: rejectedCommand, budget: { ...budget, scope: rejectedRunId as never } })).rejects.toThrow('Outbox idempotency');
     expect(await sql<{ run_count: string; budget_count: string }[]>`select
