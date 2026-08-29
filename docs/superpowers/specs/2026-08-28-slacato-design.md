@@ -354,16 +354,16 @@ All project-owned evaluation logic remains TypeScript.
 
 `artifacts/evals/source-coverage.json` is a sanitized machine-readable hard gate with one entry for each provided source group. Each entry records its inventory count/hash, authorized retrieval/control event, intended agent(s), observed receipt IDs, resulting section/claim/citation label, expected-utilization rule, and pass/fail status without source bodies or unauthorized metadata. The required rules are:
 
-- accounts → authorized exact evidence lookup → Stakeholder Agent → Deal Snapshot account claim and citation;
-- opportunities → authorized exact evidence lookup → Commercial Agent → Deal Snapshot/Negotiation State claim and citation;
-- contacts → authorized exact evidence lookup → Stakeholder Agent → Stakeholder Map claim and citation;
-- Gong summaries → authorized retrieval → Conversation Agent → Buyer Goals or Negotiation State claim and citation;
-- Gong transcripts → authorized retrieval → Conversation Agent → Buyer Goals, Negotiation State, or Missing Information claim and citation;
-- pricing notes → authorized sensitivity-filtered retrieval → Commercial Agent → commercial claim/recommendation/warning and citation for a pricing-authorized scenario;
-- access permissions → redacted `authorization_lookup` only → computed scope or opaque denial; never agent context, evidence count, claim, or citation;
-- Deal Desk policy → mandatory authorized retrieval plus deterministic policy engine and Commercial Agent receipt → approval/review-warning result with policy citation.
+- accounts → authorized exact evidence lookup → required Stakeholder and Commercial receipt → Deal Snapshot account claim/citation; Strategy receipt is allowed only for evidence cited by a validated specialist artifact;
+- opportunities → authorized exact evidence lookup → required Stakeholder and Commercial receipt → Deal Snapshot/Negotiation State claim/citation; Strategy receipt is allowed only when cited;
+- contacts → authorized exact evidence lookup → required Stakeholder and Commercial receipt → Stakeholder Map claim/citation; Strategy receipt is allowed only when cited;
+- Gong summaries → authorized retrieval → required Conversation and Stakeholder receipt → Buyer Goals or Negotiation State claim/citation; Strategy receipt is allowed only when cited;
+- Gong transcripts → authorized retrieval → required Conversation and Stakeholder receipt → Buyer Goals, Negotiation State, or Missing Information claim/citation; Strategy receipt is allowed only when cited;
+- pricing notes → authorized sensitivity-filtered retrieval → required Commercial receipt → commercial claim/recommendation/warning and citation for a pricing-authorized scenario; Strategy receipt is allowed only when cited;
+- access permissions → redacted `authorization_lookup` only → computed scope or opaque denial; no agent, including Strategy, may receive it and it creates no evidence count, claim, or citation;
+- Deal Desk policy → mandatory authorized retrieval plus deterministic policy engine and required Commercial receipt → approval/review-warning result with policy citation; Strategy receipt is allowed only when cited.
 
-Coverage fails if any group is absent at any required stage, reaches an unintended agent, lacks its expected output/control effect, or violates the authorization-only exception. Inventory alone never passes `ASG-DATA-01`.
+The allowed specialist sets match the implemented routing: Salesforce (`accounts`, `opportunities`, `contacts`) → Stakeholder + Commercial; Gong → Conversation + Stakeholder; pricing/policy → Commercial. Strategy may receive the authorized, manifest-bound cited union from validated specialist artifacts, but never uncited evidence. Coverage fails when a required receipt/output stage is missing, a specialist receives a source outside its allowed set, Strategy receives uncited/out-of-manifest evidence, or the authorization-only exception is violated. Inventory alone never passes `ASG-DATA-01`.
 
 Custom evaluators are limited to domain-specific behavior Promptfoo cannot know: citation authorization, stable citation resolution, policy triggers, permission leakage, and golden chunk identity. NDCG and broad bespoke evaluation frameworks are omitted unless baseline results later justify them.
 

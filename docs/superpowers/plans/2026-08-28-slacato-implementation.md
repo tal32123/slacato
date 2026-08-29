@@ -126,7 +126,7 @@ Expected: the web, API, worker, and package workspace boundaries compile; shadcn
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import { envSchema } from '@slacato/infrastructure/config/env';
+import { envSchema, parseEnv } from '@slacato/infrastructure/config/env';
 
 describe('envSchema', () => {
   const common = {
@@ -142,6 +142,12 @@ describe('envSchema', () => {
   it('rejects live Ollama without every required credential/model', () => {
     expect(() => envSchema.parse({ ...common, AI_PROVIDER: 'ollama' })).toThrow();
   });
+
+  it('selects named keys from ordinary process env and requires an exact HTTP(S) origin', () => {
+    expect(parseEnv({ ...common, AI_PROVIDER: 'mock', PATH: '/usr/bin' })).toMatchObject({ AI_PROVIDER: 'mock' });
+    expect(() => envSchema.parse({ ...common, AI_PROVIDER: 'mock', WEB_ORIGIN: 'https://app.example.test/path' }))
+      .toThrow('exact HTTP(S) origin');
+  });
 });
 ```
 
@@ -155,11 +161,16 @@ Expected: FAIL because `src/lib/env.ts` does not exist.
 ```ts
 import { z } from 'zod';
 
+const exactHttpOrigin = z.string().url().refine(value => {
+  const url = new URL(value);
+  return (url.protocol === 'http:' || url.protocol === 'https:') && value === url.origin;
+}, 'Must be an exact HTTP(S) origin without path, query, or hash');
+
 const commonEnvironment = {
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url().default('redis://127.0.0.1:56379'),
-  WEB_ORIGIN: z.string().url().default('http://127.0.0.1:4173'),
+  WEB_ORIGIN: exactHttpOrigin.default('http://127.0.0.1:4173'),
   SESSION_SECRET: z.string().min(32),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 };
@@ -188,7 +199,15 @@ export const envSchema = z.preprocess(input => {
 }, z.discriminatedUnion('AI_PROVIDER', [mockEnvironment, ollamaEnvironment]));
 
 export type Env = z.infer<typeof envSchema>;
-export const parseEnv = (input: NodeJS.ProcessEnv): Env => envSchema.parse(input);
+
+const envKeys = [
+  'NODE_ENV', 'DATABASE_URL', 'REDIS_URL', 'WEB_ORIGIN', 'SESSION_SECRET', 'LOG_LEVEL', 'AI_PROVIDER',
+  'OLLAMA_API_KEY', 'OLLAMA_BASE_URL', 'OLLAMA_CHAT_MODEL', 'OLLAMA_EMBEDDING_MODEL',
+] as const;
+
+export const parseEnv = (input: NodeJS.ProcessEnv): Env => envSchema.parse(Object.fromEntries(
+  envKeys.flatMap(key => input[key] === undefined ? [] : [[key, input[key]]]),
+));
 ```
 
 Keep `envSchema` and `parseEnv` import-safe for deterministic tests. A separate server-only composition-root module calls `parseEnv(process.env)` at runtime. Implement `/api/health/live` as process liveness and `/api/health/ready` as database/migration/model/index readiness.
@@ -866,7 +885,16 @@ it('fails when any canonical source misses an expected utilization stage', () =>
 
 Compute precision@k, recall@k, citation resolution/authorization, claim support, required-section completeness, policy trigger/quorum correctness, injection/unsafe-language containment, source utilization, trace completeness, Slack novelty/authorization/impact, and permission leakage. Build `source-coverage.json` with exactly eight entries containing `sourceGroup`, inventory count/hash, authorized retrieval/control trace ID, expected and observed agent IDs, resulting section/claim/citation label, `expectedUtilizationRule`, and status; sanitize source bodies, prompts, denied locators, and restricted metadata. Hard gates are leakage `= 0`, citation resolution and required visible path/stable-ID labels `= 100%`, critical/material claim support `= 100%`, required sections `= 100%`, policy/approval correctness `= 100%`, required trace stages `= 100%`, all eight source-utilization entries and every required stage `= pass`, Slack PII violations `= 0`, context overflow `= 0`, initial-release compactor calls `= 0`, and retry/call-budget violations `= 0`. Inventory alone is never sufficient. Label retrieval thresholds before freezing them.
 
-Use these executable utilization rules: accounts → exact authorized retrieval → Stakeholder receipt → Deal Snapshot claim/citation; opportunities → exact authorized retrieval → Commercial receipt → Deal Snapshot or Negotiation State claim/citation; contacts → exact authorized retrieval → Stakeholder receipt → Stakeholder Map claim/citation; Gong summaries → authorized retrieval → Conversation receipt → Buyer Goals or Negotiation State claim/citation; Gong transcripts → authorized retrieval → Conversation receipt → Buyer Goals, Negotiation State, or Missing Information claim/citation; pricing notes → sensitivity-filtered retrieval in a pricing-authorized scenario → Commercial receipt → commercial claim/recommendation/warning and citation; access permissions → `authorization_lookup` → allowed scope or opaque denial, with zero agent receipt/evidence count/claim/citation; Deal Desk policy → mandatory authorized retrieval plus deterministic policy evaluation and Commercial receipt → approval or review warning with policy citation. Reject unexpected agent receipt as well as missing stages.
+Use these executable required/allowed receipt rules, matching Task 8 routing:
+
+- accounts, opportunities, contacts: require both Stakeholder and Commercial receipt because both specialists intentionally receive authorized Salesforce records; require respectively Deal Snapshot account, Deal Snapshot/Negotiation State, and Stakeholder Map claim/citation output;
+- Gong summaries and transcripts: require Conversation and Stakeholder receipt; require a Buyer Goals, Negotiation State, Stakeholder Map, or Missing Information claim/citation appropriate to the record;
+- pricing notes: require sensitivity-filtered Commercial receipt in a pricing-authorized scenario and a commercial claim/recommendation/warning citation;
+- Deal Desk policy: require mandatory retrieval, deterministic policy evaluation, Commercial receipt, and approval/review-warning output with policy citation;
+- access permissions: require only `authorization_lookup` and allowed scope or opaque denial, with zero agent receipt, evidence count, claim, or citation;
+- Strategy may receive any of the authorized evidence groups above only when the exact manifest-bound evidence was cited by a validated specialist artifact; it receives no uncited union members.
+
+Hard-fail a missing required receipt/output stage, Salesforce delivered to Conversation, Gong delivered to Commercial, pricing/policy delivered to Conversation or Stakeholder, any access-permission delivery to an agent, or uncited/out-of-manifest Strategy evidence. Do not fail the intended dual Salesforce/Gong specialist routing or cited Strategy union.
 
 - [ ] **Step 3: Configure Promptfoo narrowly**
 
