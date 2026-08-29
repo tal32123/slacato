@@ -921,11 +921,11 @@ git commit -m "test: add RAG and security evaluation gates"
 ### Task 16: Generate and Verify Mandatory Live Submission Artifacts
 
 **Files:**
-- Create: `scripts/generate-live-artifacts.ts`, `scripts/verify-live-artifacts.ts`, `scripts/approve-slack-fixture.ts`, `tests/contract/live-artifacts.test.ts`, `artifacts/samples/README.md`, sanitized `artifacts/samples/**`
-- Modify: `scripts/generate-slack-fixtures.ts`, `fixtures/cato/slack/{account_team_updates.tsv,generation.json}`, `package.json`
+- Create: `scripts/generate-live-artifacts.ts`, `scripts/verify-live-artifacts.ts`, `scripts/approve-slack-fixture.ts`, `scripts/promote-slack-fixture.ts`, `tests/contract/live-artifacts.test.ts`, `artifacts/samples/README.md`, sanitized `artifacts/samples/**`
+- Modify: `packages/infrastructure/src/config/env.ts`, `tests/unit/env.test.ts`, `scripts/generate-slack-fixtures.ts`, `fixtures/cato/slack/{account_team_updates.tsv,generation.json}`, `package.json`
 
 **Interfaces:**
-- Produces: `pnpm fixtures:slack:live`; `pnpm fixtures:slack:approve`; `pnpm demo:generate-live`; `pnpm verify:live-artifacts`.
+- Produces: `pnpm fixtures:slack:live`; `pnpm fixtures:slack:approve`; `pnpm fixtures:slack:promote`; `pnpm demo:generate-live`; `pnpm verify:live-artifacts`.
 
 - [ ] **Step 1: Write failing live-provenance and source-coverage tests**
 
@@ -942,42 +942,69 @@ it('rejects canonical source coverage with a missing stage', () => {
   expect(() => verifyLiveSubmission(coverageWithout('pricing_notes', 'agentReceipt')))
     .toThrow('source_coverage_incomplete');
 });
+
+it('rejects non-HTTP(S) WEB_ORIGIN with the exact contract error', () => {
+  expect(() => parseEnv(validMockProcessEnv({ WEB_ORIGIN: 'ftp://app.example.test' })))
+    .toThrow('Must be an exact HTTP(S) origin without path, query, or hash');
+});
+
+it('leaves the canonical Slack bundle untouched when staged review fails', async () => {
+  const before = await hashSlackBundle(canonicalSlackDir);
+  await expect(promoteRejectedStagingBundle()).rejects.toThrow('slack_fixture_not_approved');
+  expect(await hashSlackBundle(canonicalSlackDir)).toBe(before);
+});
 ```
 
-Run: `pnpm vitest run tests/contract/live-artifacts.test.ts`
-Expected: FAIL because the live submission verifier and coverage gate do not exist.
+Run: `pnpm vitest run tests/contract/live-artifacts.test.ts tests/unit/env.test.ts`
+Expected: FAIL because the live submission verifier and coverage gate do not exist, and the production env schema still accepts an exact `ftp://` origin.
 
-- [ ] **Step 2: Regenerate, review, and reingest the submitted Slack fixture with live Ollama**
+- [ ] **Step 2: Correct production WEB_ORIGIN validation and make the env regression green**
 
-Run the credentialed probe, then generate into the canonical fixture path with fake/replay disabled:
+Modify `packages/infrastructure/src/config/env.ts` so its named-key-filtered, strict discriminated provider schema uses this exact-origin contract:
+
+```ts
+const exactHttpOrigin = z.string().url().refine(value => {
+  const url = new URL(value);
+  return (url.protocol === 'http:' || url.protocol === 'https:') && value === url.origin;
+}, 'Must be an exact HTTP(S) origin without path, query, or hash');
+```
+
+Run: `pnpm vitest run tests/unit/env.test.ts`
+Expected: PASS for clean `http://` and `https://` origins and ordinary extra process variables; FAIL validation with the exact message for FTP, path, query, and hash inputs. This is an explicit remaining production correction; the plan does not treat the earlier implementation as already compliant.
+
+- [ ] **Step 3: Generate, validate, review, promote, and reingest the submitted Slack fixture**
+
+Run the credentialed probe, then generate into a same-filesystem staging directory with fake/replay disabled. Do not write the canonical fixture before review succeeds:
 
 ```bash
 LIVE_AI=1 AI_PROVIDER=ollama pnpm vitest run tests/contract/ollama-live.test.ts
-LIVE_AI=1 AI_PROVIDER=ollama pnpm fixtures:slack:live -- --require-live --output fixtures/cato/slack
-pnpm fixtures:slack:approve -- --reviewer candidate --input fixtures/cato/slack
+slacato_slack_stage="$(mktemp -d fixtures/cato/.slack-stage.XXXXXX)"
+LIVE_AI=1 AI_PROVIDER=ollama pnpm fixtures:slack:live -- --require-live --output "$slacato_slack_stage"
+pnpm fixtures:slack:approve -- --reviewer candidate --input "$slacato_slack_stage"
+pnpm fixtures:slack:promote -- --input "$slacato_slack_stage" --output fixtures/cato/slack
 LIVE_AI=1 AI_PROVIDER=ollama pnpm ingest:records
 LIVE_AI=1 AI_PROVIDER=ollama pnpm index:embeddings
 ```
 
-`fixtures:slack:live` overwrites any mock-development TSV/metadata only after atomic validation succeeds. `generation.json` must contain provider `ollama`, exact model and output mode, provider request IDs when available, nonzero calls/input/output/total tokens, prompt/schema/source-corpus/output hashes, generated time, no replay/fake marker, and row-level `reinforces | adds_context | ambiguity_conflict` category keyed by every `update_id`. The approval command reruns deterministic PII/novelty/chronology/category validation and records reviewer/time/status without changing rows. Ingestion and indexing persist the approved TSV content hash and live embedding profile; subsequent sample manifests must bind to that hash. Any failure leaves the previous fixture intact and blocks submission.
+`fixtures:slack:live` writes only the staged TSV and metadata. `generation.json` must contain provider `ollama`, exact model and output mode, provider request IDs when available, nonzero calls/input/output/total tokens, prompt/schema/source-corpus/output hashes, generated time, no replay/fake marker, and row-level `reinforces | adds_context | ambiguity_conflict` category keyed by every `update_id`. The approval command reruns deterministic PII/novelty/chronology/category validation and records reviewer/time/status without changing rows. Only then may `fixtures:slack:promote` acquire the fixture lock, revalidate both files and their cross-hashes, and atomically promote the approved directory bundle using same-filesystem rename with rollback. Ingestion uses the same lock and rejects a partial or hash-mismatched bundle. Any generation, validation, review, or approval failure occurs before promotion and leaves the previous canonical fixture byte-for-byte intact; a promotion failure restores the prior bundle. Ingestion and indexing persist the promoted TSV content hash and live embedding profile; subsequent sample manifests must bind to that hash.
 
-- [ ] **Step 3: Implement the live scenario runner**
+- [ ] **Step 4: Implement the live scenario runner**
 
 Run OPP-1001 and OPP-1002 as their authorized owners; run OPP-1003 as its authorized owner through its complete Deal Desk + Sales Leader + Legal Reviewer + account-owner-confirmation quorum when those categories are triggered; run OPP-1003 as USR-5007 to prove denial; and run one authorized case with and without Slack to demonstrate a specific brief impact and stable Slack citation. Disable fake gateways and replay; require four distinct specialist invocations with nonzero usage. Abort immediately when capability/provider metadata reports `mock`, required Ollama credentials/models are absent, or the credentialed probe has not passed.
 
-- [ ] **Step 4: Export sanitized, provenance-rich artifacts**
+- [ ] **Step 5: Export sanitized, provenance-rich artifacts**
 
 Save canonical brief JSON/Markdown, specialist artifacts, the reviewed live Slack TSV and `generation.json`, with/without-Slack impact comparison, immutable approval subject/all quorum decisions/diffs, complete trace export, capability/output mode, exact provider/model and inference parameters, timestamps, usage/cost, prompt/schema/evidence/Slack-fixture hashes, evaluation summary, and sanitized `source-coverage.json`. The coverage file has exactly the eight required canonical groups and proves each inventory → authorized retrieval/control → intended agent receipt → result chain or the access-permissions authorization-only rule. Citations use the visible path/stable-ID format. Exclude secrets, source bodies, prompts, unauthorized locators, and restricted metadata.
 
-- [ ] **Step 5: Verify artifact authenticity and compliance**
+- [ ] **Step 6: Verify artifact authenticity and compliance**
 
 Run: `pnpm demo:generate-live && pnpm verify:live-artifacts`  
 Expected: every required scenario exists; the submitted Slack fixture and every LLM-produced sample have live Ollama provenance and nonzero usage; every sample manifest uses the approved live Slack content hash; all nine sections and path/stable-ID citations validate; the Slack ablation records a concrete brief difference; all eight canonical source groups pass every expected utilization stage; all required approval authorities/quorum entries are complete; trace completeness is 100%; and unauthorized artifacts contain no restricted metadata. Verification fails on any mock/replay/fake/zero-usage marker, stale Slack ingestion/index, fixture/sample hash mismatch, missing row category, or incomplete source group/stage.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add scripts tests/contract/live-artifacts.test.ts fixtures/cato/slack artifacts/samples package.json
+git add packages/infrastructure/src/config/env.ts tests/unit/env.test.ts scripts tests/contract/live-artifacts.test.ts fixtures/cato/slack artifacts/samples package.json
 git commit -m "test: add live submission artifacts"
 ```
 
