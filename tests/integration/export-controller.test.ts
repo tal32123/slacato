@@ -1,12 +1,14 @@
 import { resolve } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { CANONICAL_FIXTURE_COMMIT, exportBrief, hashApprovalPayload } from '@slacato/core';
+import { logger, type DatabaseClient } from '@slacato/infrastructure';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres, { type Sql } from 'postgres';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApiApplication } from '../../apps/api/src/main';
+import { PostgresBriefExportService } from '../../apps/api/src/modules/exports/exports.service';
 
 const origin = 'http://127.0.0.1:4173';
 const browserHeaders = { Origin: origin, 'Sec-Fetch-Site': 'same-site' };
@@ -204,6 +206,17 @@ describe.sequential('authorized finalized brief exports', () => {
     expect(() => exportBrief(conflicting, 'json')).toThrow('conflicting immutable evidence');
   });
 
+  it('escapes named and numeric HTML entity text faithfully in Markdown', () => {
+    const entities = structuredClone(brief);
+    entities.executiveSummary = {
+      ...entities.executiveSummary,
+      narrative: 'AT&amp;T and &#35; heading'
+    };
+    const entityMarkdown = exportBrief(entities, 'markdown');
+    expect(entityMarkdown).toContain('AT&amp;amp;T');
+    expect(entityMarkdown).toContain('&amp;\\#35; heading');
+  });
+
   it('downloads authorized JSON and Markdown with safe private headers and records a redacted audit', async () => {
     const reader = await authenticate(app, ids.reader);
     const json = await reader.get(`/api/runs/${ids.run}/export/json`).set(browserHeaders).expect(200);
@@ -244,7 +257,53 @@ describe.sequential('authorized finalized brief exports', () => {
     expect(response.headers['content-disposition']).toBeUndefined();
   });
 
+  it('uses the same authorization query count and order for every opaque denial class', async () => {
+    const manifestEntries = claim.citations.map((citation) => ({
+      citation_id: citation.id,
+      evidence_version_id: citation.evidenceId,
+      source_locator: citation.locator
+    }));
+    const denialRows = [
+      { payload: null, opportunity_id: null, manifest_entries: [], readable_evidence_ids: [] },
+      { payload: brief, opportunity_id: ids.opportunity, manifest_entries: [], readable_evidence_ids: [] },
+      {
+        payload: brief,
+        opportunity_id: ids.opportunity,
+        manifest_entries: manifestEntries,
+        readable_evidence_ids: [ids.crmEvidence]
+      }
+    ];
+
+    for (const denialRow of denialRows) {
+      const calls: string[] = [];
+      const transactionSql = async (strings: TemplateStringsArray): Promise<unknown[]> => {
+        const statement = strings.join('?');
+        if (statement.includes('with candidate as materialized')) {
+          calls.push('authorization_pipeline');
+          return [denialRow];
+        }
+        if (statement.includes("'brief_export_denied'")) {
+          calls.push('denial_audit');
+          return [];
+        }
+        throw new Error('Unexpected export query');
+      };
+      const rootSql = Object.assign(transactionSql, {
+        begin: async (callback: (sql: typeof transactionSql) => Promise<unknown>) => callback(transactionSql)
+      });
+      const service = new PostgresBriefExportService({ sql: rootSql } as unknown as DatabaseClient);
+
+      await expect(service.exportFinalized({
+        actorId: ids.outsider,
+        runId: 'run_opaque_probe',
+        format: 'json'
+      })).resolves.toBeUndefined();
+      expect(calls).toEqual(['authorization_pipeline', 'denial_audit']);
+    }
+  });
+
   it('makes unauthorized, missing, citation-denied, and authority-only exports identically opaque', async () => {
+    const deniedLog = vi.spyOn(logger, 'warn');
     const outsider = await authenticate(app, ids.outsider);
     const partial = await authenticate(app, ids.citationDenied);
     const authority = await authenticate(app, ids.authorityOnly);
@@ -263,6 +322,14 @@ describe.sequential('authorized finalized brief exports', () => {
     expect(responses.map(({ body }) => body)).toEqual(Array.from({ length: 6 }, () => ({
       code: 'NOT_FOUND', message: 'The requested resource was not found.'
     })));
+    const deniedPayloads = deniedLog.mock.calls.map(([payload]) => payload);
+    expect(deniedPayloads).toHaveLength(6);
+    expect(deniedPayloads.every((payload) => (
+      payload !== null && typeof payload === 'object' && !Object.hasOwn(payload, 'runId')
+    ))).toBe(true);
+    expect(JSON.stringify(deniedPayloads)).not.toContain(ids.run);
+    expect(JSON.stringify(deniedPayloads)).not.toContain('run_missing_task14');
+    deniedLog.mockRestore();
     for (const response of responses) {
       expect(response.headers['content-disposition']).toBeUndefined();
       expect(JSON.stringify(response.body)).not.toMatch(/citation|evidence|permission|authority|brief/i);

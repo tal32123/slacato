@@ -47,14 +47,17 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
   }
 
   public async beginAttempt(input: Parameters<ProviderAttemptLedger['beginAttempt']>[0]): Promise<ProviderAttemptReservation> {
-    const reservation = await this.database.sql.begin(async (sql) => {
+    const outcome = await this.database.sql.begin(async (sql) => {
       const logicalGenerationId = input.logicalGenerationId ?? `generation_${createHash('sha256').update(`${input.runScope}\u0000${input.operation}`).digest('hex')}`;
       const budget = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
       if (budget === undefined) throw new Error('Run budget does not exist');
       if (new Date(budget.deadline_at).getTime() <= Date.now()) throw new Error('Shared run deadline reached');
       const abandoned = await sql<ReservationRow[]>`select id, attempt_id, run_id, granted_output_tokens, reserved_input_tokens, status, actual_input_tokens, actual_output_tokens, request_id, response_id, failure_category, failure_code
         from run_budget_reservations where run_id = ${input.runScope} and logical_generation_id = ${logicalGenerationId} and operation = ${input.operation} and status = 'reserved' for update`;
-      for (const row of abandoned) await this.finalizePossibleDuplicate(sql, row);
+      const recovered = [];
+      for (const row of abandoned) {
+        recovered.push({ attempt: await this.finalizePossibleDuplicate(sql, row), row });
+      }
 
       const ordinalRow = (await sql<{ ordinal: number }[]>`select coalesce(max(ordinal), 0)::integer + 1 as ordinal
         from run_budget_reservations
@@ -73,8 +76,19 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
       await sql`insert into run_budget_reservations (id, attempt_id, run_id, invocation_id, logical_generation_id, operation, ordinal, reserved_output_tokens, granted_output_tokens, reserved_input_tokens, status)
         values (${reservationId}, ${attemptId}, ${input.runScope}, ${input.invocationId ?? null}, ${logicalGenerationId}, ${input.operation}, ${ordinal}, ${grant}, ${grant}, ${input.inputTokens}, 'reserved')`;
       await sql`update run_budgets set used_calls = used_calls + 1, used_input_tokens = used_input_tokens + ${input.inputTokens}, reserved_output_tokens = reserved_output_tokens + ${grant} where run_id = ${input.runScope}`;
-      return { reservationId, attemptId, ordinal, grantedOutputTokens: grant };
+      return { reservation: { reservationId, attemptId, ordinal, grantedOutputTokens: grant }, recovered };
     });
+    for (const recovered of outcome.recovered) {
+      logger.error({
+        event: 'provider_attempt_failed', correlationId: recovered.row.attempt_id, runId: recovered.attempt.run_id,
+        attemptId: recovered.row.attempt_id, status: 'possible_duplicate',
+        provider: recovered.attempt.provider, model: recovered.attempt.model,
+        durationMs: Math.max(0, Date.now() - new Date(recovered.attempt.started_at).getTime()),
+        retryCount: recovered.attempt.ordinal - 1, inputTokens: recovered.row.reserved_input_tokens,
+        outputTokens: recovered.row.granted_output_tokens, errorCode: 'ABANDONED_PROVIDER_ATTEMPT'
+      });
+    }
+    const reservation = outcome.reservation;
     logger.info({
       event: 'provider_attempt_started', correlationId: reservation.attemptId, runId: input.runScope,
       attemptId: reservation.attemptId, status: 'started', provider: input.provider, model: input.model,
@@ -156,9 +170,12 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
     return row;
   }
 
-  private async finalizePossibleDuplicate(sql: QuerySql, row: ReservationRow): Promise<void> {
+  private async finalizePossibleDuplicate(sql: QuerySql, row: ReservationRow): Promise<AttemptLogRow> {
     await sql`update run_budgets set reserved_output_tokens = reserved_output_tokens - ${row.granted_output_tokens}, used_output_tokens = used_output_tokens + ${row.granted_output_tokens} where run_id = ${row.run_id}`;
     await sql`update run_budget_reservations set status = 'possible_duplicate', actual_output_tokens = ${row.granted_output_tokens}, settled_at = now() where id = ${row.id}`;
-    await sql`update generation_attempts set status = 'possible_duplicate', possible_duplicate = true, output_tokens = ${row.granted_output_tokens}, completed_at = now() where id = ${row.attempt_id}`;
+    const attempt = (await sql<AttemptLogRow[]>`update generation_attempts set status = 'possible_duplicate', possible_duplicate = true, output_tokens = ${row.granted_output_tokens}, completed_at = now() where id = ${row.attempt_id}
+      returning run_id, provider, model, ordinal, started_at`)[0];
+    if (attempt === undefined) throw new ProviderAttemptFinalizationConflict('Unknown provider attempt');
+    return attempt;
   }
 }

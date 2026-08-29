@@ -26,7 +26,7 @@ export class ApprovalsController {
       logger.info({
         event: 'approval_decision_completed', correlationId, runId: input.runId,
         attemptId: input.approvalSubjectId, status: result.status, durationMs: Date.now() - startedAt,
-        retryCount: result.replayed ? 1 : 0, action: input.action
+        retryCount: result.replayed ? 1 : 0
       });
       return result;
     } catch (error) {
@@ -36,7 +36,7 @@ export class ApprovalsController {
       logger.error({
         event: 'approval_decision_failed', correlationId, runId: input.runId,
         attemptId: input.approvalSubjectId, status: 'failed', durationMs: Date.now() - startedAt,
-        retryCount: 0, errorCode, err: error
+        retryCount: 0, errorCode
       });
       return toHttpError(error);
     }

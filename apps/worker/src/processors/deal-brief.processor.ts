@@ -163,7 +163,7 @@ export class DealBriefProcessor {
         logger.error({
           event: 'workflow_command_failed', correlationId, runId: job.data.runId, attemptId: job.data.id,
           status: 'failed', durationMs: Date.now() - startedAt, retryCount: attempt - 1,
-          errorCode: 'WORKFLOW_COMMAND_FAILED', err: error
+          errorCode: 'WORKFLOW_COMMAND_FAILED'
         });
         throw error;
       }

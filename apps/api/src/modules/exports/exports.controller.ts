@@ -36,13 +36,13 @@ export class ExportsController {
     } catch (error) {
       logger.error({
         event: 'brief_export_failed', correlationId, runId: resolved.runId, status: 'failed',
-        durationMs: Date.now() - startedAt, errorCode: 'BRIEF_EXPORT_FAILED', err: error
+        durationMs: Date.now() - startedAt, errorCode: 'BRIEF_EXPORT_FAILED'
       });
       throw new InternalServerErrorException({ code: 'INTERNAL_ERROR', message: 'The request could not be completed.' });
     }
     if (result === undefined) {
       logger.warn({
-        event: 'brief_export_denied', correlationId, runId: resolved.runId, status: 'denied',
+        event: 'brief_export_denied', correlationId, status: 'denied',
         durationMs: Date.now() - startedAt, errorCode: 'NOT_FOUND'
       });
       throw new NotFoundException({ code: 'NOT_FOUND', message: 'The requested resource was not found.' });
@@ -59,7 +59,7 @@ export class ExportsController {
     });
     logger.info({
       event: 'brief_export_completed', correlationId, runId: resolved.runId, status: 'completed',
-      durationMs: Date.now() - startedAt, format: result.format
+      durationMs: Date.now() - startedAt
     });
     return result.content;
   }

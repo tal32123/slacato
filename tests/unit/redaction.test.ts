@@ -36,7 +36,12 @@ describe('safe structured logging', () => {
       sourceBodies: ['SOURCE_BODIES_SENTINEL'],
       sourceContents: ['SOURCE_CONTENTS_SENTINEL'],
       vendorEvidenceExcerpts: ['EVIDENCE_EXCERPTS_SENTINEL'],
-      evidence_excerpt: 'EVIDENCE_EXCERPT_SENTINEL'
+      evidence_excerpt: 'EVIDENCE_EXCERPT_SENTINEL',
+      secretKey: 'SECRET_KEY_SENTINEL',
+      apiKeyValue: 'API_KEY_VALUE_SENTINEL',
+      rawBody: 'RAW_BODY_SENTINEL',
+      requestPayload: 'REQUEST_PAYLOAD_SENTINEL',
+      neutralData: ['NEUTRAL_ARRAY_SENTINEL']
     };
 
     expect(redactLogPayload(payload)).toEqual({
@@ -52,7 +57,7 @@ describe('safe structured logging', () => {
       inputTokens: 42,
       outputTokens: 17,
       authorization: REDACTED,
-      headers: { Cookie: REDACTED, 'x-api-key': REDACTED },
+      headers: REDACTED,
       msg: REDACTED,
       auth: REDACTED,
       credentials: REDACTED,
@@ -60,13 +65,18 @@ describe('safe structured logging', () => {
       providerCredentials: REDACTED,
       err: REDACTED,
       error: REDACTED,
-      request: { prompt_text: REDACTED, messages: REDACTED },
-      result: [{ completion: REDACTED }],
+      request: REDACTED,
+      result: REDACTED,
       sourceBody: REDACTED,
       sourceBodies: REDACTED,
       sourceContents: REDACTED,
       vendorEvidenceExcerpts: REDACTED,
-      evidence_excerpt: REDACTED
+      evidence_excerpt: REDACTED,
+      secretKey: REDACTED,
+      apiKeyValue: REDACTED,
+      rawBody: REDACTED,
+      requestPayload: REDACTED,
+      neutralData: REDACTED
     });
   });
 
@@ -78,8 +88,8 @@ describe('safe structured logging', () => {
 
     expect(redactLogPayload(cyclic)).toEqual({
       runId: 'run_2',
-      errors: [{ name: 'Error', message: REDACTED, stack: REDACTED, cause: REDACTED, code: 'SAFE_PROVIDER_ERROR' }],
-      self: '[Circular]'
+      errors: REDACTED,
+      self: REDACTED
     });
   });
 
@@ -92,15 +102,15 @@ describe('safe structured logging', () => {
       code: 'SAFE_SERIALIZED_ERROR'
     };
     const expected = {
-      name: 'ProviderError',
+      name: REDACTED,
       message: REDACTED,
       stack: REDACTED,
       cause: REDACTED,
-      code: 'SAFE_SERIALIZED_ERROR'
+      code: REDACTED
     };
 
     expect(redactLogPayload(serialized)).toEqual(expected);
-    expect(redactLogPayload({ failure: serialized })).toEqual({ failure: expected });
+    expect(redactLogPayload({ failure: serialized })).toEqual({ failure: REDACTED });
   });
 
   it('redacts nested child bindings before they become persistent Pino context', () => {
@@ -122,9 +132,43 @@ describe('safe structured logging', () => {
     expect(output).not.toMatch(/CHILD_(?:AUTH|PROMPT)_SENTINEL/);
     expect(JSON.parse(output)).toMatchObject({
       runId: 'run_child',
-      context: { authorizationHeader: REDACTED, prompt: REDACTED },
+      context: REDACTED,
       event: 'workflow_command_started',
       status: 'started'
+    });
+  });
+
+  it('never throws while traversing hostile accessors, arrays, or reflection proxies', () => {
+    const values: unknown[] = [];
+    Object.defineProperty(values, '0', {
+      enumerable: true,
+      get() {
+        throw new Error('ARRAY_GETTER_SENTINEL');
+      }
+    });
+    values.length = 1;
+    const throwingKeys = new Proxy({}, {
+      ownKeys() {
+        throw new Error('OWN_KEYS_SENTINEL');
+      }
+    });
+    const throwingAccessor = { event: 'provider_attempt_failed' } as Record<string, unknown>;
+    Object.defineProperty(throwingAccessor, 'correlationId', {
+      enumerable: true,
+      get() {
+        throw new Error('ACCESSOR_SENTINEL');
+      }
+    });
+
+    expect(redactLogPayload({ event: 'provider_attempt_failed', values, throwingKeys })).toEqual({
+      event: 'provider_attempt_failed',
+      values: REDACTED,
+      throwingKeys: REDACTED
+    });
+    expect(redactLogPayload(throwingKeys)).toBe(REDACTED);
+    expect(redactLogPayload(throwingAccessor)).toEqual({
+      event: 'provider_attempt_failed',
+      correlationId: REDACTED
     });
   });
 
@@ -155,11 +199,16 @@ describe('safe structured logging', () => {
       prompt: 'LOGGER_PROMPT_SENTINEL',
       sourceContent: 'LOGGER_SOURCE_SENTINEL',
       evidenceExcerpt: 'LOGGER_EVIDENCE_SENTINEL',
-      err: new Error('LOGGER_ERROR_SENTINEL')
+      err: new Error('LOGGER_ERROR_SENTINEL'),
+      secretKey: 'LOGGER_SECRET_KEY_SENTINEL',
+      apiKeyValue: 'LOGGER_API_KEY_VALUE_SENTINEL',
+      rawBody: 'LOGGER_RAW_BODY_SENTINEL',
+      requestPayload: 'LOGGER_REQUEST_PAYLOAD_SENTINEL',
+      neutralData: ['LOGGER_NEUTRAL_ARRAY_SENTINEL'],
     });
     log.flush();
 
-    expect(output).not.toMatch(/LOGGER_(?:API_KEY|PROMPT|SOURCE|EVIDENCE|ERROR)_SENTINEL/);
+    expect(output).not.toMatch(/LOGGER_(?:API_KEY|PROMPT|SOURCE|EVIDENCE|ERROR|SECRET|RAW|REQUEST|NEUTRAL)_/);
     expect(JSON.parse(output)).toMatchObject({
       event: 'provider_attempt_failed',
       correlationId: 'correlation_3',
@@ -176,7 +225,12 @@ describe('safe structured logging', () => {
       apiKey: REDACTED,
       prompt: REDACTED,
       sourceContent: REDACTED,
-      evidenceExcerpt: REDACTED
+      evidenceExcerpt: REDACTED,
+      secretKey: REDACTED,
+      apiKeyValue: REDACTED,
+      rawBody: REDACTED,
+      requestPayload: REDACTED,
+      neutralData: REDACTED
     });
   });
 });

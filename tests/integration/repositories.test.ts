@@ -1,11 +1,12 @@
 import postgres from 'postgres';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { NestFactory } from '@nestjs/core';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { envSchema } from '@slacato/infrastructure/config/env';
 import { PostgresEvidenceRepository } from '@slacato/infrastructure/db/repositories/evidence-repository';
 import { PostgresProviderAttemptLedger } from '@slacato/infrastructure/db/repositories/provider-attempt-ledger';
+import { logger } from '@slacato/infrastructure';
 import { PostgresWorkflowStore } from '@slacato/infrastructure/db/repositories/workflow-store';
 import { createBudgetedModelGateway, ProviderAttemptFinalizationConflict, type ModelTransport } from '@slacato/core';
 import { createWorkerCompositionModule, WorkerModelGatewayFactory } from '../../apps/worker/src/main';
@@ -319,8 +320,10 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Budget user', 'seller')`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Budget account')`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Budget opportunity')`;
-    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
+    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', ${'a'.repeat(64)}, 0)`;
     await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 3, 9, 20)`;
+    const infoLog = vi.spyOn(logger, 'info');
+    const errorLog = vi.spyOn(logger, 'error');
     const firstDatabase = createDatabaseClient(databaseUrl, 1); const secondDatabase = createDatabaseClient(databaseUrl, 1);
     const first = new PostgresProviderAttemptLedger(firstDatabase);
     const second = new PostgresProviderAttemptLedger(secondDatabase);
@@ -335,6 +338,25 @@ describe('PostgreSQL repository contract', () => {
     if (outstanding === undefined) throw new Error('Expected outstanding reservation');
     await second.beginAttempt({ runScope: runId, ...(outstanding.invocation_id === null ? {} : { invocationId: outstanding.invocation_id }), operation: outstanding.operation, provider: 'mock', model: 'mock-chat', inputTokens: 1, requestedOutputTokens: 1 });
     expect((await sql<{ status: string; possible_duplicate: boolean; actual_output_tokens: number }[]>`select run_budget_reservations.status, generation_attempts.possible_duplicate, run_budget_reservations.actual_output_tokens from run_budget_reservations join generation_attempts on generation_attempts.id = run_budget_reservations.attempt_id where run_budget_reservations.id = ${reservation.reservationId}`)[0]).toEqual({ status: 'possible_duplicate', possible_duplicate: true, actual_output_tokens: 8 });
+    const started = infoLog.mock.calls.map(([payload]) => payload).filter((payload) => (
+      payload !== null && typeof payload === 'object'
+      && (payload as Record<string, unknown>).attemptId === reservation.attemptId
+      && (payload as Record<string, unknown>).event === 'provider_attempt_started'
+    ));
+    const terminal = errorLog.mock.calls.map(([payload]) => payload).filter((payload) => (
+      payload !== null && typeof payload === 'object'
+      && (payload as Record<string, unknown>).attemptId === reservation.attemptId
+      && (payload as Record<string, unknown>).event === 'provider_attempt_failed'
+    ));
+    expect(started).toHaveLength(1);
+    expect(terminal).toEqual([expect.objectContaining({
+      status: 'possible_duplicate',
+      errorCode: 'ABANDONED_PROVIDER_ATTEMPT',
+      provider: 'mock',
+      model: 'mock-chat'
+    })]);
+    infoLog.mockRestore();
+    errorLog.mockRestore();
     await firstDatabase.close();
     await secondDatabase.close();
   });

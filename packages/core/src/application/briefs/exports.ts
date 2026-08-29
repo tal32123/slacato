@@ -8,7 +8,7 @@ type MarkdownContext = {
 };
 
 function escapeMarkdown(value: string): string {
-  return value.replace(/\r\n?/g, '\n').replace(/[\\`*_{}[\]()<>#+.!|~-]/g, '\\$&');
+  return value.replace(/\r\n?/g, '\n').replaceAll('&', '&amp;').replace(/[\\`*_{}[\]()<>#+.!|~-]/g, '\\$&');
 }
 
 function valueLine(label: string, value: string | number | undefined): string | undefined {

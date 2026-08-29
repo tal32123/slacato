@@ -2,8 +2,8 @@
 
 ## Delivered
 
-- Added recursive, cycle-safe, JSON-safe log redaction and a Pino logger that sanitizes both log arguments and nested child bindings before serialization.
-- Wired mutually exclusive structured lifecycle events at durable provider-attempt, BullMQ workflow-command, approval-decision, and brief-export boundaries.
+- Added a fail-closed, JSON-safe telemetry allowlist and Pino logger that preserve only documented bounded event/correlation/run/attempt/status/provider/model/duration/retry/token/error-code primitives; unknown keys and all container values are redacted before serialization.
+- Wired mutually exclusive structured lifecycle events at durable provider-attempt, BullMQ workflow-command, approval-decision, and brief-export boundaries, including exactly one terminal `possible_duplicate` event when an abandoned reservation is recovered.
 - Added deterministic canonical JSON and escaped Markdown rendering for the complete immutable nine-section `DealBrief`, including a shared citation-label consistency gate and stable citation references and definitions.
 - Added the authenticated `GET /api/runs/:runId/export/:format` route for `json` and `markdown` downloads.
 - Added server-authoritative export reads from completed, finalized `briefs` rows, canonical run authorization, exact immutable run-manifest citation tuple checks, and current permission checks for every referenced evidence version.
@@ -16,21 +16,23 @@
 - A later child-binding test exposed that Pino child context bypassed the argument hook and emitted both prompt and authorization sentinels. It remained RED for the authorization-header variant after child sanitization, proving both defenses independently before the key matcher was hardened.
 - Citation hardening added an otherwise-readable finalized brief with no immutable run-manifest binding; the final integration suite now proves this citation-denied state is opaque alongside missing, run-denied, partial-evidence, and authority-only requests.
 - Focused RED regressions separately proved the authority-only/no-reference authorization bypass, the absence of durable denial events, serialized root/nested `stack` and `cause` leakage, and JSON accepting a citation-label conflict that Markdown rejected.
+- Security-review RED regressions proved conventional unknown keys (`secretKey`, `apiKeyValue`, `rawBody`, `requestPayload`), neutral string arrays, hostile array accessors/reflection proxies, denied-log run IDs, existence-dependent denial query counts, abandoned-attempt terminal omissions, and Markdown entity reinterpretation before each fix.
 
 ## GREEN and smoke evidence
 
-- `pnpm exec vitest run tests/unit/redaction.test.ts` — 1 file, 5 tests passed.
-- `pnpm exec vitest run tests/integration/export-controller.test.ts --maxWorkers=1 --silent` — 1 file, 5 tests passed against a fresh migrated disposable PostgreSQL database.
-- The integration test exercises the real Nest HTTP route through `supertest`: authenticated JSON and Markdown downloads, repeated byte-identical Markdown, parsed canonical JSON, response headers, audit rows, and opaque denied responses.
+- `pnpm exec vitest run tests/unit/redaction.test.ts` — 1 file, 6 tests passed.
+- `pnpm exec vitest run tests/integration/export-controller.test.ts --maxWorkers=1 --silent` — 1 file, 7 tests passed against a fresh migrated disposable PostgreSQL database.
+- `pnpm exec vitest run tests/integration/repositories.test.ts --maxWorkers=1 --silent -t "serializes durable reservations"` — focused abandoned-reservation lifecycle test passed, with one start and exactly one recovered terminal event.
+- The export integration test exercises the real Nest HTTP route through `supertest`: authenticated JSON and Markdown downloads, repeated byte-identical Markdown, parsed canonical JSON, response headers, audit rows, fixed authorization query count/order, and opaque denied responses.
 - `pnpm typecheck` — passed for web, API, worker, contracts, core, and infrastructure.
 
 ## Logging fields and redaction invariants
 
 Provider attempt events emit stable `event`, `correlationId`, `runId`, `attemptId`, `status`, `provider`, `model`, `durationMs`, `retryCount`, `inputTokens`, `outputTokens`, and safe normalized `errorCode` fields. Workflow, approval, and export events emit the applicable stable subset and never serialize command payloads, approval rationale/diffs, brief bodies, prompts, completions, or source/evidence content.
 
-Redaction is case- and separator-insensitive for authorization/auth/credentials, cookies, API keys, passwords, secrets, singular tokens, `msg`/`err`/`error`, messages, prompts, completions, generic bodies/content, plural source bodies/content, evidence excerpts, and serialized error stacks/causes. It handles nested objects, arrays, repeated references, real cycles, throwing getters, `Error` objects, unsupported values, non-finite numbers, and excessive depth. Error messages, stacks, and causes are always replaced; only a constrained error name and uppercase safe code can survive. Free-form Pino message strings are replaced, and child bindings are recursively sanitized before they become persistent context.
+Redaction is allowlist-based rather than denylist-based: only exact documented telemetry field names with bounded identifier, enum-like status/event/error-code, or non-negative safe-integer values survive. Unknown keys—including conventional secret/body/payload variants—and nested objects/arrays are replaced wholesale, so unkeyed strings cannot escape through a neutral container. Root arrays, errors, cycles, throwing array/accessor reads, and hostile reflection proxies fail closed without throwing. Pino path redaction remains defense in depth; free-form message strings and child bindings pass through the same fail-closed projection.
 
-Unit sentinels for authorization, cookies, API keys, messages, prompts, completions, source bodies/content, evidence excerpts, error messages/stacks/causes, and nested child bindings are absent from emitted Pino output while run/provider/attempt/status/duration/retry/token metrics remain present.
+Unit sentinels for authorization, cookies, API keys, secret-key variants, request/source bodies, payloads, messages, prompts, completions, evidence excerpts, errors, neutral arrays, and child bindings are absent from emitted Pino output while legitimate run/provider/attempt/status/duration/retry/token metrics remain present.
 
 ## Export authorization, content, and headers
 
@@ -42,9 +44,9 @@ The export service returns content only when all of these hold in server-owned p
 4. Every citation and source-evidence ID resolves to the same opportunity/account with a non-empty locator.
 5. A current canonical source grant permits the exact persisted source type and required account/evidence sensitivity, including restricted and sensitive-pricing rules.
 
-Canonical run access does not bypass evidence authorization: a partial reader and an approval-authority-only actor both receive the same response as an outsider, a missing run, and an unbound citation. Denied attempts create no success audit row; each appends the same actor-only durable denial event with `run_id = null` and no probed resource identifier. Neither responses nor durable denial payloads reveal citation, evidence, permission, authority, brief, count, filename, or disposition detail.
+Canonical run access does not bypass evidence authorization: a partial reader and an approval-authority-only actor both receive the same response as an outsider, a missing run, and an unbound citation. Every denial class runs the same single-statement authorization pipeline followed by the same durable audit insert. Denied attempts create no success audit row; each appends the same actor-only durable denial event with `run_id = null`, while the operational denial log also omits the probed run ID. Responses, logs, and durable denial payloads reveal no citation, evidence, permission, authority, brief, count, filename, or disposition detail.
 
-JSON uses canonical key ordering and parses to the canonical `DealBrief`. Markdown is deterministic, escapes Markdown/HTML-significant input, renders exactly all nine numbered sections, and provides stable footnote-style citation labels. A single pre-format validation rejects conflicting citation-label tuples identically for JSON and Markdown. Neither format reads or exports raw `document_versions.content` or `evidence_versions.content`; tests seed source/evidence sentinels and prove their absence.
+JSON uses canonical key ordering and parses to the canonical `DealBrief`. Markdown is deterministic, escapes Markdown/HTML-significant input—including ampersands before other metacharacters so named/numeric entity text remains faithful—renders exactly all nine numbered sections, and provides stable footnote-style citation labels. A single pre-format validation rejects conflicting citation-label tuples identically for JSON and Markdown. Neither format reads or exports raw `document_versions.content` or `evidence_versions.content`; tests seed source/evidence sentinels and prove their absence.
 
 Successful responses set:
 
@@ -74,6 +76,7 @@ Encoded CRLF/header-injection input is rejected before download headers are cons
 - `apps/worker/src/processors/deal-brief.processor.ts`
 - `tests/unit/redaction.test.ts`
 - `tests/integration/export-controller.test.ts`
+- `tests/integration/repositories.test.ts`
 - `.superpowers/sdd/2026-08-28-slacato-implementation/task-14-report.md`
 
 ## Risks and scope
