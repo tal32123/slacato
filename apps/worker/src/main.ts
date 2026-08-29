@@ -33,10 +33,12 @@ export interface WorkerApplicationOptions {
 
 export type WorkerModelGatewayOptions = Readonly<{ mockFixtureResolver?: MockGenerationResolver; ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'> }>;
 
-/** Injectable Task 9 seam; mock generation remains impossible without a fixture resolver. */
+/** Creates the model gateways used by the worker for its configured AI provider. */
 export class WorkerModelGatewayFactory {
+  /** Initializes the factory with validated runtime configuration and the provider-attempt ledger. */
   public constructor(private readonly environment: Env, private readonly attemptLedger: PostgresProviderAttemptLedger) {}
 
+  /** Builds model gateways for the configured provider and applies any worker-specific overrides. */
   public create(options: WorkerModelGatewayOptions = {}): ConfiguredModelGateways {
     if (this.environment.AI_PROVIDER === 'mock') {
       if (options.mockFixtureResolver === undefined) throw new Error('Worker mock model composition requires a fixture resolver');
@@ -49,7 +51,7 @@ export class WorkerModelGatewayFactory {
   }
 }
 
-/** The same module used by bootstrap and composition tests; its ledger shares the worker database lifecycle. */
+/** Creates the worker module with a model gateway factory backed by the worker database. */
 export function createWorkerCompositionModule(environment: Env, database: DatabaseClient): DynamicModule {
   const factory = new WorkerModelGatewayFactory(environment, new PostgresProviderAttemptLedger(database));
   return { module: WorkerModule, providers: [{ provide: WorkerModelGatewayFactory, useValue: factory }], exports: [WorkerModelGatewayFactory] };
@@ -104,6 +106,7 @@ export async function createWorkerApplication(options: WorkerApplicationOptions 
   return app;
 }
 
+/** Starts the worker application with the supplied runtime options. */
 export async function bootstrap(options: WorkerApplicationOptions = {}) {
   return createWorkerApplication(options);
 }

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { throwProtectedLoaderError } from './loader-security';
 
+/** Loads session-scoped diagnostics while translating protected-route failures. */
 export async function diagnosticsLoader({ request }: LoaderFunctionArgs): Promise<DemoDiagnosticsResponse | null> {
   try {
     const session = await queryClient.fetchQuery(sessionQueryOptions());
@@ -104,6 +105,7 @@ export function DiagnosticsRoute(): React.JSX.Element {
   );
 }
 
+/** Renders a labeled diagnostic fact with its icon. */
 function DiagnosticValue({ icon: Icon, label, value }: Readonly<{
   icon: typeof Bot;
   label: string;
@@ -118,21 +120,25 @@ function DiagnosticValue({ icon: Icon, label, value }: Readonly<{
   );
 }
 
+/** Formats a provider output mode for display. */
 function outputModeLabel(mode: ProviderHealthView['outputMode']): string {
   if (mode === 'deterministic_mock') return 'Deterministic development output';
   return mode === 'native_schema' ? 'Native structured output' : 'Capability probe required';
 }
 
+/** Formats a diagnostics provider name for display. */
 function providerLabel(provider: ProviderHealthView['provider']): string {
   if (provider === 'mock') return 'Mock development provider';
   return provider === 'openrouter' ? 'OpenRouter' : 'Ollama';
 }
 
+/** Formats a dependency readiness status for display. */
 function readinessLabel(status: ProviderHealthView['checks'][keyof ProviderHealthView['checks']]): string {
   if (status === 'ready') return 'Ready';
   return status === 'unconfigured' ? 'Not configured' : 'Unavailable';
 }
 
+/** Formats a dependency key for display. */
 function dependencyLabel(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }

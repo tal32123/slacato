@@ -150,6 +150,7 @@ export function PermissionMatrix({
   );
 }
 
+/** Renders a boolean value as an icon and label. */
 function BooleanValue({ value }: Readonly<{ value: boolean }>): React.JSX.Element {
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">
@@ -159,6 +160,7 @@ function BooleanValue({ value }: Readonly<{ value: boolean }>): React.JSX.Elemen
   );
 }
 
+/** Renders a labeled boolean definition-list entry. */
 function MatrixValue({ label, value }: Readonly<{ label: string; value: boolean }>): React.JSX.Element {
   return <><dt className="text-muted-foreground">{label}</dt><dd><BooleanValue value={value} /></dd></>;
 }

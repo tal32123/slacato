@@ -6,7 +6,7 @@ export class RetryLimitExceededError extends Error {
   public constructor(message: string) { super(message); this.name = 'RetryLimitExceededError'; }
 }
 
-/** The provider used more output than the capacity reserved before transport. */
+/** Signals that a provider used more output than was reserved for its request. */
 export class OutputBudgetOverrunError extends RetryLimitExceededError {
   /** Creates an output-budget error with the underlying accounting failure when available. */
   public constructor(message: string, cause?: unknown) {

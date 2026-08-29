@@ -1,19 +1,15 @@
 import {
   runDetailResponseSchema,
   runEventEnvelopeSchema,
+  runEventFallbackStatuses,
   runEventResyncInstructionSchema,
+  runEventTypes,
   runStatusSchema,
+  terminalRunEventTypes,
   type RunDetailResponse,
   type RunEventEnvelope,
   type RunStatus
 } from '@slacato/contracts';
-
-const eventTypes = [
-  'progress', 'run_created', 'checkpoint_committed', 'start', 'retrieval_completed', 'specialists_completed',
-  'synthesis_completed', 'validation_completed', 'validation_requires_approval', 'awaiting_approval',
-  'approval_entry_recorded', 'approval_granted', 'approval_rejected', 'approval_subject_replaced',
-  'regeneration_requested', 'complete', 'fail', 'cancel'
-] as const;
 
 export interface RunStreamSource {
   addEventListener(type: string, listener: (event: MessageEvent<string>) => void): void;
@@ -44,7 +40,7 @@ export function applyRunEvent(
     version,
     watermark: event.id,
     watermarkSequence: event.sequence,
-    terminal: event.type === 'complete' || event.type === 'fail' || event.type === 'approval_rejected' || event.type === 'cancel'
+    terminal: terminalRunEventTypes.includes(event.type)
       || ('terminal' in event.payload && event.payload.terminal === true),
     updatedAt: event.timestamp,
     progress: {
@@ -86,7 +82,7 @@ export function openRunEventStream(input: Readonly<{
       // Invalid or partial network data is ignored; canonical state remains the REST projection.
     }
   };
-  for (const type of eventTypes) source.addEventListener(type, handleEvent);
+  for (const type of runEventTypes) source.addEventListener(type, handleEvent);
   source.addEventListener('open', () => { if (accepts()) input.onConnection('connected'); });
   source.addEventListener('error', () => { if (accepts()) input.onConnection('reconnecting'); });
   source.addEventListener('stream.resync_required', (message) => {
@@ -112,24 +108,7 @@ function statusForEvent(event: RunEventEnvelope, fallback: RunStatus): RunStatus
     const parsed = runStatusSchema.safeParse(event.payload.status);
     if (parsed.success) return parsed.data;
   }
-  const statuses: Partial<Record<RunEventEnvelope['type'], RunStatus>> = {
-    run_created: 'created',
-    start: 'retrieving',
-    retrieval_completed: 'specialists_running',
-    specialists_completed: 'synthesizing',
-    synthesis_completed: 'validating',
-    validation_completed: 'finalizing',
-    validation_requires_approval: 'awaiting_approval',
-    awaiting_approval: 'awaiting_approval',
-    approval_entry_recorded: 'awaiting_approval',
-    approval_granted: 'finalizing',
-    approval_rejected: 'rejected',
-    approval_subject_replaced: 'awaiting_approval',
-    regeneration_requested: 'synthesizing',
-    complete: 'completed',
-    fail: 'failed'
-  };
-  return statuses[event.type] ?? fallback;
+  return runEventFallbackStatuses[event.type] ?? fallback;
 }
 
 /** Provides the user-facing timeline label for a run event. */

@@ -21,6 +21,7 @@ import {
 /** Authorizes deal queries, fetches their source data, and orchestrates workspace rendering. */
 @Injectable()
 export class DealsService {
+  /** Creates the service with its configured deal repository and workspace dependencies. */
   public constructor(@Inject(DEALS_OPTIONS) private readonly options: DealsModuleOptions) {}
 
   /** Lists deals authorized by the persona's current server-side Salesforce grants. */

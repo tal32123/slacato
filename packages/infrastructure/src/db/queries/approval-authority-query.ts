@@ -4,6 +4,7 @@ import type { DatabaseClient } from '../client.js';
 
 /** Reads canonical account approval authorities from PostgreSQL without consulting evidence permissions. */
 export class PostgresApprovalAuthorityQuery {
+  /** Creates an approval-authority query backed by the supplied database client. */
   public constructor(private readonly database: DatabaseClient) {}
 
   /** Returns the account-scoped authorities granted to one canonical persona. */

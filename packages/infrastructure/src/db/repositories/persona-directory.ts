@@ -23,8 +23,10 @@ const knownSources = new Set<string>(AUTHORIZED_SOURCE_TYPES);
 
 /** Reads identities and grants only from canonical records already persisted by ingestion. */
 export class PostgresCanonicalPersonaDirectory {
+  /** Retains the database client used to read canonical persona records and close the connection. */
   public constructor(private readonly client: DatabaseClient) {}
 
+  /** Lists every persona from the canonical fixture together with its permission grants. */
   public async list(): Promise<readonly IngestedPersona[]> {
     const rows = await this.client.sql<PersonaRow[]>`
       select id, display_name, role from personas
@@ -34,6 +36,7 @@ export class PostgresCanonicalPersonaDirectory {
     return Promise.all(rows.map((row) => this.hydrate(row)));
   }
 
+  /** Finds a canonical persona by user identifier and includes its permission grants when present. */
   public async findById(userId: string): Promise<IngestedPersona | undefined> {
     const rows = await this.client.sql<PersonaRow[]>`
       select id, display_name, role from personas
@@ -44,10 +47,12 @@ export class PostgresCanonicalPersonaDirectory {
     return row === undefined ? undefined : this.hydrate(row);
   }
 
+  /** Closes the database client when the application shuts down. */
   public async onApplicationShutdown(): Promise<void> {
     await this.client.close();
   }
 
+  /** Hydrates a persisted persona row with its validated canonical permission grants. */
   private async hydrate(persona: PersonaRow): Promise<IngestedPersona> {
     const rows = await this.client.sql<GrantRow[]>`
       select account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing

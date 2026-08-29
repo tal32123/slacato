@@ -2,6 +2,7 @@ import type { Persona } from '@slacato/contracts';
 import type { PermissionGrant } from '@slacato/core';
 
 export type CanonicalPersona = Readonly<Persona & { grants: readonly PermissionGrant[] }>;
+/** Stable identity and session generation exposed to protected application handlers. */
 export type AuthenticatedPrincipal = Readonly<{
   claims: Readonly<{ userId: string; issuedAt: number; version: string }>;
   persona: CanonicalPersona;

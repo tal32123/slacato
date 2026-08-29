@@ -15,7 +15,8 @@ import {
 } from '@slacato/infrastructure';
 import { AppModule } from '../../apps/api/src/app.module';
 import { configureApiApplication } from '../../apps/api/src/main';
-import { DealBriefProcessor, PostgresDealBriefWorkflowServices } from '../../apps/worker/src/processors/deal-brief.processor';
+import { DealBriefProcessor } from '../../apps/worker/src/processors/deal-brief.processor';
+import { PostgresDealBriefWorkflowServices } from '../../apps/worker/src/processors/postgres-deal-brief-workflow-services';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:56379';

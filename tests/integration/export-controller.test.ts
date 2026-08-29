@@ -8,7 +8,7 @@ import postgres, { type Sql } from 'postgres';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApiApplication } from '../../apps/api/src/main';
-import { PostgresBriefExportService } from '../../apps/api/src/modules/exports/exports.service';
+import { PostgresBriefExportService } from '@slacato/infrastructure';
 
 const origin = 'http://127.0.0.1:4173';
 const browserHeaders = { Origin: origin, 'Sec-Fetch-Site': 'same-site' };

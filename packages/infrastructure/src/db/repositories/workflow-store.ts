@@ -20,16 +20,22 @@ type RunRow = Readonly<{ id: string; opportunity_id: string; requested_by: strin
 type InvocationRow = Readonly<{ id: string; run_id: string; step: string; owner: string; lease_token: string; causal_command_id: string; lease_expires_at: string | Date; attempt: number }>;
 type SqlExecutor = Sql | TransactionSql;
 
+/** Converts an arbitrary value into the JSON-compatible representation accepted by PostgreSQL. */
 function jsonValue(value: unknown): JSONValue { return JSON.parse(JSON.stringify(value)) as JSONValue; }
+/** Serializes a value into canonical JSON text for PostgreSQL JSON columns. */
 function jsonText(value: unknown): string { return JSON.stringify(jsonValue(value)); }
+/** Maps a persisted run row to the workflow domain model. */
 function asRun(row: RunRow): WorkflowRun { return { id: row.id as WorkflowRun['id'], opportunityId: row.opportunity_id as WorkflowRun['opportunityId'], requestedBy: row.requested_by as WorkflowRun['requestedBy'], status: row.status, version: row.version, generationProvider: row.generation_provider, generationModel: row.generation_model, startRequestHash: row.start_request_hash ?? '' }; }
+/** Maps a persisted invocation row to an active workflow step lease. */
 function asLease(row: InvocationRow): StepLease { return { invocationId: row.id, causalCommandId: row.causal_command_id, runId: row.run_id as StepLease['runId'], step: row.step, owner: row.owner, leaseToken: row.lease_token, leaseExpiresAt: new Date(row.lease_expires_at), attempt: row.attempt }; }
+/** Loads a workflow run row by ID and optionally locks it for mutation. */
 async function runById(sql: SqlExecutor, id: string, lock = false): Promise<RunRow | undefined> {
   const rows = lock
     ? await sql<RunRow[]>`select id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash from runs where id = ${id} for update`
     : await sql<RunRow[]>`select id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash from runs where id = ${id}`;
   return rows[0];
 }
+/** Persists an outbox command idempotently while rejecting conflicting replays. */
 async function insertCommand(sql: SqlExecutor, command: WorkflowCommand): Promise<void> {
   await sql`select pg_advisory_xact_lock(hashtext(${`outbox:${command.idempotencyKey}`}))`;
   const existing = await sql<{ id: string; run_id: string; type: string; payload: Record<string, unknown>; idempotency_key: string }[]>`select id, run_id, type, payload, idempotency_key from outbox_commands where id = ${command.id} or idempotency_key = ${command.idempotencyKey} for update`;
@@ -177,6 +183,7 @@ async function appendGenerationTrace(sql: SqlExecutor, input: SaveCheckpointInpu
 }
 
 
+/** Appends and publishes the next ordered event for a workflow run. */
 async function appendEvent(sql: SqlExecutor, runId: string, type: string, payload: Record<string, unknown>): Promise<void> {
   await sql`select pg_advisory_xact_lock(hashtext(${`run-events:${runId}`}))`;
   const terminalPayload = ['complete', 'fail', 'approval_rejected', 'cancel'].includes(type) ? { ...payload, terminal: true } : payload;
@@ -194,6 +201,7 @@ async function appendEvent(sql: SqlExecutor, runId: string, type: string, payloa
     from run_events where run_id = ${event.streamId}`;
   await sql`select pg_notify('slacato_run_events', ${event.streamId})`;
 }
+/** Reconstructs a previously stored approval decision result for an idempotent replay. */
 async function replayDecision(sql: SqlExecutor, input: Readonly<{ idempotencyKey: string; requestHash: string }>): Promise<ApprovalDecisionReplay | undefined> {
   const decision = (await sql<{
     approval_subject_id: string; entry_id: string; approved_subject_hash: string; action: ApprovalDecision['action'];
@@ -223,10 +231,12 @@ async function replayDecision(sql: SqlExecutor, input: Readonly<{ idempotencyKey
     rejected: decision.result_rejected
   };
 }
+/** Verifies that the caller still owns an unexpired workflow step lease. */
 async function ownLease(sql: SqlExecutor, input: Readonly<{ invocationId: string; invocationOwner: string; leaseToken: string }>): Promise<void> {
   const rows = await sql<{ id: string }[]>`select id from step_invocations where id = ${input.invocationId} and owner = ${input.invocationOwner} and lease_token = ${input.leaseToken} and status = 'leased' and lease_expires_at > now() for update`;
   if (rows.length !== 1) throw new DomainConflictError('Step lease is no longer owned by this worker');
 }
+/** Completes an owned step lease and atomically consumes its causal command. */
 async function completeLease(sql: SqlExecutor, input: Readonly<{ runId: string; invocationId: string; invocationOwner: string; leaseToken: string; causalCommandId?: string | undefined }>): Promise<string> {
   const rows = await sql<{ causal_command_id: string }[]>`update step_invocations set status = 'completed', completed_at = now()
     where id = ${input.invocationId} and run_id = ${input.runId} and owner = ${input.invocationOwner} and lease_token = ${input.leaseToken}
@@ -237,6 +247,7 @@ async function completeLease(sql: SqlExecutor, input: Readonly<{ runId: string; 
   if (consumed.count !== 1) throw new DomainConflictError('Causal command was already consumed');
   return commandId;
 }
+/** Stores an immutable workflow checkpoint or validates an identical replay. */
 async function storeCheckpoint(sql: SqlExecutor, input: Readonly<{ runId: string; step: string; invocationId?: string | undefined; logicalGenerationId?: string | undefined; checkpoint: Readonly<Record<string, unknown>> }>): Promise<void> {
   const rows = await sql<{ payload: Record<string, unknown>; logical_generation_id: string | null }[]>`select payload, logical_generation_id from workflow_checkpoints where run_id = ${input.runId} and step = ${input.step} for update`;
   const existing = rows[0];
@@ -247,6 +258,7 @@ async function storeCheckpoint(sql: SqlExecutor, input: Readonly<{ runId: string
   await sql`insert into workflow_checkpoints (id, run_id, step, invocation_id, logical_generation_id, payload) values
     (${`checkpoint_${crypto.randomUUID()}`}, ${input.runId}, ${input.step}, ${input.invocationId ?? null}, ${input.logicalGenerationId ?? null}, ${jsonText(input.checkpoint)}::jsonb)`;
 }
+/** Persists a generated specialist or strategy artifact from an eligible checkpoint. */
 async function persistGeneratedArtifact(sql: SqlExecutor, input: SaveCheckpointInput): Promise<void> {
   if (input.logicalGenerationId === undefined || (!input.step.startsWith('specialist:') && input.step !== 'strategy')) return;
   const value = input.checkpoint.value;
@@ -266,21 +278,26 @@ async function persistGeneratedArtifact(sql: SqlExecutor, input: SaveCheckpointI
 
 /** PostgreSQL authority for atomic, CAS-protected workflow state, checkpoints, approvals, and outbox transitions. */
 export class PostgresWorkflowStore implements WorkflowStore {
+  /** Creates a workflow store backed by the provided database client. */
   public constructor(private readonly database: DatabaseClient) {}
 
+  /** Finds the run created for a matching idempotency key, requester, and opportunity. */
   public async findRunByIdempotencyKey(input: Readonly<{ idempotencyKey: string; requestedBy: WorkflowRun['requestedBy']; opportunityId: WorkflowRun['opportunityId'] }>): Promise<WorkflowRun | undefined> {
     const row = (await this.database.sql<RunRow[]>`select id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash
       from runs where idempotency_key = ${input.idempotencyKey} and requested_by = ${input.requestedBy} and opportunity_id = ${input.opportunityId}`)[0];
     return row === undefined ? undefined : asRun(row);
   }
+  /** Finds the currently active workflow run for an opportunity. */
   public async findActiveRun(input: Readonly<{ opportunityId: WorkflowRun['opportunityId']; requestedBy: WorkflowRun['requestedBy'] }>): Promise<WorkflowRun | undefined> {
     const rows = await this.database.sql<RunRow[]>`select id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash
       from runs where opportunity_id = ${input.opportunityId}
       and status in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing') order by created_at limit 1`;
     return rows[0] === undefined ? undefined : asRun(rows[0]);
   }
+  /** Retrieves a workflow run by its identifier. */
   public async getRun(runId: WorkflowRun['id']): Promise<WorkflowRun | undefined> { const row = await runById(this.database.sql, runId); return row === undefined ? undefined : asRun(row); }
 
+  /** Cancels a version-matched run and retires its outstanding work atomically. */
   public async cancelRun(input: Parameters<WorkflowStore['cancelRun']>[0]): Promise<WorkflowRun> {
     return this.database.sql.begin(async (sql) => {
       const current = await runById(sql, input.runId, true);
@@ -336,6 +353,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     });
   }
 
+  /** Claims a workflow step with an expiring lease when its causal command remains available. */
   public async claimStep(input: Readonly<{ runId: WorkflowRun['id']; step: string; invocationId: string; causalCommandId: string; owner: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined> {
     const now = input.now ?? new Date(); const expires = new Date(now.getTime() + input.leaseMs);
     return this.database.sql.begin(async (sql) => {
@@ -354,6 +372,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
       if (row === undefined) throw new DomainConflictError('Unable to claim step'); return asLease(row);
     });
   }
+  /** Extends an owned, unexpired workflow step lease. */
   public async heartbeatStep(input: Readonly<{ invocationId: string; owner: string; leaseToken: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined> {
     const now = input.now ?? new Date(); const expires = new Date(now.getTime() + input.leaseMs);
     const rows = await this.database.sql<InvocationRow[]>`update step_invocations set heartbeat_at = ${now.toISOString()}::timestamptz, lease_expires_at = ${expires.toISOString()}::timestamptz
@@ -361,14 +380,17 @@ export class PostgresWorkflowStore implements WorkflowStore {
       returning id, run_id, step, owner, lease_token, causal_command_id, lease_expires_at, attempt`;
     return rows[0] === undefined ? undefined : asLease(rows[0]);
   }
+  /** Abandons an owned workflow step lease. */
   public async abandonStep(input: Parameters<WorkflowStore['abandonStep']>[0]): Promise<void> {
     const released = await this.database.sql`update step_invocations set status = 'abandoned', completed_at = now()
       where id = ${input.invocationId} and owner = ${input.owner} and lease_token = ${input.leaseToken} and status = 'leased'`;
     if (released.count !== 1) throw new DomainConflictError('Step lease is no longer owned by this worker');
   }
+  /** Retrieves the persisted checkpoint for a workflow step. */
   public async getCheckpoint(input: Readonly<{ runId: WorkflowRun['id']; step: string }>): Promise<Readonly<Record<string, unknown>> | undefined> {
     return (await this.database.sql<{ payload: Record<string, unknown> }[]>`select payload from workflow_checkpoints where run_id = ${input.runId} and step = ${input.step}`)[0]?.payload;
   }
+  /** Saves a leased step checkpoint together with its generated artifact, trace, and event. */
   public async saveCheckpoint(input: SaveCheckpointInput): Promise<Readonly<Record<string, unknown>>> {
     return this.database.sql.begin(async (sql) => {
       await ownLease(sql, input);
@@ -444,6 +466,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     });
   }
 
+  /** Retrieves the requested or current approval subject with its requirements and decisions. */
   public async getApprovalSubject(input: Readonly<{ runId: WorkflowRun['id']; approvalSubjectId?: string | undefined }>): Promise<ApprovalSubject | undefined> {
     type SubjectRow = { id: string; run_id: string; draft_version: number; subject_hash: string; payload: Record<string, unknown>; section_ids: string[]; recommendation_ids: string[]; citation_ids: string[]; policy_triggers: string[]; quorum_version: string; superseded_by_subject_id: string | null };
     const subjects = input.approvalSubjectId === undefined
@@ -465,6 +488,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     };
   }
 
+  /** Finds the stored approval decision associated with an idempotency key. */
   public async findDecisionByIdempotencyKey(input: Parameters<WorkflowStore['findDecisionByIdempotencyKey']>[0]) {
     return replayDecision(this.database.sql, input);
   }
@@ -575,6 +599,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     });
   }
 
+  /** Finds the run associated with a prior regeneration request. */
   public async findRegenerationByIdempotencyKey(input: Parameters<WorkflowStore['findRegenerationByIdempotencyKey']>[0]): Promise<WorkflowRun | undefined> {
     const idempotencyHash = hashApprovalPayload(input.idempotencyKey);
     const event = (await this.database.sql<{ run_id: string; request_hash: string }[]>`select run_id, payload->>'requestHash' request_hash
@@ -586,6 +611,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     if (run === undefined) throw new DomainNotFoundError('run');
     return asRun(run);
   }
+  /** Restarts an eligible run at synthesis and enqueues its regeneration command atomically. */
   public async regenerateRun(input: RegenerateRunInput): Promise<WorkflowRun> {
     return this.database.sql.begin(async (sql) => {
       await sql`select pg_advisory_xact_lock(hashtext(${`regeneration:${input.idempotencyKey}`}))`;

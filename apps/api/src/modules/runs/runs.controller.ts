@@ -2,16 +2,17 @@ import { Controller, Inject, Post } from '@nestjs/common';
 import type { AuthenticatedPrincipal } from '../auth/contracts.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { z } from 'zod';
-import { cancelRunResponseSchema, startBriefRequestSchema, startBriefResponseSchema, type StartBriefRequest } from '@slacato/contracts';
+import { cancelRunResponseSchema, opaqueIdSchema, startBriefRequestSchema, startBriefResponseSchema, type StartBriefRequest } from '@slacato/contracts';
 import { ZodBody, ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
-import { CANCEL_DEAL_BRIEF, REGENERATE_DEAL_BRIEF, START_DEAL_BRIEF, toHttpError } from './contracts.js';
+import { toHttpError } from '../../common/http/to-http-error.js';
+import { CANCEL_DEAL_BRIEF, REGENERATE_DEAL_BRIEF, START_DEAL_BRIEF } from './contracts.js';
 import type { CancelDealBrief, RegenerateDealBrief, StartDealBrief } from '@slacato/core';
 
 const startSchema = startBriefRequestSchema;
 const runResponseSchema = startBriefResponseSchema;
 type StartInput = StartBriefRequest;
-const regenerateSchema = z.object({ idempotencyKey: z.string().min(1).max(256) }).strict();
-const regenerateParamsSchema = z.object({ runId: z.string().min(1) }).strict();
+const regenerateSchema = z.object({ idempotencyKey: opaqueIdSchema }).strict();
+const regenerateParamsSchema = z.object({ runId: opaqueIdSchema }).strict();
 type RegenerateParams = z.infer<typeof regenerateParamsSchema>;
 type RegenerateInput = z.infer<typeof regenerateSchema>;
 

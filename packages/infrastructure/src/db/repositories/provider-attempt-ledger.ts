@@ -13,9 +13,11 @@ type ReservationRow = Readonly<{
 type AttemptLogRow = Readonly<{ run_id: string; provider: string; model: string; ordinal: number; started_at: Date | string }>;
 type QuerySql = DatabaseClient['sql'] | TransactionSql;
 
+/** Compares nullable provider-attempt values using a shared null-equivalence rule. */
 function same(left: string | number | null | undefined, right: string | number | null | undefined): boolean { return (left ?? null) === (right ?? null); }
 /** PostgreSQL is the sole durable authority for provider-call attempts and execution safeguards. */
 export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
+  /** Creates a provider-attempt ledger backed by the supplied database client. */
   public constructor(private readonly database: DatabaseClient) {}
 
   /** Verifies the atomically-created call/deadline safeguards before exposing a run gateway. */
@@ -35,6 +37,7 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
     if (new Date(budget.deadline_at).getTime() <= Date.now()) throw new Error('Shared run deadline reached');
   }
 
+  /** Returns the unexpired execution time remaining for a run budget. */
   public async remainingDeadlineMs(runScope: string): Promise<number> {
     const deadline = (await this.database.sql<{ deadline_at: Date | string }[]>`select deadline_at from run_budgets where run_id = ${runScope}`)[0]?.deadline_at;
     if (deadline === undefined) throw new Error('Run budget does not exist');
@@ -43,6 +46,7 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
     return remaining;
   }
 
+  /** Reserves capacity and records the start of a provider attempt atomically. */
   public async beginAttempt(input: Parameters<ProviderAttemptLedger['beginAttempt']>[0]): Promise<ProviderAttemptReservation> {
     const outcome = await this.database.sql.begin(async (sql) => {
       const logicalGenerationId = input.logicalGenerationId ?? `generation_${createHash('sha256').update(`${input.runScope}\u0000${input.operation}`).digest('hex')}`;
@@ -93,6 +97,7 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
     return reservation;
   }
 
+  /** Settles a reserved provider attempt with its observed token usage and identifiers. */
   public async settleAttempt(input: Parameters<ProviderAttemptLedger['settleAttempt']>[0]): Promise<void> {
     const completed = await this.database.sql.begin(async (sql) => {
       const row = await this.lockReservation(sql, input);
@@ -118,6 +123,7 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
     });
   }
 
+  /** Releases a provider-attempt reservation according to whether the request may have been sent. */
   public async releaseAttempt(input: Parameters<ProviderAttemptLedger['releaseAttempt']>[0]): Promise<void> {
     const failed = await this.database.sql.begin(async (sql) => {
       const row = await this.lockReservation(sql, input);
@@ -146,6 +152,7 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
     });
   }
 
+  /** Records validation metadata for a provider attempt exactly once. */
   public async recordAttemptMetadata(input: Parameters<NonNullable<ProviderAttemptLedger['recordAttemptMetadata']>>[0]): Promise<void> {
     const rows = await this.database.sql<{ output_mode: string | null; validation_attempts: number; validation_issues: unknown; warnings: unknown }[]>`select output_mode, validation_attempts, validation_issues, warnings from generation_attempts where id = ${input.attemptId}`;
     const existing = rows[0];
@@ -160,12 +167,14 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
       where id = ${input.attemptId} and output_mode is null`;
   }
 
+  /** Locks and returns the reservation identified by the supplied attempt handles. */
   private async lockReservation(sql: QuerySql, input: ProviderAttemptReservation): Promise<ReservationRow> {
     const row = (await sql<ReservationRow[]>`select id, attempt_id, run_id, granted_output_tokens, reserved_input_tokens, status, actual_input_tokens, actual_output_tokens, request_id, response_id, failure_category, failure_code from run_budget_reservations where id = ${input.reservationId} and attempt_id = ${input.attemptId} for update`)[0];
     if (row === undefined) throw new ProviderAttemptFinalizationConflict('Unknown provider attempt reservation');
     return row;
   }
 
+  /** Finalizes an abandoned reservation as a possible duplicate while charging its reserved output. */
   private async finalizePossibleDuplicate(sql: QuerySql, row: ReservationRow): Promise<AttemptLogRow> {
     await sql`update run_budgets set reserved_output_tokens = reserved_output_tokens - ${row.granted_output_tokens}, used_output_tokens = used_output_tokens + ${row.granted_output_tokens} where run_id = ${row.run_id}`;
     await sql`update run_budget_reservations set status = 'possible_duplicate', actual_output_tokens = ${row.granted_output_tokens}, settled_at = now() where id = ${row.id}`;

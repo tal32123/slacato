@@ -122,7 +122,7 @@ export class ContextWindowPolicy {
     return { messages, invariantMessages, optionalMessages, inputTokens, reservedOutputTokens: this.settings.reservedOutputTokens };
   }
 
-  /** Preserves invariants first; repair/schema material can occupy only residual capacity. */
+  /** Fits repair or schema feedback into the remaining context without displacing required content. */
   public rebudget(prepared: PreparedContext, supplemental: readonly ModelMessage[]): readonly ModelMessage[] {
     const availableTokens = this.settings.contextWindowTokens - this.settings.reservedOutputTokens;
     const invariants = prepared.invariantMessages.map(copy);
@@ -211,7 +211,7 @@ export function createNonRecursiveContextCompactor(gateway: NonRecursiveCompacti
   };
 }
 
-/** Checkpoint reuse requires a validated checkpoint and exact recomputed bindings. */
+/** Reports whether a validated checkpoint exactly matches the current authorization and model bindings. */
 export function isContextCheckpointReusable(checkpoint: ContextCheckpoint, current: ContextCheckpointBindings): boolean {
   return checkpoint.validationState === 'validated' && validBindings(checkpoint)
     && checkpoint.scopeHash === current.scopeHash && checkpoint.policyHash === current.policyHash

@@ -39,6 +39,13 @@ type DealEvidenceSqlRow = Readonly<{
   created_at: Date | string;
 }>;
 
+/** Accepts both native jsonb objects and legacy jsonb string scalars written by older callers. */
+function parseStoredDealBrief(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const parsed: unknown = JSON.parse(value);
+  return parsed;
+}
+
 /** Converts an authorized SQL projection into the camelCase deal query model. */
 function mapAuthorizedDealSqlRow(row: AuthorizedDealSqlRow): AuthorizedDeal {
   const latestRun = row.latest_run_status === null || row.latest_run_updated_at === null
@@ -64,7 +71,7 @@ function mapLatestDealRunSqlRow(row: LatestDealRunSqlRow): LatestDealRun {
     updatedAt: row.updated_at,
     generatedOutput: row.generated_output_lifecycle === null || row.generated_output_payload === null
       ? null
-      : { lifecycle: row.generated_output_lifecycle, brief: dealBriefSchema.parse(row.generated_output_payload) }
+      : { lifecycle: row.generated_output_lifecycle, brief: dealBriefSchema.parse(parseStoredDealBrief(row.generated_output_payload)) }
   };
 }
 
@@ -83,6 +90,7 @@ function mapDealEvidenceSqlRow(row: DealEvidenceSqlRow): DealEvidence {
 
 /** Reads deal workspaces only through live persona-scoped source grants and returns application models. */
 export class PostgresDealQueryRepository implements DealQueryRepository {
+  /** Creates a deal query repository backed by the provided database client. */
   public constructor(private readonly database: DatabaseClient) {}
 
   /** Lists deals whose account metadata is currently readable through a Salesforce source grant. */

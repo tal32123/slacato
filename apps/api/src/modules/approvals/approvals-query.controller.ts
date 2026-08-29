@@ -1,18 +1,18 @@
 import { Controller, Get, Inject, NotFoundException } from '@nestjs/common';
-import { approvalDetailResponseSchema, approvalInboxResponseSchema } from '@slacato/contracts';
+import { approvalDetailResponseSchema, approvalInboxResponseSchema, opaqueIdSchema } from '@slacato/contracts';
 import { z } from 'zod';
 import { ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
 import type { AuthenticatedPrincipal } from '../auth/contracts.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
-import { RUN_APPROVAL_QUERIES, type RunApprovalQueryRepository } from '../runs/run-approval.repository.js';
+import { APPROVAL_QUERIES, type ApprovalQueryRepository } from '../runs/contracts.js';
 
-const paramsSchema = z.object({ subjectId: z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/) }).strict();
+const paramsSchema = z.object({ subjectId: opaqueIdSchema }).strict();
 type ApprovalParams = z.infer<typeof paramsSchema>;
 
 /** Serves the approval inbox and opaque approval details for the current principal. */
 @Controller('api/approvals')
 export class ApprovalsQueryController {
-  public constructor(@Inject(RUN_APPROVAL_QUERIES) private readonly queries: RunApprovalQueryRepository) {}
+  public constructor(@Inject(APPROVAL_QUERIES) private readonly queries: ApprovalQueryRepository) {}
 
   /** Lists approvals visible to the current principal. */
   @Get()

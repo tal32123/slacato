@@ -2,9 +2,11 @@ import { BadRequestException, Controller, Get, HttpException, HttpStatus, Inject
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import {
+  opaqueIdSchema,
   runEventCursorSchema,
   runEventResyncInstructionSchema,
   runSnapshotSchema,
+  terminalRunEventTypes,
   type RunEventEnvelope
 } from '@slacato/contracts';
 import { CursorExpiredError, type RunEventBus, type RunEventQuery } from '@slacato/core';
@@ -14,11 +16,10 @@ import { AuthService } from '../auth/auth.service.js';
 import { ZodParam, ZodQuery, ZodResponse } from '../../common/wire/zod.decorators.js';
 import { RUN_EVENT_BUS, RUN_EVENT_HEARTBEAT_MS, RUN_EVENT_QUERY } from './contracts.js';
 
-const paramsSchema = z.object({ runId: z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/) }).strict();
+const paramsSchema = z.object({ runId: opaqueIdSchema }).strict();
 const querySchema = z.object({ after: runEventCursorSchema.optional() }).strict();
 type RunParams = z.infer<typeof paramsSchema>;
 type EventsQuery = z.infer<typeof querySchema>;
-const TERMINAL_EVENT_TYPES: Readonly<Record<string, true>> = { complete: true, fail: true, approval_rejected: true };
 const MAX_STREAMS_PER_ACTOR = 4;
 const MAX_STREAMS_PER_ACTOR_RUN = 2;
 
@@ -164,7 +165,7 @@ export class RunEventsController {
           break;
         }
         await writer.write(eventFrame(event));
-        if (TERMINAL_EVENT_TYPES[event.type] === true || ('terminal' in event.payload && event.payload.terminal === true)) {
+        if (terminalRunEventTypes.includes(event.type) || ('terminal' in event.payload && event.payload.terminal === true)) {
           response.end();
           break;
         }

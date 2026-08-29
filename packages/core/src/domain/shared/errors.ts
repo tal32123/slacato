@@ -10,7 +10,7 @@ export type AppErrorCode =
 
 type AppErrorDetails = Readonly<Record<string, boolean | number | string>>;
 
-/** Base error for domain failures with a stable, non-sensitive classification. */
+/** Provides stable, non-sensitive classifications and safe messages for domain failures. */
 export abstract class AppError extends Error {
   public readonly details: AppErrorDetails;
   public readonly safeMessage: string;

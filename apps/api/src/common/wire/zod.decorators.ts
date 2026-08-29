@@ -45,6 +45,7 @@ export const validateSseEnvelope = (input: unknown): SseEnvelope => sseEnvelopeS
 /** Creates the only transport-facing SSE publisher primitive; every envelope validates before emit. */
 export const createSsePublisher = <TResult>(emit: (envelope: SseEnvelope) => TResult) => (input: unknown): TResult => emit(validateSseEnvelope(input));
 
+/** Records a request-part contract on the controller handler before applying Nest's parameter decorator. */
 function requestPart(part: RequestPart, declaration: RequestContract, nestDecorator: ParameterDecorator): ParameterDecorator {
   return (target, propertyKey, parameterIndex) => {
     if (!propertyKey) throw new TypeError('Wire request schemas require a controller method');

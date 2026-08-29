@@ -17,21 +17,26 @@ import type { BriefExportService } from './modules/exports/contracts.js';
 export class AppModule {
   /** Registers the API modules and their optional delivery-layer ports. */
   public static register(
-    auth: AuthModuleOptions,
-    workflow?: WorkflowApiOptions,
-    diagnostics?: DiagnosticsModuleOptions,
-    deals?: DealsModuleOptions,
-    exports?: BriefExportService
+    authOptions: AuthModuleOptions,
+    workflowOptions?: WorkflowApiOptions,
+    diagnosticsOptions?: DiagnosticsModuleOptions,
+    dealsOptions?: DealsModuleOptions,
+    briefExportService?: BriefExportService
   ): DynamicModule {
     return {
       module: AppModule,
       imports: [
         HealthModule,
-        AuthModule.register(auth),
-        ...(diagnostics === undefined ? [] : [DiagnosticsModule.register(diagnostics)]),
-        ...(workflow === undefined ? [] : [RunsModule.register(workflow), ApprovalsModule.register(workflow.decideApproval, workflow.queries)]),
-        ...(deals === undefined ? [] : [DealsModule.register(deals)]),
-        ...(exports === undefined ? [] : [ExportsModule.register(exports)])
+        AuthModule.register(authOptions),
+        ...(diagnosticsOptions === undefined ? [] : [DiagnosticsModule.register(diagnosticsOptions)]),
+        ...(workflowOptions === undefined
+          ? []
+          : [
+              RunsModule.register(workflowOptions),
+              ApprovalsModule.register(workflowOptions.decideApproval, workflowOptions.approvalQueries)
+            ]),
+        ...(dealsOptions === undefined ? [] : [DealsModule.register(dealsOptions)]),
+        ...(briefExportService === undefined ? [] : [ExportsModule.register(briefExportService)])
       ]
     };
   }

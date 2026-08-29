@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { DemoDiagnosticsResponse, PermissionGrantView } from '@slacato/contracts';
 import type { PermissionGrant } from '@slacato/core';
 import { HealthService } from '../health/health.service.js';
-import type { AuthenticatedRequest } from '../auth/guard.js';
+import type { AuthenticatedPrincipal } from '../auth/contracts.js';
 import {
   APPROVAL_AUTHORITY_QUERY,
   PROVIDER_RUNTIME_DESCRIPTOR,
@@ -10,11 +10,11 @@ import {
   type ProviderRuntimeDescriptor
 } from './contracts.js';
 
-type AuthenticatedSession = NonNullable<AuthenticatedRequest['auth']>;
 
 /** Builds a read-only diagnostics view from injected runtime and authorization facts. */
 @Injectable()
 export class DiagnosticsService {
+  /** Initializes diagnostics with health, runtime, and approval-authority providers. */
   public constructor(
     private readonly health: HealthService,
     @Inject(PROVIDER_RUNTIME_DESCRIPTOR) private readonly runtime: ProviderRuntimeDescriptor,
@@ -22,7 +22,7 @@ export class DiagnosticsService {
   ) {}
 
   /** Returns current runtime health, source permissions, and canonical account approval authorities. */
-  public async view(session: AuthenticatedSession): Promise<DemoDiagnosticsResponse> {
+  public async view(session: AuthenticatedPrincipal): Promise<DemoDiagnosticsResponse> {
     const [readiness, approvalAuthorities] = await Promise.all([
       this.health.readiness(),
       this.approvalAuthorities.forPersona(session.persona.userId)

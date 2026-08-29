@@ -1,20 +1,11 @@
-import { CANONICAL_FIXTURE_COMMIT, dealBriefSchema, exportBrief, type DealBriefExportFormat } from '@slacato/core';
-import type { DatabaseClient } from '@slacato/infrastructure';
-
-export const BRIEF_EXPORT_SERVICE = Symbol('BRIEF_EXPORT_SERVICE');
-
-export type BriefExportResult = Readonly<{
-  content: string;
-  format: DealBriefExportFormat;
-}>;
-
-export interface BriefExportService {
-  exportFinalized(input: Readonly<{
-    actorId: string;
-    runId: string;
-    format: DealBriefExportFormat;
-  }>): Promise<BriefExportResult | undefined>;
-}
+import {
+  CANONICAL_FIXTURE_COMMIT,
+  collectDealBriefReferences,
+  dealBriefSchema,
+  exportBrief,
+  type DealBriefExportFormat
+} from '@slacato/core';
+import type { DatabaseClient } from '../client.js';
 
 type ManifestEntryRow = Readonly<{ citation_id: string; evidence_version_id: string; source_locator: string }>;
 type FinalizedBriefRow = Readonly<{
@@ -23,41 +14,18 @@ type FinalizedBriefRow = Readonly<{
   manifest_entries: readonly ManifestEntryRow[];
   readable_evidence_ids: readonly string[];
 }>;
-type CitationProjection = Readonly<{ id: string; evidenceId: string; locator: string }>;
-type BriefReferences = Readonly<{ evidenceIds: readonly string[]; citations: readonly CitationProjection[] }>;
 
-function referencedEvidence(payload: unknown): BriefReferences {
-  const brief = dealBriefSchema.parse(payload);
-  const evidenceIds = new Set<string>(brief.sourceEvidence.evidence.map(({ evidenceId }) => evidenceId));
-  const citations = new Map<string, CitationProjection>();
-  const visit = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      value.forEach(visit);
-      return;
-    }
-    if (value === null || typeof value !== 'object') return;
-    const record = value as Record<string, unknown>;
-    if (typeof record.id === 'string' && typeof record.evidenceId === 'string' && typeof record.locator === 'string') {
-      evidenceIds.add(record.evidenceId);
-      citations.set(`${record.id}\u0000${record.evidenceId}\u0000${record.locator}`, {
-        id: record.id, evidenceId: record.evidenceId, locator: record.locator
-      });
-    }
-    Object.values(record).forEach(visit);
-  };
-  visit(brief);
-  return {
-    evidenceIds: [...evidenceIds].sort(),
-    citations: [...citations.values()].sort((left, right) =>
-      left.id.localeCompare(right.id) || left.evidenceId.localeCompare(right.evidenceId) || left.locator.localeCompare(right.locator))
-  };
-}
-
-/** Reads only immutable completed state and fails closed unless every exported evidence reference is currently readable. */
-export class PostgresBriefExportService implements BriefExportService {
+/** Exports immutable completed briefs only when every referenced evidence record remains readable. */
+export class PostgresBriefExportService {
+  /** Binds finalized brief export operations to the PostgreSQL database client. */
   public constructor(private readonly database: DatabaseClient) {}
 
-  public async exportFinalized(input: Readonly<{ actorId: string; runId: string; format: DealBriefExportFormat }>): Promise<BriefExportResult | undefined> {
+  /** Produces the requested finalized brief and records an opaque denial or successful export atomically. */
+  public async exportFinalized(input: Readonly<{
+    actorId: string;
+    runId: string;
+    format: DealBriefExportFormat;
+  }>): Promise<Readonly<{ content: string; format: DealBriefExportFormat }> | undefined> {
     return this.database.sql.begin(async (sql) => {
       const deny = async (): Promise<undefined> => {
         await sql`insert into audit_events (id, run_id, actor_id, type, payload)
@@ -136,7 +104,8 @@ export class PostgresBriefExportService implements BriefExportService {
         left join candidate on true`)[0];
       if (row?.payload === null || row === undefined) return deny();
 
-      const references = referencedEvidence(row.payload);
+      const brief = dealBriefSchema.parse(row.payload);
+      const references = collectDealBriefReferences(brief);
       const entriesByCitation = new Map<string, readonly ManifestEntryRow[]>();
       for (const entry of row.manifest_entries) {
         const entries = entriesByCitation.get(entry.citation_id) ?? [];

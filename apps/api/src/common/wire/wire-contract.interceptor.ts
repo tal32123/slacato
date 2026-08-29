@@ -13,8 +13,10 @@ interface HttpRequestData {
 /** Globally enforces explicit request and response wire contracts for every controller handler. */
 @Injectable()
 export class WireContractInterceptor implements NestInterceptor<unknown, unknown> {
+  /** Creates an interceptor that reads each handler's declared wire contracts. */
   public constructor(private readonly reflector: Reflector) {}
 
+  /** Validates request parts and emitted responses against the handler's wire contracts. */
   public intercept(context: ExecutionContext, next: CallHandler<unknown>): Observable<unknown> {
     const contract = this.reflector.get<WireContract>(WIRE_CONTRACT_METADATA, context.getHandler());
     const request = context.switchToHttp().getRequest<HttpRequestData>();
@@ -38,6 +40,7 @@ export class WireContractInterceptor implements NestInterceptor<unknown, unknown
     }));
   }
 
+  /** Validates an emitted SSE message while preserving any surrounding transport fields. */
   private validateSseEnvelope(emitted: unknown, schema: Exclude<WireContract['sse'], undefined>): unknown {
     const message = asRecord(emitted);
     const envelope = message?.data ?? emitted;
@@ -48,6 +51,7 @@ export class WireContractInterceptor implements NestInterceptor<unknown, unknown
     return message ? { ...message, data: result.data } : result.data;
   }
 
+  /** Enforces the declared contract for one populated request part. */
   private validateRequestPart(part: RequestPart, value: unknown, declaration: RequestContract | undefined): void {
     if (!hasValues(value)) return;
     if (!declaration) {
@@ -64,12 +68,14 @@ export class WireContractInterceptor implements NestInterceptor<unknown, unknown
   }
 }
 
+/** Reports whether a request value contains data that requires validation. */
 function hasValues(value: unknown): boolean {
   if (value === undefined || value === null) return false;
   if (typeof value !== 'object') return true;
   return Object.keys(value).length > 0;
 }
 
+/** Returns an object value as a record when it can carry an SSE data field. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }

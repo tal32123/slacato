@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, InternalServerErrorException, NotFoundException, Res } from '@nestjs/common';
 import type { Response } from 'express';
+import { opaqueIdSchema } from '@slacato/contracts';
 import { logger } from '@slacato/infrastructure';
 import { z } from 'zod';
 import { ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
@@ -8,7 +9,7 @@ import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { BRIEF_EXPORT_SERVICE, type BriefExportService } from './contracts.js';
 
 const exportParamsSchema = z.object({
-  runId: z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/),
+  runId: opaqueIdSchema,
   format: z.enum(['json', 'markdown'])
 }).strict();
 type ExportParams = z.infer<typeof exportParamsSchema>;

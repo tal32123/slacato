@@ -3,6 +3,7 @@ import type { RunId, UserId } from '../../domain/shared/ids.js';
 import type { ApprovalAction, ApprovalDecisionStoreResult, WorkflowStore } from '../workflow/workflow-store.js';
 import type { ApprovalAuthority, ApprovalCategory } from '../../domain/briefs/policy.js';
 import type { DealBrief } from '../../domain/briefs/schema.js';
+import { collectDealBriefReferences } from '../../domain/briefs/references.js';
 import type { DealBriefAccessControl } from '../briefs/workflow.js';
 import { assertApprovableBrief, hashApprovalPayload } from '../briefs/workflow.js';
 
@@ -30,25 +31,6 @@ export type ApprovalResult = Readonly<{
   quorumSatisfied: boolean;
   replayed: boolean;
 }>;
-
-/** Collects immutable evidence bindings for every citation in an approval payload. */
-function citationBindings(value: unknown): ReadonlyMap<string, string> {
-  const bindings = new Map<string, string>();
-  const visit = (current: unknown): void => {
-    if (Array.isArray(current)) { current.forEach(visit); return; }
-    if (current === null || typeof current !== 'object') return;
-    const record = current as Record<string, unknown>;
-    if (typeof record.id === 'string' && typeof record.evidenceId === 'string' && typeof record.locator === 'string') {
-      const binding = hashApprovalPayload({ id: record.id, evidenceId: record.evidenceId, locator: record.locator });
-      const existing = bindings.get(record.id);
-      if (existing !== undefined && existing !== binding) throw new DomainValidationError('A citation ID is bound to conflicting evidence');
-      bindings.set(record.id, binding);
-    }
-    Object.values(record).forEach(visit);
-  };
-  visit(value);
-  return bindings;
-}
 
 /** Converts the persisted decision outcome into the approval result returned to callers. */
 function result(input: DecideApprovalCommand, stored: ApprovalDecisionStoreResult): ApprovalResult {
@@ -162,9 +144,16 @@ export class DecideApproval {
     const approvedSubjectHash = hashApprovalPayload(approvedPayload);
     const originalSubjectHash = hashApprovalPayload(originalPayload);
     if (originalSubjectHash !== subject.subjectHash) throw new DomainConflictError('Persisted approval payload no longer matches its immutable hash');
-    const originalBindings = citationBindings(originalPayload);
-    for (const [id, binding] of citationBindings(approvedPayload)) {
-      if (originalBindings.get(id) !== binding) throw new DomainValidationError('Edited approval payload changed an immutable citation binding');
+    const originalReferences = collectDealBriefReferences(originalPayload);
+    const approvedReferences = collectDealBriefReferences(approvedPayload);
+    const originalCitationsById = new Map(originalReferences.citations.map((citation) => [citation.id, citation]));
+    for (const citation of approvedReferences.citations) {
+      const originalCitation = originalCitationsById.get(citation.id);
+      if (originalCitation === undefined
+        || originalCitation.evidenceId !== citation.evidenceId
+        || originalCitation.locator !== citation.locator) {
+        throw new DomainValidationError('Edited approval payload changed an immutable citation binding');
+      }
     }
     const editedRequirement = input.action === 'edit_and_approve'
       ? await this.access.validateApprovalEdit({ actorId: input.actorId, opportunityId: run.opportunityId, runId: run.id, payload: approvedPayload })
@@ -201,7 +190,7 @@ export class DecideApproval {
           id: nextSubjectId, runId, subjectHash: approvedSubjectHash, payload: approvedPayload,
           sectionIds: subject.sectionIds,
           recommendationIds: approvedPayload.recommendedNextActions.actions.map((action, index) => `recommendation:${index}:${hashApprovalPayload(action).slice(0, 16)}`),
-          citationIds: [...citationBindings(approvedPayload).keys()].sort(),
+          citationIds: approvedReferences.citations.map((citation) => citation.id),
           policyTriggers: editedRequirement.policyTriggers,
           entries: editedRequirement.entries.length === 0 ? [entry] : editedRequirement.entries,
           quorumVersion: editedRequirement.quorumVersion

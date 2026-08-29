@@ -10,6 +10,7 @@ import {
   type DealBrief,
   type StakeholderArtifact
 } from '../../domain/briefs/schema.js';
+import { collectDealBriefReferences } from '../../domain/briefs/references.js';
 import { AuthorizationDeniedError, DomainConflictError, DomainNotFoundError, DomainValidationError } from '../../domain/shared/errors.js';
 import type { RunId } from '../../domain/shared/ids.js';
 import type { WorkflowCommand } from '../workflow/command-queue.js';
@@ -160,17 +161,13 @@ function specialistArtifactOf(
 function generation(run: WorkflowRun, lease: StepLease, operation: string) {
   return { logicalGenerationId: stableId('generation', run.id, operation), operation, provider: run.generationProvider, model: run.generationModel, invocationId: lease.invocationId, possibleDuplicate: lease.attempt > 1 } as const;
 }
-/** Collects the unique citation IDs retained anywhere in a brief artifact. */
-function collectCitationIds(value: unknown): readonly string[] {
-  const ids = new Set<string>(); const visit = (current: unknown): void => { if (Array.isArray(current)) { current.forEach(visit); return; } if (current === null || typeof current !== 'object') return; const record = current as Record<string, unknown>; if (typeof record.id === 'string' && typeof record.evidenceId === 'string' && typeof record.locator === 'string') ids.add(record.id); Object.values(record).forEach(visit); }; visit(value); return [...ids].sort();
-}
 /** Validates that a brief is safe, cited, and substantive enough for approval. */
 export function assertApprovableBrief(value: unknown): DealBrief {
   const parsed = dealBriefSchema.parse(value); const serialized = canonicalJson(parsed);
   if (/(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|role\s*:/i.test(serialized)) throw new DomainValidationError('Approval payload contains unsafe instruction-like language');
   const unsupported: string[] = []; const visit = (current: unknown): void => { if (Array.isArray(current)) { current.forEach(visit); return; } if (current === null || typeof current !== 'object') return; const record = current as Record<string, unknown>; if (typeof record.statement === 'string' && Array.isArray(record.citations) && record.citations.length === 0) unsupported.push(record.statement); Object.values(record).forEach(visit); }; visit(parsed);
   if (unsupported.length > 0) throw new DomainValidationError('Approval payload contains a claim without citations');
-  const hasRetainedApprovalContent = collectCitationIds(parsed).length > 0
+  const hasRetainedApprovalContent = collectDealBriefReferences(parsed).citations.length > 0
     || parsed.sourceEvidence.evidence.length > 0
     || parsed.stakeholderMap.stakeholders.length > 0
     || parsed.recommendedNextActions.actions.length > 0
@@ -454,7 +451,8 @@ export class ProcessDealBriefStep {
     const recommendationIds = payload.recommendedNextActions.actions.map((action, index) =>
       `recommendation:${index}:${hashApprovalPayload(action).slice(0, 16)}`);
     if (requirement.entries.length > 0) {
-      await this.store.awaitApproval({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, subject: { id: stableId('approval_subject', run.id, String(draftVersion), subjectHash), runId: run.id, subjectHash, payload, sectionIds: SECTION_IDS, recommendationIds, citationIds: collectCitationIds(payload), policyTriggers: requirement.policyTriggers, entries: requirement.entries, quorumVersion: requirement.quorumVersion } });
+      const citationIds = collectDealBriefReferences(payload).citations.map((citation) => citation.id);
+      await this.store.awaitApproval({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, subject: { id: stableId('approval_subject', run.id, String(draftVersion), subjectHash), runId: run.id, subjectHash, payload, sectionIds: SECTION_IDS, recommendationIds, citationIds, policyTriggers: requirement.policyTriggers, entries: requirement.entries, quorumVersion: requirement.quorumVersion } });
       return;
     }
     await this.store.commitStepAndEnqueueNext({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, event: 'validation_completed', checkpointStep: `validation:${draftVersion}`, checkpoint: { status: 'completed', subjectHash, payload }, nextCommand: workflowCommand(run.id, 'finalize', subjectHash, { subjectHash, payload }) });

@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import {
   dealListResponseSchema,
   dealWorkspaceViewSchema,
+  opaqueIdSchema,
   type DealListResponse,
   type DealWorkspaceView
 } from '@slacato/contracts';
@@ -11,7 +12,7 @@ import type { AuthenticatedPrincipal } from '../auth/contracts.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { DealsService } from './deals.service.js';
 
-const dealParamsSchema = z.object({ opportunityId: z.string().min(1).max(128) }).strict();
+const dealParamsSchema = z.object({ opportunityId: opaqueIdSchema }).strict();
 
 /** Serves deal listings and workspaces authorized for the current principal. */
 @Controller('api/deals')

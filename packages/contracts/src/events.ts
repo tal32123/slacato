@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const opaqueIdSchema = z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+export const opaqueIdSchema = z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
 const safeTokenSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/);
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const timestampSchema = z.string().datetime();
@@ -78,26 +78,47 @@ const eventVariant = <T extends string, P extends z.ZodType>(type: T, payload: P
 const sequencedEventVariant = <T extends string, P extends z.ZodType>(type: T, payload: P) =>
   z.object({ ...eventBase, sequence: z.number().int().positive(), type: z.literal(type), payload }).strict();
 
+type RunEventStatus = z.infer<typeof runStatusSchema>;
+type RunEventDefinition = readonly [
+  type: string,
+  payload: z.ZodType,
+  metadata: Readonly<{ fallbackStatus?: RunEventStatus; terminal?: true }>
+];
+
 const eventDefinitions = [
-  ['progress', progressPayloadSchema],
-  ['run_created', runCreatedPayloadSchema],
-  ['checkpoint_committed', checkpointPayloadSchema],
-  ['start', transitionPayloadSchema],
-  ['retrieval_completed', transitionPayloadSchema],
-  ['specialists_completed', transitionPayloadSchema],
-  ['synthesis_completed', transitionPayloadSchema],
-  ['validation_completed', transitionPayloadSchema],
-  ['validation_requires_approval', transitionPayloadSchema],
-  ['awaiting_approval', awaitingApprovalPayloadSchema],
-  ['approval_entry_recorded', approvalPayloadSchema],
-  ['approval_granted', approvalPayloadSchema],
-  ['approval_rejected', rejectedApprovalPayloadSchema],
-  ['approval_subject_replaced', replacedPayloadSchema],
-  ['regeneration_requested', regenerationPayloadSchema],
-  ['complete', completePayloadSchema],
-  ['fail', failPayloadSchema],
-  ['cancel', cancelPayloadSchema]
-] as const;
+  ['progress', progressPayloadSchema, {}],
+  ['run_created', runCreatedPayloadSchema, { fallbackStatus: 'created' }],
+  ['checkpoint_committed', checkpointPayloadSchema, {}],
+  ['start', transitionPayloadSchema, { fallbackStatus: 'retrieving' }],
+  ['retrieval_completed', transitionPayloadSchema, { fallbackStatus: 'specialists_running' }],
+  ['specialists_completed', transitionPayloadSchema, { fallbackStatus: 'synthesizing' }],
+  ['synthesis_completed', transitionPayloadSchema, { fallbackStatus: 'validating' }],
+  ['validation_completed', transitionPayloadSchema, { fallbackStatus: 'finalizing' }],
+  ['validation_requires_approval', transitionPayloadSchema, { fallbackStatus: 'awaiting_approval' }],
+  ['awaiting_approval', awaitingApprovalPayloadSchema, { fallbackStatus: 'awaiting_approval' }],
+  ['approval_entry_recorded', approvalPayloadSchema, { fallbackStatus: 'awaiting_approval' }],
+  ['approval_granted', approvalPayloadSchema, { fallbackStatus: 'finalizing' }],
+  ['approval_rejected', rejectedApprovalPayloadSchema, { fallbackStatus: 'rejected', terminal: true }],
+  ['approval_subject_replaced', replacedPayloadSchema, { fallbackStatus: 'awaiting_approval' }],
+  ['regeneration_requested', regenerationPayloadSchema, { fallbackStatus: 'synthesizing' }],
+  ['complete', completePayloadSchema, { fallbackStatus: 'completed', terminal: true }],
+  ['fail', failPayloadSchema, { fallbackStatus: 'failed', terminal: true }],
+  ['cancel', cancelPayloadSchema, { terminal: true }]
+] as const satisfies readonly RunEventDefinition[];
+
+export type RunEventType = typeof eventDefinitions[number][0];
+
+export const runEventTypes: readonly RunEventType[] = Object.freeze(
+  eventDefinitions.map(([type]) => type)
+);
+export const terminalRunEventTypes: readonly RunEventType[] = Object.freeze(
+  eventDefinitions.flatMap(([type, , metadata]) => 'terminal' in metadata ? [type] : [])
+);
+export const runEventFallbackStatuses: Readonly<Partial<Record<RunEventType, RunEventStatus>>> = Object.freeze(
+  Object.fromEntries(eventDefinitions.flatMap(([type, , metadata]) =>
+    'fallbackStatus' in metadata ? [[type, metadata.fallbackStatus] as const] : []
+  ))
+);
 
 export const runEventToPublishSchema = z.discriminatedUnion('type', [
   ...eventDefinitions.map(([type, payload]) => eventVariant(type, payload))
@@ -233,7 +254,6 @@ export const traceSpanSchema = z.discriminatedUnion('kind', [
 });
 
 export type SafeEventPayload = z.infer<typeof safeEventPayloadSchema>;
-export type RunEventType = typeof eventDefinitions[number][0];
 export type RunEventToPublish = Readonly<{
   id: string;
   streamId: string;

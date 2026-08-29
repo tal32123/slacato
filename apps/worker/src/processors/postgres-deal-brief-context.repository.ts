@@ -87,22 +87,28 @@ function readCanonicalOpportunityStage(content: string): string {
 
 /** Defines the typed data-access operations used by the deal-brief workflow adapter. */
 export interface DealBriefContextRepository {
+  /** Finds a readable canonical Salesforce opportunity for the persona. */
   findAuthorizedOpportunity(
     personaId: string,
     opportunityId: string
   ): Promise<DealBriefOpportunityContext | undefined>;
+  /** Reads the persona's canonical permission grants for an account. */
   readPermissionGrants(personaId: string, accountId: string): Promise<readonly PermissionGrant[]>;
+  /** Finds the newest indexed embedding profile for a provider and model. */
   findEmbeddingProfile(
     accountId: string,
     provider: string,
     model: string
   ): Promise<EmbeddingProfile | undefined>;
+  /** Reads the durable model-call budget for a workflow run. */
   readRunBudget(runId: string): Promise<RunBudgetLimits>;
+  /** Retrieves authorized evidence with the supplied embedding gateway and profile. */
   retrieveEvidence(
     request: RetrievalRequest,
     embeddingGateway: EmbeddingGateway,
     profile: EmbeddingProfile
   ): Promise<RetrievalResult>;
+  /** Checks whether a persisted manifest exactly matches the expected context entries. */
   manifestMatches(
     manifestId: string,
     expectedEntries: readonly AgentManifestEntry[]

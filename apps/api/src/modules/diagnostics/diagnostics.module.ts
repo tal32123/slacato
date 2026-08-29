@@ -8,10 +8,10 @@ import {
 import { DiagnosticsController } from './diagnostics.controller.js';
 import { DiagnosticsService } from './diagnostics.service.js';
 
-/** Connects diagnostics to runtime facts and canonical approval-authority data supplied by composition. */
+/** Makes provider runtime and approval-authority diagnostics available through the diagnostics API. */
 @Module({})
 export class DiagnosticsModule {
-  /** Registers the diagnostics boundary with its concrete runtime and query dependencies. */
+  /** Builds the diagnostics module with the runtime facts and approval-authority query it needs. */
   public static register(options: DiagnosticsModuleOptions): DynamicModule {
     return {
       module: DiagnosticsModule,

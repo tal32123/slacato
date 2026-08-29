@@ -7,7 +7,7 @@ export type ProviderRuntimeDescriptor = Readonly<Pick<
 
 /** Reads canonical, account-scoped approval authority without consulting session roles or evidence grants. */
 export interface ApprovalAuthorityQuery {
-  /** Looks up every account authority granted to the requested persona. */
+  /** Returns every account approval authority granted to the requested persona. */
   forPersona(personaId: string): Promise<readonly AccountApprovalAuthorityView[]>;
 }
 

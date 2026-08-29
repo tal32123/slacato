@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentContext, WorkflowRun } from '@slacato/core';
 import type { ProviderRunScope } from '../../packages/infrastructure/src/model/provider.js';
-import { PostgresDealBriefWorkflowServices } from '../../apps/worker/src/processors/deal-brief.processor.js';
+import { PostgresDealBriefWorkflowServices } from '../../apps/worker/src/processors/postgres-deal-brief-workflow-services.js';
 
 describe('worker generation limits', () => {
   it('does not install app-defined input or output token limits', async () => {

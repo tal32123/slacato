@@ -1,6 +1,10 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import type { AppError, CancelDealBrief, DecideApproval, RegenerateDealBrief, RunEventBus, RunEventQuery, StartDealBrief } from '@slacato/core';
-import type { RunApprovalQueryRepository } from './run-approval.repository.js';
+import type {
+  ApprovalDetailResponse,
+  ApprovalInboxResponse,
+  RunDetailResponse,
+  RunListResponse
+} from '@slacato/contracts';
+import type { CancelDealBrief, DecideApproval, RegenerateDealBrief, RunEventBus, RunEventQuery, StartDealBrief } from '@slacato/core';
 
 export const START_DEAL_BRIEF = Symbol('START_DEAL_BRIEF');
 export const REGENERATE_DEAL_BRIEF = Symbol('REGENERATE_DEAL_BRIEF');
@@ -9,12 +13,31 @@ export const DECIDE_APPROVAL = Symbol('DECIDE_APPROVAL');
 export const RUN_EVENT_BUS = Symbol('RUN_EVENT_BUS');
 export const RUN_EVENT_QUERY = Symbol('RUN_EVENT_QUERY');
 export const RUN_EVENT_HEARTBEAT_MS = Symbol('RUN_EVENT_HEARTBEAT_MS');
+export const RUN_QUERIES = Symbol('RUN_QUERIES');
+export const APPROVAL_QUERIES = Symbol('APPROVAL_QUERIES');
+
+/** Supplies actor-scoped read models for the run query endpoints. */
+export interface RunQueryRepository {
+  /** Lists runs visible to the actor under the supplied session version. */
+  listRuns(actorId: string, sessionVersion: string): Promise<RunListResponse>;
+  /** Returns one visible run, or no result when it is absent or opaque to the actor. */
+  getRun(actorId: string, sessionVersion: string, runId: string): Promise<RunDetailResponse | undefined>;
+}
+
+/** Supplies actor-scoped read models for the approval query endpoints. */
+export interface ApprovalQueryRepository {
+  /** Lists approvals visible to the actor under the supplied session version. */
+  listApprovals(actorId: string, sessionVersion: string): Promise<ApprovalInboxResponse>;
+  /** Returns one visible approval, or no result when it is absent or opaque to the actor. */
+  getApproval(actorId: string, sessionVersion: string, subjectId: string): Promise<ApprovalDetailResponse | undefined>;
+}
 
 export type WorkflowApiOptions = Readonly<{
   startDealBrief: StartDealBrief;
   regenerateDealBrief: RegenerateDealBrief;
   cancelDealBrief: CancelDealBrief;
-  queries?: RunApprovalQueryRepository | undefined;
+  runQueries?: RunQueryRepository | undefined;
+  approvalQueries?: ApprovalQueryRepository | undefined;
   runEvents?: Readonly<{
     bus: RunEventBus;
     query: RunEventQuery;
@@ -23,14 +46,3 @@ export type WorkflowApiOptions = Readonly<{
   decideApproval: DecideApproval;
 }>;
 
-
-export function toHttpError(error: unknown): never {
-  const applicationError = error as Partial<AppError>;
-  if (applicationError.code === 'AUTHORIZATION_DENIED' || applicationError.code === 'NOT_FOUND') {
-    throw new NotFoundException({ code: 'NOT_FOUND', message: 'The requested resource was not found.' });
-  }
-  const body = { code: applicationError.code ?? 'INTERNAL_ERROR', message: applicationError.safeMessage ?? 'The request could not be completed.' };
-  if (applicationError.code === 'CONFLICT' || applicationError.code === 'INVALID_RUN_TRANSITION') throw new ConflictException(body);
-  if (applicationError.code === 'VALIDATION_FAILED') throw new BadRequestException(body);
-  throw error;
-}

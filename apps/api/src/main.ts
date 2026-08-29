@@ -9,18 +9,19 @@ import {
   createDatabaseClient,
   loadRuntimeEnv,
   PostgresApprovalAuthorityQuery,
+  PostgresApprovalQueryRepository,
+  PostgresBriefExportService,
   PostgresCanonicalPersonaDirectory,
   PostgresDealBriefAccessControl,
   PostgresEventStore,
   PostgresRunEventQuery,
+  PostgresRunQueryRepository,
   PostgresWorkflowStore,
   type Env
 } from '@slacato/infrastructure';
 import { PostgresSessionRegistry } from './modules/auth/postgres-session-registry.js';
 import { AppModule } from './app.module.js';
 import { PostgresDealQueryRepository } from './modules/deals/deals.repository.js';
-import { PostgresRunApprovalQueryRepository } from './modules/runs/run-approval.repository.js';
-import { PostgresBriefExportService } from './modules/exports/exports.service.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
 import type { ProviderRuntimeDescriptor } from './modules/diagnostics/contracts.js';
@@ -67,6 +68,7 @@ export function configuredProviderRuntime(environment: Env): ProviderRuntimeDesc
   };
 }
 
+/** Converts body-parser failures into the API's stable HTTP error responses. */
 const bodyParserErrorHandler: ErrorRequestHandler = (error: unknown, _request, response, next) => {
   void next;
   if (error instanceof HttpException) {
@@ -106,7 +108,8 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
   const workflowAccess = new PostgresDealBriefAccessControl(database);
   const runEvents = new PostgresEventStore(database);
   const dealQueries = new PostgresDealQueryRepository(database);
-  const runApprovalQueries = new PostgresRunApprovalQueryRepository(database);
+  const runQueries = new PostgresRunQueryRepository(database);
+  const approvalQueries = new PostgresApprovalQueryRepository(database);
   const app = await NestFactory.create<NestExpressApplication>(AppModule.register({
     sessionSecret: env.SESSION_SECRET,
     environment: env.NODE_ENV,
@@ -121,7 +124,8 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
     regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
     cancelDealBrief: new CancelDealBrief(workflowStore, workflowAccess),
     decideApproval: new DecideApproval(workflowStore, workflowAccess),
-    queries: runApprovalQueries,
+    runQueries,
+    approvalQueries,
     runEvents: { bus: runEvents, query: new PostgresRunEventQuery(database) }
   }, {
     providerRuntime,
@@ -133,6 +137,7 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
   return app;
 }
 
+/** Creates and starts the configured API server on the selected port. */
 export async function bootstrap(options: ApiApplicationOptions = {}): Promise<NestExpressApplication> {
   const app = await createApiApplication(options);
   await app.listen(process.env.PORT ? Number(process.env.PORT) : 3000);
