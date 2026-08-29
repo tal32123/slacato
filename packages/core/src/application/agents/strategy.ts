@@ -40,7 +40,8 @@ export class StrategyAgent {
         { id: 'conversation', value: conversation },
         { id: 'stakeholder', value: stakeholder },
         { id: 'commercial', value: commercial }
-      ]
+      ],
+      validate: (value, evidence) => validateDealBrief(value, evidence, context)
     });
     const citedEvidence = result.evidence.filter((record) => citedIds.has(record.evidenceId));
     return validateDealBrief(result.value, citedEvidence, context);

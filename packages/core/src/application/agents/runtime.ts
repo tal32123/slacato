@@ -1,8 +1,9 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { BudgetedModelGateway } from '../model/contracts.js';
 import { buildAgentPrompt, pruneAgentEvidence } from '../briefs/prompts.js';
 import type { AgentContext, AgentEvidenceRecord } from './contracts.js';
 import { assertAgentContextBindings } from './validation.js';
+import { DomainValidationError } from '../../domain/shared/errors.js';
 
 export async function runAgent<Value>(input: Readonly<{
   gateway: BudgetedModelGateway;
@@ -13,6 +14,7 @@ export async function runAgent<Value>(input: Readonly<{
   allowedSourceTypes: ReadonlySet<AgentEvidenceRecord['sourceType']>;
   artifacts?: readonly Readonly<{ id: string; value: unknown }>[];
   citedIds?: ReadonlySet<string>;
+  validate?: (value: Value, evidence: readonly AgentEvidenceRecord[]) => Value;
 }>): Promise<Readonly<{ value: Value; evidence: readonly AgentEvidenceRecord[] }>> {
   assertAgentContextBindings(input.context);
   const evidence = pruneAgentEvidence(input.context.evidence, input.allowedSourceTypes, input.citedIds);
@@ -30,8 +32,18 @@ export async function runAgent<Value>(input: Readonly<{
     evidence,
     ...(input.artifacts === undefined ? {} : { artifacts: input.artifacts })
   });
+  const schema = input.validate === undefined ? input.schema : input.schema.transform((value, issueContext) => {
+    try {
+      return input.validate?.(value, evidence) ?? value;
+    } catch (error) {
+      if (!(error instanceof DomainValidationError)) throw error;
+      const details = Object.keys(error.details).length === 0 ? '' : ` Details: ${JSON.stringify(error.details)}`;
+      issueContext.addIssue({ code: 'custom', message: `${error.message}${details}` });
+      return z.NEVER;
+    }
+  });
   const generation = await input.gateway.generateObject({
-    schema: input.schema,
+    schema,
     messages: prompt.messages,
     operation: input.operation,
     limits: input.context.generation.limits,

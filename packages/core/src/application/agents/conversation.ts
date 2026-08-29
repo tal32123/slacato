@@ -15,7 +15,11 @@ export class ConversationAgent {
   public constructor(private readonly gateway: BudgetedModelGateway) {}
 
   public async run(context: AgentContext): Promise<ConversationArtifact> {
-    const result = await runAgent({ gateway: this.gateway, context, operation: 'conversation-intelligence', task: TASK, schema: agentArtifactSchema, allowedSourceTypes: SOURCES });
+    const result = await runAgent({
+      gateway: this.gateway, context, operation: 'conversation-intelligence', task: TASK,
+      schema: agentArtifactSchema, allowedSourceTypes: SOURCES,
+      validate: (value, evidence) => validateConversationArtifact(value, context.manifest.id, evidence)
+    });
     return agentArtifactSchema.parse(validateConversationArtifact(result.value, context.manifest.id, result.evidence));
   }
 }

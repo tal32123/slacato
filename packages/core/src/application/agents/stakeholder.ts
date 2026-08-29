@@ -15,7 +15,11 @@ export class StakeholderAgent {
   public constructor(private readonly gateway: BudgetedModelGateway) {}
 
   public async run(context: AgentContext): Promise<StakeholderArtifact> {
-    const result = await runAgent({ gateway: this.gateway, context, operation: 'stakeholder-intelligence', task: TASK, schema: agentArtifactSchema, allowedSourceTypes: SOURCES });
+    const result = await runAgent({
+      gateway: this.gateway, context, operation: 'stakeholder-intelligence', task: TASK,
+      schema: agentArtifactSchema, allowedSourceTypes: SOURCES,
+      validate: (value, evidence) => validateStakeholderArtifact(value, context.manifest.id, evidence)
+    });
     return agentArtifactSchema.parse(validateStakeholderArtifact(result.value, context.manifest.id, result.evidence));
   }
 }
