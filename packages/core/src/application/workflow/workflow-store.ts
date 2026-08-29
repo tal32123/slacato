@@ -205,4 +205,5 @@ export interface WorkflowStore {
   findRegenerationByIdempotencyKey(input: RegenerationReplayInput): Promise<WorkflowRun | undefined>;
   finalizeRun(input: FinalizeRunInput): Promise<WorkflowRun>;
   failRun(input: Readonly<{ runId: RunId; expectedVersion: number; invocationId: string; invocationOwner: string; leaseToken: string; causalCommandId: string; reason: string }>): Promise<WorkflowRun>;
+  cancelRun(input: Readonly<{ runId: RunId; expectedVersion: number; cancelledBy: UserId }>): Promise<WorkflowRun>;
 }

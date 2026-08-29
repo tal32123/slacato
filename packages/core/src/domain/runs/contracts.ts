@@ -11,7 +11,8 @@ export const runStatusSchema = z.enum([
   'finalizing',
   'completed',
   'rejected',
-  'failed'
+  'failed',
+  'cancelled'
 ]);
 
 /** Events recognized by the exhaustive workflow state machine. */
@@ -25,7 +26,8 @@ export const runEventSchema = z.enum([
   'approval_granted',
   'approval_rejected',
   'complete',
-  'fail'
+  'fail',
+  'cancel'
 ]);
 
 /** Union of persisted lifecycle states accepted by the run state machine. */
