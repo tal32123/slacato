@@ -40,7 +40,7 @@ export const ZodSseEnvelope = (schema: ZodType<unknown> = sseEnvelopeSchema): Me
 };
 
 /** Validates a generic SSE envelope before an SSE transport serializes it. */
-export const validateSseEnvelope = (input: unknown): SseEnvelope => sseEnvelopeSchema.parse(input);
+export const validateSseEnvelope = (input: unknown): SseEnvelope => sseEnvelopeSchema.parse(input) as SseEnvelope;
 
 /** Creates the only transport-facing SSE publisher primitive; every envelope validates before emit. */
 export const createSsePublisher = <TResult>(emit: (envelope: SseEnvelope) => TResult) => (input: unknown): TResult => emit(validateSseEnvelope(input));

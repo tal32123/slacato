@@ -49,3 +49,50 @@ pnpm typecheck
 The package `test:integration` script currently does not narrow Vitest to its trailing filename argument and therefore starts unrelated integration files; the focused Task 10 PostgreSQL suite was run directly with the equivalent Vitest file filter shown above.
 
 No formatter, lint, build, or project-wide/full test suite was run.
+
+## Review hardening — round 1
+
+Standards and security review produced eleven Important findings. Focused RED proof first reproduced the wire and completeness defects:
+
+```text
+pnpm vitest run tests/unit/event-bus.test.ts --reporter dot --silent
+# 1 file failed; 3 failed, 6 passed
+# accepted CR/LF event IDs, camelCase sensitive payload aliases/value tunneling,
+# empty per-kind trace data, and a degraded attempt without a partial decision
+```
+
+The hardened implementation now:
+
+- assigns every denied authorization attempt a separate correlation-specific trace/run identity, so a later authorized retry cannot inherit a denial, and rejects deterministic trace-ID reuse with different content;
+- applies the same line-safe opaque ID grammar at publish, persistence, replay, cursor, and frame boundaries;
+- replaces blacklist-only records with strict discriminated event and trace schemas, exact payload keys, hash/enum/identifier value shapes, and required per-kind retrieval, model, validation, guardrail, policy, approval, recommendation, usage, failure, and finalization facts;
+- reauthorizes before every event emission and closes an established stream without bytes after permission revocation;
+- returns HTTP 204 when an authorized client reconnects at a terminal snapshot watermark, preventing native `EventSource` reconnect/poll loops;
+- uses one bounded reconciliation timer per store rather than one timer per subscriber, plus per-actor and per-actor/run stream limits;
+- emits model-call, validation, guardrail, repair, and usage spans for every durable generation-attempt ordinal, creating a durable checkpoint attempt when a production service has no provider-ledger row;
+- requires every degraded attempt to own a linked typed partial decision and every failed attempt to own a linked fatal decision;
+- serializes event and coalesced heartbeat frames through one backpressure-aware writer and explicitly removes the losing drain/close listener;
+- exercises persisted production-store completed/degraded, awaiting-approval, failed, and denied-then-authorized traces; and
+- preserves Task 9 production workflow behavior under the stricter event and trace boundaries.
+
+Fresh round-1 evidence:
+
+```text
+pnpm vitest run tests/unit/event-bus.test.ts --reporter dot --silent
+# 1 file passed, 9 tests passed
+
+pnpm vitest run tests/unit/wire-boundary.test.ts --reporter dot --silent
+# 1 file passed, 13 tests passed
+
+pnpm vitest run tests/integration/sse-controller.test.ts --reporter dot --silent
+# 1 file passed, 15 tests passed
+
+pnpm vitest run tests/integration/workflow-production.test.ts --reporter dot --silent
+# 1 file passed, 3 tests passed
+
+pnpm vitest run tests/integration/migration-catalog-parity.test.ts --reporter dot --silent
+# 1 file passed, 3 tests passed
+
+pnpm typecheck
+# exit 0
+```

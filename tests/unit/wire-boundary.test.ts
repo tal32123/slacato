@@ -76,11 +76,11 @@ class WireTestController {
   }
 
   public validSse() {
-    return of({ data: { id: 'event-1', streamId: 'run-1', type: 'progress', timestamp: '2026-08-28T15:00:00.000Z', version: 1, payload: {} } });
+    return of({ data: { id: 'event-1', streamId: 'run-1', sequence: 1, type: 'progress', timestamp: '2026-08-28T15:00:00.000Z', version: 1, payload: { status: 'running' } } });
   }
 
   public invalidSse() {
-    return of({ data: { id: 'event-1', streamId: 'run-1', type: 'progress', timestamp: '2026-08-28T15:00:00.000Z', version: 1, payload: {}, hidden: true } });
+    return of({ data: { id: 'event-1', streamId: 'run-1', sequence: 1, type: 'progress', timestamp: '2026-08-28T15:00:00.000Z', version: 1, payload: { status: 'running' }, hidden: true } });
   }
 
   public undecoratedSse() {

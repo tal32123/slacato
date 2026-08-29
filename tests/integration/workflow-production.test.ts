@@ -66,6 +66,14 @@ beforeAll(async () => {
     const migration = await readFile(resolve(process.cwd(), 'drizzle/0015_immutable_approval_replays.sql'), 'utf8');
     await admin.unsafe(migration);
   }
+  const observabilityCatalog = await admin<{ present: boolean }[]>`select exists (
+    select 1 from information_schema.columns
+    where table_schema = current_schema() and table_name = 'trace_spans' and column_name = 'span_id'
+  ) present`;
+  if (observabilityCatalog[0]?.present !== true) {
+    const migration = await readFile(resolve(process.cwd(), 'drizzle/0016_append_only_run_observability.sql'), 'utf8');
+    await admin.unsafe(migration);
+  }
 });
 
 afterAll(async () => {

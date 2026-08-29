@@ -138,7 +138,12 @@ function openStream(url: URL, path: string, cookie: string, headers: Readonly<Re
 }
 
 function event(id: string, streamId: string, type: string, payload: Readonly<Record<string, unknown>>): RunEventToPublish {
-  return { id, streamId, type, version: 1, timestamp, payload } as RunEventToPublish;
+  const common = { id, streamId, type, version: 1, timestamp };
+  if (type === 'complete') {
+    return { ...common, payload: { version: 1, subjectHash: 'f'.repeat(64), deterministic: true, terminal: true } } as RunEventToPublish;
+  }
+  if (type === 'progress') return { ...common, payload: { status: payload.status } } as RunEventToPublish;
+  return { ...common, payload: { version: 1, status: payload.status } } as RunEventToPublish;
 }
 
 async function seedRuns(): Promise<void> {
@@ -277,6 +282,39 @@ describe.sequential('authorized raw run SSE', () => {
     await closed.promise;
     expect(stream.response.destroyed).toBe(true);
   });
+  it('returns 204 for a terminal watermark so native EventSource does not reconnect forever', async () => {
+    await publisher.publish(event('evt-terminal', 'run-sse', 'complete', {}));
+    await database.sql`update runs set status = 'completed', version = 1 where id = 'run-sse'`;
+
+    await request(app.getHttpServer()).get('/api/runs/run-sse/events?after=evt-terminal')
+      .set('Cookie', mayaCookie).set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(204);
+    await expect(publisher.publish(event('evt-bad\nevent: complete', 'run-sse', 'progress', { status: 'running' }))).rejects.toThrow();
+  });
+
+  it('reauthorizes before each new event and closes without disclosing post-revocation data', async () => {
+    await publisher.publish(event('evt-1', 'run-sse', 'progress', { status: 'retrieving' }));
+    const stream = await openStream(baseUrl, '/api/runs/run-sse/events?after=evt-1', mayaCookie);
+    await database.sql`delete from permission_grants where id = 'grant-sse'`;
+    await publisher.publish(event('evt-after-revocation', 'run-sse', 'complete', {}));
+
+    const body = await stream.ended;
+    expect(body).not.toContain('evt-after-revocation');
+  });
+
+  it('bounds concurrent streams for one actor and run', async () => {
+    const first = await openStream(baseUrl, '/api/runs/run-sse/events', mayaCookie);
+    const second = await openStream(baseUrl, '/api/runs/run-sse/events', mayaCookie);
+    await request(app.getHttpServer()).get('/api/runs/run-sse/events')
+      .set('Cookie', mayaCookie).set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(429);
+    const firstClosed = Promise.withResolvers<void>();
+    const secondClosed = Promise.withResolvers<void>();
+    first.response.once('close', () => firstClosed.resolve());
+    second.response.once('close', () => secondClosed.resolve());
+    first.request.destroy();
+    second.request.destroy();
+    await Promise.all([firstClosed.promise, secondClosed.promise]);
+  });
+
 
   it('wakes subscribers across a worker connection and two API replicas without gaps', async () => {
     await publisher.publish(event('evt-1', 'run-sse', 'progress', { status: 'retrieving' }));
@@ -366,6 +404,13 @@ describe.sequential('authorized raw run SSE', () => {
       checkpoint,
       nextCommand
     })).version;
+    const seedGenerationAttempt = async (logicalGenerationId: string, operation: string, ordinal = 1, validationAttempts = 0): Promise<void> => {
+      await database.sql`insert into generation_attempts
+        (id, run_id, logical_generation_id, operation, ordinal, status, provider, model, output_mode,
+          validation_attempts, possible_duplicate, input_tokens, output_tokens, completed_at)
+        values (${`attempt-${logicalGenerationId}-${ordinal}`}, ${runId}, ${logicalGenerationId}, ${operation}, ${ordinal},
+          'completed', 'mock', 'mock-brief', 'native_schema', ${validationAttempts}, false, ${10 * ordinal}, ${4 * ordinal}, now())`;
+    };
 
     const retrieveCommand = command('retrieve', 1);
     let version = await commit(await claim(startCommand, 'start', 0), 0, startCommand, 'start', 'start', {}, retrieveCommand);
@@ -381,6 +426,7 @@ describe.sequential('authorized raw run SSE', () => {
     );
     const specialistLease = await claim(specialistsCommand, 'specialists', 2);
     for (const specialist of ['conversation', 'stakeholder', 'commercial']) {
+      await seedGenerationAttempt(`generation-${specialist}`, specialist);
       await store.saveCheckpoint({
         runId: runId as never,
         step: `specialist:${specialist}`,
@@ -389,7 +435,7 @@ describe.sequential('authorized raw run SSE', () => {
         leaseToken: specialistLease.leaseToken,
         logicalGenerationId: `generation-${specialist}`,
         checkpoint: {
-          status: 'completed',
+          status: specialist === 'conversation' ? 'degraded' : 'completed',
           value: { claims: [] },
           generation: { provider: 'mock', model: 'mock-brief', operation: specialist }
         }
@@ -409,6 +455,8 @@ describe.sequential('authorized raw run SSE', () => {
       confidenceAndReviewWarnings: { overallConfidence: 0.5, warnings: [] }
     });
     const synthesizeLease = await claim(synthesizeCommand, 'synthesize', 3);
+    await seedGenerationAttempt('generation-strategy', 'strategy', 1);
+    await seedGenerationAttempt('generation-strategy', 'strategy', 2, 1);
     await store.saveCheckpoint({
       runId: runId as never,
       step: 'strategy:1',
@@ -453,28 +501,155 @@ describe.sequential('authorized raw run SSE', () => {
     ]);
     expect(spans.find(({ kind }) => kind === 'authorization_lookup')?.data).not.toHaveProperty('resultIds');
     expect(spans.filter(({ kind }) => kind === 'specialist_attempt').map(({ step }) => step).sort()).toEqual(['commercial', 'conversation', 'stakeholder']);
+    expect(spans.filter(({ kind, step }) => kind === 'model_call' && step === 'strategy')).toHaveLength(2);
+    expect(spans).toContainEqual(expect.objectContaining({ kind: 'repair', step: 'strategy', attempt: 2 }));
+    const degradedAttempt = spans.find(({ kind, step }) => kind === 'specialist_attempt' && step === 'conversation');
+    expect(degradedAttempt?.status).toBe('degraded');
+    expect(spans).toContainEqual(expect.objectContaining({
+      kind: 'partial_failure', parentSpanId: degradedAttempt?.spanId, status: 'degraded'
+    }));
   });
 
-  it('persists only a safe denied authorization trace and no run events for an opaque denial', async () => {
+  it('persists a complete awaiting-approval trace through the production workflow store', async () => {
+    const runId = 'run-awaiting';
+    const store = new PostgresWorkflowStore(database);
+    await database.sql`insert into accounts (id, name) values ('ACC-AWAIT', 'Await Account')`;
+    await database.sql`insert into opportunities (id, account_id, name) values ('OPP-AWAIT', 'ACC-AWAIT', 'Await Opportunity')`;
+    const startCommand: WorkflowCommand = {
+      id: 'command-await-start', runId: runId as never, type: 'process-deal-brief-step',
+      payload: { step: 'start' }, idempotencyKey: 'run-await:start'
+    };
+    await store.startRun({
+      id: runId as never, opportunityId: 'OPP-AWAIT' as never, requestedBy: maya.userId as never, status: 'created',
+      generationProvider: 'mock', generationModel: 'mock-brief', idempotencyKey: 'run-await',
+      startRequestHash: 'a'.repeat(64), command: startCommand,
+      budget: { scope: runId as never, maxCalls: 10, maxInputTokens: 1_000, maxOutputTokens: 500, deadlineMs: 30_000 }
+    });
+    const auth = (await publisher.tracesForRun(runId))[0]!;
+    const append = async (
+      kind: Parameters<PostgresEventStore['appendTrace']>[0]['kind'],
+      step: string,
+      suffix: string,
+      parentSpanId: string,
+      data: Readonly<Record<string, unknown>>
+    ): Promise<string> => {
+      const spanId = `span-await-${suffix}`;
+      await publisher.appendTrace({
+        traceId: auth.traceId, spanId, runId, parentSpanId, step, attempt: 1, kind,
+        status: 'completed', startedAt: timestamp, endedAt: timestamp, data
+      } as never);
+      return spanId;
+    };
+    const retrieval = await append('evidence_retrieval', 'retrieval', 'retrieval', auth.spanId, { resultIds: [], scores: [], evidenceCount: 0 });
+    for (const specialist of ['conversation', 'stakeholder', 'commercial']) {
+      const attempt = await append('specialist_attempt', specialist, `${specialist}-attempt`, retrieval, { operation: specialist, logicalGenerationId: `generation-await-${specialist}` });
+      const model = await append('model_call', specialist, `${specialist}-model`, attempt, {
+        durableAttemptId: `attempt-await-${specialist}`, logicalGenerationId: `generation-await-${specialist}`, ordinal: 1,
+        provider: 'mock', model: 'mock-brief', parametersHash: 'b'.repeat(64), outputMode: 'native_schema', possibleDuplicate: false
+      });
+      await append('validation', specialist, `${specialist}-validation`, model, { decision: 'accepted', validationAttempts: 0 });
+      await append('guardrail', specialist, `${specialist}-guardrail`, model, { decision: 'passed' });
+      await append('usage', specialist, `${specialist}-usage`, model, { inputTokens: 10, outputTokens: 4 });
+    }
+    const strategy = await append('strategy_attempt', 'strategy', 'strategy-attempt', retrieval, { operation: 'strategy', logicalGenerationId: 'generation-await-strategy' });
+    const strategyModel = await append('model_call', 'strategy', 'strategy-model', strategy, {
+      durableAttemptId: 'attempt-await-strategy', logicalGenerationId: 'generation-await-strategy', ordinal: 1,
+      provider: 'mock', model: 'mock-brief', parametersHash: 'c'.repeat(64), outputMode: 'native_schema', possibleDuplicate: false
+    });
+    await append('validation', 'strategy', 'strategy-validation', strategyModel, { decision: 'accepted', validationAttempts: 0 });
+    await append('guardrail', 'strategy', 'strategy-guardrail', strategyModel, { decision: 'passed' });
+    await append('usage', 'strategy', 'strategy-usage', strategyModel, { inputTokens: 20, outputTokens: 8 });
+    await database.sql`update runs set status = 'validating', version = 4 where id = ${runId}`;
+    await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${startCommand.id}`;
+    const lease = await store.claimStep({
+      runId: runId as never, step: 'validate', invocationId: 'invocation-await', causalCommandId: startCommand.id,
+      owner: 'await-worker', leaseMs: 30_000
+    });
+    if (lease === undefined) throw new Error('Unable to claim awaiting validation');
+    const brief = dealBriefSchema.parse({
+      dealSnapshot: { accountName: 'Await Account', opportunityName: 'Await Opportunity', stage: 'Negotiate' },
+      executiveSummary: { narrative: 'Insufficient supported evidence is available for an executive summary.' },
+      buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
+      stakeholderMap: { stakeholders: [] },
+      negotiationState: { currentState: 'Insufficient supported evidence is available.', risks: [] },
+      recommendedNextActions: { actions: [] },
+      missingInformation: { items: [] },
+      sourceEvidence: { evidence: [] },
+      confidenceAndReviewWarnings: { overallConfidence: 0.5, warnings: [] }
+    });
+    const subjectHash = hashApprovalPayload(brief);
+    await store.awaitApproval({
+      runId: runId as never, expectedVersion: 4, invocationId: lease.invocationId, invocationOwner: lease.owner,
+      leaseToken: lease.leaseToken, causalCommandId: startCommand.id,
+      subject: {
+        id: 'subject-await' as never, runId: runId as never, draftVersion: 4, subjectHash, payload: brief,
+        sectionIds: [], recommendationIds: [], citationIds: [], policyTriggers: ['discount'],
+        entries: [{
+          id: 'entry-await', category: 'commercial_discount', eligibleAuthorities: ['deal_desk'],
+          policyTriggers: ['discount'], dependsOn: []
+        }], quorumVersion: 'policy-v1', decisions: []
+      }
+    });
+    await expect(publisher.assertTraceComplete(runId)).resolves.toBeUndefined();
+    expect((await publisher.tracesForRun(runId))).toContainEqual(expect.objectContaining({ kind: 'approval_requirement' }));
+  });
+
+  it('persists a failed production trace linked to its exact triggering attempt', async () => {
+    const runId = 'run-failed-production';
+    const store = new PostgresWorkflowStore(database);
+    await database.sql`insert into accounts (id, name) values ('ACC-FAIL', 'Fail Account')`;
+    await database.sql`insert into opportunities (id, account_id, name) values ('OPP-FAIL', 'ACC-FAIL', 'Fail Opportunity')`;
+    const command: WorkflowCommand = {
+      id: 'command-fail-start', runId: runId as never, type: 'process-deal-brief-step',
+      payload: { step: 'start' }, idempotencyKey: 'run-fail:start'
+    };
+    await store.startRun({
+      id: runId as never, opportunityId: 'OPP-FAIL' as never, requestedBy: maya.userId as never, status: 'created',
+      generationProvider: 'mock', generationModel: 'mock-brief', idempotencyKey: 'run-fail',
+      startRequestHash: 'd'.repeat(64), command,
+      budget: { scope: runId as never, maxCalls: 10, maxInputTokens: 1_000, maxOutputTokens: 500, deadlineMs: 30_000 }
+    });
+    await database.sql`update runs set status = 'synthesizing', version = 3 where id = ${runId}`;
+    await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${command.id}`;
+    const lease = await store.claimStep({
+      runId: runId as never, step: 'synthesize', invocationId: 'invocation-fail', causalCommandId: command.id,
+      owner: 'fail-worker', leaseMs: 30_000
+    });
+    if (lease === undefined) throw new Error('Unable to claim failing synthesis');
+    await store.failRun({
+      runId: runId as never, expectedVersion: 3, invocationId: lease.invocationId, invocationOwner: lease.owner,
+      leaseToken: lease.leaseToken, causalCommandId: command.id, reason: 'strategy_generation_failed'
+    });
+    await expect(publisher.assertTraceComplete(runId)).resolves.toBeUndefined();
+    const spans = await publisher.tracesForRun(runId);
+    const attempt = spans.find(({ kind }) => kind === 'strategy_attempt');
+    expect(spans).toContainEqual(expect.objectContaining({
+      kind: 'fatal_failure', parentSpanId: attempt?.spanId, status: 'failed'
+    }));
+  });
+  it('keeps denied attempts separate when the same start later becomes authorized', async () => {
+    await database.sql`insert into accounts (id, name) values ('ACC-DENIAL', 'Denied Account')`;
+    await database.sql`insert into opportunities (id, account_id, name) values ('OPP-DENIAL', 'ACC-DENIAL', 'Denied Opportunity')`;
     const start = new StartDealBrief(
       new PostgresWorkflowStore(database),
+
       new PostgresDealBriefAccessControl(database),
       { provider: 'mock', model: 'mock-brief' }
     );
 
     await expect(start.execute({
-      opportunityId: 'OPP-TRACE',
+      opportunityId: 'OPP-DENIAL',
       requestedBy: stranger.userId,
       idempotencyKey: 'denied-trace',
       budget: { maxCalls: 10, maxInputTokens: 1_000, maxOutputTokens: 500, deadlineMs: 30_000 }
     })).rejects.toThrow('DealBrief start denied');
-    const [{ run_id: runId }] = await database.sql<{ run_id: string }[]>`
+    const [{ run_id: deniedTraceId }] = await database.sql<{ run_id: string }[]>`
       select run_id from trace_spans where kind = 'authorization_lookup' and status = 'denied'
       order by started_at desc limit 1`;
 
-    await expect(publisher.assertTraceComplete(runId)).resolves.toBeUndefined();
-    const spans = await publisher.tracesForRun(runId);
-    expect(spans).toEqual([
+    await expect(publisher.assertTraceComplete(deniedTraceId)).resolves.toBeUndefined();
+    const deniedSpans = await publisher.tracesForRun(deniedTraceId);
+    expect(deniedSpans).toEqual([
       expect.objectContaining({
         kind: 'authorization_lookup',
         status: 'denied',
@@ -488,8 +663,23 @@ describe.sequential('authorized raw run SSE', () => {
       })
     ]);
     const [{ event_count: eventCount, run_count: runCount }] = await database.sql<{ event_count: number; run_count: number }[]>`
-      select (select count(*)::int from run_events where run_id = ${runId}) event_count,
-        (select count(*)::int from runs where id = ${runId}) run_count`;
+      select (select count(*)::int from run_events where run_id = ${deniedTraceId}) event_count,
+        (select count(*)::int from runs where id = ${deniedTraceId}) run_count`;
     expect({ eventCount, runCount }).toEqual({ eventCount: 0, runCount: 0 });
+
+    await database.sql`insert into permission_grants
+      (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing)
+      values ('grant-denial-retry', ${stranger.userId}, 'ACC-DENIAL', 'salesforce', true, false, true, false, false)`;
+    const allowedRunId = await start.execute({
+      opportunityId: 'OPP-DENIAL',
+      requestedBy: stranger.userId,
+      idempotencyKey: 'denied-trace',
+      budget: { maxCalls: 10, maxInputTokens: 1_000, maxOutputTokens: 500, deadlineMs: 30_000 }
+    });
+    expect(allowedRunId).not.toBe(deniedTraceId);
+    const allowedSpans = await publisher.tracesForRun(allowedRunId);
+    expect(allowedSpans).toEqual([
+      expect.objectContaining({ kind: 'authorization_lookup', status: 'completed', data: expect.objectContaining({ decision: 'allowed' }) })
+    ]);
   });
 });

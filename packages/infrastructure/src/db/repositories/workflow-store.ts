@@ -64,10 +64,30 @@ async function appendTrace(
     endedAt: now,
     data: input.data
   });
+  const existing = (await sql<{
+    trace_id: string; run_id: string; parent_id: string | null; step: string; attempt: number;
+    kind: string; status: string; payload: Record<string, unknown>;
+  }[]>`select trace_id, run_id, parent_id, step, attempt, kind, status, payload
+    from trace_spans where id = ${span.spanId} for update`)[0];
+  if (existing !== undefined) {
+    const persisted = {
+      traceId: existing.trace_id, spanId: span.spanId, runId: existing.run_id,
+      ...(existing.parent_id === null ? {} : { parentSpanId: existing.parent_id }),
+      step: existing.step, attempt: existing.attempt, kind: existing.kind, status: existing.status, data: existing.payload
+    };
+    const proposed = {
+      traceId: span.traceId, spanId: span.spanId, runId: span.runId,
+      ...(span.parentSpanId === undefined ? {} : { parentSpanId: span.parentSpanId }),
+      step: span.step, attempt: span.attempt, kind: span.kind, status: span.status, data: span.data
+    };
+    if (canonicalJson(persisted) !== canonicalJson(proposed)) {
+      throw new DomainConflictError(`Trace span ID conflicts with different content: ${span.spanId}`);
+    }
+    return span.spanId;
+  }
   await sql`insert into trace_spans (id, trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at)
     values (${span.spanId}, ${span.traceId}, ${span.spanId}, ${span.runId}, ${span.parentSpanId ?? null}, ${span.step}, ${span.attempt},
-      ${span.kind}, ${span.status}, ${jsonText(span.data)}::jsonb, ${span.startedAt}::timestamptz, ${span.endedAt ?? null}::timestamptz)
-    on conflict (id) do nothing`;
+      ${span.kind}, ${span.status}, ${jsonText(span.data)}::jsonb, ${span.startedAt}::timestamptz, ${span.endedAt ?? null}::timestamptz)`;
   return span.spanId;
 }
 
@@ -75,9 +95,6 @@ async function appendGenerationTrace(sql: SqlExecutor, input: SaveCheckpointInpu
   if (input.logicalGenerationId === undefined || (!input.step.startsWith('specialist:') && !input.step.startsWith('strategy'))) return;
   const operation = input.step.startsWith('specialist:') ? input.step.slice('specialist:'.length) : 'strategy';
   const kind: TraceSpan['kind'] = input.step.startsWith('specialist:') ? 'specialist_attempt' : 'strategy_attempt';
-  const generation = input.checkpoint.generation !== null && typeof input.checkpoint.generation === 'object'
-    ? input.checkpoint.generation as Readonly<Record<string, unknown>>
-    : {};
   const attemptStatus: TraceSpan['status'] = input.checkpoint.status === 'degraded' ? 'degraded' : input.checkpoint.status === 'failed' ? 'failed' : 'completed';
   const retrievalSpanId = traceSpanId(input.runId, 'evidence_retrieval', 'retrieval');
   const parentSpanId = await existingSpanId(sql, retrievalSpanId);
@@ -90,70 +107,114 @@ async function appendGenerationTrace(sql: SqlExecutor, input: SaveCheckpointInpu
     ...(parentSpanId === undefined ? {} : { parentSpanId }),
     data: { operation, logicalGenerationId: input.logicalGenerationId }
   });
-  const attempts = await sql<{
+  const persistedAttempts = await sql<{
+    id: string;
+    logical_generation_id: string;
+    ordinal: number;
     provider: string;
     model: string;
-    output_mode: string | null;
+    output_mode: 'native_schema' | 'prompted_json' | null;
     validation_attempts: number;
     input_tokens: number | null;
     output_tokens: number | null;
     status: string;
-  }[]>`select provider, model, output_mode, validation_attempts, input_tokens, output_tokens, status
+    possible_duplicate: boolean;
+  }[]>`select id, logical_generation_id, ordinal, provider, model, output_mode, validation_attempts,
+      input_tokens, output_tokens, status, possible_duplicate
     from generation_attempts where run_id = ${input.runId} and logical_generation_id = ${input.logicalGenerationId}
     order by ordinal`;
-  const provider = attempts[0]?.provider ?? (typeof generation.provider === 'string' ? generation.provider : 'unknown');
-  const model = attempts[0]?.model ?? (typeof generation.model === 'string' ? generation.model : 'unknown');
-  const modelSpanId = await appendTrace(sql, {
-    runId: input.runId,
-    kind: 'model_call',
-    discriminator: `${input.step}:model`,
-    step: operation,
-    status: attempts.some(({ status }) => status === 'failed') ? 'failed' : 'completed',
-    parentSpanId: attemptSpanId,
-    data: {
+  let attempts = [...persistedAttempts];
+  if (attempts.length === 0) {
+    const generation = input.checkpoint.generation !== null && typeof input.checkpoint.generation === 'object'
+      ? input.checkpoint.generation as Readonly<Record<string, unknown>>
+      : {};
+    const provider = typeof generation.provider === 'string' ? generation.provider : 'unknown';
+    const model = typeof generation.model === 'string' ? generation.model : 'unknown';
+    const attemptId = `attempt_${hashApprovalPayload({ runId: input.runId, logicalGenerationId: input.logicalGenerationId, operation, ordinal: 1 })}`;
+    const possibleDuplicate = generation.possibleDuplicate === true;
+    await sql`insert into generation_attempts
+      (id, run_id, invocation_id, logical_generation_id, operation, ordinal, status, provider, model,
+        output_mode, validation_attempts, possible_duplicate, input_tokens, output_tokens, completed_at)
+      values (${attemptId}, ${input.runId}, ${input.invocationId}, ${input.logicalGenerationId}, ${operation}, 1,
+        ${attemptStatus === 'failed' ? 'failed' : 'completed'}, ${provider}, ${model}, null, 0,
+        ${possibleDuplicate}, 0, 0, now())`;
+    attempts = [{
+      id: attemptId,
+      logical_generation_id: input.logicalGenerationId,
+      ordinal: 1,
       provider,
       model,
-      parametersHash: hashApprovalPayload({ provider, model, operation }),
-      outputModes: attempts.flatMap(({ output_mode }) => output_mode === null ? [] : [output_mode])
-    }
-  });
-  await appendTrace(sql, {
-    runId: input.runId,
-    kind: 'validation',
-    discriminator: `${input.step}:validation`,
-    step: operation,
-    status: attemptStatus === 'failed' ? 'failed' : 'completed',
-    parentSpanId: modelSpanId,
-    data: { decision: attemptStatus === 'failed' ? 'rejected' : 'accepted' }
-  });
-  await appendTrace(sql, {
-    runId: input.runId,
-    kind: 'guardrail',
-    discriminator: `${input.step}:guardrail`,
-    step: operation,
-    status: 'completed',
-    parentSpanId: modelSpanId,
-    data: { decision: attemptStatus === 'failed' ? 'blocked' : 'passed' }
-  });
-  const inputTokens = attempts.reduce((total, attempt) => total + (attempt.input_tokens ?? 0), 0);
-  const outputTokens = attempts.reduce((total, attempt) => total + (attempt.output_tokens ?? 0), 0);
-  await appendTrace(sql, {
-    runId: input.runId,
-    kind: 'usage',
-    discriminator: `${input.step}:usage`,
-    step: operation,
-    parentSpanId: modelSpanId,
-    data: { calls: attempts.length, inputTokens, outputTokens }
-  });
-  if (attempts.some(({ validation_attempts }) => validation_attempts > 0)) {
+      output_mode: null,
+      validation_attempts: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      status: attemptStatus === 'failed' ? 'failed' : 'completed',
+      possible_duplicate: possibleDuplicate
+    }];
+  }
+  for (const attempt of attempts) {
+    const failed = attempt.status === 'failed';
+    const modelSpanId = await appendTrace(sql, {
+      runId: input.runId,
+      kind: 'model_call',
+      discriminator: `${input.step}:model:${attempt.id}`,
+      step: operation,
+      attempt: attempt.ordinal,
+      status: failed ? 'failed' : 'completed',
+      parentSpanId: attemptSpanId,
+      data: {
+        durableAttemptId: attempt.id,
+        logicalGenerationId: attempt.logical_generation_id,
+        ordinal: attempt.ordinal,
+        provider: attempt.provider,
+        model: attempt.model,
+        parametersHash: hashApprovalPayload({
+          provider: attempt.provider, model: attempt.model, operation, outputMode: attempt.output_mode
+        }),
+        outputMode: attempt.output_mode,
+        possibleDuplicate: attempt.possible_duplicate
+      }
+    });
     await appendTrace(sql, {
       runId: input.runId,
-      kind: 'repair',
-      discriminator: `${input.step}:repair`,
+      kind: 'validation',
+      discriminator: `${input.step}:validation:${attempt.id}`,
       step: operation,
+      attempt: attempt.ordinal,
+      status: failed ? 'failed' : 'completed',
       parentSpanId: modelSpanId,
-      data: { attempts: attempts.reduce((total, attempt) => total + attempt.validation_attempts, 0), decision: 'validated' }
+      data: { decision: failed ? 'rejected' : 'accepted', validationAttempts: attempt.validation_attempts }
     });
+    await appendTrace(sql, {
+      runId: input.runId,
+      kind: 'guardrail',
+      discriminator: `${input.step}:guardrail:${attempt.id}`,
+      step: operation,
+      attempt: attempt.ordinal,
+      status: 'completed',
+      parentSpanId: modelSpanId,
+      data: { decision: failed ? 'blocked' : 'passed' }
+    });
+    await appendTrace(sql, {
+      runId: input.runId,
+      kind: 'usage',
+      discriminator: `${input.step}:usage:${attempt.id}`,
+      step: operation,
+      attempt: attempt.ordinal,
+      parentSpanId: modelSpanId,
+      data: { inputTokens: attempt.input_tokens ?? 0, outputTokens: attempt.output_tokens ?? 0 }
+    });
+    if (attempt.validation_attempts > 0) {
+      await appendTrace(sql, {
+        runId: input.runId,
+        kind: 'repair',
+        discriminator: `${input.step}:repair:${attempt.id}`,
+        step: operation,
+        attempt: attempt.ordinal,
+        parentSpanId: modelSpanId,
+        data: { attempts: attempt.validation_attempts, decision: 'validated' }
+      });
+    }
   }
   if (attemptStatus === 'degraded') {
     await appendTrace(sql, {
@@ -413,7 +474,10 @@ export class PostgresWorkflowStore implements WorkflowStore {
       await storeCheckpoint(sql, input);
       await persistGeneratedArtifact(sql, input);
       await appendGenerationTrace(sql, input);
-      await appendEvent(sql, input.runId, 'checkpoint_committed', { step: input.step, logicalGenerationId: input.logicalGenerationId ?? '' });
+      await appendEvent(sql, input.runId, 'checkpoint_committed', {
+        step: input.step,
+        ...(input.logicalGenerationId === undefined ? {} : { logicalGenerationId: input.logicalGenerationId })
+      });
       return input.checkpoint;
     });
   }
@@ -659,22 +723,25 @@ export class PostgresWorkflowStore implements WorkflowStore {
   }
 
   public async findRegenerationByIdempotencyKey(input: Parameters<WorkflowStore['findRegenerationByIdempotencyKey']>[0]): Promise<WorkflowRun | undefined> {
+    const idempotencyHash = hashApprovalPayload(input.idempotencyKey);
     const event = (await this.database.sql<{ run_id: string; request_hash: string }[]>`select run_id, payload->>'requestHash' request_hash
-      from run_events where type = 'regeneration_requested' and payload->>'idempotencyKey' = ${input.idempotencyKey}
+      from run_events where type = 'regeneration_requested' and payload->>'idempotencyHash' = ${idempotencyHash}
       order by created_at limit 1`)[0];
     if (event === undefined) return undefined;
-    if (event.request_hash !== input.requestHash) throw new DomainConflictError('Regeneration idempotency key conflicts with another command');
-    const run = await runById(this.database.sql, event.run_id); if (run === undefined) throw new DomainNotFoundError('run');
+    if (event.request_hash !== hashApprovalPayload(input.requestHash)) throw new DomainConflictError('Regeneration idempotency key conflicts with another command');
+    const run = await runById(this.database.sql, event.run_id);
+    if (run === undefined) throw new DomainNotFoundError('run');
     return asRun(run);
   }
   public async regenerateRun(input: RegenerateRunInput): Promise<WorkflowRun> {
     return this.database.sql.begin(async (sql) => {
       await sql`select pg_advisory_xact_lock(hashtext(${`regeneration:${input.idempotencyKey}`}))`;
+      const idempotencyHash = hashApprovalPayload(input.idempotencyKey);
       const replay = (await sql<{ run_id: string; request_hash: string }[]>`select run_id, payload->>'requestHash' request_hash
-        from run_events where type = 'regeneration_requested' and payload->>'idempotencyKey' = ${input.idempotencyKey}
+        from run_events where type = 'regeneration_requested' and payload->>'idempotencyHash' = ${idempotencyHash}
         order by created_at limit 1`)[0];
       if (replay !== undefined) {
-        if (replay.request_hash !== input.requestHash) throw new DomainConflictError('Regeneration idempotency key conflicts with another command');
+        if (replay.request_hash !== hashApprovalPayload(input.requestHash)) throw new DomainConflictError('Regeneration idempotency key conflicts with another command');
         const replayRun = await runById(sql, replay.run_id, true); if (replayRun === undefined) throw new DomainNotFoundError('run');
         return asRun(replayRun);
       }
@@ -686,7 +753,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
       if (row === undefined) throw new DomainConflictError('Run version is stale');
       await insertCommand(sql, input.command);
       await appendEvent(sql, input.runId, 'regeneration_requested', {
-        requestedBy: input.requestedBy, idempotencyKey: input.idempotencyKey, requestHash: input.requestHash, draftVersion: row.version
+        idempotencyHash, requestHash: hashApprovalPayload(input.requestHash), draftVersion: row.version
       });
       return asRun(row);
     });
@@ -752,7 +819,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
           step: operation,
           status: 'failed',
           ...(parentSpanId === undefined ? {} : { parentSpanId }),
-          data: { operation }
+          data: { operation, logicalGenerationId: `failed_${hashApprovalPayload({ runId: input.runId, operation, reasonCode })}` }
         });
       }
       await appendTrace(sql, {

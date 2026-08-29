@@ -68,7 +68,7 @@ export async function* createRunEventSubscription(
       throw error;
     }
     const ordered = rows
-      .map((row) => runEventEnvelopeSchema.parse(row))
+      .map((row) => runEventEnvelopeSchema.parse(row) as RunEventEnvelope)
       .filter((row) => row.streamId === streamId && row.sequence > sequence)
       .sort((left, right) => left.sequence - right.sequence);
     if (ordered.length > 0) {
@@ -100,18 +100,31 @@ function requireSpan(spans: readonly TraceSpan[], kind: TraceSpan['kind'], descr
 function parentOf(span: TraceSpan, byId: ReadonlyMap<string, TraceSpan>): TraceSpan | undefined {
   return span.parentSpanId === undefined ? undefined : byId.get(span.parentSpanId);
 }
+type TraceFor<K extends TraceSpan['kind']> = Extract<TraceSpan, { kind: K }>;
+
+function spansOfKind<K extends TraceSpan['kind']>(spans: readonly TraceSpan[], kind: K): TraceFor<K>[] {
+  return spans.filter((span) => span.kind === kind) as TraceFor<K>[];
+}
 
 function assertAttemptEvidence(spans: readonly TraceSpan[], attempt: TraceSpan): void {
-  const model = spans.find((span) => span.kind === 'model_call' && span.step === attempt.step && span.parentSpanId === attempt.spanId);
-  if (model === undefined) throw new TraceCompletenessError(`Trace is missing model call for ${attempt.step}`);
-  if (!spans.some((span) => span.kind === 'validation' && span.step === attempt.step && span.parentSpanId === model.spanId)) {
-    throw new TraceCompletenessError(`Trace is missing validation for ${attempt.step}`);
-  }
-  if (!spans.some((span) => span.kind === 'guardrail' && span.step === attempt.step && span.parentSpanId === model.spanId)) {
-    throw new TraceCompletenessError(`Trace is missing guardrail for ${attempt.step}`);
-  }
-  if (!spans.some((span) => span.kind === 'usage' && span.step === attempt.step && span.parentSpanId === model.spanId)) {
-    throw new TraceCompletenessError(`Trace is missing usage for ${attempt.step}`);
+  const models = spansOfKind(spans, 'model_call').filter((span) => span.step === attempt.step && span.parentSpanId === attempt.spanId);
+  if (models.length === 0) throw new TraceCompletenessError(`Trace is missing model call for ${attempt.step}`);
+  const ordinals = new Set<number>();
+  for (const model of models) {
+    if (ordinals.has(model.data.ordinal)) throw new TraceCompletenessError(`Trace has duplicate model ordinal for ${attempt.step}`);
+    ordinals.add(model.data.ordinal);
+    const validation = spansOfKind(spans, 'validation').find((span) => span.step === attempt.step && span.parentSpanId === model.spanId);
+    if (validation === undefined) throw new TraceCompletenessError(`Trace is missing validation for ${attempt.step} attempt ${model.data.ordinal}`);
+    if (!spansOfKind(spans, 'guardrail').some((span) => span.step === attempt.step && span.parentSpanId === model.spanId)) {
+      throw new TraceCompletenessError(`Trace is missing guardrail for ${attempt.step} attempt ${model.data.ordinal}`);
+    }
+    if (!spansOfKind(spans, 'usage').some((span) => span.step === attempt.step && span.parentSpanId === model.spanId)) {
+      throw new TraceCompletenessError(`Trace is missing usage for ${attempt.step} attempt ${model.data.ordinal}`);
+    }
+    if (validation.data.validationAttempts > 0
+      && !spansOfKind(spans, 'repair').some((span) => span.step === attempt.step && span.parentSpanId === model.spanId)) {
+      throw new TraceCompletenessError(`Trace is missing repair for ${attempt.step} attempt ${model.data.ordinal}`);
+    }
   }
 }
 
@@ -136,7 +149,7 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
     }
   }
 
-  const authorizations = spans.filter(({ kind }) => kind === 'authorization_lookup');
+  const authorizations = spansOfKind(spans, 'authorization_lookup');
   if (authorizations.length === 0) throw new TraceCompletenessError('Trace is missing authorization lookup');
   const denied = authorizations.some((span) => span.status === 'denied' || span.data.decision === 'denied');
   if (denied) {
@@ -152,14 +165,16 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
     throw new TraceCompletenessError('Trace has no permitted authorization decision');
   }
 
-  const fatal = spans.find(({ kind }) => kind === 'fatal_failure');
-  if (fatal !== undefined) {
-    const triggering = parentOf(fatal, byId);
-    if (triggering === undefined || !['specialist_attempt', 'strategy_attempt'].includes(triggering.kind)) {
-      throw new TraceCompletenessError('Fatal decision is not linked to its triggering attempt');
-    }
-    if (fatal.status !== 'failed' || fatal.data.decision !== 'fatal') {
-      throw new TraceCompletenessError('Fatal decision is not typed as failed');
+  const failedAttempts = [
+    ...spansOfKind(spans, 'specialist_attempt'),
+    ...spansOfKind(spans, 'strategy_attempt')
+  ].filter((span) => span.status === 'failed');
+  if (failedAttempts.length > 0) {
+    for (const attempt of failedAttempts) {
+      const fatal = spansOfKind(spans, 'fatal_failure').find((span) => span.parentSpanId === attempt.spanId);
+      if (fatal === undefined || fatal.status !== 'failed' || fatal.data.decision !== 'fatal') {
+        throw new TraceCompletenessError('Failed attempt is missing its linked fatal decision');
+      }
     }
     return;
   }
@@ -176,7 +191,7 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
   requireSpan(spans, 'policy_decision', 'policy decision');
   requireSpan(spans, 'recommendation', 'recommendation IDs');
 
-  for (const partial of spans.filter(({ kind }) => kind === 'partial_failure')) {
+  for (const partial of spansOfKind(spans, 'partial_failure')) {
     const triggering = parentOf(partial, byId);
     if (triggering === undefined || !['specialist_attempt', 'strategy_attempt'].includes(triggering.kind)) {
       throw new TraceCompletenessError('Partial decision is not linked to its triggering attempt');
@@ -185,8 +200,17 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
       throw new TraceCompletenessError('Partial decision is not typed as degraded');
     }
   }
+  for (const attempt of [
+    ...spansOfKind(spans, 'specialist_attempt'),
+    ...spansOfKind(spans, 'strategy_attempt')
+  ].filter((span) => span.status === 'degraded')) {
+    const partial = spansOfKind(spans, 'partial_failure').find((span) => span.parentSpanId === attempt.spanId);
+    if (partial === undefined || partial.status !== 'degraded' || partial.data.decision !== 'partial') {
+      throw new TraceCompletenessError(`Degraded attempt ${attempt.step} is missing its linked partial decision`);
+    }
+  }
 
-  const requirements = spans.filter(({ kind }) => kind === 'approval_requirement');
+  const requirements = spansOfKind(spans, 'approval_requirement');
   for (const requirement of requirements) {
     if (typeof requirement.data.entryId !== 'string'
       || typeof requirement.data.subjectHash !== 'string'
@@ -202,7 +226,7 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
     if (requirements.length === 0) throw new TraceCompletenessError('Non-terminal trace has no approval requirement');
     return;
   }
-  const decisions = spans.filter(({ kind }) => kind === 'approval_decision');
+  const decisions = spansOfKind(spans, 'approval_decision');
   if (requirements.length > 0 && decisions.length === 0) throw new TraceCompletenessError('Trace is missing approval decision');
   for (const decision of decisions) {
     const requirement = parentOf(decision, byId);

@@ -25,7 +25,7 @@ import type { DatabaseClient } from '../db/client.js';
 
 const CHANNEL = 'slacato_run_events';
 const REPLAY_PAGE_SIZE = 256;
-const REPLAY_POLL_INTERVAL_MS = 250;
+const REPLAY_RECONCILIATION_INTERVAL_MS = 1_000;
 
 type EventRow = Readonly<{
   id: string;
@@ -62,7 +62,7 @@ function envelopeFromRow(row: EventRow): RunEventEnvelope {
     version: row.version,
     timestamp: new Date(row.created_at).toISOString(),
     payload: row.payload
-  });
+  }) as RunEventEnvelope;
 }
 
 function traceFromRow(row: TraceRow): TraceSpan {
@@ -85,6 +85,7 @@ function traceFromRow(row: TraceRow): TraceSpan {
 export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSource, TraceStore {
   private readonly waiters = new Map<string, Set<WakeWaiter>>();
   private listener: Promise<ListenMeta> | undefined;
+  private reconciliation: NodeJS.Timeout | undefined;
   private closed = false;
 
   public constructor(private readonly database: DatabaseClient) {}
@@ -98,6 +99,7 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     this.closed = true;
     for (const streamWaiters of this.waiters.values()) for (const waiter of streamWaiters) waiter.abort();
     this.waiters.clear();
+    clearInterval(this.reconciliation);
     if (this.listener !== undefined) await (await this.listener).unlisten();
   }
   public async onModuleDestroy(): Promise<void> {
@@ -151,11 +153,9 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     this.waiters.set(streamId, streamWaiters);
     let settled = false;
     let waiter: WakeWaiter;
-    let poll: NodeJS.Timeout | undefined;
     const cleanup = (): void => {
       if (settled) return;
       settled = true;
-      clearTimeout(poll);
       signal.removeEventListener('abort', cleanup);
       streamWaiters.delete(waiter);
       if (streamWaiters.size === 0) this.waiters.delete(streamId);
@@ -164,8 +164,6 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     waiter = { resolve: cleanup, abort: cleanup };
     streamWaiters.add(waiter);
     signal.addEventListener('abort', cleanup, { once: true });
-    poll = setTimeout(cleanup, REPLAY_POLL_INTERVAL_MS);
-    poll.unref();
     if (signal.aborted) cleanup();
     return promise;
   }
@@ -233,6 +231,10 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
   private async ensureListener(): Promise<void> {
     if (this.closed) throw new Error('Postgres event store is closed');
     this.listener ??= this.database.sql.listen(CHANNEL, (streamId) => this.wake(streamId));
+    this.reconciliation ??= setInterval(() => {
+      for (const streamId of this.waiters.keys()) this.wake(streamId);
+    }, REPLAY_RECONCILIATION_INTERVAL_MS);
+    this.reconciliation.unref();
     await this.listener;
   }
 

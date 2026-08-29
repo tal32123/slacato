@@ -37,18 +37,19 @@ export class PostgresDealBriefAccessControl implements DealBriefAccessControl {
       await sql`insert into audit_events (id, actor_id, type, payload) values
         (${`audit_${crypto.randomUUID()}`}, ${actorId}, 'deal_brief_access_denied', '{"reason":"forbidden"}'::jsonb)`;
       if (runId === undefined) return;
-      const traceId = `trace_${hashApprovalPayload(runId)}`;
-      const spanId = `span_${hashApprovalPayload({ runId, kind: 'authorization_lookup', discriminator: 'start' })}`;
+      const denialAttemptId = crypto.randomUUID();
+      const denialRunId = `denial_${hashApprovalPayload({ runId, actorId, denialAttemptId })}`;
+      const traceId = `trace_${hashApprovalPayload(denialRunId)}`;
+      const spanId = `span_${hashApprovalPayload({ denialRunId, kind: 'authorization_lookup', denialAttemptId })}`;
       await sql`insert into trace_spans (id, trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at)
-        values (${spanId}, ${traceId}, ${spanId}, ${runId}, null, 'authorization', 1, 'authorization_lookup', 'denied',
+        values (${spanId}, ${traceId}, ${spanId}, ${denialRunId}, null, 'authorization', 1, 'authorization_lookup', 'denied',
           ${JSON.stringify({
             decision: 'denied',
-            correlationHash: hashApprovalPayload({ runId, actorId }),
+            correlationHash: hashApprovalPayload({ denialRunId, actorId }),
             reasonCode: 'forbidden',
             readKinds: ['opportunity', 'account', 'requester', 'permissions'],
             readCount: 4
-          })}::jsonb, now(), now())
-        on conflict (id) do nothing`;
+          })}::jsonb, now(), now())`;
     });
   }
 
