@@ -1,22 +1,14 @@
 import { Controller, Inject, Post, Req } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/guard.js';
 import { z } from 'zod';
+import { startBriefRequestSchema, startBriefResponseSchema, type StartBriefRequest } from '@slacato/contracts';
 import { ZodBody, ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
 import { REGENERATE_DEAL_BRIEF, START_DEAL_BRIEF, toHttpError } from './contracts.js';
 import type { RegenerateDealBrief, StartDealBrief } from '@slacato/core';
 
-const startSchema = z.object({
-  opportunityId: z.string().min(1),
-  idempotencyKey: z.string().min(1).max(256),
-  budget: z.object({
-    maxCalls: z.number().int().positive(),
-    maxInputTokens: z.number().int().positive(),
-    maxOutputTokens: z.number().int().positive(),
-    deadlineMs: z.number().int().min(1_000)
-  }).strict()
-}).strict();
-const runResponseSchema = z.object({ runId: z.string().min(1) }).strict();
-type StartInput = z.infer<typeof startSchema>;
+const startSchema = startBriefRequestSchema;
+const runResponseSchema = startBriefResponseSchema;
+type StartInput = StartBriefRequest;
 const regenerateSchema = z.object({ idempotencyKey: z.string().min(1).max(256) }).strict();
 const regenerateParamsSchema = z.object({ runId: z.string().min(1) }).strict();
 type RegenerateParams = z.infer<typeof regenerateParamsSchema>;

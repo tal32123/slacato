@@ -6,6 +6,7 @@ import { queryClient, sessionQueryOptions, sessionRuntime, SessionInvalidatedErr
 import { DealBrief } from '@/features/briefs/deal-brief';
 import { EvidenceDetail } from '@/features/briefs/evidence-detail';
 import { dealWorkspaceQueryOptions } from '@/features/deals/queries';
+import { GenerateBriefAction } from '@/features/runs/generate-brief-action';
 import { throwProtectedLoaderError } from './loader-security';
 
 export async function dealLoader({ request, params }: LoaderFunctionArgs): Promise<DealWorkspaceView | null> {
@@ -104,7 +105,12 @@ export function DealRoute(): React.JSX.Element {
       ref={container}
       className={desktopEvidence && selected !== undefined ? 'grid min-w-0 grid-cols-[minmax(640px,1fr)_clamp(360px,28vw,440px)] gap-6' : 'min-w-0'}
     >
-      <DealBrief workspace={workspace} selectedEvidenceId={selectedEvidenceId} onEvidence={openEvidence} />
+      <DealBrief
+        workspace={workspace}
+        selectedEvidenceId={selectedEvidenceId}
+        onEvidence={openEvidence}
+        primaryAction={<GenerateBriefAction opportunityId={workspace.deal.opportunityId} sessionVersion={workspace.sessionVersion} />}
+      />
       {selected !== undefined && <EvidenceDetail evidence={selected} desktop={desktopEvidence} onClose={closeEvidence} />}
     </div>
   );

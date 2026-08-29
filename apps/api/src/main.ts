@@ -17,6 +17,7 @@ import {
 } from '@slacato/infrastructure';
 import { AppModule } from './app.module.js';
 import { PostgresDealQueryRepository } from './modules/deals/deals.repository.js';
+import { PostgresRunApprovalQueryRepository } from './modules/runs/run-approval.repository.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
 
@@ -62,6 +63,7 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
   const workflowAccess = new PostgresDealBriefAccessControl(database);
   const runEvents = new PostgresEventStore(database);
   const dealQueries = new PostgresDealQueryRepository(database);
+  const runApprovalQueries = new PostgresRunApprovalQueryRepository(database);
   const app = await NestFactory.create<NestExpressApplication>(AppModule.register({
     sessionSecret: env.SESSION_SECRET,
     environment: env.NODE_ENV,
@@ -74,6 +76,7 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
     }),
     regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
     decideApproval: new DecideApproval(workflowStore, workflowAccess),
+    queries: runApprovalQueries,
     runEvents: { bus: runEvents, query: new PostgresRunEventQuery(database) }
   }, {
     provider: env.AI_PROVIDER,

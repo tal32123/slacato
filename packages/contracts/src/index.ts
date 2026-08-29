@@ -4,6 +4,8 @@ export * from './auth.js';
 export * from './events.js';
 export * from './diagnostics.js';
 export * from './deals.js';
+export * from './runs.js';
+export * from './approvals.js';
 
 export const liveHealthSchema = z.object({ status: z.literal('live') }).strict();
 export const readyHealthSchema = z.object({

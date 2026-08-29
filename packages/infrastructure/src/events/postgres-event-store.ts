@@ -259,14 +259,26 @@ export class PostgresRunEventQuery implements RunEventQuery {
         (select event.id from run_events event where event.run_id = run.id order by event.sequence desc limit 1) watermark
       from runs run
       join opportunities opportunity on opportunity.id = run.opportunity_id
-      where run.id = ${streamId} and run.requested_by = ${actorId}
-        and exists (
-          select 1 from permission_grants permission
-          where permission.persona_id = ${actorId}
-            and permission.account_id = opportunity.account_id
-            and permission.can_read
-            and (not opportunity.restricted or permission.can_read_restricted)
-        )`)[0];
+      where run.id = ${streamId}
+        and (
+          (
+            run.requested_by = ${actorId} and exists (
+              select 1 from permission_grants permission
+              where permission.persona_id = ${actorId}
+                and permission.account_id = opportunity.account_id
+                and permission.can_read
+                and (not opportunity.restricted or permission.can_read_restricted)
+            )
+          ) or exists (
+            select 1 from approval_subjects subject
+            join approval_requirement_entries entry on entry.approval_subject_id = subject.id
+            join approval_authority_grants authority on authority.persona_id = ${actorId}
+              and authority.account_id = opportunity.account_id
+              and authority.authority in (select jsonb_array_elements_text(entry.eligible_authorities))
+            where subject.run_id = run.id
+          )
+        )
+        `)[0];
     if (row === undefined) return undefined;
     return runSnapshotSchema.parse({
       streamId: row.id,

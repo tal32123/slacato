@@ -8,11 +8,27 @@ import {
   dealWorkspaceViewSchema,
   logoutResponseSchema,
   personaListResponseSchema,
+  approvalDecisionRequestSchema,
+  approvalDecisionResultSchema,
+  approvalDetailResponseSchema,
+  approvalInboxResponseSchema,
+  runDetailResponseSchema,
+  runListResponseSchema,
+  startBriefRequestSchema,
+  startBriefResponseSchema,
   type AuthSessionResponse,
   type DealListResponse,
   type DealWorkspaceView,
   type DemoDiagnosticsResponse,
-  type Persona
+  type Persona,
+  type ApprovalDecisionRequest,
+  type ApprovalDecisionResult,
+  type ApprovalDetailResponse,
+  type ApprovalInboxResponse,
+  type RunDetailResponse,
+  type RunListResponse,
+  type StartBriefRequest,
+  type StartBriefResponse,
 } from '@slacato/contracts';
 
 interface WireSchema<T> {
@@ -76,4 +92,36 @@ export function fetchDeals(signal: AbortSignal | undefined): Promise<DealListRes
 
 export function fetchDealWorkspace(opportunityId: string, signal: AbortSignal | undefined): Promise<DealWorkspaceView> {
   return requestJson(dealWorkspaceViewSchema, `/api/deals/${encodeURIComponent(opportunityId)}`, { signal });
+}
+
+export function fetchRuns(signal: AbortSignal | undefined): Promise<RunListResponse> {
+  return requestJson(runListResponseSchema, '/api/runs', { signal });
+}
+
+export function fetchRunDetail(runId: string, signal: AbortSignal | undefined): Promise<RunDetailResponse> {
+  return requestJson(runDetailResponseSchema, `/api/runs/${encodeURIComponent(runId)}/detail`, { signal });
+}
+
+export function startBrief(input: StartBriefRequest, csrfToken: string): Promise<StartBriefResponse> {
+  return requestJson(startBriefResponseSchema, '/api/runs/deal-brief', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(startBriefRequestSchema.parse(input))
+  });
+}
+
+export function fetchApprovals(signal: AbortSignal | undefined): Promise<ApprovalInboxResponse> {
+  return requestJson(approvalInboxResponseSchema, '/api/approvals', { signal });
+}
+
+export function fetchApprovalDetail(subjectId: string, signal: AbortSignal | undefined): Promise<ApprovalDetailResponse> {
+  return requestJson(approvalDetailResponseSchema, `/api/approvals/${encodeURIComponent(subjectId)}`, { signal });
+}
+
+export function decideApproval(input: ApprovalDecisionRequest, csrfToken: string): Promise<ApprovalDecisionResult> {
+  return requestJson(approvalDecisionResultSchema, '/api/approvals/decisions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(approvalDecisionRequestSchema.parse(input))
+  });
 }

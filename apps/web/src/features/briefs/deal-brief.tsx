@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { DealWorkspaceView, RecommendedActionView, StakeholderView } from '@slacato/contracts';
 import { AlertTriangle, ArrowLeft, CalendarDays, CircleDollarSign, Gauge, UserRound } from 'lucide-react';
 import { Link } from 'react-router';
@@ -11,10 +12,11 @@ const sectionOrder = [
   'recommendedNextActions', 'missingInformation', 'sourceEvidence', 'confidenceAndReviewWarnings'
 ] as const;
 
-export function DealBrief({ workspace, selectedEvidenceId, onEvidence }: Readonly<{
+export function DealBrief({ workspace, selectedEvidenceId, onEvidence, primaryAction }: Readonly<{
   workspace: DealWorkspaceView;
   selectedEvidenceId: string | null;
   onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
+  primaryAction: ReactNode;
 }>): React.JSX.Element {
   const { deal, brief } = workspace;
   const evidence = new Map(workspace.evidence.map((item) => [item.id, item]));
@@ -22,10 +24,15 @@ export function DealBrief({ workspace, selectedEvidenceId, onEvidence }: Readonl
     <article data-deal-main className="min-w-0">
       <Button asChild variant="link" className="min-h-11 px-0"><Link to="/deals"><ArrowLeft aria-hidden="true" />Back to authorized deals</Link></Button>
       <header className="mt-3 border-b pb-7">
-        <div className="flex flex-wrap items-center gap-2"><StatusBadge status={deal.restricted ? 'attention' : 'ready'} label={deal.restricted ? 'Restricted — authorized' : 'Authorized workspace'} /><StatusBadge status="readonly" label={brief.status === 'generated' ? 'Generated brief' : 'Source-backed brief'} /></div>
-        <p className="mt-4 text-sm font-medium text-primary">{deal.opportunityId}</p>
-        <h1 className="mt-1 max-w-4xl text-3xl font-semibold tracking-tight sm:text-4xl">{deal.opportunityName}</h1>
-        <p className="mt-3 max-w-3xl leading-7 text-muted-foreground">Brief-first negotiation preparation for {deal.accountName}. Suggestions remain internal and require seller judgment.</p>
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2"><StatusBadge status={deal.restricted ? 'attention' : 'ready'} label={deal.restricted ? 'Restricted — authorized' : 'Authorized workspace'} /><StatusBadge status="readonly" label={brief.status === 'generated' ? 'Generated brief' : 'Source-backed brief'} /></div>
+            <p className="mt-4 text-sm font-medium text-primary">{deal.opportunityId}</p>
+            <h1 className="mt-1 max-w-4xl text-3xl font-semibold tracking-tight sm:text-4xl">{deal.opportunityName}</h1>
+            <p className="mt-3 max-w-3xl leading-7 text-muted-foreground">Brief-first negotiation preparation for {deal.accountName}. Suggestions remain internal and require seller judgment.</p>
+          </div>
+          {primaryAction}
+        </div>
       </header>
 
       <section className="grid gap-3 border-b py-6 sm:grid-cols-2 xl:grid-cols-4" aria-label="Deal metrics">

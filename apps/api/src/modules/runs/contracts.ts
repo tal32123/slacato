@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { AppError, DecideApproval, RegenerateDealBrief, RunEventBus, RunEventQuery, StartDealBrief } from '@slacato/core';
+import type { RunApprovalQueryRepository } from './run-approval.repository.js';
 
 export const START_DEAL_BRIEF = Symbol('START_DEAL_BRIEF');
 export const REGENERATE_DEAL_BRIEF = Symbol('REGENERATE_DEAL_BRIEF');
@@ -11,6 +12,7 @@ export const RUN_EVENT_HEARTBEAT_MS = Symbol('RUN_EVENT_HEARTBEAT_MS');
 export type WorkflowApiOptions = Readonly<{
   startDealBrief: StartDealBrief;
   regenerateDealBrief: RegenerateDealBrief;
+  queries?: RunApprovalQueryRepository | undefined;
   runEvents?: Readonly<{
     bus: RunEventBus;
     query: RunEventQuery;

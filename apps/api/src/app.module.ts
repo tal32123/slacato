@@ -24,7 +24,7 @@ export class AppModule {
         HealthModule,
         AuthModule.register(auth),
         ...(diagnostics === undefined ? [] : [DiagnosticsModule.register(diagnostics)]),
-        ...(workflow === undefined ? [] : [RunsModule.register(workflow), ApprovalsModule.register(workflow.decideApproval)]),
+        ...(workflow === undefined ? [] : [RunsModule.register(workflow), ApprovalsModule.register(workflow.decideApproval, workflow.queries)]),
         ...(deals === undefined ? [] : [DealsModule.register(deals)])
       ]
     };
