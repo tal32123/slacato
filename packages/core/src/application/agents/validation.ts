@@ -74,7 +74,12 @@ const MATERIAL_PREDICATES = [
   { assertion: /\baccepted\b/i, evidence: /\b(?:accepted|agreed)\b/i },
   { assertion: /\brejected\b/i, evidence: /\b(?:rejected|declined)\b/i },
   { assertion: /\bunlimited\b/i, evidence: /\bunlimited\b/i },
-  { assertion: /\bcapped\b/i, evidence: /\b(?:capped|limited)\b/i }
+  { assertion: /\bcapped\b/i, evidence: /\b(?:capped|limited)\b/i },
+  { assertion: /\bcommit(?:s|ted)?\b/i, evidence: /\bcommit(?:s|ted)?\b/i },
+  { assertion: /\binclude(?:s|d)?\b/i, evidence: /\binclude(?:s|d)?\b/i },
+  { assertion: /\bexclude(?:s|d)?\b/i, evidence: /\bexclude(?:s|d)?\b/i },
+  { assertion: /\boppos(?:e|es|ed)\b/i, evidence: /\boppos(?:e|es|ed)\b/i },
+  { assertion: /\bsupport(?:s|ed)?\b/i, evidence: /\b(?:support(?:s|ed)?|need(?:s|ed)?|require(?:s|d)?)\b/i }
 ] as const;
 
 /** Conservative, deterministic atom matching: no model judge and no whole-sentence copy requirement. */
@@ -90,9 +95,7 @@ function textAtomsSupported(assertion: string, support: string): boolean {
   if (assertionTerms.size === 0) return anchors.length > 0 && matchedPredicates.length > 0;
   const evidenceTerms = supportTerms(support);
   const overlap = [...assertionTerms].filter((term) => evidenceTerms.has(term)).length;
-  const minimumOverlap = assertionTerms.size === 1 && anchors.length > 0 && matchedPredicates.length > 0
-    ? 1
-    : Math.max(2, Math.ceil(assertionTerms.size * 0.45));
+  const minimumOverlap = assertionTerms.size === 1 && anchors.length > 0 && matchedPredicates.length > 0 ? 1 : assertionTerms.size;
   return overlap >= minimumOverlap;
 }
 
@@ -108,12 +111,25 @@ function explicitlyNegates(content: string, anchor: string): boolean {
 const CONTRADICTORY_PREDICATES = [
   ['accepted', 'rejected'], ['approved', 'denied'], ['approved', 'rejected'], ['agreed', 'declined'],
   ['required', 'optional'], ['unlimited', 'capped'], ['unlimited', 'limited'], ['increased', 'decreased'],
-  ['positive', 'negative']
+  ['positive', 'negative'], ['includes', 'excludes'], ['included', 'excluded'], ['allows', 'prohibits'],
+  ['enabled', 'disabled'], ['present', 'absent'], ['available', 'unavailable'], ['won', 'lost']
 ] as const;
+
+const POSITIVE_INTENT = /\b(?:need(?:s|ed)?|want(?:s|ed)?|support(?:s|ed)?|prefer(?:s|red)?|accept(?:s|ed)?|approv(?:e|es|ed)|agree(?:s|d)?|request(?:s|ed)?|commit(?:s|ted)?|advocat(?:e|es|ed)|endors(?:e|es|ed)|allow(?:s|ed)?|include(?:s|d)?|enable(?:s|d)?|require(?:s|d)?)\b/i;
+const NEGATIVE_INTENT = /\b(?:oppos(?:e|es|ed)|reject(?:s|ed)?|refus(?:e|es|ed)|declin(?:e|es|ed)|object(?:s|ed)?|resist(?:s|ed)?|block(?:s|ed)?|den(?:y|ies|ied)|avoid(?:s|ed)?|cancel(?:s|led)?|prohibit(?:s|ed)?|exclude(?:s|d)?|disable(?:s|d)?)\b/i;
+const NEGATED_MATERIAL_PREDICATE = /\b(?:not|never|no longer|cannot|can't|won't|doesn't|didn't)\b(?:\s+\S+){0,3}\s+(?:need|want|support|prefer|accept|approve|agree|request|commit|allow|include|enable|require)\w*\b/i;
 
 function hasPredicateContradiction(statement: string, evidence: string): boolean {
   const normalizedStatement = normalize(statement);
   const normalizedEvidence = normalize(evidence);
+  const statementPositive = POSITIVE_INTENT.test(statement);
+  const statementNegative = NEGATIVE_INTENT.test(statement);
+  const evidencePositive = POSITIVE_INTENT.test(evidence);
+  const evidenceNegative = NEGATIVE_INTENT.test(evidence);
+  if ((statementPositive && !statementNegative && evidenceNegative && !evidencePositive)
+    || (statementNegative && !statementPositive && evidencePositive && !evidenceNegative)) return true;
+  if (NEGATED_MATERIAL_PREDICATE.test(statement) !== NEGATED_MATERIAL_PREDICATE.test(evidence)
+    && (POSITIVE_INTENT.test(statement) || POSITIVE_INTENT.test(evidence))) return true;
   if (/\bnot required\b/.test(normalizedStatement) && /\brequired\b/.test(normalizedEvidence) && !/\bnot required\b/.test(normalizedEvidence)) return true;
   if (/\brequired\b/.test(normalizedStatement) && !/\bnot required\b/.test(normalizedStatement) && /\bnot required\b/.test(normalizedEvidence)) return true;
   return CONTRADICTORY_PREDICATES.some(([left, right]) =>
@@ -200,7 +216,27 @@ function tupleSupported(values: readonly (string | number)[], claims: readonly C
 }
 
 function isExplicitUncertainty(value: string): boolean {
-  return /\b(?:insufficient|unknown|unverified|no verified|not (?:available|known|verified)|requires? (?:review|verification)|hypothesis)\b/i.test(value);
+  if (!safeGeneratedProse(value)) return false;
+  return /^(?:unknown|unverified|not (?:available|known|verified)|requires? (?:review|verification)|hypothesis|no verified (?:summary|information) is available yet|insufficient verified information|insufficient (?:supported )?evidence is available(?: for (?:an executive summary|a negotiation-state assessment))?)\.?$/i.test(value.trim());
+}
+
+/** Missing-information fields are useful only when their grammar explicitly remains open/non-factual. */
+function safeInformationRequest(value: string): boolean {
+  if (!safeGeneratedProse(value)) return false;
+  const normalized = value.trim();
+  if (/\b(?:that|according to|already|definitely|certainly)\b/i.test(normalized)) return false;
+  return /^(?:(?:who|what|when|where|which|how|whether|can|could|should|is|are|do|does)\b.*\?|(?:identify|determine|clarify)\b.*[.?]|(?:confirm|verify|check) whether\b.*[.?])$/i.test(normalized);
+}
+
+/** Imperative workflow action, not customer-facing promise or factual assertion. */
+function safeRecommendationAction(value: string): boolean {
+  if (!safeGeneratedProse(value) || /\b(?:promise|guarantee|bypass|conceal|mislead|fabricate)\b/i.test(value)) return false;
+  if (materialAnchors(value).length > 0 && !/^(?:confirm|clarify|review|validate|escalate)\b/i.test(value.trim())) return false;
+  return /^(?:schedule|arrange|prepare|confirm|clarify|request|review|document|follow up|coordinate|identify|validate|escalate)\b/i.test(value.trim());
+}
+
+function safeGenericOwner(value: string): boolean {
+  return /^(?:account executive|sales engineer|legal|procurement|deal owner|unassigned)$/i.test(value.trim());
 }
 
 function withoutInsufficient<Value extends Readonly<{ insufficient: readonly Claim[] }>>(value: Value): Omit<Value, 'insufficient'> {
@@ -225,6 +261,7 @@ export function validateConversationArtifact(value: unknown, manifestId: string,
     objections: parsed.objections.filter((assertion) => assertionSupported(assertion, result.kept)),
     claims: result.kept,
     missingContext: [
+      ...parsed.missingContext.filter(safeInformationRequest),
       ...result.insufficient.map((claim) => `Verify evidence for claim ${claim.id}.`),
       ...(unsupportedAssertions.length === 0 ? [] : ['Verify unsupported conversation details.'])
     ],
@@ -265,6 +302,7 @@ export function validateStakeholderArtifact(value: unknown, manifestId: string, 
     claims: top.kept,
     stakeholders: supportedStakeholders.map(withoutInsufficient),
     coverageGaps: [
+      ...parsed.coverageGaps.filter(safeInformationRequest),
       ...insufficient.map((claim) => `Verify evidence for claim ${claim.id}.`),
       ...(unsupportedStakeholders.length === 0 ? [] : ['Verify unsupported stakeholder records.'])
     ],
@@ -317,12 +355,16 @@ export function validateDealBrief(value: unknown, evidence: readonly AgentEviden
   const actions = parsed.recommendedNextActions.actions.flatMap((action) => {
     const result = pruneClaims(action.claims, map);
     insufficient.push(...result.insufficient);
-    const fieldsSupported = tupleSupported([
-      action.action, action.rationale, action.priority,
-      ...(action.owner === undefined ? [] : [action.owner]),
-      ...(action.dueDate === undefined ? [] : [action.dueDate])
-    ], result.kept);
-    return result.insufficient.length > 0 || result.kept.length === 0 || !fieldsSupported ? [] : [{ ...action, claims: result.kept }];
+    if (result.insufficient.length > 0 || result.kept.length === 0 || !safeRecommendationAction(action.action)
+      || !assertionSupported(action.rationale, result.kept)) return [];
+    return [{
+      action: action.action,
+      priority: action.priority,
+      rationale: action.rationale,
+      claims: result.kept,
+      ...(action.owner === undefined || (!safeGenericOwner(action.owner) && !fieldSupported(action.owner, result.kept)) ? {} : { owner: action.owner }),
+      ...(action.dueDate === undefined || !fieldSupported(action.dueDate, result.kept) ? {} : { dueDate: action.dueDate })
+    }];
   });
   const snapshotClaims = process(parsed.dealSnapshot.claims) ?? [];
   const summaryClaims = process(parsed.executiveSummary.claims) ?? [];
@@ -404,7 +446,13 @@ export function validateDealBrief(value: unknown, evidence: readonly AgentEviden
     },
     stakeholderMap: {
       stakeholders: supportedStakeholders,
-      ...(supportedStakeholders.length === parsed.stakeholderMap.stakeholders.length ? {} : { coverageGaps: ['Verify unsupported stakeholder records.'] }),
+      ...((parsed.stakeholderMap.coverageGaps?.filter(safeInformationRequest).length ?? 0) === 0
+        && supportedStakeholders.length === parsed.stakeholderMap.stakeholders.length ? {} : {
+          coverageGaps: [
+            ...(parsed.stakeholderMap.coverageGaps?.filter(safeInformationRequest) ?? []),
+            ...(supportedStakeholders.length === parsed.stakeholderMap.stakeholders.length ? [] : ['Verify unsupported stakeholder records.'])
+          ]
+        }),
       ...(stakeholderSectionClaims.length === 0 ? {} : { claims: stakeholderSectionClaims })
     },
     negotiationState: {
@@ -420,6 +468,11 @@ export function validateDealBrief(value: unknown, evidence: readonly AgentEviden
     recommendedNextActions: { actions },
     missingInformation: {
       items: [
+        ...parsed.missingInformation.items.filter((item) => safeInformationRequest(item.question)).map((item) => ({
+          question: item.question,
+          whyItMatters: 'Additional information is required before the deal team can act.',
+          ...(item.owner === undefined || !safeGenericOwner(item.owner) ? {} : { owner: item.owner })
+        })),
         ...insufficient.map((claim) => ({
           question: `Verify evidence for claim ${claim.id}.`,
           whyItMatters: 'The generated claim did not satisfy deterministic evidence support checks.'
