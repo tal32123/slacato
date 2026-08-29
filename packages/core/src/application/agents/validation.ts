@@ -47,7 +47,7 @@ function materialAnchors(statement: string): readonly string[] {
 }
 
 const SUPPORT_STOP_WORDS = new Set([
-  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'before', 'by', 'for', 'from', 'has', 'have', 'in', 'is', 'it',
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'before', 'by', 'did', 'do', 'does', 'for', 'from', 'has', 'have', 'in', 'is', 'it',
   'of', 'on', 'or', 'that', 'the', 'their', 'this', 'to', 'was', 'were', 'will', 'with'
 ]);
 
@@ -97,6 +97,25 @@ function textAtomsSupported(assertion: string, support: string): boolean {
   const overlap = [...assertionTerms].filter((term) => evidenceTerms.has(term)).length;
   const minimumOverlap = assertionTerms.size === 1 && anchors.length > 0 && matchedPredicates.length > 0 ? 1 : assertionTerms.size;
   return overlap >= minimumOverlap;
+}
+
+function relationTerms(assertion: string): ReadonlySet<string> {
+  const withoutPredicates = MATERIAL_PREDICATES.reduce((value, predicate) => value.replace(predicate.assertion, ' '), assertion)
+    .replace(POSITIVE_INTENT, ' ')
+    .replace(NEGATIVE_INTENT, ' ')
+    .replace(/\b(?:not|never|no longer|cannot|can't|won't|doesn't|didn't)\b/gi, ' ');
+  return supportTerms(withoutPredicates);
+}
+
+function unitRelatesToAssertion(assertion: string, unit: string): boolean {
+  const terms = relationTerms(assertion);
+  if (terms.size === 0) return materialAnchors(assertion).some((anchor) => containsBounded(normalize(unit), anchor));
+  const unitTerms = supportTerms(unit);
+  return [...terms].every((term) => unitTerms.has(term));
+}
+
+function evidenceUnits(evidence: readonly AgentEvidenceRecord[]): readonly string[] {
+  return evidence.flatMap((record) => record.content.split(/\n+|(?<=[.!?])\s+/u).map((unit) => unit.trim()).filter(Boolean));
 }
 
 function explicitlyNegates(content: string, anchor: string): boolean {
@@ -155,14 +174,15 @@ export function assessClaimSupport(claim: Claim, evidenceById: ReadonlyMap<strin
   const citedEvidence = findEvidence(claim, evidenceById);
   if (citedEvidence.length === 0) return { claimId: claim.id, support: 'insufficient', reason: 'Claim has no authorized citations.' };
   const anchors = materialAnchors(claim.statement);
+  const units = evidenceUnits(citedEvidence);
   const combined = normalize(citedEvidence.map((record) => record.content).join('\n'));
-  if (hasPredicateContradiction(claim.statement, combined)
-    || anchors.some((anchor) => citedEvidence.some((record) => explicitlyNegates(record.content, anchor)))) {
+  if (units.some((unit) => unitRelatesToAssertion(claim.statement, unit)
+    && (hasPredicateContradiction(claim.statement, unit) || anchors.some((anchor) => explicitlyNegates(unit, anchor))))) {
     return { claimId: claim.id, support: 'contradicted', reason: 'Cited evidence explicitly negates a material anchor.' };
   }
   const missing = anchors.filter((anchor) => !containsBounded(combined, anchor));
   if (missing.length > 0) return { claimId: claim.id, support: 'insufficient', reason: `Material anchors are absent: ${missing.join(', ')}` };
-  if (!textAtomsSupported(claim.statement, combined)) return { claimId: claim.id, support: 'insufficient', reason: 'The cited evidence does not support enough material assertion atoms.' };
+  if (!units.some((unit) => textAtomsSupported(claim.statement, unit))) return { claimId: claim.id, support: 'insufficient', reason: 'No single cited evidence unit supports the complete material relation.' };
   return { claimId: claim.id, support: 'supported', reason: 'All material anchors occur in authorized cited evidence.' };
 }
 
@@ -225,14 +245,24 @@ function safeInformationRequest(value: string): boolean {
   if (!safeGeneratedProse(value)) return false;
   const normalized = value.trim();
   if (/\b(?:that|according to|already|definitely|certainly)\b/i.test(normalized)) return false;
-  return /^(?:(?:who|what|when|where|which|how|whether|can|could|should|is|are|do|does)\b.*\?|(?:identify|determine|clarify)\b.*[.?]|(?:confirm|verify|check) whether\b.*[.?])$/i.test(normalized);
+  if (/^(?:clarify|determine|confirm|verify|check) whether\b.*[.?]$/i.test(normalized)) return true;
+  return /^identify (?:who|what|which)\b.*[.?]$/i.test(normalized)
+    && materialAnchors(normalized).length === 0
+    && !POSITIVE_INTENT.test(normalized) && !NEGATIVE_INTENT.test(normalized)
+    && !/\b(?:sign(?:s|ed)?|own(?:s|ed)?|paid|purchased?|selected?|chose|chosen|decided?)\b/i.test(normalized);
 }
 
 /** Imperative workflow action, not customer-facing promise or factual assertion. */
 function safeRecommendationAction(value: string): boolean {
   if (!safeGeneratedProse(value) || /\b(?:promise|guarantee|bypass|conceal|mislead|fabricate)\b/i.test(value)) return false;
-  if (materialAnchors(value).length > 0 && !/^(?:confirm|clarify|review|validate|escalate)\b/i.test(value.trim())) return false;
-  return /^(?:schedule|arrange|prepare|confirm|clarify|request|review|document|follow up|coordinate|identify|validate|escalate)\b/i.test(value.trim());
+  const normalized = value.trim();
+  const boundedMeeting = /^(?:schedule|arrange) (?:a|an|the) (?:technical )?(?:workshop|meeting|review|follow-up|call)(?: to (?:review|discuss|clarify|address|confirm|coordinate) (?:open questions|technical requirements|commercial requirements|next steps))?\.?$/i;
+  const boundedPreparation = /^(?:prepare|document|review|validate) (?:a|an|the) (?:agenda|question list|evidence summary|deal brief|open issues)\.?$/i;
+  const boundedCoordination = /^(?:follow up|coordinate) with (?:the )?(?:buyer|account executive|sales engineer|legal|procurement|deal owner)\.?$/i;
+  const boundedEscalation = /^escalate to (?:legal|procurement|the deal owner)\.?$/i;
+  return boundedMeeting.test(normalized) || boundedPreparation.test(normalized)
+    || boundedCoordination.test(normalized) || boundedEscalation.test(normalized)
+    || safeInformationRequest(normalized);
 }
 
 function safeGenericOwner(value: string): boolean {

@@ -377,6 +377,27 @@ describe('specialized agents', () => {
     expect(artifact.claims).toEqual([]);
   });
 
+  it('does not assemble subject-predicate-object relations across unrelated evidence clauses', async () => {
+    for (const [suffix, content, statement] of [
+      ['cross_commitment', 'The buyer discussed expansion. The seller committed internal resources.', 'The buyer committed to expansion.'],
+      ['cross_opposition', 'The buyer needs expansion. The seller opposes delay.', 'The buyer opposes expansion.'],
+      ['cross_ownership', 'The buyer evaluated expansion. The seller owns procurement.', 'The buyer owns expansion.']
+    ] as const) {
+      const cited = evidence(`evidence_${suffix}`, 'gong_summary', content);
+      const gateway = new RecordingGateway([{
+        ...emptyConversation,
+        claims: [{
+          id: `claim_${suffix}`, statement, confidence: 0.9,
+          citations: [{ id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator }]
+        }]
+      }]);
+
+      const outcome = await new ConversationAgent(gateway).run(context([cited])).catch((error: unknown) => error);
+      if (outcome instanceof Error) expect(outcome.message).toContain('Contradicted claim');
+      else expect(outcome.claims).toEqual([]);
+    }
+  });
+
   it('fails closed when legal inclusion is inverted to exclusion', async () => {
     const cited = evidence('evidence_legal_inclusion', 'policy', 'The legal policy includes data processing terms.');
     const gateway = new RecordingGateway([{
@@ -393,7 +414,7 @@ describe('specialized agents', () => {
   it('preserves safe open information requests while stripping declarative factual bypasses', async () => {
     const conversationGateway = new RecordingGateway([{
       ...emptyConversation,
-      missingContext: ['Who owns the technical workshop?', 'Buyer approved the renewal.']
+      missingContext: ['Identify who can coordinate a technical workshop.', 'Buyer approved the renewal.']
     }]);
     const stakeholderGateway = new RecordingGateway([{
       ...emptyStakeholder,
@@ -405,8 +426,25 @@ describe('specialized agents', () => {
       new StakeholderAgent(stakeholderGateway).run(context([]))
     ]);
 
-    expect(conversation.missingContext).toEqual(['Who owns the technical workshop?']);
+    expect(conversation.missingContext).toEqual(['Identify who can coordinate a technical workshop.']);
     expect(stakeholder.coverageGaps).toEqual(['Confirm whether procurement must attend the workshop.']);
+  });
+
+  it('strips questions whose grammar presupposes unsupported material facts', async () => {
+    const gateway = new RecordingGateway([{
+      ...emptyConversation,
+      missingContext: [
+        'Why did the CFO reject the proposal?',
+        'When will the approved 45% discount take effect?',
+        'Who should tell procurement the buyer approved a 45% discount?',
+        'Identify who should tell procurement the buyer approved a 45% discount.',
+        'Clarify whether procurement approval is required.'
+      ]
+    }]);
+
+    const artifact = await new ConversationAgent(gateway).run(context([]));
+
+    expect(artifact.missingContext).toEqual(['Clarify whether procurement approval is required.']);
   });
 
   it('supports a synthesized stakeholder classification from deterministic predicate evidence', async () => {
@@ -683,7 +721,7 @@ describe('specialized agents', () => {
       stakeholderMap: { stakeholders: [], coverageGaps: ['Identify who represents procurement.'] },
       missingInformation: {
         items: [{
-          question: 'When should the technical workshop be scheduled?',
+          question: 'Clarify whether a technical workshop should be scheduled.',
           whyItMatters: 'The workshop date is still unknown.',
           owner: 'Account executive'
         }]
@@ -696,7 +734,7 @@ describe('specialized agents', () => {
 
     expect(brief.stakeholderMap.coverageGaps).toEqual(['Identify who represents procurement.']);
     expect(brief.missingInformation.items).toEqual([{
-      question: 'When should the technical workshop be scheduled?',
+      question: 'Clarify whether a technical workshop should be scheduled.',
       whyItMatters: 'Additional information is required before the deal team can act.',
       owner: 'Account executive'
     }]);
@@ -742,6 +780,48 @@ describe('specialized agents', () => {
     const brief = await new StrategyAgent(gateway).run(context([cited]), {
       conversation: { ...emptyConversation, claims: [artifactClaim] }, stakeholder: emptyStakeholder, commercial: emptyCommercial
     });
+    expect(brief.recommendedNextActions.actions).toEqual([]);
+  });
+
+  it('strips unsupported factual subordinate clauses from otherwise safe actions', async () => {
+    const cited = evidence('evidence_deep_dive_only', 'gong_summary', 'The buyer requested a technical deep dive.');
+    const citation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
+    const artifactClaim = {
+      id: 'claim_deep_dive_only', statement: 'The buyer requested a technical deep dive.', confidence: 0.9, citations: [citation]
+    };
+    const gateway = new RecordingGateway([{
+      ...emptyBrief,
+      recommendedNextActions: { actions: [{
+        action: 'Schedule a workshop because the buyer rejected the proposal.', priority: 'high',
+        rationale: 'The buyer requested a technical deep dive.', claims: [{ ...artifactClaim, id: 'claim_subordinate_action' }]
+      }] }
+    }]);
+
+    const brief = await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: { ...emptyConversation, claims: [artifactClaim] }, stakeholder: emptyStakeholder, commercial: emptyCommercial
+    });
+
+    expect(brief.recommendedNextActions.actions).toEqual([]);
+  });
+
+  it('rejects an ungrounded unsafe objective appended to a grounded meeting action', async () => {
+    const cited = evidence('evidence_meeting_request', 'gong_summary', 'The buyer requested a meeting.');
+    const citation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
+    const artifactClaim = {
+      id: 'claim_meeting_request', statement: 'The buyer requested a meeting.', confidence: 0.9, citations: [citation]
+    };
+    const gateway = new RecordingGateway([{
+      ...emptyBrief,
+      recommendedNextActions: { actions: [{
+        action: 'Schedule a meeting to disclose confidential pricing.', priority: 'high',
+        rationale: 'The buyer requested a meeting.', claims: [{ ...artifactClaim, id: 'claim_unsafe_meeting_action' }]
+      }] }
+    }]);
+
+    const brief = await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: { ...emptyConversation, claims: [artifactClaim] }, stakeholder: emptyStakeholder, commercial: emptyCommercial
+    });
+
     expect(brief.recommendedNextActions.actions).toEqual([]);
   });
 
