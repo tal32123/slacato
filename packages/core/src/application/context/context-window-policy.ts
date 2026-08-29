@@ -37,7 +37,10 @@ function renderRequiredEvidence(sections: readonly ContextSection[], budget: num
   for (const [index, section] of sections.entries()) {
     const prefix = prefixes[index];
     if (prefix === undefined) throw new ContextBudgetError('Evidence prefix was not prepared');
-    const content = takeTokens(section.content, budget - used);
+    const remaining = budget - used;
+    const sealedEnvelope = section.content.startsWith('BEGIN_UNTRUSTED_');
+    if (sealedEnvelope && estimateTokens(section.content) > remaining) throw new ContextBudgetError('Sealed evidence envelope exceeds its section budget');
+    const content = sealedEnvelope ? section.content : takeTokens(section.content, remaining);
     const segment = `${prefix}${content}`;
     used += estimateTokens(content);
     rendered.push(segment);
@@ -109,13 +112,14 @@ export class ContextWindowPolicy {
     const invariants = prepared.invariantMessages.map(copy);
     const invariantTokens = messageTokens(invariants);
     if (invariantTokens > availableTokens) throw new ContextBudgetError('Required context invariants exceed available input capacity');
-    let remainingChars = (availableTokens - invariantTokens) * CHARS_PER_TOKEN;
+    let remainingTokens = availableTokens - invariantTokens;
     const retained: ModelMessage[] = [];
     for (const message of [...prepared.optionalMessages, ...supplemental].reverse()) {
-      if (remainingChars <= 0) break;
-      const content = message.content.slice(0, remainingChars);
+      if (remainingTokens <= 0) break;
+      const content = takeTokens(message.content, remainingTokens);
+      const tokens = estimateTokens(content);
       retained.unshift({ role: message.role, content });
-      remainingChars -= content.length;
+      remainingTokens -= tokens;
     }
     const result = [...invariants, ...retained];
     if (messageTokens(result) > availableTokens) throw new ContextBudgetError('Rebudgeted context exceeds available input capacity');
@@ -123,13 +127,14 @@ export class ContextWindowPolicy {
   }
 
   public rebudgetRaw(messages: readonly ModelMessage[]): readonly ModelMessage[] {
-    let remainingChars = (this.settings.contextWindowTokens - this.settings.reservedOutputTokens) * CHARS_PER_TOKEN;
+    let remainingTokens = this.settings.contextWindowTokens - this.settings.reservedOutputTokens;
     const retained: ModelMessage[] = [];
     for (const message of [...messages].reverse()) {
-      if (remainingChars <= 0) break;
-      const content = message.content.slice(0, remainingChars);
+      if (remainingTokens <= 0) break;
+      const content = takeTokens(message.content, remainingTokens);
+      const tokens = estimateTokens(content);
       retained.unshift({ role: message.role, content });
-      remainingChars -= content.length;
+      remainingTokens -= tokens;
     }
     if (messageTokens(retained) > this.settings.contextWindowTokens - this.settings.reservedOutputTokens) throw new ContextBudgetError('Rebudgeted context exceeds available input capacity');
     return retained;

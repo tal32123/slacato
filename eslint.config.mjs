@@ -51,6 +51,22 @@ export default tseslint.config(
     }
   },
   { files: ['packages/core/**/*.ts'], rules: { 'no-restricted-imports': ['error', { patterns: ['@slacato/infrastructure', '@nestjs/**', 'bullmq', 'react', 'react-dom'] }] } },
+  {
+    files: ['packages/core/src/application/agents/{conversation,stakeholder,commercial,strategy}.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: [
+              '@slacato/infrastructure', '@nestjs/**', 'bullmq', 'react', 'react-dom',
+              './conversation.js', './stakeholder.js', './commercial.js', './strategy.js'
+            ],
+            message: 'Specialist agents must not import infrastructure, tools, or one another.'
+          }
+        ]
+      }]
+    }
+  },
   { files: ['packages/infrastructure/**/*.ts'], rules: { 'no-restricted-imports': ['error', { patterns: ['@slacato/api', '@slacato/web', '@slacato/worker'] }] } },
   { files: ['apps/web/**/*.{ts,tsx}'], rules: { 'no-restricted-imports': ['error', { patterns: ['@slacato/infrastructure', '@slacato/api', '@slacato/worker'] }] } },
   { files: ['apps/api/src/**/*.ts'], ignores: ['apps/api/src/main.ts'], rules: { 'no-restricted-imports': ['error', { patterns: ['@slacato/infrastructure', '@slacato/web', '@slacato/worker'] }] } },

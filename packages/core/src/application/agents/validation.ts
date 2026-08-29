@@ -1,0 +1,428 @@
+import { createHash } from 'node:crypto';
+import type { Claim, CommercialArtifact, ConversationArtifact, DealBrief, ReviewWarning, StakeholderArtifact } from '../../domain/briefs/schema.js';
+import {
+  commercialArtifactSchema,
+  conversationArtifactSchema,
+  dealBriefSchema,
+  stakeholderArtifactSchema
+} from '../../domain/briefs/schema.js';
+import { DomainValidationError } from '../../domain/shared/errors.js';
+import { accountIdSchema, opportunityIdSchema, runIdSchema } from '../../domain/shared/ids.js';
+import type { AgentContext, AgentEvidenceRecord } from './contracts.js';
+
+export type ClaimSupport = 'supported' | 'contradicted' | 'insufficient';
+export type ClaimSupportAssessment = Readonly<{ claimId: string; support: ClaimSupport; reason: string }>;
+
+function normalize(value: string): string { return value.normalize('NFKC').toLocaleLowerCase('en-US'); }
+
+function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function containsBounded(haystack: string, needle: string): boolean {
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(needle)}(?![\\p{L}\\p{N}])`, 'u').test(haystack);
+}
+
+function materialAnchors(statement: string): readonly string[] {
+  const patterns = [
+    /(?:[$€£]\s*)?\b\d[\d,.]*(?:\s*%)?/gu,
+    /\b[A-Z]{3}\b/gu,
+    /["“”']([^"“”']{3,120})["“”']/gu,
+    /\b(?:liability|indemnity|termination|renewal|governing law|data processing|service level|discount|competitor)\b/giu,
+    /\b(?:competitor|stakeholder|buyer|approver)\s+(?:is\s+)?([A-Z][\p{L}\p{N}.-]*(?:\s+[A-Z][\p{L}\p{N}.-]*){0,3})/gu
+  ];
+  const anchors = new Set<string>();
+  for (const pattern of patterns) {
+    for (const match of statement.matchAll(pattern)) {
+      const anchor = (match[1] ?? match[0]).trim();
+      if (anchor.length > 0) anchors.add(normalize(anchor));
+    }
+  }
+  return [...anchors];
+}
+
+function explicitlyNegates(content: string, anchor: string): boolean {
+  const normalized = normalize(content);
+  const match = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(anchor)}(?![\\p{L}\\p{N}])`, 'u').exec(normalized);
+  const at = match?.index ?? -1;
+  if (at < 0) return false;
+  const prefix = normalized.slice(Math.max(0, at - 80), at);
+  return /\b(?:not|no|never|denied|declined|rejected|without)\b/.test(prefix);
+}
+
+const CONTRADICTORY_PREDICATES = [
+  ['accepted', 'rejected'], ['approved', 'denied'], ['approved', 'rejected'], ['agreed', 'declined'],
+  ['required', 'optional'], ['unlimited', 'capped'], ['unlimited', 'limited'], ['increased', 'decreased'],
+  ['positive', 'negative']
+] as const;
+
+function hasPredicateContradiction(statement: string, evidence: string): boolean {
+  const normalizedStatement = normalize(statement);
+  const normalizedEvidence = normalize(evidence);
+  if (/\bnot required\b/.test(normalizedStatement) && /\brequired\b/.test(normalizedEvidence) && !/\bnot required\b/.test(normalizedEvidence)) return true;
+  if (/\brequired\b/.test(normalizedStatement) && !/\bnot required\b/.test(normalizedStatement) && /\bnot required\b/.test(normalizedEvidence)) return true;
+  return CONTRADICTORY_PREDICATES.some(([left, right]) =>
+    (containsBounded(normalizedStatement, left) && containsBounded(normalizedEvidence, right))
+    || (containsBounded(normalizedStatement, right) && containsBounded(normalizedEvidence, left))
+  );
+}
+
+function findEvidence(claim: Claim, evidenceById: ReadonlyMap<string, AgentEvidenceRecord>): readonly AgentEvidenceRecord[] {
+  if (claim.citations.length === 0) return [];
+  return claim.citations.map((citation) => {
+    const evidence = evidenceById.get(citation.evidenceId);
+    if (evidence === undefined || evidence.citationId !== citation.id || evidence.sourceLocator !== citation.locator) {
+      throw new DomainValidationError('Unknown or stale citation in generated claim', { claimId: claim.id });
+    }
+    return evidence;
+  });
+}
+
+/** Deterministically validates material anchors against the exact prompt-visible evidence. */
+export function assessClaimSupport(claim: Claim, evidenceById: ReadonlyMap<string, AgentEvidenceRecord>): ClaimSupportAssessment {
+  const citedEvidence = findEvidence(claim, evidenceById);
+  if (citedEvidence.length === 0) return { claimId: claim.id, support: 'insufficient', reason: 'Claim has no authorized citations.' };
+  const anchors = materialAnchors(claim.statement);
+  const combined = normalize(citedEvidence.map((record) => record.content).join('\n'));
+  const missing = anchors.filter((anchor) => !containsBounded(combined, anchor));
+  if (missing.length > 0) return { claimId: claim.id, support: 'insufficient', reason: `Material anchors are absent: ${missing.join(', ')}` };
+  if (hasPredicateContradiction(claim.statement, combined)
+    || anchors.some((anchor) => citedEvidence.some((record) => explicitlyNegates(record.content, anchor)))) {
+    return { claimId: claim.id, support: 'contradicted', reason: 'Cited evidence explicitly negates a material anchor.' };
+  }
+  if (!combined.includes(normalize(claim.statement))) return { claimId: claim.id, support: 'insufficient', reason: 'The complete assertion is absent from cited evidence.' };
+  return { claimId: claim.id, support: 'supported', reason: 'All material anchors occur in authorized cited evidence.' };
+}
+
+function assertUniqueClaims(claimGroups: readonly (readonly Claim[])[]): void {
+  const seen = new Set<string>();
+  for (const claim of claimGroups.flat()) {
+    if (seen.has(claim.id)) throw new DomainValidationError('Duplicate claim ID in generated artifact', { claimId: claim.id });
+    seen.add(claim.id);
+  }
+}
+
+function pruneClaims(claims: readonly Claim[], evidenceById: ReadonlyMap<string, AgentEvidenceRecord>): Readonly<{ kept: readonly Claim[]; insufficient: readonly Claim[] }> {
+  const kept: Claim[] = [];
+  const insufficient: Claim[] = [];
+  for (const claim of claims) {
+    const assessment = assessClaimSupport(claim, evidenceById);
+    if (assessment.support === 'contradicted') throw new DomainValidationError('Contradicted claim in generated artifact', { claimId: claim.id });
+    if (assessment.support === 'supported') kept.push(claim);
+    else insufficient.push(claim);
+  }
+  return { kept, insufficient };
+}
+
+function supportWarning(claims: readonly Claim[]): ReviewWarning | undefined {
+  if (claims.length === 0) return undefined;
+  return {
+    code: 'INSUFFICIENT_CLAIM_SUPPORT', severity: 'warning',
+    message: 'Unsupported material claims were removed and require verification.',
+    claimIds: claims.map((claim) => claim.id)
+  };
+}
+
+function evidenceMap(evidence: readonly AgentEvidenceRecord[]): ReadonlyMap<string, AgentEvidenceRecord> {
+  return new Map(evidence.map((record) => [record.evidenceId, record]));
+}
+
+function assertionSupported(assertion: string, claims: readonly Claim[]): boolean {
+  const normalized = normalize(assertion);
+  return normalized.length > 0 && claims.some((claim) => normalize(claim.statement).includes(normalized));
+}
+
+function fieldSupported(value: string | number, claims: readonly Claim[]): boolean {
+  const normalized = normalize(String(value));
+  return claims.some((claim) => containsBounded(normalize(claim.statement), normalized));
+}
+
+function tupleSupported(values: readonly (string | number)[], claims: readonly Claim[]): boolean {
+  return claims.some((claim) => values.every((value) => fieldSupported(value, [claim])));
+}
+
+function isExplicitUncertainty(value: string): boolean {
+  return /\b(?:insufficient|unknown|unverified|not (?:available|known|verified)|requires? (?:review|verification)|hypothesis)\b/i.test(value);
+}
+
+function withoutInsufficient<Value extends Readonly<{ insufficient: readonly Claim[] }>>(value: Value): Omit<Value, 'insufficient'> {
+  const { insufficient, ...copy } = value;
+  void insufficient;
+  return copy;
+}
+
+export function validateConversationArtifact(value: unknown, manifestId: string, evidence: readonly AgentEvidenceRecord[]): ConversationArtifact {
+  const parsed = conversationArtifactSchema.parse(value);
+  if (parsed.evidenceManifestId !== manifestId) throw new DomainValidationError('Conversation artifact evidence manifest does not match');
+  assertUniqueClaims([parsed.claims]);
+  const result = pruneClaims(parsed.claims, evidenceMap(evidence));
+  const unsupportedAssertions = [parsed.goals, parsed.concerns, parsed.commitments, parsed.objections]
+    .flat().filter((assertion) => !assertionSupported(assertion, result.kept));
+  const warning = supportWarning(result.insufficient);
+  return conversationArtifactSchema.parse({
+    ...parsed,
+    goals: parsed.goals.filter((assertion) => assertionSupported(assertion, result.kept)),
+    concerns: parsed.concerns.filter((assertion) => assertionSupported(assertion, result.kept)),
+    commitments: parsed.commitments.filter((assertion) => assertionSupported(assertion, result.kept)),
+    objections: parsed.objections.filter((assertion) => assertionSupported(assertion, result.kept)),
+    claims: result.kept,
+    missingContext: [
+      ...parsed.missingContext,
+      ...result.insufficient.map((claim) => `Verify before use: ${claim.statement}`),
+      ...unsupportedAssertions.map((assertion) => `Verify before use: ${assertion}`)
+    ],
+    reviewWarnings: warning === undefined ? parsed.reviewWarnings : [...parsed.reviewWarnings, warning]
+  });
+}
+
+export function validateStakeholderArtifact(value: unknown, manifestId: string, evidence: readonly AgentEvidenceRecord[]): StakeholderArtifact {
+  const parsed = stakeholderArtifactSchema.parse(value);
+  if (parsed.evidenceManifestId !== manifestId) throw new DomainValidationError('Stakeholder artifact evidence manifest does not match');
+  assertUniqueClaims([parsed.claims, ...parsed.stakeholders.map((stakeholder) => stakeholder.claims)]);
+  const map = evidenceMap(evidence);
+  const top = pruneClaims(parsed.claims, map);
+  const stakeholders = parsed.stakeholders.map((stakeholder) => {
+    const claims = pruneClaims(stakeholder.claims, map);
+    return { ...stakeholder, claims: claims.kept, insufficient: claims.insufficient };
+  });
+  const supportedStakeholders = stakeholders.flatMap((stakeholder) => {
+    const role = stakeholder.role.replaceAll('_', ' ');
+    const identity = [stakeholder.name, stakeholder.influence, stakeholder.relationship,
+      ...(stakeholder.role === 'unknown' ? [] : [role]),
+      ...(stakeholder.title === undefined ? [] : [stakeholder.title]),
+      ...(stakeholder.organization === undefined ? [] : [stakeholder.organization])];
+    if (stakeholder.claims.length === 0 || !tupleSupported(identity, stakeholder.claims)) return [];
+    return [{
+      ...stakeholder,
+      goals: stakeholder.goals.filter((goal) => assertionSupported(goal, stakeholder.claims)),
+      concerns: stakeholder.concerns.filter((concern) => assertionSupported(concern, stakeholder.claims))
+    }];
+  });
+  const supportedNames = new Set(supportedStakeholders.map((stakeholder) => stakeholder.name));
+  const unsupportedStakeholders = stakeholders.filter((stakeholder) => !supportedNames.has(stakeholder.name));
+  const insufficient = [...top.insufficient, ...stakeholders.flatMap((stakeholder) => stakeholder.insufficient)];
+  const warning = supportWarning(insufficient);
+  return stakeholderArtifactSchema.parse({
+    ...parsed,
+    claims: top.kept,
+    stakeholders: supportedStakeholders.map(withoutInsufficient),
+    coverageGaps: [
+      ...parsed.coverageGaps,
+      ...insufficient.map((claim) => `Verify before use: ${claim.statement}`),
+      ...unsupportedStakeholders.map((stakeholder) => `Verify before use: stakeholder ${stakeholder.name} (${stakeholder.role})`)
+    ],
+    reviewWarnings: warning === undefined ? parsed.reviewWarnings : [...parsed.reviewWarnings, warning]
+  });
+}
+
+export function validateCommercialArtifact(value: unknown, manifestId: string, evidence: readonly AgentEvidenceRecord[]): CommercialArtifact {
+  const parsed = commercialArtifactSchema.parse(value);
+  if (parsed.evidenceManifestId !== manifestId) throw new DomainValidationError('Commercial artifact evidence manifest does not match');
+  assertUniqueClaims([parsed.claims, ...parsed.commercialTerms.map((term) => term.claims)]);
+  const map = evidenceMap(evidence);
+  const top = pruneClaims(parsed.claims, map);
+  const terms = parsed.commercialTerms.map((term) => {
+    const claims = pruneClaims(term.claims, map);
+    return { ...term, claims: claims.kept, insufficient: claims.insufficient };
+  });
+  const supportedTerms = terms.filter((term) => term.claims.length > 0
+    && tupleSupported([term.term, term.detail, ...(term.status === 'unknown' ? [] : [term.status])], term.claims));
+  const insufficient = [...top.insufficient, ...terms.flatMap((term) => term.insufficient)];
+  const allSupportedClaims = [...top.kept, ...supportedTerms.flatMap((term) => term.claims)];
+  const warning = supportWarning(insufficient);
+  return commercialArtifactSchema.parse({
+    ...parsed,
+    claims: top.kept,
+    commercialTerms: supportedTerms.map(withoutInsufficient),
+    policyTriggers: parsed.policyTriggers.filter((trigger) => assertionSupported(trigger, allSupportedClaims)),
+    reviewWarnings: warning === undefined ? parsed.reviewWarnings : [...parsed.reviewWarnings, warning]
+  });
+}
+
+function briefClaimGroups(brief: DealBrief): readonly (readonly Claim[])[] {
+  return [
+    brief.dealSnapshot.claims ?? [], brief.executiveSummary.claims ?? [], brief.buyerGoalsAndBusinessDrivers.claims ?? [],
+    brief.stakeholderMap.claims ?? [], ...brief.stakeholderMap.stakeholders.map((stakeholder) => stakeholder.claims),
+    brief.negotiationState.claims ?? [], ...brief.recommendedNextActions.actions.map((action) => action.claims),
+    ...brief.sourceEvidence.evidence.map((summary) => summary.claims)
+  ];
+}
+
+export function validateDealBrief(value: unknown, evidence: readonly AgentEvidenceRecord[], context: AgentContext): DealBrief {
+  const parsed = dealBriefSchema.parse(value);
+  assertUniqueClaims(briefClaimGroups(parsed));
+  const map = evidenceMap(evidence);
+  const insufficient: Claim[] = [];
+  const process = (claims: readonly Claim[] | undefined): readonly Claim[] | undefined => {
+    if (claims === undefined) return undefined;
+    const result = pruneClaims(claims, map); insufficient.push(...result.insufficient); return result.kept;
+  };
+  const actions = parsed.recommendedNextActions.actions.flatMap((action) => {
+    const result = pruneClaims(action.claims, map);
+    insufficient.push(...result.insufficient);
+    const fieldsSupported = tupleSupported([
+      action.action, action.rationale, action.priority,
+      ...(action.owner === undefined ? [] : [action.owner]),
+      ...(action.dueDate === undefined ? [] : [action.dueDate])
+    ], result.kept);
+    return result.insufficient.length > 0 || result.kept.length === 0 || !fieldsSupported ? [] : [{ ...action, claims: result.kept }];
+  });
+  const snapshotClaims = process(parsed.dealSnapshot.claims) ?? [];
+  const summaryClaims = process(parsed.executiveSummary.claims) ?? [];
+  const buyerClaims = process(parsed.buyerGoalsAndBusinessDrivers.claims) ?? [];
+  const stakeholderSectionClaims = process(parsed.stakeholderMap.claims) ?? [];
+  const negotiationClaims = process(parsed.negotiationState.claims) ?? [];
+  const supportedStakeholders = parsed.stakeholderMap.stakeholders.flatMap((stakeholder) => {
+    const claims = process(stakeholder.claims) ?? [];
+    const role = stakeholder.role.replaceAll('_', ' ');
+    const identity = [stakeholder.name, stakeholder.influence, stakeholder.relationship,
+      ...(stakeholder.role === 'unknown' ? [] : [role]),
+      ...(stakeholder.title === undefined ? [] : [stakeholder.title]),
+      ...(stakeholder.organization === undefined ? [] : [stakeholder.organization])];
+    if (claims.length === 0 || !tupleSupported(identity, claims)) return [];
+    return [{
+      ...stakeholder,
+      goals: stakeholder.goals.filter((goal) => assertionSupported(goal, claims)),
+      concerns: stakeholder.concerns.filter((concern) => assertionSupported(concern, claims)),
+      claims
+    }];
+  });
+  const supportedEvidenceSummaries = parsed.sourceEvidence.evidence.flatMap((summary) => {
+    const source = map.get(summary.evidenceId);
+    if (source === undefined) return [];
+    const claims = process(summary.claims) ?? [];
+    const expectedSourceType = source.sourceType === 'salesforce' ? 'crm'
+      : source.sourceType === 'gong_summary' || source.sourceType === 'gong_transcript' ? 'conversation'
+        : source.sourceType;
+    if (claims.length === 0 || !assertionSupported(summary.summary, claims) || summary.sourceType !== expectedSourceType
+      || source.eventDate === undefined || !summary.capturedAt.startsWith(source.eventDate)) return [];
+    return [{ ...summary, claims }];
+  });
+  const summaryWasReplaced = !isExplicitUncertainty(parsed.executiveSummary.narrative)
+    && !assertionSupported(parsed.executiveSummary.narrative, summaryClaims);
+  const negotiationWasReplaced = !isExplicitUncertainty(parsed.negotiationState.currentState)
+    && !assertionSupported(parsed.negotiationState.currentState, negotiationClaims);
+  const nakedAssertions = [
+    ...parsed.buyerGoalsAndBusinessDrivers.goals.filter((value) => !assertionSupported(value, buyerClaims)),
+    ...parsed.buyerGoalsAndBusinessDrivers.businessDrivers.filter((value) => !assertionSupported(value, buyerClaims)),
+    ...parsed.negotiationState.risks.filter((value) => !assertionSupported(value, negotiationClaims)),
+    ...(summaryWasReplaced ? [parsed.executiveSummary.narrative] : []),
+    ...(negotiationWasReplaced ? [parsed.negotiationState.currentState] : []),
+    ...parsed.stakeholderMap.stakeholders.filter((stakeholder) => stakeholder.claims.length === 0)
+      .map((stakeholder) => `stakeholder ${stakeholder.name} (${stakeholder.role})`),
+    ...parsed.recommendedNextActions.actions.filter((action) => action.claims.length === 0).map((action) => action.action),
+    ...(snapshotClaims.length === 0 ? [
+      ...(parsed.dealSnapshot.amount === undefined ? [] : [`amount ${parsed.dealSnapshot.amount}`]),
+      ...(parsed.dealSnapshot.currency === undefined ? [] : [`currency ${parsed.dealSnapshot.currency}`]),
+      ...(parsed.dealSnapshot.closeDate === undefined ? [] : [`close date ${parsed.dealSnapshot.closeDate}`]),
+      ...(parsed.dealSnapshot.owner === undefined ? [] : [`owner ${parsed.dealSnapshot.owner}`])
+    ] : [])
+  ];
+  const warning = supportWarning(insufficient);
+  return dealBriefSchema.parse({
+    ...parsed,
+    dealSnapshot: {
+      accountName: context.account.name,
+      opportunityName: context.opportunity.name,
+      stage: context.opportunity.stage,
+      ...(snapshotClaims.length === 0 ? {} : {
+        claims: snapshotClaims,
+        ...(parsed.dealSnapshot.closeDate === undefined || !tupleSupported(['close date', parsed.dealSnapshot.closeDate], snapshotClaims) ? {} : { closeDate: parsed.dealSnapshot.closeDate }),
+        ...(parsed.dealSnapshot.amount === undefined || !tupleSupported(['amount', parsed.dealSnapshot.amount], snapshotClaims) ? {} : { amount: parsed.dealSnapshot.amount }),
+        ...(parsed.dealSnapshot.currency === undefined || !tupleSupported(['currency', parsed.dealSnapshot.currency], snapshotClaims) ? {} : { currency: parsed.dealSnapshot.currency }),
+        ...(parsed.dealSnapshot.owner === undefined || !tupleSupported(['owner', parsed.dealSnapshot.owner], snapshotClaims) ? {} : { owner: parsed.dealSnapshot.owner })
+      })
+    },
+    executiveSummary: {
+      narrative: !summaryWasReplaced
+        ? parsed.executiveSummary.narrative
+        : 'Insufficient supported evidence is available for an executive summary.',
+      ...(summaryClaims.length === 0 ? {} : { claims: summaryClaims })
+    },
+    buyerGoalsAndBusinessDrivers: {
+      goals: parsed.buyerGoalsAndBusinessDrivers.goals.filter((value) => assertionSupported(value, buyerClaims)),
+      businessDrivers: parsed.buyerGoalsAndBusinessDrivers.businessDrivers.filter((value) => assertionSupported(value, buyerClaims)),
+      ...(buyerClaims.length === 0 ? {} : { claims: buyerClaims })
+    },
+    stakeholderMap: {
+      stakeholders: supportedStakeholders,
+      ...(parsed.stakeholderMap.coverageGaps === undefined ? {} : { coverageGaps: parsed.stakeholderMap.coverageGaps }),
+      ...(stakeholderSectionClaims.length === 0 ? {} : { claims: stakeholderSectionClaims })
+    },
+    negotiationState: {
+      currentState: !negotiationWasReplaced
+        ? parsed.negotiationState.currentState
+        : 'Insufficient supported evidence is available for a negotiation-state assessment.',
+      risks: parsed.negotiationState.risks.filter((value) => assertionSupported(value, negotiationClaims)),
+      ...(parsed.negotiationState.leverage === undefined ? {} : {
+        leverage: parsed.negotiationState.leverage.filter((value) => assertionSupported(value, negotiationClaims))
+      }),
+      ...(negotiationClaims.length === 0 ? {} : { claims: negotiationClaims })
+    },
+    recommendedNextActions: { actions },
+    missingInformation: {
+      items: [...parsed.missingInformation.items, ...[...insufficient.map((claim) => claim.statement), ...nakedAssertions].map((statement) => ({
+        question: `Verify before use: ${statement}`,
+        whyItMatters: 'The generated assertion lacks support in the authorized evidence manifest.'
+      }))]
+    },
+    sourceEvidence: {
+      evidence: supportedEvidenceSummaries
+    },
+    confidenceAndReviewWarnings: {
+      ...parsed.confidenceAndReviewWarnings,
+      warnings: warning === undefined ? parsed.confidenceAndReviewWarnings.warnings : [...parsed.confidenceAndReviewWarnings.warnings, warning]
+    }
+  });
+}
+
+/** Fails closed before prompting if evidence escaped its immutable deal binding. */
+export function assertAgentContextBindings(context: AgentContext): void {
+  runIdSchema.parse(context.runId);
+  accountIdSchema.parse(context.account.id);
+  opportunityIdSchema.parse(context.opportunity.id);
+  if (context.account.name.length === 0 || context.account.name.length > 2_000
+    || context.opportunity.name.length === 0 || context.opportunity.name.length > 2_000
+    || context.opportunity.stage.length === 0 || context.opportunity.stage.length > 2_000) {
+    throw new DomainValidationError('Trusted deal context is empty or exceeds its prompt bound');
+  }
+  if (context.generation.durableAttempt.runScope !== context.runId) throw new DomainValidationError('Durable model-attempt scope does not match the agent run');
+  if (context.manifest.runId !== context.runId) throw new DomainValidationError('Evidence manifest run binding does not match');
+  const evidenceIds = new Set<string>();
+  const citationIds = new Set<string>();
+  const manifestEntries = new Map(context.manifestEntries.map((entry) => [entry.evidenceId, entry]));
+  if (manifestEntries.size !== context.manifestEntries.length || manifestEntries.size !== context.evidence.length) {
+    throw new DomainValidationError('Duplicate evidence manifest entry or incomplete entry set');
+  }
+  for (const record of context.evidence) {
+    if (evidenceIds.has(record.evidenceId) || citationIds.has(record.citationId)) {
+      throw new DomainValidationError('Duplicate evidence or citation identifier in agent context');
+    }
+    evidenceIds.add(record.evidenceId);
+    citationIds.add(record.citationId);
+    const entry = manifestEntries.get(record.evidenceId);
+    if (entry === undefined || entry.manifestId !== context.manifest.id || entry.citationId !== record.citationId || entry.contentHash !== record.contentHash
+      || entry.sourceLocator !== record.sourceLocator || entry.sourceType !== record.sourceType
+      || entry.sensitivity !== record.sensitivity || entry.policyHash !== record.policyHash || entry.eventDate !== record.eventDate) {
+      throw new DomainValidationError('Evidence record does not match its immutable manifest entry');
+    }
+    const actualExcerptHash = createHash('sha256').update(record.content).digest('hex');
+    if (entry.includedCharacters !== record.content.length || entry.excerptHash !== actualExcerptHash) {
+      throw new DomainValidationError('Evidence content does not match its immutable manifest excerpt');
+    }
+    if (record.accountId !== context.account.id) throw new DomainValidationError('Evidence account binding does not match');
+    if (record.opportunityId !== context.opportunity.id) throw new DomainValidationError('Evidence opportunity binding does not match');
+    if (record.policyHash !== context.manifest.policyHash) throw new DomainValidationError('Evidence policy binding does not match');
+  }
+}
+
+export function collectArtifactCitationEvidenceIds(value: unknown): ReadonlySet<string> {
+  const ids = new Set<string>();
+  const visit = (current: unknown): void => {
+    if (Array.isArray(current)) { current.forEach(visit); return; }
+    if (typeof current !== 'object' || current === null) return;
+    const record = current as Record<string, unknown>;
+    if (typeof record.evidenceId === 'string' && typeof record.id === 'string' && record.id.startsWith('citation_')) ids.add(record.evidenceId);
+    Object.values(record).forEach(visit);
+  };
+  visit(value);
+  return ids;
+}

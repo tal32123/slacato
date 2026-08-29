@@ -1,0 +1,48 @@
+import type { BudgetedModelGateway } from '../model/contracts.js';
+import { dealBriefSchema, type DealBrief } from '../../domain/briefs/schema.js';
+import type { AgentContext, AgentEvidenceRecord, StrategyArtifacts } from './contracts.js';
+import { runAgent } from './runtime.js';
+import {
+  collectArtifactCitationEvidenceIds,
+  validateCommercialArtifact,
+  validateConversationArtifact,
+  validateDealBrief,
+  validateStakeholderArtifact
+} from './validation.js';
+
+const ALL_SOURCES = new Set<AgentEvidenceRecord['sourceType']>(['gong_summary', 'gong_transcript', 'policy', 'pricing', 'salesforce', 'slack']);
+const TASK = 'Synthesize the three validated specialist artifacts into the canonical nine-section deal brief. Use only citations already present in the validated artifacts. Prioritize negotiation state, concrete next actions, missing information, confidence, and review warnings. Return only the strict DealBrief.';
+
+/** Negotiation strategist receiving validated artifacts, never live specialist capabilities. */
+export class StrategyAgent {
+  public constructor(private readonly gateway: BudgetedModelGateway) {}
+
+  public async run(context: AgentContext, artifacts: StrategyArtifacts): Promise<DealBrief> {
+    const conversation = validateConversationArtifact(artifacts.conversation, context.manifest.id, context.evidence);
+    const stakeholder = validateStakeholderArtifact(artifacts.stakeholder, context.manifest.id, context.evidence);
+    const commercial = validateCommercialArtifact(artifacts.commercial, context.manifest.id, context.evidence);
+    const validatedArtifacts: StrategyArtifacts = { conversation, stakeholder, commercial };
+    const citedIds = collectArtifactCitationEvidenceIds(validatedArtifacts);
+    const citedContext: AgentContext = {
+      ...context,
+      evidence: context.evidence.filter((record) => citedIds.has(record.evidenceId)),
+      manifestEntries: context.manifestEntries.filter((entry) => citedIds.has(entry.evidenceId))
+    };
+    const result = await runAgent({
+      gateway: this.gateway,
+      context: citedContext,
+      operation: 'negotiation-strategy',
+      task: TASK,
+      schema: dealBriefSchema,
+      allowedSourceTypes: ALL_SOURCES,
+      citedIds,
+      artifacts: [
+        { id: 'conversation', value: conversation },
+        { id: 'stakeholder', value: stakeholder },
+        { id: 'commercial', value: commercial }
+      ]
+    });
+    const citedEvidence = result.evidence.filter((record) => citedIds.has(record.evidenceId));
+    return validateDealBrief(result.value, citedEvidence, context);
+  }
+}

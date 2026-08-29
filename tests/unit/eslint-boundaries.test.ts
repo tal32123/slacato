@@ -33,4 +33,13 @@ describe('architectural boundary lint policy', () => {
 
     expect(result?.messages.some((message) => message.ruleId === 'boundaries/dependencies')).toBe(false);
   });
+
+  it('rejects a specialist importing another specialist agent', async () => {
+    const eslint = new ESLint({ cwd: process.cwd() });
+    const [result] = await eslint.lintText("import './conversation.js';\nexport {};\n", {
+      filePath: 'packages/core/src/application/agents/strategy.ts'
+    });
+
+    expect(result?.messages.some((message) => message.ruleId === 'no-restricted-imports')).toBe(true);
+  });
 });
