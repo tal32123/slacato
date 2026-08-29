@@ -327,6 +327,52 @@ describe('specialized agents', () => {
     await expect(new CommercialAgent(gateway).run(context([cited]))).rejects.toThrow('Unknown or stale citation');
   });
 
+  it('feeds citation validation failures and the failed artifact back into native repair', async () => {
+    const cited = evidence('evidence_repair_terms', 'pricing', 'The proposed annual amount is USD 100000.');
+    const validCitation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
+    const invalidArtifact = {
+      ...emptyCommercial,
+      claims: [{
+        id: 'claim_amount', statement: 'The proposed annual amount is USD 100000.', confidence: 0.9,
+        citations: [{ ...validCitation, id: 'citation_forged' }]
+      }]
+    };
+    const validArtifact = {
+      ...emptyCommercial,
+      claims: [{
+        id: 'claim_amount', statement: 'The proposed annual amount is USD 100000.', confidence: 0.9,
+        citations: [validCitation]
+      }]
+    };
+    const messages: string[] = [];
+    let call = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: true },
+      async generate(request) {
+        messages.push(request.messages.map((message) => message.content).join('\n'));
+        call += 1;
+        const output = call === 1 ? invalidArtifact : validArtifact;
+        return { text: JSON.stringify(output), output, usage: { inputTokens: 100, outputTokens: 100 } };
+      }
+    };
+    let ordinal = 0;
+    const ledger: ProviderAttemptLedger = {
+      async beginAttempt(input) {
+        ordinal += 1;
+        return { reservationId: `citation-repair-${ordinal}`, attemptId: `citation-repair-${ordinal}`, ordinal, grantedOutputTokens: input.requestedOutputTokens };
+      },
+      async settleAttempt() {},
+      async releaseAttempt() {}
+    };
+
+    const artifact = await new CommercialAgent(createBudgetedModelGateway(transport, undefined, ledger)).run(context([cited]));
+
+    expect(artifact.claims).toHaveLength(1);
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toContain('Unknown or stale citation');
+    expect(messages[1]).toContain('citation_forged');
+  });
+
   it('prunes insufficient material claims and turns them into explicit missing context', async () => {
     const cited = evidence('evidence_discount', 'gong_summary', 'The buyer asked to discuss commercial flexibility.');
     const gateway = new RecordingGateway([{

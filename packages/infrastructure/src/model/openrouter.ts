@@ -96,16 +96,37 @@ class OpenRouterTransport implements ModelTransport {
       if (request.outputMode === 'native_schema') {
         if (request.schema === undefined) throw new Error('Native structured generation requires a schema');
         const inputJsonSchema = z.toJSONSchema(request.schema, { io: 'input' }) as unknown as Parameters<typeof jsonSchema>[0];
-        const result = await generateText({
-          ...common,
-          output: Output.object({ schema: jsonSchema(inputJsonSchema) })
-        });
-        return {
-          text: result.text,
-          output: result.output as Value,
-          usage: result.usage,
-          warnings: (result.warnings ?? []).map(warningText)
-        };
+        try {
+          const result = await generateText({
+            ...common,
+            output: Output.object({ schema: jsonSchema(inputJsonSchema) })
+          });
+          try {
+            return {
+              text: result.text,
+              output: result.output as Value,
+              usage: result.usage,
+              warnings: (result.warnings ?? []).map(warningText)
+            };
+          } catch (error) {
+            if (!NoOutputGeneratedError.isInstance(error)) throw error;
+            return {
+              text: result.text,
+              output: undefined,
+              usage: result.usage,
+              warnings: (result.warnings ?? []).map(warningText)
+            };
+          }
+        } catch (error) {
+          if (!NoObjectGeneratedError.isInstance(error)) throw error;
+          return {
+            text: error.text ?? '',
+            output: undefined,
+            usage: error.usage,
+            requestId: error.response?.id,
+            warnings: []
+          };
+        }
       }
       const result = await generateText(common);
       return { text: result.text, usage: result.usage, warnings: (result.warnings ?? []).map(warningText) };
