@@ -13,11 +13,11 @@ const ledger: ProviderAttemptLedger = {
 
 describe('OpenRouter transport', () => {
   it('uses strict JSON schema generation and the embeddings endpoint through one provider', async () => {
-    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const requests: Array<{ url: string; body: Record<string, unknown>; headers: Headers }> = [];
     const fakeFetch: typeof fetch = async (input, init) => {
       const url = input.toString();
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-      requests.push({ url, body });
+      requests.push({ url, body, headers: new Headers(init?.headers) });
       if (url.endsWith('/embeddings')) {
         return Response.json({
           object: 'list', model: 'openai/text-embedding-3-small',
@@ -58,6 +58,7 @@ describe('OpenRouter transport', () => {
         provider: { allow_fallbacks: true, require_parameters: true }
       }
     });
+    expect(requests[0]?.headers.get('x-openrouter-title')).toBe('SlaCato');
     expect(requests[1]).toMatchObject({
       url: 'https://openrouter.ai/api/v1/embeddings',
       body: { model: 'openai/text-embedding-3-small', input: ['first', 'second'] }
