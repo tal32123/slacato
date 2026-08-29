@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const destinations = ['Deals', 'Runs', 'Approvals', 'Settings'] as const;
 
@@ -7,6 +7,14 @@ async function loginAs(page: Page, name = 'Maya Levin', returnTo = '/settings'):
   await page.goto(`/login?returnTo=${encodeURIComponent(returnTo)}`);
   await page.getByRole('button', { name: new RegExp(`Continue as ${name}`) }).click();
   await expect(page).toHaveURL(returnTo);
+}
+
+async function tabTo(page: Page, target: Locator, limit = 30): Promise<void> {
+  for (let step = 0; step < limit; step += 1) {
+    await page.keyboard.press('Tab');
+    if (await target.evaluate((element) => element === document.activeElement)) return;
+  }
+  await expect(target).toBeFocused();
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -57,24 +65,146 @@ test('adapts one primary navigation across the required responsive viewports', a
   }
 });
 
-test('supports skip navigation, keyboard focus, current destination, and intended-destination restoration', async ({ page }) => {
+test('completes the desktop and mobile shell journey with keyboard input only', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/diagnostics');
   await expect(page).toHaveURL('/unauthorized?returnTo=%2Fdiagnostics');
-  await page.getByRole('link', { name: 'Choose a persona' }).click();
-  await page.getByRole('button', { name: /Continue as Maya Levin/ }).click();
+
+  const choosePersona = page.getByRole('link', { name: 'Choose a persona' });
+  await tabTo(page, choosePersona);
+  await page.keyboard.press('Enter');
+  const mayaLogin = page.getByRole('button', { name: /Continue as Maya Levin/ });
+  await tabTo(page, mayaLogin);
+  await page.keyboard.press('Enter');
   await expect(page).toHaveURL('/diagnostics');
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  await page.keyboard.press('Tab');
+
   const skip = page.getByRole('link', { name: 'Skip to content' });
-  await expect(skip).toBeFocused();
+  await tabTo(page, skip);
   await page.keyboard.press('Enter');
   await expect(page.locator('#main-content')).toBeFocused();
 
+  await page.keyboard.press('Shift+Tab');
+  const personaMenu = page.getByRole('button', { name: /Maya Levin, Account Owner/ });
+  await expect(personaMenu).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Persona & session' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Demo Diagnostics' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(personaMenu).toBeFocused();
+
+  await page.keyboard.press('Shift+Tab');
+  const railToggle = page.getByRole('button', { name: 'Expand navigation' });
+  await expect(railToggle).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Collapse navigation' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(railToggle).toBeFocused();
+
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('navigation', { name: 'Secondary' }).getByRole('link', { name: 'Demo Diagnostics' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
   const settings = page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Settings', exact: true });
-  await settings.focus();
+  await expect(settings).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL('/settings');
-  await expect(settings).toHaveAttribute('aria-current', 'page');
+
+  const mayaRadio = page.getByRole('radio', { name: /Maya Levin/ });
+  await tabTo(page, mayaRadio);
+  await page.keyboard.press('ArrowDown');
+  const noraRadio = page.getByRole('radio', { name: /Nora Chen/ });
+  await expect(noraRadio).toBeChecked();
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Shift+Tab');
+  const changePersona = page.getByRole('button', { name: 'Use selected persona' });
+  await expect(changePersona).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('radio', { name: /Nora Chen/ })).toBeChecked();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/deals');
+  const mobileDeals = page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Deals', exact: true });
+  await tabTo(page, mobileDeals);
+  await page.keyboard.press('Tab');
+  const mobileRuns = page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Runs', exact: true });
+  await expect(mobileRuns).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/runs');
+});
+
+test('initializes and toggles the exact desktop rail widths across breakpoints', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await loginAs(page);
+  const rail = page.getByRole('complementary');
+  await expect(rail).toHaveAttribute('data-state', 'collapsed');
+  expect((await rail.boundingBox())?.width).toBe(72);
+
+  await page.getByRole('button', { name: 'Expand navigation' }).click();
+  await expect(rail).toHaveAttribute('data-state', 'expanded');
+  expect((await rail.boundingBox())?.width).toBe(240);
+  await page.getByRole('button', { name: 'Collapse navigation' }).click();
+  expect((await rail.boundingBox())?.width).toBe(72);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(rail).toHaveAttribute('data-state', 'expanded');
+  expect((await rail.boundingBox())?.width).toBe(240);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(rail).toHaveAttribute('data-state', 'collapsed');
+  expect((await rail.boundingBox())?.width).toBe(72);
+});
+
+test('announces exact Diagnostics location on desktop and containing Settings location on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await loginAs(page, 'Maya Levin', '/diagnostics');
+  const desktopPrimary = page.getByRole('navigation', { name: 'Primary' });
+  await expect(desktopPrimary.getByRole('link', { name: 'Settings', exact: true })).not.toHaveAttribute('aria-current');
+  const diagnostics = page.getByRole('navigation', { name: 'Secondary' }).getByRole('link', { name: 'Demo Diagnostics' });
+  await expect(diagnostics).toHaveAttribute('aria-current', 'page');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileSettings = page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Settings', exact: true });
+  await expect(mobileSettings).toHaveAttribute('aria-current', 'location');
+});
+
+test('foreground-refetches the signed session on protected navigation', async ({ page }) => {
+  await loginAs(page);
+  let sessionRequests = 0;
+  await page.route('**/api/auth/session', async (route) => {
+    sessionRequests += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: false }) });
+  });
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Runs', exact: true }).click();
+  await expect(page).toHaveURL('/unauthorized?returnTo=%2Fruns');
+  await expect(page.getByRole('heading', { name: 'Sign in to continue' })).toBeVisible();
+  expect(sessionRequests).toBeGreaterThan(0);
+});
+
+test('routes typed authorization errors and gives root bootstrap failures a main landmark', async ({ page }) => {
+  await loginAs(page);
+  await page.route('**/api/diagnostics', (route) => route.fulfill({
+    status: 401,
+    contentType: 'application/json',
+    body: JSON.stringify({ code: 'UNAUTHORIZED', message: 'Authentication is required' })
+  }));
+  await page.goto('/diagnostics');
+  await expect(page).toHaveURL('/login?returnTo=%2Fdiagnostics');
+
+  await page.unroute('**/api/diagnostics');
+  await page.goto('/settings');
+  await page.route('**/api/diagnostics', (route) => route.fulfill({
+    status: 403,
+    contentType: 'application/json',
+    body: JSON.stringify({ code: 'FORBIDDEN', message: 'Request could not be authorized' })
+  }));
+  await page.goto('/diagnostics');
+  await expect(page).toHaveURL('/forbidden');
+
+  await page.unroute('**/api/diagnostics');
+  await page.route('**/api/auth/session', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }));
+  await page.goto('/runs');
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { name: 'This view could not be loaded' })).toBeVisible();
 });
 
 test('renders route pending, error, and genuine not-found states', async ({ page }) => {
@@ -114,7 +244,7 @@ test('respects forced colors and reduced motion while preserving visible focus',
   await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
   await loginAs(page);
   const deals = page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Deals', exact: true });
-  await deals.focus();
+  await tabTo(page, deals);
   const styles = await deals.evaluate((element) => {
     const computed = getComputedStyle(element);
     return {

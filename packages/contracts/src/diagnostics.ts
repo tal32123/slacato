@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { authenticatedSessionSchema } from './auth.js';
 
-const readinessStateSchema = z.enum(['ready', 'unavailable']);
+const readinessStateSchema = z.enum(['ready', 'unavailable', 'unconfigured']);
 
 /** Serializable, secret-free view of the signed browser session. */
 export const demoSessionSchema = authenticatedSessionSchema;
@@ -30,7 +30,7 @@ export const providerHealthViewSchema = z.object({
   pinnedGenerationModel: z.string().trim().min(1).max(200),
   pinnedEmbeddingModel: z.string().trim().min(1).max(200),
   indexHealth: readinessStateSchema,
-  runtimeReadiness: z.enum(['ready', 'not_ready']),
+  runtimeReadiness: z.enum(['ready', 'not_ready', 'unconfigured']),
   checks: z.object({
     database: readinessStateSchema,
     migration: readinessStateSchema,

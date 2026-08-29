@@ -1,5 +1,7 @@
+export type ReadinessProbeResult = boolean | 'unconfigured';
+
 export interface ReadinessCheck {
-  isReady(): Promise<boolean>;
+  isReady(): Promise<ReadinessProbeResult>;
 }
 
 export interface ReadinessDependencies {
@@ -11,7 +13,7 @@ export interface ReadinessDependencies {
 }
 
 export type ReadinessCheckName = keyof ReadinessDependencies;
-export type ReadinessCheckStatus = 'ready' | 'unavailable';
+export type ReadinessCheckStatus = 'ready' | 'unavailable' | 'unconfigured';
 
 export interface ReadyHealth {
   status: 'ready';
@@ -24,7 +26,13 @@ export interface NotReadyHealth {
   detail: { code: 'MODEL_UNAVAILABLE' | 'DEPENDENCY_UNAVAILABLE'; generation: 'disabled' };
 }
 
-export type ReadinessHealth = ReadyHealth | NotReadyHealth;
+export interface UnconfiguredHealth {
+  status: 'unconfigured';
+  checks: Record<ReadinessCheckName, 'ready' | 'unconfigured'>;
+  detail: { code: 'CHECKS_UNCONFIGURED'; generation: 'disabled' };
+}
+
+export type ReadinessHealth = ReadyHealth | NotReadyHealth | UnconfiguredHealth;
 
 /** Coordinates replaceable readiness probes without constructing real infrastructure. */
 export class HealthService {
@@ -34,7 +42,8 @@ export class HealthService {
     const entries = await Promise.all(
       (Object.entries(this.dependencies) as Array<[ReadinessCheckName, ReadinessCheck]>).map(async ([name, check]) => {
         try {
-          return [name, (await check.isReady()) ? 'ready' : 'unavailable'] as const;
+          const result = await check.isReady();
+          return [name, result === 'unconfigured' ? 'unconfigured' : result ? 'ready' : 'unavailable'] as const;
         } catch {
           return [name, 'unavailable'] as const;
         }
@@ -42,8 +51,17 @@ export class HealthService {
     );
     const checks = Object.fromEntries(entries) as Record<ReadinessCheckName, ReadinessCheckStatus>;
     const unavailable = (Object.entries(checks) as Array<[ReadinessCheckName, ReadinessCheckStatus]>).find(([, status]) => status === 'unavailable');
-
-    if (!unavailable) return { status: 'ready', checks: checks as Record<ReadinessCheckName, 'ready'> };
+    if (unavailable === undefined) {
+      const unconfigured = Object.values(checks).some((status) => status === 'unconfigured');
+      if (unconfigured) {
+        return {
+          status: 'unconfigured',
+          checks: checks as Record<ReadinessCheckName, 'ready' | 'unconfigured'>,
+          detail: { code: 'CHECKS_UNCONFIGURED', generation: 'disabled' }
+        };
+      }
+      return { status: 'ready', checks: checks as Record<ReadinessCheckName, 'ready'> };
+    }
 
     return {
       status: 'not_ready',

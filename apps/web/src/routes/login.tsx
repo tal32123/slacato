@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import type { Persona } from '@slacato/contracts';
 import { ArrowRight, Check, Database, LoaderCircle, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
 import { fetchCsrf, fetchPersonas } from '@/api/client';
-import { safeDestination, selectPersonaSession } from '@/api/session';
+import { safeDestination, selectPersonaSession, sessionRuntime } from '@/api/session';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,10 @@ export function LoginRoute(): React.JSX.Element {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    sessionRuntime.finishTransition();
+  }, []);
 
   useEffect(() => {
     const abort = new AbortController();

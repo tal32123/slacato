@@ -41,10 +41,26 @@ export const csrfQueryOptions = (version: string) => queryOptions({
   staleTime: 0
 });
 
-export const diagnosticsQueryOptions = (version: string) => queryOptions({
-  queryKey: queryKeys.scoped(version, 'diagnostics'),
-  queryFn: ({ signal }) => fetchDiagnostics(signal)
-});
+export class SessionInvalidatedError extends Error {
+  public constructor() {
+    super('The signed session changed while protected data was loading.');
+  }
+}
+
+export const diagnosticsQueryOptions = (version: string) => {
+  const generation = sessionRuntime.generation;
+  return queryOptions({
+    queryKey: queryKeys.scoped(version, 'diagnostics'),
+    queryFn: async ({ signal }) => {
+      const diagnostics = await fetchDiagnostics(signal);
+      if (diagnostics.sessionVersion !== version || !sessionRuntime.accepts(generation)) {
+        await sessionRuntime.reconcileAuthoritativeSession(queryKeys.scoped(version, 'diagnostics'));
+        throw new SessionInvalidatedError();
+      }
+      return diagnostics;
+    }
+  });
+};
 
 interface ClosableStream {
   close(): void;
@@ -52,7 +68,7 @@ interface ClosableStream {
 
 type SessionBroadcast = Readonly<{
   source: string;
-  kind: 'persona' | 'logout';
+  kind: 'persona' | 'logout' | 'invalidate';
   version?: string;
 }>;
 
@@ -62,6 +78,8 @@ class SessionRuntime {
   private readonly overlayClosers = new Set<() => void>();
   private readonly channel = typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel('slacato-session');
   private connectionGeneration = 0;
+  private transitionInProgress = false;
+  private readonly transitionListeners = new Set<() => void>();
 
   public constructor() {
     this.channel?.addEventListener('message', (event: MessageEvent<unknown>) => {
@@ -75,6 +93,15 @@ class SessionRuntime {
 
   public get generation(): number {
     return this.connectionGeneration;
+  }
+
+  public get transitioning(): boolean {
+    return this.transitionInProgress;
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.transitionListeners.add(listener);
+    return () => this.transitionListeners.delete(listener);
   }
 
   public registerStream(stream: ClosableStream): () => void {
@@ -91,14 +118,39 @@ class SessionRuntime {
     return generation === this.connectionGeneration;
   }
 
-  public prepareTransition(): void {
+  public prepareTransition(preserveQueryKey?: readonly unknown[]): void {
     for (const stream of this.streams) stream.close();
     this.streams.clear();
     this.connectionGeneration += 1;
+    this.transitionInProgress = true;
+    this.notifyTransition();
     for (const close of this.overlayClosers) close();
     this.overlayClosers.clear();
-    void queryClient.cancelQueries({ predicate: ({ queryKey }) => queryKey[0] === 'scoped' || queryKey[0] === 'csrf' });
-    queryClient.removeQueries({ predicate: ({ queryKey }) => queryKey[0] === 'scoped' || queryKey[0] === 'csrf' });
+    const shouldTearDown = ({ queryKey }: { queryKey: readonly unknown[] }): boolean =>
+      (queryKey[0] === 'scoped' || queryKey[0] === 'csrf') &&
+      (preserveQueryKey === undefined || !sameQueryKey(queryKey, preserveQueryKey));
+    void queryClient.cancelQueries({ predicate: shouldTearDown });
+    queryClient.removeQueries({ predicate: shouldTearDown });
+  }
+
+  public finishTransition(): void {
+    if (!this.transitionInProgress) return;
+    this.transitionInProgress = false;
+    this.notifyTransition();
+  }
+
+  public async reconcileAuthoritativeSession(
+    preserveQueryKey?: readonly unknown[],
+    broadcastKind: SessionBroadcast['kind'] = 'invalidate'
+  ): Promise<AuthSessionResponse> {
+    this.prepareTransition(preserveQueryKey);
+    queryClient.removeQueries({ queryKey: queryKeys.session });
+    this.broadcast(broadcastKind);
+    return queryClient.fetchQuery(sessionQueryOptions());
+  }
+
+  private notifyTransition(): void {
+    for (const listener of this.transitionListeners) listener();
   }
 
   public broadcast(kind: SessionBroadcast['kind'], version?: string): void {
@@ -110,27 +162,55 @@ export const sessionRuntime = new SessionRuntime();
 
 export async function selectPersonaSession(userId: string, csrfToken: string): Promise<Extract<AuthSessionResponse, { authenticated: true }>> {
   sessionRuntime.prepareTransition();
-  const payload = await changePersona(userId, csrfToken);
-  queryClient.setQueryData(queryKeys.session, payload.session);
-  queryClient.setQueryData(queryKeys.csrf(payload.session.version), payload.csrfToken);
-  sessionRuntime.broadcast('persona', payload.session.version);
-  return payload.session;
+  try {
+    const payload = await changePersona(userId, csrfToken);
+    queryClient.setQueryData(queryKeys.session, payload.session);
+    queryClient.setQueryData(queryKeys.csrf(payload.session.version), payload.csrfToken);
+    sessionRuntime.broadcast('persona', payload.session.version);
+    return payload.session;
+  } catch (error) {
+    return reconcileAmbiguousMutation(error, 'persona');
+  }
 }
 
 export async function logoutSession(csrfToken: string): Promise<void> {
   sessionRuntime.prepareTransition();
-  const payload = await endSession(csrfToken);
-  queryClient.setQueryData(queryKeys.session, payload.session);
-  queryClient.removeQueries({ predicate: ({ queryKey }) => queryKey[0] === 'csrf' });
-  sessionRuntime.broadcast('logout');
+  try {
+    const payload = await endSession(csrfToken);
+    queryClient.setQueryData(queryKeys.session, payload.session);
+    queryClient.removeQueries({ predicate: ({ queryKey }) => queryKey[0] === 'csrf' });
+    sessionRuntime.broadcast('logout');
+  } catch (error) {
+    return reconcileAmbiguousMutation(error, 'logout');
+  }
 }
 
 export function safeDestination(value: string | null, fallback = '/deals'): string {
   return value?.startsWith('/') && !value.startsWith('//') ? value : fallback;
 }
 
+async function reconcileAmbiguousMutation(error: unknown, kind: 'persona' | 'logout'): Promise<never> {
+  try {
+    const session = await sessionRuntime.reconcileAuthoritativeSession(undefined, kind);
+    if (!session.authenticated) {
+      const returnTo = safeDestination(`${window.location.pathname}${window.location.search}`);
+      window.location.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+    } else {
+      window.location.reload();
+    }
+  } catch {
+    window.location.reload();
+  }
+  throw error;
+}
+
+function sameQueryKey(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+}
+
 function isSessionBroadcast(value: unknown): value is SessionBroadcast {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Partial<SessionBroadcast>;
-  return typeof candidate.source === 'string' && (candidate.kind === 'persona' || candidate.kind === 'logout');
+  return typeof candidate.source === 'string'
+    && (candidate.kind === 'persona' || candidate.kind === 'logout' || candidate.kind === 'invalidate');
 }

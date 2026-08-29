@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DemoSession } from '@slacato/contracts';
 import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
 import { Link, Outlet, useLocation, useNavigation } from 'react-router';
@@ -16,6 +16,14 @@ export function AppShell({ session, onLogout }: Readonly<{
   const location = useLocation();
   const navigation = useNavigation();
 
+  useEffect(() => {
+    const preferredRail = window.matchMedia('(min-width: 1280px)');
+    const applyPreferredRail = (event: MediaQueryListEvent): void => setExpanded(event.matches);
+    setExpanded(preferredRail.matches);
+    preferredRail.addEventListener('change', applyPreferredRail);
+    return () => preferredRail.removeEventListener('change', applyPreferredRail);
+  }, []);
+
   return (
     <div className="min-h-dvh bg-background lg:grid lg:grid-cols-[auto_minmax(0,1fr)]">
       <a
@@ -26,6 +34,7 @@ export function AppShell({ session, onLogout }: Readonly<{
       </a>
 
       <aside
+        data-state={expanded ? 'expanded' : 'collapsed'}
         className={cn(
           'sticky top-0 hidden h-dvh flex-col overflow-y-auto bg-brand-forest text-brand-pale lg:flex',
           expanded ? 'w-60' : 'w-18'
@@ -41,7 +50,7 @@ export function AppShell({ session, onLogout }: Readonly<{
         <nav aria-label="Primary" data-layout="desktop" className="flex-1 px-2 py-5">
           <ul className="grid gap-1">
             {primaryDestinations.map(({ label, to, icon: Icon }) => {
-              const current = location.pathname === to || (label === 'Settings' && location.pathname === '/diagnostics');
+              const current = location.pathname === to;
               return (
                 <li key={to}>
                   <Link
@@ -62,13 +71,19 @@ export function AppShell({ session, onLogout }: Readonly<{
         </nav>
 
         <div className="border-t border-brand-mint/20 p-2">
-          <Link
-            to="/diagnostics"
-            className="flex min-h-11 min-w-11 items-center gap-3 rounded-md px-3 text-sm text-brand-pale/75 hover:bg-brand-medium hover:text-brand-pale"
-          >
-            <ShieldCheck aria-hidden="true" className="size-5 shrink-0" />
-            <span className={cn(!expanded && 'sr-only')}>Demo Diagnostics</span>
-          </Link>
+          <nav aria-label="Secondary">
+            <Link
+              aria-current={location.pathname === '/diagnostics' ? 'page' : undefined}
+              to="/diagnostics"
+              className={cn(
+                'flex min-h-11 min-w-11 items-center gap-3 rounded-md px-3 text-sm text-brand-pale/75 hover:bg-brand-medium hover:text-brand-pale',
+                location.pathname === '/diagnostics' && 'bg-brand-medium text-brand-mint'
+              )}
+            >
+              <ShieldCheck aria-hidden="true" className="size-5 shrink-0" />
+              <span className={cn(!expanded && 'sr-only')}>Demo Diagnostics</span>
+            </Link>
+          </nav>
           <Button
             aria-label={expanded ? 'Collapse navigation' : 'Expand navigation'}
             variant="ghost"

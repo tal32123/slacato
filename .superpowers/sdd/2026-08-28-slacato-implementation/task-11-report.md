@@ -71,7 +71,7 @@ The previous component-owned auth client and placeholder workspace route were re
 - `apps/web/src/main.tsx`
   - one protected nested data-router tree
   - root bootstrap loader
-  - settings and diagnostics loaders using `ensureQueryData`
+  - foreground `fetchQuery` session revalidation on every protected navigation, with shared query options retaining fetch ownership
   - route-level pending and error states
   - protected catch-all not-found state
 - `apps/web/src/routes/root.tsx`
@@ -160,7 +160,7 @@ Result: passed with no diagnostics.
 The actual Vite/Nest surface was driven in Chromium rather than reviewed from source alone.
 
 - 1440×900 Settings: expanded 240px forest rail, restrained paper workspace, clear active persona hierarchy, compact signed-session status, and balanced two-column session controls.
-- 1440×900 Diagnostics: truthful mock provider/model values, visible `Runtime not ready`, all five dependency checks shown as unavailable, and a readable full authority matrix.
+- 1440×900 Diagnostics: truthful mock provider/model values, visible `Runtime not configured`, all five dependency checks explicitly shown as not configured, and a readable full authority matrix.
 - 320×720 Settings: single-column persona records, no horizontal overflow (`scrollWidth === clientWidth === 320`), usable header, persistent four-item bottom navigation, and 44px controls.
 - 390×844 Diagnostics: stacked runtime facts and mobile permission records, no horizontal overflow (`scrollWidth === clientWidth === 390`), bottom navigation retained.
 - Automated responsive coverage additionally exercised tablet, landscape phone, 1024px collapsed rail, short desktop, and 200% zoom equivalent behavior.
@@ -168,7 +168,56 @@ The actual Vite/Nest surface was driven in Chromium rather than reviewed from so
 
 ## Concerns and grounded limitations
 
-- `HealthModule` still uses the repository’s existing unconfigured readiness checks, so Diagnostics truthfully reports runtime and index state as unavailable instead of inventing healthy values. Wiring operational readiness adapters is outside Task 11.
+- `HealthModule` has no operational dependency probes configured in this composition. Its explicit `unconfigured` readiness state prevents the UI from claiming either observed health or observed failure. Wiring real database, migration, Redis, index, and model probes is outside Task 11.
 - Mock mode reports `deterministic_mock`. Ollama mode reports `capability_probe_required` because the current API composition has no persisted credentialed capability-probe result; the UI does not claim an unobserved native output mode.
 - The requested package-script form with a standalone `--` selected the existing login spec in addition to the two Task 11 specs in this pnpm/Playwright setup. Final isolated proof used explicit Playwright file paths and one worker.
 - No formatter, linter, project-wide build, or project-wide test suite was run, per task constraints.
+
+## Review-fix round 1
+
+### Additional RED evidence
+
+The review round began with focused tests that exposed the reported gaps:
+
+```text
+pnpm vitest run tests/unit/health.controller.test.ts
+1 failed, 2 passed
+```
+
+The failure showed the unconfigured composition being reported as `not_ready` / `unavailable` instead of the required explicit `unconfigured` state.
+
+```text
+pnpm exec playwright test tests/e2e/responsive-shell.spec.ts tests/e2e/settings.spec.ts --workers=1
+2 failed, 2 passed, 12 did not run
+```
+
+The first failures demonstrated that the desktop secondary navigation landmark was absent and the permission matrix omitted the read-permission column. Subsequent focused RED runs also exercised session-version mismatch, connection-generation mismatch, foreground session expiry, and invalid persona/logout response bodies before each path was made green.
+
+### Review fixes
+
+- Diagnostics now accepts a protected response only when both its `sessionVersion` and captured connection generation remain current. A mismatch hides protected content, tears down scoped state, fetches the authoritative session, and retries through the shared query option before rendering.
+- Persona and logout mutations reconcile the authoritative signed cookie after any ambiguous parse/validation failure, with transition pending state and cross-tab persona/logout broadcasts preventing the prior identity from remaining rendered.
+- Protected navigation foreground-refetches the signed session. Typed API 401 errors preserve a safe `returnTo`; 403 errors route to the opaque forbidden surface.
+- Runtime health now distinguishes `unconfigured` from an observed dependency failure in both the strict contracts and Diagnostics UI.
+- Desktop Diagnostics is an exact secondary destination. Desktop Settings is not marked current while Diagnostics is active; mobile Settings uses `aria-current="location"`.
+- The permission matrix exposes read, restricted-opportunity, sensitive-pricing, request, and all four decision-authority values on desktop and mobile.
+- The keyboard journey uses Tab, Shift+Tab, Enter, Space, ArrowDown, and Escape without programmatic focus shortcuts. Root bootstrap errors now retain a `main` landmark.
+- The rail is asserted at 72px collapsed and 240px expanded across 1024px and 1440px. The 1024px Diagnostics grid constrains the wide matrix to an internal, keyboard-focusable horizontal scroller instead of expanding the document.
+
+### Final review-fix verification
+
+```text
+pnpm exec playwright test tests/e2e/responsive-shell.spec.ts tests/e2e/settings.spec.ts --workers=1
+16 passed (23.4s)
+
+pnpm exec playwright test tests/e2e/login.spec.ts --workers=1
+5 passed (6.3s)
+
+pnpm vitest run tests/unit/health.controller.test.ts
+3 passed
+
+pnpm typecheck
+passed with no diagnostics
+```
+
+The live Vite/Nest surface was reviewed again in Chromium. At 1024×900 the collapsed rail measured 72px, Diagnostics used the exact secondary current destination, the document measured `scrollWidth === clientWidth === 1024`, and the wider 1370px matrix remained inside an 886px keyboard-accessible scroller. At 390×844 the document measured `scrollWidth === clientWidth === 390`, the mobile Settings destination used `aria-current="location"`, and the complete stacked permission records remained readable. The final desktop/mobile axe path passed with zero violations.

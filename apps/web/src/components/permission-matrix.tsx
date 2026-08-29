@@ -45,14 +45,15 @@ export function PermissionMatrix({ grants }: Readonly<{ grants: readonly Permiss
   return (
     <>
       <div className="hidden overflow-hidden rounded-lg border lg:block">
-        <Table aria-label="Permission and decision authority matrix">
+        <Table aria-label="Permission and decision authority matrix" tabIndex={0}>
           <TableCaption className="sr-only">Permission and decision authority matrix</TableCaption>
           <TableHeader>
             <TableRow>
               <TableHead scope="col">Account</TableHead>
               <TableHead scope="col">Source</TableHead>
-              <TableHead scope="col">Restricted access</TableHead>
-              <TableHead scope="col">Sensitive pricing</TableHead>
+              <TableHead scope="col">Read permission</TableHead>
+              <TableHead scope="col">Can access restricted opportunities</TableHead>
+              <TableHead scope="col">Can view sensitive pricing</TableHead>
               <TableHead scope="col">Request permission</TableHead>
               {authorityColumns.map(({ label }) => <TableHead scope="col" key={label}>{label}</TableHead>)}
             </TableRow>
@@ -62,6 +63,7 @@ export function PermissionMatrix({ grants }: Readonly<{ grants: readonly Permiss
               <TableRow key={`${grant.accountId}:${grant.sourceType}`}>
                 <TableCell className="font-medium">{grant.accountId}</TableCell>
                 <TableCell>{sourceLabels[grant.sourceType] ?? grant.sourceType}</TableCell>
+                <TableCell><BooleanValue value={grant.canRead} /></TableCell>
                 <TableCell><BooleanValue value={grant.restrictedOpportunityAccess} /></TableCell>
                 <TableCell><BooleanValue value={grant.sensitivePricing} /></TableCell>
                 <TableCell><BooleanValue value={grant.canRequestApproval} /></TableCell>
@@ -81,8 +83,9 @@ export function PermissionMatrix({ grants }: Readonly<{ grants: readonly Permiss
               <h3 className="font-medium">{grant.accountId}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{sourceLabels[grant.sourceType] ?? grant.sourceType}</p>
               <dl className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
-                <MatrixValue label="Restricted access" value={grant.restrictedOpportunityAccess} />
-                <MatrixValue label="Sensitive pricing" value={grant.sensitivePricing} />
+                <MatrixValue label="Read permission" value={grant.canRead} />
+                <MatrixValue label="Can access restricted opportunities" value={grant.restrictedOpportunityAccess} />
+                <MatrixValue label="Can view sensitive pricing" value={grant.sensitivePricing} />
                 <MatrixValue label="Request permission" value={grant.canRequestApproval} />
                 {authorityColumns.map(({ label, key }) => (
                   <MatrixValue key={label} label={`${label} authority`} value={grant.decisionAuthority[key]} />

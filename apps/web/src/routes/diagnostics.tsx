@@ -1,16 +1,34 @@
 import type { DemoDiagnosticsResponse, DemoSession, ProviderHealthView } from '@slacato/contracts';
+import type { LoaderFunctionArgs } from 'react-router';
 import { ArrowLeft, Bot, Database, SearchCheck, ServerCog } from 'lucide-react';
 import { Link, useLoaderData, useRouteLoaderData } from 'react-router';
-import { diagnosticsQueryOptions, queryClient, sessionQueryOptions } from '@/api/session';
+import { diagnosticsQueryOptions, queryClient, SessionInvalidatedError, sessionQueryOptions, sessionRuntime } from '@/api/session';
 import { PermissionMatrix } from '@/components/permission-matrix';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { throwProtectedLoaderError } from './loader-security';
 
-export async function diagnosticsLoader(): Promise<DemoDiagnosticsResponse | null> {
-  const session = await queryClient.ensureQueryData(sessionQueryOptions());
-  if (!session.authenticated) return null;
-  return queryClient.ensureQueryData(diagnosticsQueryOptions(session.version));
+export async function diagnosticsLoader({ request }: LoaderFunctionArgs): Promise<DemoDiagnosticsResponse | null> {
+  try {
+    const session = await queryClient.fetchQuery(sessionQueryOptions());
+    if (!session.authenticated) return null;
+    return await queryClient.fetchQuery(diagnosticsQueryOptions(session.version));
+  } catch (error) {
+    if (error instanceof SessionInvalidatedError) {
+      try {
+        const session = await queryClient.fetchQuery(sessionQueryOptions());
+        if (session.authenticated) {
+          const diagnostics = await queryClient.fetchQuery(diagnosticsQueryOptions(session.version));
+          sessionRuntime.finishTransition();
+          return diagnostics;
+        }
+      } catch (retryError) {
+        throwProtectedLoaderError(retryError, request);
+      }
+    }
+    throwProtectedLoaderError(error, request);
+  }
 }
 
 export function DiagnosticsRoute(): React.JSX.Element {
@@ -23,7 +41,7 @@ export function DiagnosticsRoute(): React.JSX.Element {
   ]>;
 
   return (
-    <div className="grid gap-8">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8">
       <header className="max-w-4xl">
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm font-medium text-primary">Settings / Demo Diagnostics</p>
@@ -42,7 +60,10 @@ export function DiagnosticsRoute(): React.JSX.Element {
             <h2 id="runtime-title" className="text-xl font-semibold">Runtime configuration</h2>
             <p className="mt-1 text-sm text-muted-foreground">Pinned, server-reported facts for this process. These controls cannot be changed here.</p>
           </div>
-          <StatusBadge status={health.runtimeReadiness === 'ready' ? 'ready' : 'attention'} label={health.runtimeReadiness === 'ready' ? 'Runtime ready' : 'Runtime not ready'} />
+          <StatusBadge
+            status={health.runtimeReadiness === 'ready' ? 'ready' : health.runtimeReadiness === 'unconfigured' ? 'readonly' : 'attention'}
+            label={health.runtimeReadiness === 'ready' ? 'Runtime ready' : health.runtimeReadiness === 'unconfigured' ? 'Runtime not configured' : 'Runtime not ready'}
+          />
         </div>
         <Card className="shadow-none">
           <CardHeader className="border-b">
@@ -55,13 +76,13 @@ export function DiagnosticsRoute(): React.JSX.Element {
               <DiagnosticValue icon={Bot} label="Pinned generation model" value={health.pinnedGenerationModel} />
               <DiagnosticValue icon={SearchCheck} label="Pinned embedding model" value={health.pinnedEmbeddingModel} />
               <DiagnosticValue icon={Database} label="Index health" value={readinessLabel(health.indexHealth)} />
-              <DiagnosticValue icon={ServerCog} label="Runtime readiness" value={health.runtimeReadiness === 'ready' ? 'Ready' : 'Not ready'} />
+              <DiagnosticValue icon={ServerCog} label="Runtime readiness" value={health.runtimeReadiness === 'ready' ? 'Ready' : health.runtimeReadiness === 'unconfigured' ? 'Not configured' : 'Not ready'} />
             </dl>
             <div className="mt-6 border-t pt-5">
               <h3 className="text-sm font-semibold">Dependency checks</h3>
               <ul className="mt-3 flex flex-wrap gap-2" aria-label="Runtime dependency checks">
                 {dependencyChecks.map(([name, status]) => (
-                  <li key={name}><StatusBadge status={status === 'ready' ? 'ready' : 'unavailable'} label={`${dependencyLabel(name)}: ${readinessLabel(status)}`} /></li>
+                  <li key={name}><StatusBadge status={status === 'ready' ? 'ready' : status === 'unconfigured' ? 'readonly' : 'unavailable'} label={`${dependencyLabel(name)}: ${readinessLabel(status)}`} /></li>
                 ))}
               </ul>
             </div>
@@ -100,8 +121,9 @@ function outputModeLabel(mode: ProviderHealthView['outputMode']): string {
   return mode === 'deterministic_mock' ? 'Deterministic development output' : 'Capability probe required';
 }
 
-function readinessLabel(status: 'ready' | 'unavailable'): string {
-  return status === 'ready' ? 'Ready' : 'Unavailable';
+function readinessLabel(status: ProviderHealthView['checks'][keyof ProviderHealthView['checks']]): string {
+  if (status === 'ready') return 'Ready';
+  return status === 'unconfigured' ? 'Not configured' : 'Unavailable';
 }
 
 function dependencyLabel(value: string): string {

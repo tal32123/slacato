@@ -25,16 +25,22 @@ describe('HealthController', () => {
     });
   });
 
-  it('returns HTTP 503 when required readiness ports are unavailable', async () => {
+  it('reports absent readiness adapters as unconfigured rather than unavailable', async () => {
     const app = await createApiApplication({ environment: validEnvironment });
     await app.listen(0, '127.0.0.1');
     try {
       const response = await fetch(`${addressOf(app)}/api/health/ready`);
       expect(response.status).toBe(503);
-      await expect(response.json()).resolves.toMatchObject({
-        status: 'not_ready',
-        checks: { migration: 'unavailable' },
-        detail: { generation: 'disabled' }
+      await expect(response.json()).resolves.toEqual({
+        status: 'unconfigured',
+        checks: {
+          database: 'unconfigured',
+          migration: 'unconfigured',
+          redis: 'unconfigured',
+          index: 'unconfigured',
+          model: 'unconfigured'
+        },
+        detail: { code: 'CHECKS_UNCONFIGURED', generation: 'disabled' }
       });
     } finally {
       await app.close();

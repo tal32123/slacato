@@ -16,16 +16,17 @@ import { UnauthorizedRoute } from './routes/unauthorized';
 import './styles/globals.css';
 
 const router = createBrowserRouter([
-  { path: '/login', element: <LoginRoute />, errorElement: <RouteErrorBoundary /> },
+  { path: '/login', element: <LoginRoute />, errorElement: <RouteErrorBoundary root /> },
   { path: '/unauthorized', element: <UnauthorizedRoute /> },
   { path: '/forbidden', element: <ForbiddenRoute /> },
   {
     id: 'protected-root',
     path: '/',
     loader: protectedRootLoader,
+    shouldRevalidate: () => true,
     element: <RootRoute />,
     hydrateFallbackElement: <RoutePending />,
-    errorElement: <RouteErrorBoundary />,
+    errorElement: <RouteErrorBoundary root />,
     children: [
       { index: true, element: <Navigate to="/deals" replace /> },
       { path: 'deals', element: <DealsHomeRoute /> },

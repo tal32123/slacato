@@ -2,12 +2,12 @@ import { AlertTriangle } from 'lucide-react';
 import { isRouteErrorResponse, useRevalidator, useRouteError } from 'react-router';
 import { Button } from '@/components/ui/button';
 
-export function RouteErrorBoundary(): React.JSX.Element {
+export function RouteErrorBoundary({ root = false }: Readonly<{ root?: boolean }>): React.JSX.Element {
   const error = useRouteError();
   const revalidator = useRevalidator();
   const denied = isRouteErrorResponse(error) && error.status === 403;
 
-  return (
+  const content = (
     <section className="mx-auto max-w-2xl rounded-xl border bg-card p-6 sm:p-8" aria-labelledby="route-error-title">
       <span className="grid size-11 place-items-center rounded-full bg-secondary text-secondary-foreground">
         <AlertTriangle aria-hidden="true" />
@@ -27,4 +27,7 @@ export function RouteErrorBoundary(): React.JSX.Element {
       )}
     </section>
   );
+
+  if (root) return <main className="grid min-h-dvh place-items-center bg-background px-5 py-12">{content}</main>;
+  return content;
 }

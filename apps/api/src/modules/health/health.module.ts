@@ -3,7 +3,7 @@ import { HealthController } from './health.controller.js';
 import { HealthService, type ReadinessCheck } from './health.service.js';
 
 class UnconfiguredReadinessCheck implements ReadinessCheck {
-  public async isReady(): Promise<boolean> { return false; }
+  public async isReady(): Promise<'unconfigured'> { return 'unconfigured'; }
 }
 
 @Module({
@@ -11,8 +11,8 @@ class UnconfiguredReadinessCheck implements ReadinessCheck {
   providers: [{
     provide: HealthService,
     useFactory: () => {
-      const unavailable = new UnconfiguredReadinessCheck();
-      return new HealthService({ database: unavailable, migration: unavailable, redis: unavailable, index: unavailable, model: unavailable });
+      const unconfigured = new UnconfiguredReadinessCheck();
+      return new HealthService({ database: unconfigured, migration: unconfigured, redis: unconfigured, index: unconfigured, model: unconfigured });
     }
   }],
   exports: [HealthService]

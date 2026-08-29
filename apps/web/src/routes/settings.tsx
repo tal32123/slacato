@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { DemoSession } from '@slacato/contracts';
+import type { LoaderFunctionArgs } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Check, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate, useRevalidator, useRouteLoaderData } from 'react-router';
@@ -15,16 +16,21 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { throwProtectedLoaderError } from './loader-security';
 
-export async function settingsLoader(): Promise<null> {
-  const session = await queryClient.ensureQueryData(sessionQueryOptions());
-  if (session.authenticated) {
-    await Promise.all([
-      queryClient.ensureQueryData(personasQueryOptions()),
-      queryClient.ensureQueryData(csrfQueryOptions(session.version))
-    ]);
+export async function settingsLoader({ request }: LoaderFunctionArgs): Promise<null> {
+  try {
+    const session = await queryClient.fetchQuery(sessionQueryOptions());
+    if (session.authenticated) {
+      await Promise.all([
+        queryClient.ensureQueryData(personasQueryOptions()),
+        queryClient.ensureQueryData(csrfQueryOptions(session.version))
+      ]);
+    }
+    return null;
+  } catch (error) {
+    throwProtectedLoaderError(error, request);
   }
-  return null;
 }
 
 export function SettingsRoute(): React.JSX.Element {

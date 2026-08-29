@@ -12,11 +12,18 @@ export const readyHealthSchema = z.object({
 export const notReadyHealthSchema = z.object({
   status: z.literal('not_ready'),
   checks: z.object({
-    database: z.enum(['ready', 'unavailable']), migration: z.enum(['ready', 'unavailable']), redis: z.enum(['ready', 'unavailable']), index: z.enum(['ready', 'unavailable']), model: z.enum(['ready', 'unavailable'])
+    database: z.enum(['ready', 'unavailable', 'unconfigured']), migration: z.enum(['ready', 'unavailable', 'unconfigured']), redis: z.enum(['ready', 'unavailable', 'unconfigured']), index: z.enum(['ready', 'unavailable', 'unconfigured']), model: z.enum(['ready', 'unavailable', 'unconfigured'])
   }).strict(),
   detail: z.object({ code: z.enum(['MODEL_UNAVAILABLE', 'DEPENDENCY_UNAVAILABLE']), generation: z.literal('disabled') }).strict()
 }).strict();
-export const readinessHealthSchema = z.union([readyHealthSchema, notReadyHealthSchema]);
+export const unconfiguredHealthSchema = z.object({
+  status: z.literal('unconfigured'),
+  checks: z.object({
+    database: z.enum(['ready', 'unconfigured']), migration: z.enum(['ready', 'unconfigured']), redis: z.enum(['ready', 'unconfigured']), index: z.enum(['ready', 'unconfigured']), model: z.enum(['ready', 'unconfigured'])
+  }).strict(),
+  detail: z.object({ code: z.literal('CHECKS_UNCONFIGURED'), generation: z.literal('disabled') }).strict()
+}).strict();
+export const readinessHealthSchema = z.union([readyHealthSchema, notReadyHealthSchema, unconfiguredHealthSchema]);
 
 
 export type LiveHealth = z.infer<typeof liveHealthSchema>;

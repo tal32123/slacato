@@ -19,11 +19,13 @@ export function MobileNav(): React.JSX.Element {
     >
       <ul className="grid grid-cols-4 px-1 py-1">
         {primaryDestinations.map(({ label, to, icon: Icon }) => {
-          const current = location.pathname === to || (label === 'Settings' && location.pathname === '/diagnostics');
+          const current = location.pathname === to
+            ? 'page'
+            : label === 'Settings' && location.pathname === '/diagnostics' ? 'location' : undefined;
           return (
             <li key={to}>
               <Link
-                aria-current={current ? 'page' : undefined}
+                aria-current={current}
                 className={cn(
                   'flex min-h-14 min-w-11 flex-col items-center justify-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground',
                   current && 'bg-secondary text-secondary-foreground'
