@@ -4,9 +4,13 @@ import {
   authenticatedMutationResponseSchema,
   csrfResponseSchema,
   demoDiagnosticsResponseSchema,
+  dealListResponseSchema,
+  dealWorkspaceViewSchema,
   logoutResponseSchema,
   personaListResponseSchema,
   type AuthSessionResponse,
+  type DealListResponse,
+  type DealWorkspaceView,
   type DemoDiagnosticsResponse,
   type Persona
 } from '@slacato/contracts';
@@ -64,4 +68,12 @@ export function endSession(csrfToken: string) {
 
 export function fetchDiagnostics(signal: AbortSignal | undefined): Promise<DemoDiagnosticsResponse> {
   return requestJson(demoDiagnosticsResponseSchema, '/api/diagnostics', { signal });
+}
+
+export function fetchDeals(signal: AbortSignal | undefined): Promise<DealListResponse> {
+  return requestJson(dealListResponseSchema, '/api/deals', { signal });
+}
+
+export function fetchDealWorkspace(opportunityId: string, signal: AbortSignal | undefined): Promise<DealWorkspaceView> {
+  return requestJson(dealWorkspaceViewSchema, `/api/deals/${encodeURIComponent(opportunityId)}`, { signal });
 }

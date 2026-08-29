@@ -3,6 +3,7 @@ import { z } from 'zod';
 export * from './auth.js';
 export * from './events.js';
 export * from './diagnostics.js';
+export * from './deals.js';
 
 export const liveHealthSchema = z.object({ status: z.literal('live') }).strict();
 export const readyHealthSchema = z.object({

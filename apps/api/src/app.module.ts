@@ -7,13 +7,16 @@ import { ApprovalsModule } from './modules/approvals/approvals.module.js';
 import type { WorkflowApiOptions } from './modules/runs/contracts.js';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module.js';
 import type { DiagnosticsModuleOptions } from './modules/diagnostics/contracts.js';
+import { DealsModule } from './modules/deals/deals.module.js';
+import type { DealsModuleOptions } from './modules/deals/contracts.js';
 
 @Module({})
 export class AppModule {
   public static register(
     auth: AuthModuleOptions,
     workflow?: WorkflowApiOptions,
-    diagnostics?: DiagnosticsModuleOptions
+    diagnostics?: DiagnosticsModuleOptions,
+    deals?: DealsModuleOptions
   ): DynamicModule {
     return {
       module: AppModule,
@@ -21,7 +24,8 @@ export class AppModule {
         HealthModule,
         AuthModule.register(auth),
         ...(diagnostics === undefined ? [] : [DiagnosticsModule.register(diagnostics)]),
-        ...(workflow === undefined ? [] : [RunsModule.register(workflow), ApprovalsModule.register(workflow.decideApproval)])
+        ...(workflow === undefined ? [] : [RunsModule.register(workflow), ApprovalsModule.register(workflow.decideApproval)]),
+        ...(deals === undefined ? [] : [DealsModule.register(deals)])
       ]
     };
   }

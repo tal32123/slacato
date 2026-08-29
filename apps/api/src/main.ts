@@ -16,6 +16,7 @@ import {
   PostgresWorkflowStore
 } from '@slacato/infrastructure';
 import { AppModule } from './app.module.js';
+import { PostgresDealQueryRepository } from './modules/deals/deals.repository.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
 
@@ -60,6 +61,7 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
   const workflowStore = new PostgresWorkflowStore(database);
   const workflowAccess = new PostgresDealBriefAccessControl(database);
   const runEvents = new PostgresEventStore(database);
+  const dealQueries = new PostgresDealQueryRepository(database);
   const app = await NestFactory.create<NestExpressApplication>(AppModule.register({
     sessionSecret: env.SESSION_SECRET,
     environment: env.NODE_ENV,
@@ -77,6 +79,8 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
     provider: env.AI_PROVIDER,
     pinnedGenerationModel: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_CHAT_MODEL : 'mock-brief',
     pinnedEmbeddingModel: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_EMBEDDING_MODEL : 'mock-embedding'
+  }, {
+    repository: dealQueries
   }), { bodyParser: false });
   configureApiApplication(app);
   return app;
