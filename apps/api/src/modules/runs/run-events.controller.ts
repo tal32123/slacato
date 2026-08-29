@@ -9,6 +9,7 @@ import {
 } from '@slacato/contracts';
 import { CursorExpiredError, type RunEventBus, type RunEventQuery } from '@slacato/core';
 import type { AuthenticatedRequest } from '../auth/guard.js';
+import { AuthService } from '../auth/auth.service.js';
 import { ZodParam, ZodQuery, ZodResponse } from '../../common/wire/zod.decorators.js';
 import { RUN_EVENT_BUS, RUN_EVENT_HEARTBEAT_MS, RUN_EVENT_QUERY } from './contracts.js';
 
@@ -75,7 +76,8 @@ export class RunEventsController {
   public constructor(
     @Inject(RUN_EVENT_BUS) private readonly bus: RunEventBus,
     @Inject(RUN_EVENT_QUERY) private readonly query: RunEventQuery,
-    @Inject(RUN_EVENT_HEARTBEAT_MS) private readonly heartbeatMs: number
+    @Inject(RUN_EVENT_HEARTBEAT_MS) private readonly heartbeatMs: number,
+    private readonly auth: AuthService
   ) {}
 
   @Get(':runId')
@@ -97,9 +99,13 @@ export class RunEventsController {
     @Res() response: Response
   ): Promise<undefined> {
     const actorId = request.auth?.persona.userId;
-    if (actorId === undefined) throw new Error('Authenticated request identity was not installed');
+    const sessionVersion = request.auth?.claims.version;
+    if (actorId === undefined || sessionVersion === undefined) throw new Error('Authenticated request identity was not installed');
+    const authorize = async (): Promise<boolean> =>
+      await this.auth.isSessionActive(sessionVersion, actorId)
+      && await this.query.authorizeAndSnapshot(params.runId, actorId) !== undefined;
     const snapshot = await this.query.authorizeAndSnapshot(params.runId, actorId);
-    if (snapshot === undefined) return opaqueNotFound();
+    if (snapshot === undefined || !await this.auth.isSessionActive(sessionVersion, actorId)) return opaqueNotFound();
     const cursor = headerCursor(request) ?? query.after;
     if (snapshot.terminal && (cursor === undefined || cursor === snapshot.watermark)) {
       response.status(204).end();
@@ -124,14 +130,24 @@ export class RunEventsController {
     const heartbeat = setInterval(() => {
       if (abort.signal.aborted || response.writableEnded || heartbeatPending) return;
       heartbeatPending = true;
-      void writer.write(': heartbeat\n\n').finally(() => { heartbeatPending = false; });
+      void authorize().then(async (allowed) => {
+        if (!allowed) {
+          abort.abort();
+          response.end();
+          return;
+        }
+        await writer.write(': heartbeat\n\n');
+      }).catch(() => {
+        abort.abort();
+        response.end();
+      }).finally(() => { heartbeatPending = false; });
     }, this.heartbeatMs);
     heartbeat.unref();
 
     try {
-      for await (const event of this.bus.subscribe(params.runId, cursor, abort.signal)) {
+      for await (const event of this.bus.subscribe(params.runId, cursor, abort.signal, authorize)) {
         if (abort.signal.aborted) break;
-        if (await this.query.authorizeAndSnapshot(params.runId, actorId) === undefined) {
+        if (!await authorize()) {
           response.end();
           break;
         }
@@ -143,7 +159,7 @@ export class RunEventsController {
       }
     } catch (error) {
       if (!(error instanceof CursorExpiredError)) throw error;
-      if (!abort.signal.aborted) {
+      if (!abort.signal.aborted && await authorize()) {
         const instruction = runEventResyncInstructionSchema.parse({
           type: 'stream.resync_required', version: 1, streamId: params.runId,
           timestamp: new Date().toISOString(),

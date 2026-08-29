@@ -1,5 +1,5 @@
 import {
-  decideApprovalRequirement, extractEditedPolicySignals, hashApprovalPayload, validateDealBrief,
+  CANONICAL_FIXTURE_COMMIT, decideApprovalRequirement, extractEditedPolicySignals, hashApprovalPayload, validateDealBrief,
   DomainValidationError, type AgentEvidenceRecord, type ApprovalAuthority, type ApprovalRequirement,
   type ApprovalRequirementInput, type DealBrief, type DealBriefAccessControl
 } from '@slacato/core';
@@ -14,7 +14,8 @@ export class PostgresDealBriefAccessControl implements DealBriefAccessControl {
       coalesce(bool_or(permission.can_read and (not opportunity.restricted or permission.can_read_restricted)), false) readable,
       coalesce(bool_or(permission.can_request_approval), false) may_request
       from opportunities opportunity
-      left join permission_grants permission on permission.account_id = opportunity.account_id and permission.persona_id = ${input.requestedBy}
+      left join permission_grants permission on permission.account_id = opportunity.account_id
+        and permission.persona_id = ${input.requestedBy} and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT}
       where opportunity.id = ${input.opportunityId}
       group by opportunity.account_id, opportunity.restricted`)[0];
     if (row === undefined || !row.readable || !row.may_request) return { allowed: false as const };
@@ -24,7 +25,8 @@ export class PostgresDealBriefAccessControl implements DealBriefAccessControl {
   public async authoritiesFor(input: Readonly<{ actorId: string; opportunityId: string }>): Promise<readonly ApprovalAuthority[]> {
     const rows = await this.database.sql<{ authority: ApprovalAuthority }[]>`select authority.authority
       from opportunities opportunity
-      join approval_authority_grants authority on authority.account_id = opportunity.account_id and authority.persona_id = ${input.actorId}
+      join approval_authority_grants authority on authority.account_id = opportunity.account_id
+        and authority.persona_id = ${input.actorId} and authority.source_commit = ${CANONICAL_FIXTURE_COMMIT}
       where opportunity.id = ${input.opportunityId}
       order by authority.authority`;
     return rows.map(({ authority }) => authority);

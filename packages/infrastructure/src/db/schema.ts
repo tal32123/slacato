@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean, check, customType, date, foreignKey, index, integer, jsonb, numeric, pgTable, primaryKey,
-  text, timestamp, unique, uniqueIndex
+  text, timestamp, unique, uniqueIndex, uuid
 } from 'drizzle-orm/pg-core';
 
 /**
@@ -24,6 +24,16 @@ export const personas = pgTable('personas', {
 }, (table) => [
   index('personas_source_commit_display_name_idx').on(table.sourceCommit, table.displayName, table.id),
   check('personas_source_commit_check', sql`${table.sourceCommit} is null or ${table.sourceCommit} ~ '^[0-9a-f]{40}$'`)
+]);
+export const authSessions = pgTable('auth_sessions', {
+  version: uuid('version').primaryKey(),
+  personaId: text('persona_id').notNull().references(() => personas.id),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: now()
+}, (table) => [
+  index('auth_sessions_active_idx').on(table.version, table.personaId, table.expiresAt).where(sql`${table.revokedAt} is null`),
+  check('auth_sessions_expiry_ck', sql`${table.expiresAt} > ${table.createdAt}`)
 ]);
 export const permissionGrants = pgTable('permission_grants', {
   id: text('id').primaryKey(), personaId: text('persona_id').notNull().references(() => personas.id),
@@ -124,10 +134,12 @@ export const claims = pgTable('claims', { id: text('id').primaryKey(), runId: te
 export const citations = pgTable('citations', { id: text('id').primaryKey(), claimId: text('claim_id').notNull().references(() => claims.id), evidenceVersionId: text('evidence_version_id').notNull().references(() => evidenceVersions.id), locator: text('locator').notNull(), createdAt: now() }, (table) => [uniqueIndex('citations_claim_evidence_locator_uq').on(table.claimId, table.evidenceVersionId, table.locator)]);
 export const approvalAuthorityGrants = pgTable('approval_authority_grants', {
   id: text('id').primaryKey(), personaId: text('persona_id').notNull().references(() => personas.id), accountId: text('account_id').notNull().references(() => accounts.id),
-  authority: text('authority').notNull(), demoOnly: boolean('demo_only').notNull().default(false), source: text('source').notNull(), createdAt: now()
+  authority: text('authority').notNull(), demoOnly: boolean('demo_only').notNull().default(false),
+  source: text('source').notNull(), sourceCommit: text('source_commit').notNull(), createdAt: now()
 }, (table) => [
   unique('approval_authority_grants_scope_uq').on(table.personaId, table.accountId, table.authority),
-  check('approval_authority_grants_authority_ck', sql`${table.authority} in ('deal_desk','sales_leader','legal_reviewer','account_owner')`)
+  check('approval_authority_grants_authority_ck', sql`${table.authority} in ('deal_desk','sales_leader','legal_reviewer','account_owner')`),
+  check('approval_authority_grants_source_commit_ck', sql`${table.sourceCommit} ~ '^[0-9a-f]{40}$'`)
 ]);
 export const opportunityPolicyFacts = pgTable('opportunity_policy_facts', {
   opportunityId: text('opportunity_id').primaryKey().references(() => opportunities.id), discountPercent: numeric('discount_percent').notNull(),

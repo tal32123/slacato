@@ -1,4 +1,6 @@
 import {
+  approvalBriefPayloadSchema,
+  approvalStructuredDiffSchema,
   approvalDetailResponseSchema,
   approvalInboxResponseSchema,
   runDetailResponseSchema,
@@ -64,18 +66,17 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
       join opportunities opportunity on opportunity.id = run.opportunity_id
       join accounts account on account.id = opportunity.account_id
       join personas requester on requester.id = run.requested_by
-      where (
-        run.requested_by = ${actorId} and exists (
-          select 1 from permission_grants permission
-          where permission.persona_id = ${actorId} and permission.account_id = opportunity.account_id
-            and permission.can_read and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-            and (not opportunity.restricted or permission.can_read_restricted)
-        )
+      where exists (
+        select 1 from permission_grants permission
+        where permission.persona_id = ${actorId} and permission.account_id = opportunity.account_id
+          and permission.can_read and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+          and (not opportunity.restricted or permission.can_read_restricted)
       ) or exists (
         select 1 from approval_subjects subject
         join approval_requirement_entries entry on entry.approval_subject_id = subject.id
         join approval_authority_grants authority on authority.persona_id = ${actorId}
           and authority.account_id = opportunity.account_id
+          and authority.source_commit = ${CANONICAL_FIXTURE_COMMIT}
           and authority.authority in (select jsonb_array_elements_text(entry.eligible_authorities))
         where subject.run_id = run.id
       )
@@ -93,18 +94,17 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
       join accounts account on account.id = opportunity.account_id
       join personas requester on requester.id = run.requested_by
       where run.id = ${runId} and (
-        (
-          run.requested_by = ${actorId} and exists (
-            select 1 from permission_grants permission
-            where permission.persona_id = ${actorId} and permission.account_id = opportunity.account_id
-              and permission.can_read and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-              and (not opportunity.restricted or permission.can_read_restricted)
-          )
+        exists (
+          select 1 from permission_grants permission
+          where permission.persona_id = ${actorId} and permission.account_id = opportunity.account_id
+            and permission.can_read and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+            and (not opportunity.restricted or permission.can_read_restricted)
         ) or exists (
           select 1 from approval_subjects subject
           join approval_requirement_entries entry on entry.approval_subject_id = subject.id
           join approval_authority_grants authority on authority.persona_id = ${actorId}
             and authority.account_id = opportunity.account_id
+            and authority.source_commit = ${CANONICAL_FIXTURE_COMMIT}
             and authority.authority in (select jsonb_array_elements_text(entry.eligible_authorities))
           where subject.run_id = run.id
         )
@@ -116,7 +116,10 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
       this.database.sql<{ step: string; status: string | null }[]>`select distinct on (step) step, payload->>'status' status from workflow_checkpoints where run_id = ${runId} and step like 'specialist:%' order by step, created_at desc, id desc`,
       this.database.sql<{ evidence_count: number | null }[]>`select max((payload->>'evidenceCount')::integer) evidence_count from trace_spans where run_id = ${runId} and kind = 'evidence_retrieval'`,
       this.database.sql<{ retry_count: number | null }[]>`select coalesce(sum(greatest(validation_attempts - 1, 0)), 0)::integer retry_count from generation_attempts where run_id = ${runId}`,
-      this.database.sql<{ present: boolean }[]>`select exists(select 1 from workflow_checkpoints where run_id = ${runId} and step like 'strategy:%') present`
+      this.database.sql<{ present: boolean }[]>`select exists(
+        select 1 from workflow_checkpoints where run_id = ${runId} and step like 'validation:%' and payload->>'status' = 'completed'
+        union all select 1 from approval_subjects where run_id = ${runId}
+      ) present`
     ]);
     const orderedEvents = [...events].reverse();
     const status = runStatusSchema.parse(row.status);
@@ -169,6 +172,7 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
       join lateral (
         select authority.authority from approval_authority_grants authority
         where authority.persona_id = ${actorId} and authority.account_id = account.id
+          and authority.source_commit = ${CANONICAL_FIXTURE_COMMIT}
           and authority.authority in (select jsonb_array_elements_text(entry.eligible_authorities))
         order by authority.authority limit 1
       ) available on true
@@ -199,20 +203,30 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
         and exists (
           select 1 from approval_requirement_entries requirement
           join approval_authority_grants authority on authority.persona_id = ${actorId} and authority.account_id = account.id
+            and authority.source_commit = ${CANONICAL_FIXTURE_COMMIT}
           where requirement.approval_subject_id = subject.id
             and authority.authority in (select jsonb_array_elements_text(requirement.eligible_authorities))
         ) limit 1`)[0];
     if (subject === undefined) return undefined;
 
-    const [entryRows, authorityRows, decisionRows, decidedEntryRows] = await Promise.all([
+    const [entryRows, authorityRows, decisionRows, decidedEntryRows, readableSourceRows] = await Promise.all([
       this.database.sql<ApprovalEntryRow[]>`select id entry_id, category, eligible_authorities, depends_on from approval_requirement_entries where approval_subject_id = ${subjectId} order by ordinal`,
-      this.database.sql<{ authority: string }[]>`select authority from approval_authority_grants where persona_id = ${actorId} and account_id = (select opportunity.account_id from runs run join opportunities opportunity on opportunity.id = run.opportunity_id where run.id = ${subject.run_id})`,
+      this.database.sql<{ authority: string }[]>`select authority from approval_authority_grants
+        where persona_id = ${actorId} and source_commit = ${CANONICAL_FIXTURE_COMMIT}
+          and account_id = (select opportunity.account_id from runs run join opportunities opportunity on opportunity.id = run.opportunity_id where run.id = ${subject.run_id})`,
       this.database.sql<DecisionRow[]>`select decision.action, decision.authority, decision.rationale, decision.diff, decision.created_at, persona.display_name actor_name from approval_decisions decision join personas persona on persona.id = decision.actor_id where decision.approval_subject_id = ${subjectId} order by decision.created_at, decision.id`,
-      this.database.sql<{ entry_id: string }[]>`select entry_id from approval_decisions where approval_subject_id = ${subjectId}`
+      this.database.sql<{ entry_id: string }[]>`select entry_id from approval_decisions where approval_subject_id = ${subjectId}`,
+      this.database.sql<{ source_type: string }[]>`select distinct permission.source_type
+        from permission_grants permission join opportunities opportunity on opportunity.account_id = permission.account_id
+        where permission.persona_id = ${actorId} and opportunity.id = ${subject.opportunity_id}
+          and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT} and permission.can_read
+          and (not opportunity.restricted or permission.can_read_restricted)`
     ]);
     const actorAuthorities = new Set(authorityRows.map((row) => approvalAuthority(row.authority)));
     const decisions = decisionRows.map(mapDecision);
     const decidedEntries = new Set(decidedEntryRows.map((row) => row.entry_id));
+    const payload = approvalBriefPayloadSchema.parse(subject.payload);
+    const readableSources = new Set(readableSourceRows.map(({ source_type }) => source_type));
     return approvalDetailResponseSchema.parse({
       sessionVersion,
       approvalSubjectId: subject.approval_subject_id,
@@ -223,7 +237,7 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
       opportunityName: subject.opportunity_name,
       accountName: subject.account_name,
       status: subject.run_status,
-      payload: subject.payload,
+      payload,
       entries: entryRows.map((entry) => {
         const required = authorities(entry.eligible_authorities);
         return {
@@ -237,6 +251,12 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
       }),
       decisions,
       quorum: { completed: decisions.length, required: entryRows.length },
+      capabilities: {
+        canReadDeal: readableSources.size > 0,
+        evidenceIds: payload.sourceEvidence.evidence
+          .filter((evidence) => readableSources.has(evidence.sourceType))
+          .map((evidence) => evidence.evidenceId)
+      },
       createdAt: iso(subject.created_at),
       supersededBySubjectId: subject.superseded_by_subject_id
     });
@@ -281,10 +301,15 @@ function mapApprovalInboxEntry(row: ApprovalRow): ApprovalInboxEntry {
 
 function mapDecision(row: DecisionRow): ApprovalDecisionView {
   const diff = record(row.diff);
+  const structured = approvalStructuredDiffSchema.safeParse({
+    fields: diff?.fields ?? [],
+    changedSections: diff?.changedSections ?? []
+  });
   return {
     action: row.action as ApprovalDecisionView['action'], actorName: row.actor_name,
     authority: approvalAuthority(row.authority), rationale: row.rationale,
-    decidedAt: iso(row.created_at), changed: diff?.changed === true
+    decidedAt: iso(row.created_at), changed: diff?.changed === true,
+    diff: diff?.changed === true && structured.success ? structured.data : null
   };
 }
 

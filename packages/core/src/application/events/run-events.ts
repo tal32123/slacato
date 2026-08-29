@@ -9,7 +9,7 @@ import {
 
 export interface RunEventBus {
   publish(envelope: RunEventToPublish): Promise<void>;
-  subscribe(streamId: string, afterId?: string, signal?: AbortSignal): AsyncIterable<RunEventEnvelope>;
+  subscribe(streamId: string, afterId?: string, signal?: AbortSignal, authorize?: () => Promise<boolean>): AsyncIterable<RunEventEnvelope>;
 }
 
 export interface RunEventSubscriptionSource {
@@ -51,10 +51,13 @@ export async function* createRunEventSubscription(
   source: RunEventSubscriptionSource,
   streamId: string,
   afterId?: string,
-  signal: AbortSignal = new AbortController().signal
+  signal: AbortSignal = new AbortController().signal,
+  authorize: () => Promise<boolean> = async () => true
 ): AsyncIterable<RunEventEnvelope> {
+  if (!await authorize()) return;
   let sequence = await source.resolveCursor(streamId, afterId);
   while (!signal.aborted) {
+    if (!await authorize()) return;
     const cycle = new AbortController();
     const abortCycle = (): void => cycle.abort();
     signal.addEventListener('abort', abortCycle, { once: true });
@@ -75,12 +78,18 @@ export async function* createRunEventSubscription(
       cycle.abort();
       signal.removeEventListener('abort', abortCycle);
       for (const row of ordered) {
+        if (!await authorize()) return;
         if (signal.aborted) return;
         if (row.sequence <= sequence) continue;
         sequence = row.sequence;
         yield row;
       }
       continue;
+    }
+    if (!await authorize()) {
+      cycle.abort();
+      signal.removeEventListener('abort', abortCycle);
+      return;
     }
     try {
       await wake;

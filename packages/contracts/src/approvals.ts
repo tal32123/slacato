@@ -126,6 +126,21 @@ export const approvalDecisionResultSchema = z.object({
   quorumSatisfied: z.boolean(),
   replayed: z.boolean()
 }).strict();
+export const approvalFieldDiffSchema = z.object({
+  field: z.enum(['executive_summary', 'negotiation_state', 'overall_confidence']),
+  before: z.string().max(8_000),
+  after: z.string().max(8_000)
+}).strict();
+export const approvalStructuredDiffSchema = z.object({
+  fields: z.array(approvalFieldDiffSchema).max(3),
+  changedSections: z.array(z.enum([
+    'deal_snapshot', 'executive_summary', 'buyer_goals_and_business_drivers', 'stakeholder_map',
+    'negotiation_state', 'recommended_next_actions', 'missing_information', 'source_evidence',
+    'confidence_and_review_warnings'
+  ])).max(9)
+}).strict();
+
+
 
 export const approvalDecisionViewSchema = z.object({
   action: approvalActionSchema,
@@ -133,7 +148,8 @@ export const approvalDecisionViewSchema = z.object({
   authority: approvalAuthoritySchema,
   rationale: z.string().max(4_000).nullable(),
   decidedAt: timestampSchema,
-  changed: z.boolean()
+  changed: z.boolean(),
+  diff: approvalStructuredDiffSchema.nullable()
 }).strict();
 
 export const approvalInboxEntrySchema = z.object({
@@ -184,6 +200,10 @@ export const approvalDetailResponseSchema = z.object({
   entries: z.array(approvalRequirementViewSchema).min(1).max(20),
   decisions: z.array(approvalDecisionViewSchema).max(20),
   quorum: z.object({ completed: z.number().int().nonnegative(), required: z.number().int().positive() }).strict(),
+  capabilities: z.object({
+    canReadDeal: z.boolean(),
+    evidenceIds: z.array(opaqueIdSchema).max(50)
+  }).strict(),
   createdAt: timestampSchema,
   supersededBySubjectId: opaqueIdSchema.nullable()
 }).strict();

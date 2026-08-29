@@ -44,3 +44,27 @@ A real Chromium session was driven against the built API and web application usi
 ## Environment note
 
 The shared development database had schema through migrations 0014–0016 but its Drizzle journal ended at 0013 because earlier focused tests installed schema directly. Browser verification therefore used fresh disposable PostgreSQL databases so `db:migrate` could apply the complete journal deterministically. The production workflow test initially reproduced an unavailable isolated Redis port; starting the declared Compose Redis service made the unchanged workflow test pass.
+
+## Review hardening — round 1
+
+- Added server-authoritative PostgreSQL session registration and revocation. Persona switches and logout now revoke the prior signed session version, and retained SSE connections reauthorize the session and canonical run scope before cursor reads, polling pages, event writes, resync instructions, and heartbeats.
+- Added explicit canonical provenance to approval-authority grants. Start, list/detail, approval decisions, worker retrieval, snapshot, and SSE boundaries now accept only the canonical fixture commit; the migration removes grants whose provenance cannot be established, and ingestion recreates the declared canonical grants.
+- Made existing active-run reuse readable to every canonically authorized opportunity reader, kept missing and unauthorized mutation responses opaque and indistinguishable, and projected completed sections only from successful validation checkpoints or persisted approval subjects.
+- Added safe capability projections for deal and individual evidence links, actual decision authority in approval history, structured persisted approval diffs, semantic edit controls, before/after preview and quorum impact, local contract validation, exact field errors/focus, 4,000-character rationale enforcement, preserved operation keys for retry, a distinct 409 reload path, action-specific busy labels, and focused atomic success announcements.
+- Added milestone REST reconciliation, explicit online reconnect, truthful stopped progress for rejected/failed runs, native progressbar value semantics, title-cased statuses, rejected-history treatment, descendant navigation state, per-route titles/focus, opaque error focus, and removal of internal sequence metadata from the primary UI.
+- Expanded approval browser coverage with run detail refresh, forced reconnect/reload recovery, desktop detail accessibility, semantic edit preview, 320-pixel reflow, and opaque deep-link checks.
+
+### Review verification evidence
+
+- Fresh PostgreSQL databases migrated through `0017_canonical_grants_sessions.sql`; canonical ingestion succeeded with 6 personas, 51 grants, 3 accounts, 3 opportunities, 15 contacts, 74 documents, and 136 chunks.
+- `pnpm exec vitest run tests/unit/run-stream.test.ts tests/unit/run-approval-contracts.test.ts tests/unit/run-state-machine.test.ts` — 3 files, 11 tests passed.
+- `pnpm exec vitest run tests/integration/run-approval-api.test.ts --maxWorkers=1` — 1 file, 4 tests passed.
+- `pnpm exec vitest run tests/integration/sse-controller.test.ts --maxWorkers=1` — 1 file, 16 tests passed, including retained raw-stream revocation on persona switch and logout.
+- `pnpm exec vitest run tests/integration/workflow-production.test.ts --maxWorkers=1` — 1 file, 4 tests passed, including worker-side stale-provenance denial.
+- `pnpm exec vitest run tests/integration/migration-catalog-parity.test.ts --maxWorkers=1` — 1 file, 3 tests passed.
+- `pnpm exec playwright test tests/e2e/approval.spec.ts --workers=1` — 4 browser tests passed.
+- Focused TypeScript checks passed for web, API, worker, and infrastructure after building changed contracts/core/infrastructure.
+
+### Review browser findings
+
+A real Chromium session was driven against the built application and a fresh migrated database. The desktop approval inbox showed pending decisions before history, actual authority, quorum, assignment, age, and distinct rejected styling. The semantic approval editor showed bounded executive-summary, negotiation-state, confidence, rationale, before/after preview, and quorum effect without exposing internal payload JSON. At 320 × 700, the approval inbox had `scrollWidth === clientWidth === 320`; cards and controls reflowed without horizontal overflow. An opaque missing approval focused its error surface and set the title to `Unavailable view | SlaCato`.

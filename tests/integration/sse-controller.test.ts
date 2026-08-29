@@ -19,6 +19,7 @@ import {
 } from '@slacato/infrastructure';
 import {
   dealBriefSchema,
+  CANONICAL_FIXTURE_COMMIT,
   hashApprovalPayload,
   StartDealBrief,
   type RunEvent,
@@ -102,6 +103,22 @@ async function login(server: NestExpressApplication, userId: string): Promise<st
     .set('X-CSRF-Token', bootstrap.body.csrfToken as string).send({ userId }).expect(201);
   return (selected.headers['set-cookie'] as string[]).find((cookie) => cookie.startsWith('slacato_session='))!.split(';')[0]!;
 }
+async function loginState(server: NestExpressApplication, userId: string): Promise<Readonly<{
+  cookie: string;
+  csrfToken: string;
+}>> {
+  const bootstrap = await request(server.getHttpServer()).get('/api/auth/csrf')
+    .set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
+  const seed = (bootstrap.headers['set-cookie'] as string[]).find((cookie) => cookie.startsWith('slacato_csrf_seed='))!.split(';')[0]!;
+  const selected = await request(server.getHttpServer()).post('/api/auth/persona')
+    .set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('Cookie', seed)
+    .set('X-CSRF-Token', bootstrap.body.csrfToken as string).send({ userId }).expect(201);
+  return {
+    cookie: (selected.headers['set-cookie'] as string[]).map((cookie) => cookie.split(';')[0]!).join('; '),
+    csrfToken: selected.body.csrfToken as string
+  };
+}
+
 
 function openStream(url: URL, path: string, cookie: string, headers: Readonly<Record<string, string>> = {}): Promise<OpenStream> {
   const opened = Promise.withResolvers<OpenStream>();
@@ -151,8 +168,8 @@ async function seedRuns(): Promise<void> {
     (${maya.userId}, ${maya.displayName}, ${maya.role}), (${stranger.userId}, ${stranger.displayName}, ${stranger.role})`;
   await database.sql`insert into accounts (id, name) values ('ACC-SSE', 'SSE Account')`;
   await database.sql`insert into opportunities (id, account_id, name) values ('OPP-SSE', 'ACC-SSE', 'SSE Opportunity')`;
-  await database.sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing)
-    values ('grant-sse', ${maya.userId}, 'ACC-SSE', 'salesforce', true, false, true, false, false)`;
+  await database.sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
+    values ('grant-sse', ${maya.userId}, 'ACC-SSE', 'salesforce', true, false, true, false, false, ${CANONICAL_FIXTURE_COMMIT})`;
   await database.sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash)
     values ('run-sse', 'OPP-SSE', ${maya.userId}, 'retrieving', 'mock', 'mock-brief', ${'a'.repeat(64)}),
       ('run-other', 'OPP-SSE', ${maya.userId}, 'completed', 'mock', 'mock-brief', ${'b'.repeat(64)})`;
@@ -300,6 +317,26 @@ describe.sequential('authorized raw run SSE', () => {
     const body = await stream.ended;
     expect(body).not.toContain('evt-after-revocation');
   });
+  it('revokes retained raw streams on persona switch and logout without client cooperation', async () => {
+    for (const transition of ['persona', 'logout'] as const) {
+      const held = await loginState(app, maya.userId);
+      await publisher.publish(event(`evt-before-${transition}`, 'run-sse', 'progress', { status: 'retrieving' }));
+      const stream = await openStream(baseUrl, `/api/runs/run-sse/events?after=evt-before-${transition}`, held.cookie);
+      if (transition === 'persona') {
+        await request(app.getHttpServer()).post('/api/auth/persona')
+          .set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('Cookie', held.cookie)
+          .set('X-CSRF-Token', held.csrfToken).send({ userId: stranger.userId }).expect(201);
+      } else {
+        await request(app.getHttpServer()).post('/api/auth/logout')
+          .set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('Cookie', held.cookie)
+          .set('X-CSRF-Token', held.csrfToken).send({}).expect(201);
+      }
+      await publisher.publish(event(`evt-after-${transition}`, 'run-sse', 'progress', { status: 'validating' }));
+      const body = await stream.ended;
+      expect(body).not.toContain(`evt-after-${transition}`);
+    }
+  });
+
 
   it('bounds concurrent streams for one actor and run', async () => {
     const first = await openStream(baseUrl, '/api/runs/run-sse/events', mayaCookie);
@@ -340,8 +377,8 @@ describe.sequential('authorized raw run SSE', () => {
     const store = new PostgresWorkflowStore(database);
     await database.sql`insert into accounts (id, name) values ('ACC-TRACE', 'Trace Account')`;
     await database.sql`insert into opportunities (id, account_id, name) values ('OPP-TRACE', 'ACC-TRACE', 'Trace Opportunity')`;
-    await database.sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing)
-      values ('grant-trace', ${maya.userId}, 'ACC-TRACE', 'salesforce', true, false, true, false, false)`;
+    await database.sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
+      values ('grant-trace', ${maya.userId}, 'ACC-TRACE', 'salesforce', true, false, true, false, false, ${CANONICAL_FIXTURE_COMMIT})`;
     const command = (step: string, ordinal: number, payload: Readonly<Record<string, unknown>> = {}): WorkflowCommand => ({
       id: `command-trace-${ordinal}`,
       runId: runId as never,
@@ -689,8 +726,8 @@ describe.sequential('authorized raw run SSE', () => {
     expect({ eventCount, runCount }).toEqual({ eventCount: 0, runCount: 0 });
 
     await database.sql`insert into permission_grants
-      (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing)
-      values ('grant-denial-retry', ${stranger.userId}, 'ACC-DENIAL', 'salesforce', true, false, true, false, false)`;
+      (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
+      values ('grant-denial-retry', ${stranger.userId}, 'ACC-DENIAL', 'salesforce', true, false, true, false, false, ${CANONICAL_FIXTURE_COMMIT})`;
     const allowedRunId = await start.execute({
       opportunityId: 'OPP-DENIAL',
       requestedBy: stranger.userId,

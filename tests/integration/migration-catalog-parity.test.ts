@@ -18,13 +18,13 @@ import {
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 17 }, (_, index) =>
+const migrationFiles = Array.from({ length: 18 }, (_, index) =>
   resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
     'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
     'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
     'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance',
     'persona_provenance', 'authorized_retrieval', 'manifest_replay', 'durable_brief_approvals',
-    'immutable_approval_replays', 'append_only_run_observability'
+    'immutable_approval_replays', 'append_only_run_observability', 'canonical_grants_sessions'
   ][index]}.sql`)
 );
 const temporaryDatabases: string[] = [];

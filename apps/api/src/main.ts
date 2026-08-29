@@ -15,6 +15,7 @@ import {
   PostgresRunEventQuery,
   PostgresWorkflowStore
 } from '@slacato/infrastructure';
+import { PostgresSessionRegistry } from './modules/auth/postgres-session-registry.js';
 import { AppModule } from './app.module.js';
 import { PostgresDealQueryRepository } from './modules/deals/deals.repository.js';
 import { PostgresRunApprovalQueryRepository } from './modules/runs/run-approval.repository.js';
@@ -68,7 +69,8 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
     sessionSecret: env.SESSION_SECRET,
     environment: env.NODE_ENV,
     allowedOrigins: [env.WEB_ORIGIN],
-    personaDirectory: personas
+    personaDirectory: personas,
+    sessionRegistry: new PostgresSessionRegistry(database)
   }, {
     startDealBrief: new StartDealBrief(workflowStore, workflowAccess, {
       provider: env.AI_PROVIDER,

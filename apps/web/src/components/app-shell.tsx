@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DemoSession } from '@slacato/contracts';
 import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
-import { Link, Outlet, useLocation, useNavigation } from 'react-router';
+import { Link, Outlet, useLocation, useNavigation, useNavigationType } from 'react-router';
 import { MobileNav, primaryDestinations } from '@/components/mobile-nav';
 import { PersonaMenu } from '@/components/persona-menu';
 import { StatusBadge } from '@/components/status-badge';
@@ -15,6 +15,8 @@ export function AppShell({ session, onLogout }: Readonly<{
   const [expanded, setExpanded] = useState(() => window.matchMedia('(min-width: 1280px)').matches);
   const location = useLocation();
   const navigation = useNavigation();
+  const navigationType = useNavigationType();
+  const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const preferredRail = window.matchMedia('(min-width: 1280px)');
@@ -23,6 +25,17 @@ export function AppShell({ session, onLogout }: Readonly<{
     preferredRail.addEventListener('change', applyPreferredRail);
     return () => preferredRail.removeEventListener('change', applyPreferredRail);
   }, []);
+  useEffect(() => {
+    const section = location.pathname.split('/').filter(Boolean)[0] ?? 'deals';
+    const title = section === 'approvals' ? 'Approvals'
+      : section === 'runs' ? 'Runs'
+        : section === 'settings' ? 'Settings'
+          : section === 'diagnostics' ? 'Diagnostics'
+            : 'Deals';
+    document.title = `${title} | SlaCato`;
+    if (navigationType !== 'POP') window.requestAnimationFrame(() => mainRef.current?.focus());
+  }, [location.pathname, navigationType]);
+
 
   return (
     <div data-protected-app-shell className="min-h-dvh bg-background lg:grid lg:grid-cols-[auto_minmax(0,1fr)]">
@@ -50,7 +63,7 @@ export function AppShell({ session, onLogout }: Readonly<{
         <nav aria-label="Primary" data-layout="desktop" className="flex-1 px-2 py-5">
           <ul className="grid gap-1">
             {primaryDestinations.map(({ label, to, icon: Icon }) => {
-              const current = location.pathname === to;
+              const current = location.pathname === to || location.pathname.startsWith(`${to}/`);
               return (
                 <li key={to}>
                   <Link
@@ -116,7 +129,7 @@ export function AppShell({ session, onLogout }: Readonly<{
           </div>
         )}
 
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-7xl px-4 py-7 pb-24 sm:px-6 sm:py-9 lg:px-8 lg:pb-10">
+        <main ref={mainRef} id="main-content" tabIndex={-1} className="mx-auto w-full max-w-7xl px-4 py-7 pb-24 sm:px-6 sm:py-9 lg:px-8 lg:pb-10">
           <Outlet />
         </main>
       </div>

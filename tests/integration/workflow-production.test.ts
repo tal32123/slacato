@@ -6,8 +6,8 @@ import postgres from 'postgres';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
-  DecideApproval, DomainConflictError, DomainValidationError, ProcessDealBriefStep, RegenerateDealBrief, StartDealBrief,
-  dealBriefSchema, hashApprovalPayload, type DealBriefWorkflowServices
+  CANONICAL_FIXTURE_COMMIT, DecideApproval, DomainConflictError, DomainValidationError, ProcessDealBriefStep,
+  RegenerateDealBrief, StartDealBrief, dealBriefSchema, hashApprovalPayload, type DealBriefWorkflowServices
 } from '@slacato/core';
 import {
   BullMqCommandQueue, OutboxDispatcher, OutboxDispatcherLoop, PostgresDealBriefAccessControl, PostgresWorkflowStore,
@@ -15,7 +15,7 @@ import {
 } from '@slacato/infrastructure';
 import { AppModule } from '../../apps/api/src/app.module';
 import { configureApiApplication } from '../../apps/api/src/main';
-import { DealBriefProcessor } from '../../apps/worker/src/processors/deal-brief.processor';
+import { DealBriefProcessor, PostgresDealBriefWorkflowServices } from '../../apps/worker/src/processors/deal-brief.processor';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:56379';
@@ -87,13 +87,15 @@ afterAll(async () => {
 
 describe('production DealBrief seams', () => {
   it('crosses authenticated API, PostgreSQL outbox, BullMQ processor, approval wait, quorum, and deterministic finalization', async () => {
-    await admin`insert into personas (id, display_name, role) values (${requester}, 'Workflow Requester', 'Account Owner'), (${approver}, 'Workflow Approver', 'Deal Desk Approver')`;
+    await admin`insert into personas (id, display_name, role, source_commit) values
+      (${requester}, 'Workflow Requester', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
+      (${approver}, 'Workflow Approver', 'Deal Desk Approver', ${CANONICAL_FIXTURE_COMMIT})`;
     await admin`insert into accounts (id, name) values (${account}, 'Workflow Account')`;
     await admin`insert into opportunities (id, account_id, name, restricted) values (${opportunity}, ${account}, 'Workflow Opportunity', false)`;
-    await admin`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_request_approval)
-      values (${`grant_${suffix}`}, ${requester}, ${account}, 'salesforce', true, true)`;
-    await admin`insert into approval_authority_grants (id, persona_id, account_id, authority, source) values
-      (${`authority_${suffix}`}, ${approver}, ${account}, 'deal_desk', 'task-9-production-test')`;
+    await admin`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_request_approval, source_commit)
+      values (${`grant_${suffix}`}, ${requester}, ${account}, 'salesforce', true, true, ${CANONICAL_FIXTURE_COMMIT})`;
+    await admin`insert into approval_authority_grants (id, persona_id, account_id, authority, source, source_commit) values
+      (${`authority_${suffix}`}, ${approver}, ${account}, 'deal_desk', 'task-9-production-test', ${CANONICAL_FIXTURE_COMMIT})`;
     await admin`insert into opportunity_policy_facts (opportunity_id, discount_percent, renewal_uplift_percent, source_commit)
       values (${opportunity}, 12, 1, 'task-9-production-test')`;
 
@@ -195,6 +197,25 @@ describe('production DealBrief seams', () => {
     const completed = await waitFor(async () => (await store.getRun(runId as never))?.status === 'completed' ? store.getRun(runId as never) : undefined);
     expect(completed.status).toBe('completed'); expect(strategyCalls.get(runId)).toBe(2);
   }, 20_000);
+  it('reauthorizes canonical permission provenance before worker retrieval', async () => {
+    const row = (await admin<{ id: string }[]>`select id from runs where opportunity_id = ${opportunity} order by created_at desc limit 1`)[0];
+    if (row === undefined) throw new Error('Workflow run fixture is unavailable');
+    const store = new PostgresWorkflowStore(database);
+    const run = await store.getRun(row.id as never);
+    if (run === undefined) throw new Error('Workflow run fixture could not be loaded');
+    await admin`update permission_grants set source_commit = ${'a'.repeat(40)} where id = ${`grant_${suffix}`}`;
+    try {
+      const services = new PostgresDealBriefWorkflowServices(database, {
+        provider: 'mock',
+        registry: { resolve: () => ({ modelId: 'mock-brief' }) }
+      } as never);
+      await expect(services.retrieve(run, `invocation-stale-${suffix}`))
+        .rejects.toThrow('Authorized opportunity context is unavailable');
+    } finally {
+      await admin`update permission_grants set source_commit = ${CANONICAL_FIXTURE_COMMIT} where id = ${`grant_${suffix}`}`;
+    }
+  });
+
 
   it('replays the original non-quorate unchanged approval after a later edit supersedes its subject', async () => {
     const replaySuffix = crypto.randomUUID().replaceAll('-', '');

@@ -10,7 +10,7 @@ const origin = 'http://127.0.0.1:4173';
 const browserHeaders = { Origin: origin, 'Sec-Fetch-Site': 'same-site' };
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const suffix = `task13_${process.pid}`;
-const personaBase = 9_000_000 + process.pid * 3;
+const personaBase = 9_000_000 + process.pid * 5;
 const ids = {
   account: `ACC-${suffix}`,
   hiddenAccount: `ACC-hidden-${suffix}`,
@@ -19,8 +19,11 @@ const ids = {
   requester: `USR-${personaBase}`,
   approver: `USR-${personaBase + 1}`,
   outsider: `USR-${personaBase + 2}`,
+  reader: `USR-${personaBase + 3}`,
+  stale: `USR-${personaBase + 4}`,
   run: `run-${suffix}`,
   hiddenRun: `run-hidden-${suffix}`,
+  failedRun: `run-failed-${suffix}`,
   subject: `subject-${suffix}`,
   entry: `entry-${suffix}`,
   replacementSubject: `subject-replacement-${suffix}`,
@@ -52,6 +55,14 @@ async function authenticate(app: NestExpressApplication, userId: string) {
   return agent;
 }
 
+async function authenticateWithCsrf(app: NestExpressApplication, userId: string) {
+  const agent = request.agent(app.getHttpServer());
+  const bootstrap = await agent.get('/api/auth/csrf').set(browserHeaders).expect(200);
+  const selected = await agent.post('/api/auth/persona').set(browserHeaders)
+    .set('X-CSRF-Token', bootstrap.body.csrfToken as string).send({ userId }).expect(201);
+  return { agent, csrfToken: selected.body.csrfToken as string };
+}
+
 describe('run and approval query APIs', () => {
   let app: NestExpressApplication;
   let sql: Sql;
@@ -65,18 +76,27 @@ describe('run and approval query APIs', () => {
     await sql`insert into personas (id, display_name, role, source_commit) values
       (${ids.requester}, 'Task 13 Requester', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
       (${ids.approver}, 'Task 13 Legal Reviewer', 'Legal Reviewer', ${CANONICAL_FIXTURE_COMMIT}),
-      (${ids.outsider}, 'Task 13 Outsider', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT})`;
+      (${ids.outsider}, 'Task 13 Outsider', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
+      (${ids.reader}, 'Task 13 Reader', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
+      (${ids.stale}, 'Task 13 Stale Grant', 'Legal Reviewer', ${CANONICAL_FIXTURE_COMMIT})`;
     await sql`insert into permission_grants
       (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
       values
-      (${`grant-requester-${suffix}`}, ${ids.requester}, ${ids.account}, 'salesforce', true, false, true, false, false, ${CANONICAL_FIXTURE_COMMIT})`;
-    await sql`insert into approval_authority_grants (id, persona_id, account_id, authority, source)
-      values (${`authority-${suffix}`}, ${ids.approver}, ${ids.account}, 'legal_reviewer', 'task-13-test')`;
+      (${`grant-requester-${suffix}`}, ${ids.requester}, ${ids.account}, 'salesforce', true, false, true, false, false, ${CANONICAL_FIXTURE_COMMIT}),
+      (${`grant-reader-${suffix}`}, ${ids.reader}, ${ids.account}, 'salesforce', true, false, true, false, false, ${CANONICAL_FIXTURE_COMMIT}),
+      (${`grant-stale-${suffix}`}, ${ids.stale}, ${ids.account}, 'salesforce', true, true, true, true, true, ${'a'.repeat(40)})`;
+    await sql`insert into approval_authority_grants (id, persona_id, account_id, authority, source, source_commit)
+      values
+      (${`authority-${suffix}`}, ${ids.approver}, ${ids.account}, 'legal_reviewer', 'task-13-test', ${CANONICAL_FIXTURE_COMMIT}),
+      (${`authority-stale-${suffix}`}, ${ids.stale}, ${ids.account}, 'legal_reviewer', 'old-task-13-test', ${'a'.repeat(40)})`;
     await sql`insert into runs
       (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
       values
       (${ids.run}, ${ids.opportunity}, ${ids.requester}, 'awaiting_approval', 'mock', 'mock-brief', ${'c'.repeat(64)}, 7),
-      (${ids.hiddenRun}, ${ids.hiddenOpportunity}, ${ids.requester}, 'completed', 'mock', 'mock-brief', ${'d'.repeat(64)}, 4)`;
+      (${ids.hiddenRun}, ${ids.hiddenOpportunity}, ${ids.requester}, 'completed', 'mock', 'mock-brief', ${'d'.repeat(64)}, 4),
+      (${ids.failedRun}, ${ids.opportunity}, ${ids.requester}, 'failed', 'mock', 'mock-brief', ${'e'.repeat(64)}, 3)`;
+    await sql`insert into workflow_checkpoints (id, run_id, step, payload)
+      values (${`checkpoint-strategy-${suffix}`}, ${ids.failedRun}, 'strategy:1', ${sql.json({ status: 'completed', value: subjectPayload })})`;
     await sql`insert into run_events (id, run_id, sequence, type, payload) values
       (${`event-1-${suffix}`}, ${ids.run}, 1, 'run_created', ${sql.json({ status: 'created', deadlineMs: 60000 })}),
       (${`event-2-${suffix}`}, ${ids.run}, 2, 'awaiting_approval', ${sql.json({ version: 7, subjectHash, quorumVersion: 'deal-brief-approval-v1' })})`;
@@ -101,7 +121,7 @@ describe('run and approval query APIs', () => {
   it('lists complete scoped runs and lets an authorized approval actor rejoin the persisted detail and watermark', async () => {
     const requester = await authenticate(app, ids.requester);
     const list = runListResponseSchema.parse((await requester.get('/api/runs').set(browserHeaders).expect(200)).body);
-    expect(list.runs.map(({ runId }) => runId)).toEqual([ids.run]);
+    expect(list.runs.map(({ runId }) => runId)).toEqual(expect.arrayContaining([ids.run, ids.failedRun]));
     expect(JSON.stringify(list)).not.toContain(ids.hiddenRun);
 
     const approver = await authenticate(app, ids.approver);
@@ -111,6 +131,53 @@ describe('run and approval query APIs', () => {
     const snapshot = runSnapshotSchema.parse((await approver.get(`/api/runs/${ids.run}`).set(browserHeaders).expect(200)).body);
     expect(snapshot.watermark).toBe(`event-2-${suffix}`);
   });
+  it('returns an existing active run to every canonical readable starter and rejects stale grant provenance across boundaries', async () => {
+    const reader = await authenticateWithCsrf(app, ids.reader);
+    const start = await reader.agent.post('/api/runs/deal-brief').set(browserHeaders)
+      .set('X-CSRF-Token', reader.csrfToken).send({
+        opportunityId: ids.opportunity,
+        idempotencyKey: `reader-start-${suffix}`,
+        budget: { maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 5_000, deadlineMs: 60_000 }
+      }).expect(201);
+    expect(start.body).toEqual({ runId: ids.run });
+    expect((await reader.agent.get('/api/runs').set(browserHeaders).expect(200)).body.runs)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ runId: ids.run })]));
+    await reader.agent.get(`/api/runs/${ids.run}/detail`).set(browserHeaders).expect(200);
+    await reader.agent.get(`/api/runs/${ids.run}`).set(browserHeaders).expect(200);
+    const failed = (await reader.agent.get(`/api/runs/${ids.failedRun}/detail`).set(browserHeaders).expect(200)).body;
+    expect(failed.progress.completedSections).toEqual([]);
+
+    const stale = await authenticateWithCsrf(app, ids.stale);
+    const staleStart = await stale.agent.post('/api/runs/deal-brief').set(browserHeaders)
+      .set('X-CSRF-Token', stale.csrfToken).send({
+        opportunityId: ids.opportunity,
+        idempotencyKey: `stale-start-${suffix}`,
+        budget: { maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 5_000, deadlineMs: 60_000 }
+      }).expect(404);
+    const missingStart = await stale.agent.post('/api/runs/deal-brief').set(browserHeaders)
+      .set('X-CSRF-Token', stale.csrfToken).send({
+        opportunityId: `OPP-missing-${suffix}`,
+        idempotencyKey: `missing-start-${suffix}`,
+        budget: { maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 5_000, deadlineMs: 60_000 }
+      }).expect(404);
+    expect(staleStart.body).toEqual(missingStart.body);
+    expect((await stale.agent.get('/api/approvals').set(browserHeaders).expect(200)).body.pending).toEqual([]);
+    await stale.agent.get(`/api/runs/${ids.run}`).set(browserHeaders).expect(404);
+    await stale.agent.get(`/api/approvals/${ids.subject}`).set(browserHeaders).expect(404);
+    const decision = {
+      runId: ids.run, approvalSubjectId: ids.subject, expectedRunVersion: 7, expectedSubjectHash: subjectHash,
+      entryId: ids.entry, category: 'legal_terms', authority: 'legal_reviewer',
+      action: 'approve_unchanged', idempotencyKey: `stale-decision-${suffix}`
+    };
+    const staleDecision = await stale.agent.post('/api/approvals/decisions').set(browserHeaders)
+      .set('X-CSRF-Token', stale.csrfToken).send(decision).expect(404);
+    const outsider = await authenticateWithCsrf(app, ids.outsider);
+    const outsiderDecision = await outsider.agent.post('/api/approvals/decisions').set(browserHeaders)
+      .set('X-CSRF-Token', outsider.csrfToken)
+      .send({ ...decision, runId: `run-missing-${suffix}`, idempotencyKey: `missing-decision-${suffix}` }).expect(404);
+    expect(staleDecision.body).toEqual(outsiderDecision.body);
+  });
+
 
   it('returns one opaque response for missing and unauthorized run and approval deep links', async () => {
     const outsider = await authenticate(app, ids.outsider);
@@ -153,5 +220,6 @@ describe('run and approval query APIs', () => {
     const detail = approvalDetailResponseSchema.parse((await approver.get(`/api/approvals/${ids.subject}`).set(browserHeaders).expect(200)).body);
     expect(detail.entries).toEqual([expect.objectContaining({ entryId: ids.entry, availableAuthority: 'legal_reviewer', decided: false })]);
     expect(detail.payload.executiveSummary.narrative).toBe('A validated summary for approval.');
+    expect(detail.capabilities).toEqual({ canReadDeal: false, evidenceIds: [] });
   });
 });

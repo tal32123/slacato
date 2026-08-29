@@ -60,6 +60,44 @@ function result(input: DecideApprovalCommand, stored: ApprovalDecisionStoreResul
     replayed: stored.replayed
   };
 }
+function structuredApprovalDiff(before: DealBrief, after: DealBrief): Readonly<Record<string, unknown>> {
+  const fields = [
+    {
+      field: 'executive_summary',
+      before: before.executiveSummary.narrative,
+      after: after.executiveSummary.narrative
+    },
+    {
+      field: 'negotiation_state',
+      before: before.negotiationState.currentState,
+      after: after.negotiationState.currentState
+    },
+    {
+      field: 'overall_confidence',
+      before: String(before.confidenceAndReviewWarnings.overallConfidence),
+      after: String(after.confidenceAndReviewWarnings.overallConfidence)
+    }
+  ].filter((field) => field.before !== field.after);
+  const sections = [
+    ['deal_snapshot', before.dealSnapshot, after.dealSnapshot],
+    ['executive_summary', before.executiveSummary, after.executiveSummary],
+    ['buyer_goals_and_business_drivers', before.buyerGoalsAndBusinessDrivers, after.buyerGoalsAndBusinessDrivers],
+    ['stakeholder_map', before.stakeholderMap, after.stakeholderMap],
+    ['negotiation_state', before.negotiationState, after.negotiationState],
+    ['recommended_next_actions', before.recommendedNextActions, after.recommendedNextActions],
+    ['missing_information', before.missingInformation, after.missingInformation],
+    ['source_evidence', before.sourceEvidence, after.sourceEvidence],
+    ['confidence_and_review_warnings', before.confidenceAndReviewWarnings, after.confidenceAndReviewWarnings]
+  ] as const;
+  return {
+    changed: hashApprovalPayload(before) !== hashApprovalPayload(after),
+    fields,
+    changedSections: sections
+      .filter(([, prior, next]) => hashApprovalPayload(prior) !== hashApprovalPayload(next))
+      .map(([section]) => section)
+  };
+}
+
 
 /** Records one authority decision against an immutable snapshot and advances only on complete quorum. */
 export class DecideApproval {
@@ -139,7 +177,11 @@ export class DecideApproval {
       approvedSubjectHash,
       ...(input.action === 'edit_and_approve' ? {
         editedPayload: approvedPayload,
-        diff: { originalSubjectHash, approvedSubjectHash, changed: originalSubjectHash !== approvedSubjectHash }
+        diff: {
+          originalSubjectHash,
+          approvedSubjectHash,
+          ...structuredApprovalDiff(originalPayload, approvedPayload)
+        }
       } : {}),
       ...(input.rationale === undefined ? {} : { rationale: input.rationale.trim() }),
       requestHash,

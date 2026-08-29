@@ -5,6 +5,7 @@ import postgres, { type Sql } from 'postgres';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const suffix = `task13e2e-${process.pid}-${Date.now()}`;
+const canonicalCommit = '076c659c3c7afd416f8d26729774b67042a55761';
 const fixtures = {
   quorum: { opportunity: `OPP-quorum-${suffix}`, run: `run-quorum-${suffix}`, subject: `subject-quorum-${suffix}`, desk: `entry-desk-${suffix}`, leader: `entry-leader-${suffix}` },
   edit: { opportunity: `OPP-edit-${suffix}`, run: `run-edit-${suffix}`, subject: `subject-edit-${suffix}`, entry: `entry-edit-${suffix}` },
@@ -76,8 +77,8 @@ test.beforeAll(async () => {
   sql = postgres(databaseUrl, { max: 1 });
   await sql`insert into personas (id, display_name, role, source_commit)
     values (${leaderId}, ${leaderName}, 'Sales Leader', '076c659c3c7afd416f8d26729774b67042a55761')`;
-  await sql`insert into approval_authority_grants (id, persona_id, account_id, authority, source)
-    values (${`authority-leader-${suffix}`}, ${leaderId}, 'ACC-2003', 'sales_leader', 'task-13-e2e')`;
+  await sql`insert into approval_authority_grants (id, persona_id, account_id, authority, source, source_commit)
+    values (${`authority-leader-${suffix}`}, ${leaderId}, 'ACC-2003', 'sales_leader', 'task-13-e2e', ${canonicalCommit})`;
   await seedApproval(fixtures.quorum.opportunity, fixtures.quorum.run, fixtures.quorum.subject, [
     { id: fixtures.quorum.desk, authority: 'deal_desk' },
     { id: fixtures.quorum.leader, authority: 'sales_leader' }
@@ -95,6 +96,14 @@ test('partial quorum remains awaiting until a distinct authorized persona satisf
   await expect(page.getByText('Quorum 1 of 2')).toBeVisible();
   await page.goto(`/runs/${fixtures.quorum.run}`);
   await expect(page.getByText('Awaiting approval', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Restricted Account Renewal' })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.route(`**/api/runs/${fixtures.quorum.run}/events*`, (route) => route.abort());
+  await page.reload();
+  await expect(page.getByText('Reconnecting')).toBeVisible();
+  await page.unroute(`**/api/runs/${fixtures.quorum.run}/events*`);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Restricted Account Renewal' })).toBeVisible();
 
   await page.goto('/settings');
   await page.getByRole('radio', { name: new RegExp(leaderName) }).check();
@@ -103,22 +112,21 @@ test('partial quorum remains awaiting until a distinct authorized persona satisf
   await page.goto(`/approvals/${fixtures.quorum.subject}`);
   await expect(page.getByText(/Your authority: Sales Leader/)).toBeVisible();
   await page.getByRole('button', { name: 'Approve unchanged' }).click();
-  await expect(page.getByText('finalizing', { exact: true })).toBeVisible();
+  await expect(page.getByText('Finalizing', { exact: true })).toBeVisible();
 });
 
 test('edit and approve creates a new immutable subject and editing alone never resumes the run', async ({ page }) => {
   await loginAs(page, 'Rina Vale', `/approvals/${fixtures.edit.subject}`);
   await page.getByRole('button', { name: 'Edit and approve' }).click();
-  const editor = page.getByLabel('Edited brief JSON');
-  const edited = JSON.parse(await editor.inputValue()) as typeof payload;
-  edited.confidenceAndReviewWarnings.overallConfidence = 0.7;
-  await editor.fill(JSON.stringify(edited, null, 2));
+  await page.getByLabel('Overall confidence').fill('0.7');
+  await expect(page.getByRole('heading', { name: 'Change preview' })).toBeVisible();
   await page.getByLabel('Rationale').fill('Clarify the approved commercial posture.');
   await expect(page).toHaveURL(new RegExp(`${fixtures.edit.subject}$`));
   const decisionResponse = page.waitForResponse((response) => response.url().includes('/api/approvals/') && response.request().method() === 'POST');
   await page.getByRole('button', { name: 'Submit edit for approval' }).click();
   const response = await decisionResponse;
   expect(response.ok(), `Approval edit failed with HTTP ${response.status()}`).toBe(true);
+  await expect(page.getByRole('status')).toContainText('Decision recorded');
   await expect(page).not.toHaveURL(new RegExp(`${fixtures.edit.subject}$`));
   await expect(page.getByText('Approval review')).toBeVisible();
   await page.getByRole('link', { name: 'View run' }).click();
@@ -131,14 +139,14 @@ test('reject is terminal, duplicate action is disabled, and history remains insp
   await page.getByLabel('Rationale').fill('The commercial posture is not acceptable.');
   const confirm = page.getByRole('button', { name: 'Confirm rejection' });
   await confirm.click();
-  await expect(page.getByText('rejected', { exact: true })).toBeVisible();
+  await expect(page.getByText('Rejected', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Decision history' })).toBeVisible();
   await page.getByRole('link', { name: 'View run' }).click();
   await expect(page.getByRole('heading', { name: 'Approval rejected' })).toBeVisible();
 });
 
 test('approval inbox is stacked and accessible on mobile while forbidden deep links stay opaque', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 320, height: 700 });
   await loginAs(page, 'Rina Vale', '/approvals');
   await expect(page.getByRole('heading', { name: 'Approval inbox' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);

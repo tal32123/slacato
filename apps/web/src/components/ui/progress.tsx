@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 function Progress({
   className,
   value,
+  max = 100,
   ...props
 }: React.ComponentProps<typeof ProgressPrimitive.Root>) {
   return (
@@ -15,6 +16,8 @@ function Progress({
         "relative h-2 w-full overflow-hidden rounded-full bg-primary/20",
         className
       )}
+      value={value}
+      max={max}
       {...props}
     >
       <ProgressPrimitive.Indicator

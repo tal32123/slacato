@@ -8,13 +8,21 @@ export interface CanonicalPersonaDirectory {
   list(): Promise<readonly CanonicalPersona[]>;
   findById(userId: string): Promise<CanonicalPersona | undefined>;
 }
+export interface SessionRegistry {
+  activate(input: Readonly<{ version: string; userId: string; expiresAt: Date }>): Promise<void>;
+  revoke(version: string): Promise<void>;
+  isActive(version: string, userId: string): Promise<boolean>;
+}
+
 
 export type AuthModuleOptions = Readonly<{
   sessionSecret: string;
   environment: 'development' | 'test' | 'production';
   allowedOrigins: readonly string[];
   personaDirectory: CanonicalPersonaDirectory;
+  sessionRegistry?: SessionRegistry;
 }>;
 
 export const AUTH_OPTIONS = Symbol('AUTH_OPTIONS');
 export const PERSONA_DIRECTORY = Symbol('PERSONA_DIRECTORY');
+export const SESSION_REGISTRY = Symbol('SESSION_REGISTRY');

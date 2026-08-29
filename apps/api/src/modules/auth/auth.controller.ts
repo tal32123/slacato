@@ -41,17 +41,19 @@ export class AuthController {
   @ZodResponse(authenticatedMutationResponseSchema)
   public selectPersona(
     @ZodBody(selectPersonaRequestSchema) input: SelectPersonaRequest,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ) {
-    return this.auth.selectPersona(input, response);
+    return this.auth.selectPersona(input, request, response);
   }
 
   @Post('logout')
   @ZodResponse(logoutResponseSchema)
   public logout(
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ) {
-    return this.auth.logout(response);
+    return this.auth.logout(request, response);
   }
 
   @Options(['persona', 'logout'])

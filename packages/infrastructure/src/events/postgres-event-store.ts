@@ -10,6 +10,7 @@ import {
   type TraceSpan
 } from '@slacato/contracts';
 import {
+  CANONICAL_FIXTURE_COMMIT,
   CursorExpiredError,
   TraceCompletenessError,
   DomainConflictError,
@@ -127,8 +128,8 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     });
   }
 
-  public subscribe(streamId: string, afterId?: string, signal?: AbortSignal): AsyncIterable<RunEventEnvelope> {
-    return createRunEventSubscription(this, streamId, afterId, signal);
+  public subscribe(streamId: string, afterId?: string, signal?: AbortSignal, authorize?: () => Promise<boolean>): AsyncIterable<RunEventEnvelope> {
+    return createRunEventSubscription(this, streamId, afterId, signal, authorize);
   }
 
   public async resolveCursor(streamId: string, afterId: string | undefined): Promise<number> {
@@ -261,19 +262,19 @@ export class PostgresRunEventQuery implements RunEventQuery {
       join opportunities opportunity on opportunity.id = run.opportunity_id
       where run.id = ${streamId}
         and (
-          (
-            run.requested_by = ${actorId} and exists (
-              select 1 from permission_grants permission
-              where permission.persona_id = ${actorId}
-                and permission.account_id = opportunity.account_id
-                and permission.can_read
-                and (not opportunity.restricted or permission.can_read_restricted)
-            )
+          exists (
+            select 1 from permission_grants permission
+            where permission.persona_id = ${actorId}
+              and permission.account_id = opportunity.account_id
+              and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+              and permission.can_read
+              and (not opportunity.restricted or permission.can_read_restricted)
           ) or exists (
             select 1 from approval_subjects subject
             join approval_requirement_entries entry on entry.approval_subject_id = subject.id
             join approval_authority_grants authority on authority.persona_id = ${actorId}
               and authority.account_id = opportunity.account_id
+              and authority.source_commit = ${CANONICAL_FIXTURE_COMMIT}
               and authority.authority in (select jsonb_array_elements_text(entry.eligible_authorities))
             where subject.run_id = run.id
           )

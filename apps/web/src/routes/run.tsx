@@ -47,7 +47,7 @@ export function RunRoute(): React.JSX.Element {
 
   useEffect(() => {
     const onOffline = (): void => setConnection('offline');
-    const onOnline = (): void => setConnection('reconnecting');
+    const onOnline = (): void => { setConnection('reconnecting'); restartStream((value) => value + 1); };
     window.addEventListener('offline', onOffline);
     window.addEventListener('online', onOnline);
     return () => {
@@ -64,7 +64,8 @@ export function RunRoute(): React.JSX.Element {
 
   useEffect(() => {
     const generation = sessionRuntime.generation;
-    return openRunEventStream({
+    let reconnectTimer: number | undefined;
+    const close = openRunEventStream({
       detail,
       generation,
       currentGeneration: () => sessionRuntime.generation,
@@ -78,25 +79,43 @@ export function RunRoute(): React.JSX.Element {
         if (!parsed.success) return;
         const transition = parsed.data.type.startsWith('approval_') || parsed.data.type === 'awaiting_approval'
           || parsed.data.type === 'complete' || parsed.data.type === 'fail';
-        if (!transition) return;
-        void Promise.all([
-          queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, `run:${detail.runId}`) }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, 'runs') }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, `deal:${detail.opportunityId}`) }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, 'deals') }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, 'approvals') })
-        ]);
+        if (transition) {
+          void Promise.all([
+            queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, `run:${detail.runId}`) }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, 'runs') }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, `deal:${detail.opportunityId}`) }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, 'deals') }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, 'approvals') })
+          ]);
+          return;
+        }
+        if (['retrieval_completed', 'specialists_completed', 'synthesis_completed', 'validation_completed', 'validation_requires_approval', 'checkpoint_committed'].includes(parsed.data.type)) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, `run:${detail.runId}`) });
+        }
       },
-      onConnection: setConnection,
+      onConnection: (state) => {
+        setConnection(state);
+        if (state === 'connected' && reconnectTimer !== undefined) {
+          window.clearTimeout(reconnectTimer);
+          reconnectTimer = undefined;
+        } else if (state === 'reconnecting' && navigator.onLine && reconnectTimer === undefined) {
+          reconnectTimer = window.setTimeout(() => restartStream((value) => value + 1), 1_000);
+        }
+      },
       onResync: () => {
         void query.refetch().then((result) => {
           if (result.data !== undefined) restartStream((value) => value + 1);
         });
       }
     });
+    return () => {
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      close();
+    };
   }, [detail.runId, detail.terminal, session.version, streamEpoch]);
 
   const stalled = !detail.terminal && Date.now() - new Date(detail.updatedAt).getTime() > 60_000;
+  const progress = progressView(detail);
   return (
     <article className="min-w-0" aria-labelledby="run-title">
       <Button asChild variant="link" className="min-h-11 px-0"><Link to="/runs"><ArrowLeft aria-hidden="true" />Back to runs</Link></Button>
@@ -117,14 +136,13 @@ export function RunRoute(): React.JSX.Element {
       <section className="border-b py-7" aria-labelledby="progress-title">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><p className="text-sm font-medium text-primary">Current phase</p><h2 id="progress-title" className="mt-1 text-xl font-semibold">{statusLabel(detail.progress.phase)}</h2></div>
-          <p className="text-sm text-muted-foreground">{progressPercent(detail.status)}% workflow progress</p>
+          <p className="text-sm text-muted-foreground">{progress.label}</p>
         </div>
-        <Progress className="mt-4" value={progressPercent(detail.status)} aria-label="Workflow progress" />
-        <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Progress className="mt-4" value={progress.value} aria-label="Workflow progress" aria-valuetext={progress.valueText} />
+        <dl className="mt-6 grid gap-3 sm:grid-cols-3">
           <Fact label="Authorized evidence" value={`${detail.progress.retrievalCount} items`} />
           <Fact label="Validation retries" value={String(detail.progress.validationRetries)} />
           <Fact label="Validated sections" value={`${detail.progress.completedSections.length} of 9`} />
-          <Fact label="Persisted sequence" value={String(detail.watermarkSequence)} />
         </dl>
       </section>
 
@@ -142,7 +160,7 @@ export function RunRoute(): React.JSX.Element {
       <section className="py-7" aria-labelledby="timeline-title">
         <h2 id="timeline-title" className="text-xl font-semibold">Persisted timeline</h2>
         {detail.progress.timeline.length === 0 ? <p className="mt-4 text-sm text-muted-foreground">The run is queued; the first persisted milestone will appear here.</p> : (
-          <ol className="mt-5 grid gap-4">{detail.progress.timeline.map((item) => <li key={item.eventId} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3"><CircleDashed aria-hidden="true" className="mt-0.5 size-5 text-primary" /><div><p className="font-medium">{item.label}</p><p className="mt-1 text-xs text-muted-foreground"><time dateTime={item.at}>{formatTime(item.at)}</time> · sequence {item.sequence}</p></div></li>)}</ol>
+          <ol className="mt-5 grid gap-4">{detail.progress.timeline.map((item) => <li key={item.eventId} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3"><CircleDashed aria-hidden="true" className="mt-0.5 size-5 text-primary" /><div><p className="font-medium">{item.label}</p><p className="mt-1 text-xs text-muted-foreground"><time dateTime={item.at}>{formatTime(item.at)}</time></p></div></li>)}</ol>
         )}
       </section>
     </article>
@@ -169,6 +187,17 @@ function Notice({ icon: Icon, title, text, action, href }: Readonly<{ icon: type
 function Fact({ label, value }: Readonly<{ label: string; value: string }>): React.JSX.Element { return <div className="rounded-lg border bg-card p-4"><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt><dd className="mt-1 text-lg font-semibold">{value}</dd></div>; }
 function formatTime(value: string): string { return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }
 function progressPercent(status: RunStatus): number {
-  const values: Record<RunStatus, number> = { created: 5, retrieving: 20, specialists_running: 40, synthesizing: 60, validating: 75, awaiting_approval: 82, finalizing: 92, completed: 100, rejected: 100, failed: 100 };
+  const values: Record<RunStatus, number> = { created: 5, retrieving: 20, specialists_running: 40, synthesizing: 60, validating: 75, awaiting_approval: 82, finalizing: 92, completed: 100, rejected: 82, failed: 75 };
   return values[status];
+}
+function progressView(detail: RunDetailResponse): { value: number; label: string; valueText: string } {
+  if (detail.status === 'completed') return { value: 100, label: '100% workflow complete', valueText: 'Workflow complete' };
+  const terminal = detail.status === 'failed' || detail.status === 'rejected';
+  const previous = terminal
+    ? [...detail.progress.timeline].reverse().map((item) => item.phase).find((phase) => phase !== 'failed' && phase !== 'rejected') ?? 'created'
+    : detail.status;
+  const value = progressPercent(previous);
+  const phase = statusLabel(previous);
+  if (terminal) return { value, label: `Stopped during ${phase}`, valueText: `${value}% complete; stopped during ${phase}` };
+  return { value, label: `${value}% workflow progress`, valueText: `${value}% complete; ${phase}` };
 }

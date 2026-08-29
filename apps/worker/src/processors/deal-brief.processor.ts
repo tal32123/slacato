@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { Worker, type Job } from 'bullmq';
 import {
-  CommercialAgent, ConversationAgent, StrategyAgent, StakeholderAgent, ProcessDealBriefStep, authorizeOpportunity,
-  createEvidenceScopeBinding, dealBriefSchema, hashEvidenceScopeBinding,
+  CANONICAL_FIXTURE_COMMIT, CommercialAgent, ConversationAgent, StrategyAgent, StakeholderAgent, ProcessDealBriefStep,
+  authorizeOpportunity, createEvidenceScopeBinding, dealBriefSchema, hashEvidenceScopeBinding,
   type AgentContext, type ApprovalRequirementInput, type DealBrief, type DealBriefWorkflowServices,
   type PermissionGrant, type StrategyArtifacts, type WorkflowCommand, type WorkflowRun
 } from '@slacato/core';
@@ -120,7 +120,8 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
   private async readGrants(personaId: string, accountId: string): Promise<PermissionGrant[]> {
     const rows = await this.database.sql<GrantRow[]>`select account_id "accountId", source_type,
       can_read "canRead", can_read_restricted "canReadRestricted", can_request_approval "canRequestApproval", can_approve "canApprove", sensitive_pricing "sensitivePricing"
-      from permission_grants where persona_id = ${personaId} and account_id = ${accountId}`;
+      from permission_grants where persona_id = ${personaId} and account_id = ${accountId}
+        and source_commit = ${CANONICAL_FIXTURE_COMMIT}`;
     return rows.map(({ source_type, ...grant }) => ({ ...grant, sourceType: source_type }));
   }
   private async budgetFor(runId: string) {

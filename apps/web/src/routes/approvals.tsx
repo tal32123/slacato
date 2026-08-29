@@ -1,6 +1,6 @@
 import type { ApprovalInboxEntry, ApprovalInboxResponse } from '@slacato/contracts';
 import type { LoaderFunctionArgs } from 'react-router';
-import { CheckCircle2, Inbox, Scale } from 'lucide-react';
+import { Inbox, Scale } from 'lucide-react';
 import { Link, useLoaderData } from 'react-router';
 import { queryClient, sessionQueryOptions, sessionRuntime, SessionInvalidatedError } from '@/api/session';
 import { StatusBadge } from '@/components/status-badge';
@@ -63,12 +63,12 @@ function ApprovalRow({ entry, pending }: Readonly<{ entry: ApprovalInboxEntry; p
   return (
     <li className="grid min-w-0 gap-4 rounded-xl border bg-card p-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(14rem,0.8fr)_auto] lg:items-center">
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2"><StatusBadge status={pending ? 'attention' : 'ready'} label={pending ? 'Decision required' : decisionLabel(entry)} /><span className="text-xs text-muted-foreground">{categoryLabel(entry.category)}</span></div>
+        <div className="flex flex-wrap items-center gap-2"><StatusBadge status={pending || entry.decision?.action === 'reject' ? 'attention' : 'ready'} label={pending ? 'Decision required' : decisionLabel(entry)} /><span className="text-xs text-muted-foreground">{categoryLabel(entry.category)}</span></div>
         <h3 className="mt-3 break-words text-lg font-semibold">{entry.opportunityName}</h3>
         <p className="mt-1 break-words text-sm text-muted-foreground">{entry.accountName} · {entry.opportunityId}</p>
       </div>
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
-        <dt className="text-muted-foreground">Authority</dt><dd className="break-words">{authorityLabel(entry.availableAuthority)}</dd>
+        <dt className="text-muted-foreground">Authority</dt><dd className="break-words">{authorityLabel(entry.decision?.authority ?? entry.availableAuthority)}</dd>
         <dt className="text-muted-foreground">Quorum</dt><dd>{entry.quorum.completed} of {entry.quorum.required}</dd>
         <dt className="text-muted-foreground">Assigned</dt><dd className="break-words">{entry.assignedApprover ?? 'Unassigned authority pool'}</dd>
         <dt className="text-muted-foreground">Age</dt><dd><time dateTime={entry.ageStartedAt}>{age(entry.ageStartedAt)}</time></dd>
@@ -83,7 +83,7 @@ function ApprovalRow({ entry, pending }: Readonly<{ entry: ApprovalInboxEntry; p
 
 function decisionLabel(entry: ApprovalInboxEntry): string { return entry.decision?.action === 'reject' ? 'Rejected' : entry.decision?.changed ? 'Edited and approved' : 'Approved'; }
 function categoryLabel(value: ApprovalInboxEntry['category']): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
-function authorityLabel(value: ApprovalInboxEntry['availableAuthority']): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+function authorityLabel(value: ApprovalInboxEntry['availableAuthority'] | NonNullable<ApprovalInboxEntry['decision']>['authority']): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function age(value: string): string {
   const hours = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 3_600_000));
   return hours < 1 ? 'Less than an hour' : hours < 24 ? `${hours}h` : `${Math.floor(hours / 24)}d`;

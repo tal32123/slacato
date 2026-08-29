@@ -83,9 +83,10 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
         for (const accountId of permission.allowedAccountIds) for (const authority of deriveApprovalAuthorities(permission.role, fixtures.policy.content)) {
           const authorityGrantId = `approval-authority:${permission.userId}:${accountId}:${authority}`;
           authorityGrantIds.push(authorityGrantId);
-          await transaction`insert into approval_authority_grants (id, persona_id, account_id, authority, demo_only, source)
-            values (${authorityGrantId}, ${permission.userId}, ${accountId}, ${authority}, false, ${CANONICAL_FIXTURE_COMMIT})
-            on conflict (persona_id, account_id, authority) do update set demo_only = excluded.demo_only, source = excluded.source`;
+          await transaction`insert into approval_authority_grants (id, persona_id, account_id, authority, demo_only, source, source_commit)
+            values (${authorityGrantId}, ${permission.userId}, ${accountId}, ${authority}, false, ${CANONICAL_FIXTURE_COMMIT}, ${CANONICAL_FIXTURE_COMMIT})
+            on conflict (persona_id, account_id, authority) do update
+              set demo_only = excluded.demo_only, source = excluded.source, source_commit = excluded.source_commit`;
         }
       }
       for (const identity of DEMO_APPROVAL_IDENTITIES) {
@@ -94,20 +95,22 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
         for (const authority of identity.authorities) {
           const authorityGrantId = `approval-authority:${identity.userId}:${identity.accountId}:${authority}`;
           authorityGrantIds.push(authorityGrantId);
-          await transaction`insert into approval_authority_grants (id, persona_id, account_id, authority, demo_only, source)
-            values (${authorityGrantId}, ${identity.userId}, ${identity.accountId}, ${authority}, true, 'candidate-created-task-9')
-            on conflict (persona_id, account_id, authority) do update set demo_only = excluded.demo_only, source = excluded.source`;
+          await transaction`insert into approval_authority_grants (id, persona_id, account_id, authority, demo_only, source, source_commit)
+            values (${authorityGrantId}, ${identity.userId}, ${identity.accountId}, ${authority}, true, 'candidate-created-task-9', ${CANONICAL_FIXTURE_COMMIT})
+            on conflict (persona_id, account_id, authority) do update
+              set demo_only = excluded.demo_only, source = excluded.source, source_commit = excluded.source_commit`;
         }
       }
       await transaction`delete from permission_grants
-        where source_commit = ${CANONICAL_FIXTURE_COMMIT}
-          and not exists (
+        where source_commit is distinct from ${CANONICAL_FIXTURE_COMMIT}
+          or not exists (
             select 1 from jsonb_array_elements_text(${transaction.json(canonicalGrantIds)}::jsonb) expected(id)
             where expected.id = permission_grants.id
           )`;
-      await transaction`delete from approval_authority_grants where (source = ${CANONICAL_FIXTURE_COMMIT} or source = 'candidate-created-task-9')
-        and not exists (select 1 from jsonb_array_elements_text(${transaction.json(authorityGrantIds)}::jsonb) expected(id)
-          where expected.id = approval_authority_grants.id)`;
+      await transaction`delete from approval_authority_grants
+        where source_commit is distinct from ${CANONICAL_FIXTURE_COMMIT}
+          or not exists (select 1 from jsonb_array_elements_text(${transaction.json(authorityGrantIds)}::jsonb) expected(id)
+            where expected.id = approval_authority_grants.id)`;
       for (const { document, chunks } of chunksByDocument) {
         const documentId = `document:${document.sourceType}:${document.externalId}:v1`;
         const contentHash = sha256(document.content);

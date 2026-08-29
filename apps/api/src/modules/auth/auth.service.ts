@@ -1,7 +1,10 @@
 import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { AuthSessionResponse, Persona, SelectPersonaRequest } from '@slacato/contracts';
-import { AUTH_OPTIONS, PERSONA_DIRECTORY, type AuthModuleOptions, type CanonicalPersonaDirectory } from './contracts.js';
+import {
+  AUTH_OPTIONS, PERSONA_DIRECTORY, SESSION_REGISTRY,
+  type AuthModuleOptions, type CanonicalPersonaDirectory, type SessionRegistry
+} from './contracts.js';
 import { DemoSessionCodec, SessionCsrf } from './session.js';
 import { Inject } from '@nestjs/common';
 
@@ -26,7 +29,8 @@ export class AuthService {
 
   public constructor(
     @Inject(AUTH_OPTIONS) private readonly options: AuthModuleOptions,
-    @Inject(PERSONA_DIRECTORY) private readonly personas: CanonicalPersonaDirectory
+    @Inject(PERSONA_DIRECTORY) private readonly personas: CanonicalPersonaDirectory,
+    @Inject(SESSION_REGISTRY) private readonly sessions: SessionRegistry
   ) {
     this.sessionCodec = new DemoSessionCodec(options.sessionSecret);
     this.csrf = new SessionCsrf(options.sessionSecret);
@@ -59,14 +63,21 @@ export class AuthService {
 
   public async selectPersona(
     input: SelectPersonaRequest,
+    request: Request,
     response: Response
   ): Promise<Readonly<{ session: Extract<AuthSessionResponse, { authenticated: true }>; csrfToken: string }>> {
     const persona = await this.personas.findById(input.userId);
     if (persona === undefined) this.forbidden();
+    await this.revokeRequestSession(request);
 
     const sessionToken = this.sessionCodec.sign({ userId: persona.userId });
     const claims = this.sessionCodec.verify(sessionToken);
     if (claims === undefined) throw new Error('Newly created session could not be verified');
+    await this.sessions.activate({
+      version: claims.version,
+      userId: claims.userId,
+      expiresAt: new Date(claims.issuedAt + EIGHT_HOURS_MS)
+    });
     const seed = this.csrf.createSeed();
     this.writeCookie(response, this.sessionCookieName, sessionToken);
     this.writeCookie(response, this.csrfCookieName, seed);
@@ -81,8 +92,10 @@ export class AuthService {
   }
 
   public async logout(
+    request: Request,
     response: Response
   ): Promise<Readonly<{ session: { authenticated: false }; csrfToken: string }>> {
+    await this.revokeRequestSession(request);
     const seed = this.csrf.createSeed();
     response.clearCookie(this.sessionCookieName, this.baseCookieOptions);
     this.writeCookie(response, this.csrfCookieName, seed);
@@ -103,13 +116,23 @@ export class AuthService {
   public assertAuthenticatedMutationCsrf(request: Request, token: string | undefined, sessionVersion: string): void {
     this.assertCsrf(token, request, sessionVersion);
   }
+  public async isSessionActive(version: string, userId: string): Promise<boolean> {
+    return this.sessions.isActive(version, userId);
+  }
+
 
   private async resolveSession(request: Request) {
     const claims = this.sessionCodec.verify(this.readCookie(request, this.sessionCookieName));
     if (claims === undefined) return undefined;
+    if (!await this.sessions.isActive(claims.version, claims.userId)) return undefined;
     const persona = await this.personas.findById(claims.userId);
     return persona === undefined ? undefined : { claims, persona };
   }
+  private async revokeRequestSession(request: Request): Promise<void> {
+    const claims = this.sessionCodec.verify(this.readCookie(request, this.sessionCookieName));
+    if (claims !== undefined) await this.sessions.revoke(claims.version);
+  }
+
 
   private assertCsrf(token: string | undefined, request: Request, version: string | undefined): void {
     if (!this.csrf.verify(token, this.readCookie(request, this.csrfCookieName), version)) {
