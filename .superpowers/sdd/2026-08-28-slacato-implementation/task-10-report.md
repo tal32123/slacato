@@ -96,3 +96,33 @@ pnpm vitest run tests/integration/migration-catalog-parity.test.ts --reporter do
 pnpm typecheck
 # exit 0
 ```
+
+## Review hardening — round 2
+
+The re-review found that a fatal decision created after a completed generation attempt was linked directly to that completed attempt. Completeness only examined attempts whose status was already failed, so the real validation-failure trace was rejected while other malformed fatal links could escape the intended relationship.
+
+RED proof changed the fatal fixture to the real completed-strategy parent and reproduced the defect:
+
+```text
+pnpm vitest run tests/unit/event-bus.test.ts --reporter dot --silent
+# 1 failed, 8 passed
+# TraceCompletenessError: Trace is missing conversation specialist attempt
+```
+
+`failRun` now preserves the completed attempt and appends a distinct failed triggering attempt beneath it, followed by the fatal decision. Failure reasons use an exact supported-code map and select the matching specialist or strategy operation. Completeness validates every fatal span, requires failed status and a linked failed specialist/strategy attempt, rejects fatal links directly to completed attempts, and still requires every failed attempt to own a fatal decision. The PostgreSQL integration now runs the Task 9 sequence through a completed strategy checkpoint and a subsequent `draft_validation_failed`, proving the completed history, failed trigger, and fatal child all persist and pass completeness.
+
+Fresh round-2 evidence:
+
+```text
+pnpm vitest run tests/unit/event-bus.test.ts --reporter dot --silent
+# 1 file passed, 9 tests passed
+
+pnpm vitest run tests/integration/sse-controller.test.ts --reporter dot --silent
+# 1 file passed, 15 tests passed
+
+pnpm vitest run tests/integration/workflow-production.test.ts --reporter dot --silent
+# 1 file passed, 3 tests passed
+
+pnpm typecheck
+# exit 0
+```

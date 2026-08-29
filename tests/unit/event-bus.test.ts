@@ -270,9 +270,14 @@ describe('trace completeness', () => {
     const failedRunId = 'run-failed';
     const auth = span(failedRunId, 'authorization_lookup', 'failed_auth', { status: 'completed', data: { decision: 'allowed', correlationHash: '2'.repeat(64), readKinds: ['opportunity'], readCount: 1 } });
     const retrieval = span(failedRunId, 'evidence_retrieval', 'failed_retrieval', { status: 'completed', parentSpanId: auth.spanId, data: { resultIds: [], scores: [], evidenceCount: 0 } });
-    const failedAttempt = span(failedRunId, 'strategy_attempt', 'failed_strategy', { status: 'failed', step: 'strategy', parentSpanId: retrieval.spanId, data: { operation: 'strategy', logicalGenerationId: 'generation-failed' } });
-    const fatal = span(failedRunId, 'fatal_failure', 'fatal', { status: 'failed', step: 'strategy', parentSpanId: failedAttempt.spanId, data: { decision: 'fatal', reasonCode: 'strategy_generation_failed' } });
-    expect(() => assertTraceComplete(failedRunId, [auth, retrieval, failedAttempt, fatal])).not.toThrow();
+    const completedAttempt = span(failedRunId, 'strategy_attempt', 'completed_strategy', { status: 'completed', step: 'strategy', parentSpanId: retrieval.spanId, data: { operation: 'strategy', logicalGenerationId: 'generation-completed' } });
+    const failedAttempt = span(failedRunId, 'strategy_attempt', 'failed_strategy', { status: 'failed', step: 'strategy', parentSpanId: completedAttempt.spanId, data: { operation: 'strategy', logicalGenerationId: 'generation-failed' } });
+    const fatal = span(failedRunId, 'fatal_failure', 'fatal', { status: 'failed', step: 'strategy', parentSpanId: failedAttempt.spanId, data: { decision: 'fatal', reasonCode: 'draft_validation_failed' } });
+    expect(() => assertTraceComplete(failedRunId, [auth, retrieval, completedAttempt, failedAttempt, fatal])).not.toThrow();
+    const mistypedFatal = span(failedRunId, 'fatal_failure', 'mistyped_fatal', { status: 'completed', step: 'strategy', parentSpanId: failedAttempt.spanId, data: { decision: 'fatal', reasonCode: 'draft_validation_failed' } });
+    expect(() => assertTraceComplete(failedRunId, [auth, retrieval, completedAttempt, failedAttempt, mistypedFatal])).toThrow('Fatal decision is not typed as failed');
+    const completedParentFatal = span(failedRunId, 'fatal_failure', 'completed_parent_fatal', { status: 'failed', step: 'strategy', parentSpanId: completedAttempt.spanId, data: { decision: 'fatal', reasonCode: 'draft_validation_failed' } });
+    expect(() => assertTraceComplete(failedRunId, [auth, retrieval, completedAttempt, completedParentFatal])).toThrow('Fatal decision is not linked to a failed triggering attempt');
   });
 
   it('requires kind-specific trace facts and a typed decision for every degraded attempt', () => {

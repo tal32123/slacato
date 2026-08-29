@@ -36,6 +36,20 @@ async function insertCommand(sql: SqlExecutor, command: WorkflowCommand): Promis
 const traceId = (runId: string): string => `trace_${hashApprovalPayload(runId)}`;
 const traceSpanId = (runId: string, kind: TraceSpan['kind'], discriminator: string): string =>
   `span_${hashApprovalPayload({ runId, kind, discriminator })}`;
+const failureOperations = {
+  conversation_unavailable: 'conversation',
+  stakeholder_unavailable: 'stakeholder',
+  commercial_unavailable: 'commercial',
+  strategy_unavailable: 'strategy',
+  commercial_specialist_failed: 'commercial',
+  strategy_generation_failed: 'strategy',
+  draft_validation_failed: 'strategy',
+  workflow_failed: 'strategy'
+} as const;
+type FailureReasonCode = keyof typeof failureOperations;
+function failureReasonCode(reason: string): FailureReasonCode {
+  return Object.hasOwn(failureOperations, reason) ? reason as FailureReasonCode : 'workflow_failed';
+}
 
 async function appendTrace(
   sql: SqlExecutor,
@@ -804,24 +818,26 @@ export class PostgresWorkflowStore implements WorkflowStore {
       await completeLease(sql, input); const status = transitionRun(current.status, 'fail');
       const row = (await sql<RunRow[]>`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`)[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
-      const reasonCode = /^[a-z0-9_]{1,128}$/.test(input.reason) ? input.reason : 'workflow_failed';
-      const operation = reasonCode.startsWith('commercial_') ? 'commercial' : 'strategy';
-      const attemptKind: TraceSpan['kind'] = operation === 'commercial' ? 'specialist_attempt' : 'strategy_attempt';
-      let attemptSpanId = (await sql<{ span_id: string }[]>`select span_id from trace_spans
+      const reasonCode = failureReasonCode(input.reason);
+      const operation = failureOperations[reasonCode];
+      const attemptKind: TraceSpan['kind'] = operation === 'strategy' ? 'strategy_attempt' : 'specialist_attempt';
+      const previousAttemptSpanId = (await sql<{ span_id: string }[]>`select span_id from trace_spans
         where run_id = ${input.runId} and kind = ${attemptKind} and step = ${operation}
         order by started_at desc, span_id desc limit 1`)[0]?.span_id;
-      if (attemptSpanId === undefined) {
-        const parentSpanId = await latestSpanId(sql, input.runId, ['evidence_retrieval', 'authorization_lookup']);
-        attemptSpanId = await appendTrace(sql, {
-          runId: input.runId,
-          kind: attemptKind,
-          discriminator: `${operation}:failed:${row.version}`,
-          step: operation,
-          status: 'failed',
-          ...(parentSpanId === undefined ? {} : { parentSpanId }),
-          data: { operation, logicalGenerationId: `failed_${hashApprovalPayload({ runId: input.runId, operation, reasonCode })}` }
-        });
-      }
+      const attemptParentSpanId = previousAttemptSpanId
+        ?? await latestSpanId(sql, input.runId, ['evidence_retrieval', 'authorization_lookup']);
+      const attemptSpanId = await appendTrace(sql, {
+        runId: input.runId,
+        kind: attemptKind,
+        discriminator: `${operation}:failed:${reasonCode}:${row.version}`,
+        step: operation,
+        status: 'failed',
+        ...(attemptParentSpanId === undefined ? {} : { parentSpanId: attemptParentSpanId }),
+        data: {
+          operation,
+          logicalGenerationId: `failed_${hashApprovalPayload({ runId: input.runId, operation, reasonCode, version: row.version })}`
+        }
+      });
       await appendTrace(sql, {
         runId: input.runId,
         kind: 'fatal_failure',

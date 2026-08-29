@@ -165,19 +165,27 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
     throw new TraceCompletenessError('Trace has no permitted authorization decision');
   }
 
-  const failedAttempts = [
+  const attempts = [
     ...spansOfKind(spans, 'specialist_attempt'),
     ...spansOfKind(spans, 'strategy_attempt')
-  ].filter((span) => span.status === 'failed');
-  if (failedAttempts.length > 0) {
-    for (const attempt of failedAttempts) {
-      const fatal = spansOfKind(spans, 'fatal_failure').find((span) => span.parentSpanId === attempt.spanId);
-      if (fatal === undefined || fatal.status !== 'failed' || fatal.data.decision !== 'fatal') {
-        throw new TraceCompletenessError('Failed attempt is missing its linked fatal decision');
-      }
+  ];
+  const fatalFailures = spansOfKind(spans, 'fatal_failure');
+  for (const fatal of fatalFailures) {
+    const triggering = parentOf(fatal, byId);
+    if (triggering === undefined || triggering.status !== 'failed' || !['specialist_attempt', 'strategy_attempt'].includes(triggering.kind)) {
+      throw new TraceCompletenessError('Fatal decision is not linked to a failed triggering attempt');
     }
-    return;
+    if (fatal.status !== 'failed' || fatal.data.decision !== 'fatal') {
+      throw new TraceCompletenessError('Fatal decision is not typed as failed');
+    }
   }
+  const failedAttempts = attempts.filter((span) => span.status === 'failed');
+  for (const attempt of failedAttempts) {
+    if (!fatalFailures.some((span) => span.parentSpanId === attempt.spanId)) {
+      throw new TraceCompletenessError('Failed attempt is missing its linked fatal decision');
+    }
+  }
+  if (fatalFailures.length > 0) return;
 
   requireSpan(spans, 'evidence_retrieval', 'authorized evidence retrieval');
   for (const specialist of ['conversation', 'stakeholder', 'commercial']) {

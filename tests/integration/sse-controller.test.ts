@@ -616,15 +616,36 @@ describe.sequential('authorized raw run SSE', () => {
       owner: 'fail-worker', leaseMs: 30_000
     });
     if (lease === undefined) throw new Error('Unable to claim failing synthesis');
+    await database.sql`insert into generation_attempts
+      (id, run_id, logical_generation_id, operation, ordinal, status, provider, model, output_mode,
+        validation_attempts, possible_duplicate, input_tokens, output_tokens, completed_at)
+      values ('attempt-failed-production-strategy', ${runId}, 'generation-failed-production-strategy', 'strategy', 1,
+        'completed', 'mock', 'mock-brief', 'native_schema', 0, false, 10, 4, now())`;
+    await store.saveCheckpoint({
+      runId: runId as never,
+      step: 'strategy:1',
+      invocationId: lease.invocationId,
+      invocationOwner: lease.owner,
+      leaseToken: lease.leaseToken,
+      logicalGenerationId: 'generation-failed-production-strategy',
+      checkpoint: {
+        status: 'completed',
+        value: { draft: 'generated before validation failed' },
+        generation: { provider: 'mock', model: 'mock-brief', operation: 'strategy' }
+      }
+    });
     await store.failRun({
       runId: runId as never, expectedVersion: 3, invocationId: lease.invocationId, invocationOwner: lease.owner,
-      leaseToken: lease.leaseToken, causalCommandId: command.id, reason: 'strategy_generation_failed'
+      leaseToken: lease.leaseToken, causalCommandId: command.id, reason: 'draft_validation_failed'
     });
     await expect(publisher.assertTraceComplete(runId)).resolves.toBeUndefined();
     const spans = await publisher.tracesForRun(runId);
-    const attempt = spans.find(({ kind }) => kind === 'strategy_attempt');
+    const completedAttempt = spans.find(({ kind, status }) => kind === 'strategy_attempt' && status === 'completed');
+    const failedAttempt = spans.find(({ kind, status }) => kind === 'strategy_attempt' && status === 'failed');
+    expect(failedAttempt?.parentSpanId).toBe(completedAttempt?.spanId);
     expect(spans).toContainEqual(expect.objectContaining({
-      kind: 'fatal_failure', parentSpanId: attempt?.spanId, status: 'failed'
+      kind: 'fatal_failure', parentSpanId: failedAttempt?.spanId, status: 'failed',
+      data: expect.objectContaining({ decision: 'fatal', reasonCode: 'draft_validation_failed' })
     }));
   });
   it('keeps denied attempts separate when the same start later becomes authorized', async () => {
