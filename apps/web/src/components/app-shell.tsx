@@ -33,8 +33,11 @@ export function AppShell({ session, onLogout }: Readonly<{
           : section === 'diagnostics' ? 'Diagnostics'
             : 'Deals';
     document.title = `${title} | SlaCato`;
-    if (navigationType !== 'POP') window.requestAnimationFrame(() => mainRef.current?.focus());
-  }, [location.pathname, navigationType]);
+    const focusOwner = (location.state as { focusOwner?: unknown } | null)?.focusOwner;
+    if (navigationType !== 'POP' && focusOwner !== 'approval-status') {
+      window.requestAnimationFrame(() => mainRef.current?.focus());
+    }
+  }, [location.pathname, location.state, navigationType]);
 
 
   return (

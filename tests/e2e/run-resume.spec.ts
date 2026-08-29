@@ -9,6 +9,8 @@ const personaName = `Task 13 Runner ${process.pid}`;
 const accountId = `ACC-task13-run-${suffix}`;
 const opportunityId = `OPP-task13-run-${suffix}`;
 let sql: Sql;
+const failedRunId = `run-failed-${suffix}`;
+const rejectedRunId = `run-rejected-${suffix}`;
 
 async function loginAs(page: Page, name: string, returnTo: string): Promise<void> {
   await page.goto(`/login?returnTo=${encodeURIComponent(returnTo)}`);
@@ -26,6 +28,17 @@ test.beforeAll(async () => {
   await sql`insert into permission_grants
     (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
     values (${`grant-task13-run-${suffix}`}, ${personaId}, ${accountId}, 'salesforce', true, false, true, false, false, '076c659c3c7afd416f8d26729774b67042a55761')`;
+  await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
+    values
+    (${failedRunId}, ${opportunityId}, ${personaId}, 'failed', 'mock', 'mock-brief', ${'f'.repeat(64)}, 3),
+    (${rejectedRunId}, ${opportunityId}, ${personaId}, 'rejected', 'mock', 'mock-brief', ${'e'.repeat(64)}, 4)`;
+  await sql`insert into run_events (id, run_id, sequence, type, payload) values
+    (${`event-failed-created-${suffix}`}, ${failedRunId}, 1, 'run_created', ${sql.json({ status: 'created', deadlineMs: 60000 })}),
+    (${`event-failed-synthesis-${suffix}`}, ${failedRunId}, 2, 'specialists_completed', ${sql.json({ version: 2, status: 'synthesizing' })}),
+    (${`event-failed-terminal-${suffix}`}, ${failedRunId}, 3, 'fail', ${sql.json({ version: 3, reason: 'workflow_failed', terminal: true })}),
+    (${`event-rejected-created-${suffix}`}, ${rejectedRunId}, 1, 'run_created', ${sql.json({ status: 'created', deadlineMs: 60000 })}),
+    (${`event-rejected-awaiting-${suffix}`}, ${rejectedRunId}, 2, 'validation_requires_approval', ${sql.json({ version: 3, status: 'awaiting_approval' })}),
+    (${`event-rejected-terminal-${suffix}`}, ${rejectedRunId}, 3, 'approval_rejected', ${sql.json({ version: 4, subjectHash: 'a'.repeat(64), entryId: 'entry-rejected', category: 'legal_terms', authority: 'legal_reviewer', action: 'reject', approvedSubjectHash: 'a'.repeat(64), terminal: true })})`;
 });
 test.afterAll(async () => { await sql.end({ timeout: 1 }); });
 
@@ -93,15 +106,26 @@ test('run view reports offline recovery, closes on persona transition, and keeps
   const body = await observing.locator('body').innerText();
   await expect(observing.getByRole('heading', { name: 'This view could not be loaded' })).toBeVisible();
   expect(body).not.toContain('Task 13 Stable Run');
+  await expect(observing).toHaveTitle('Unavailable view | SlaCato');
+  await expect(observing.locator('section[role="alert"]')).toBeFocused();
   expect(body).not.toContain(accountId);
   expect(body).not.toContain('ACC-2001');
 });
 
 test('run experiences are responsive and have no automated accessibility violations', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await loginAs(page, personaName, '/runs');
-  await expect(page.getByRole('heading', { name: 'Runs' })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await loginAs(page, personaName, `/runs/${failedRunId}`);
+  await expect(page.getByRole('heading', { name: 'Run failed safely' })).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '60');
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuetext', '60% complete; stopped during Synthesizing');
+  await expect(page.getByText('Stopped during Synthesizing')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Runs', exact: true }).last()).toHaveAttribute('aria-current', 'page');
+  await expect(page).toHaveTitle('Runs | SlaCato');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.goto(`/runs/${rejectedRunId}`);
+  await expect(page.getByRole('heading', { name: 'Approval rejected' })).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '82');
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuetext', '82% complete; stopped during Awaiting approval');
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
 });

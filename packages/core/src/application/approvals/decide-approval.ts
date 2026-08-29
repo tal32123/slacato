@@ -116,7 +116,10 @@ export class DecideApproval {
     const run = await this.store.getRun(runId);
     if (run === undefined) throw new DomainNotFoundError('run');
     const granted = await this.access.authoritiesFor({ actorId: input.actorId, opportunityId: run.opportunityId });
-    if (!granted.includes(input.authority)) {
+    const subject = await this.store.getApprovalSubject({ runId, approvalSubjectId: input.approvalSubjectId });
+    const entry = subject?.entries.find((candidate) => candidate.id === input.entryId);
+    if (subject === undefined || entry === undefined) throw new DomainNotFoundError('approval subject');
+    if (!granted.includes(input.authority) || !entry.eligibleAuthorities.includes(input.authority)) {
       await this.access.recordOpaqueDenial({ type: 'approval_decision_denied', actorId: input.actorId, reason: 'forbidden' });
       throw new AuthorizationDeniedError('Approval decision denied');
     }
@@ -134,12 +137,9 @@ export class DecideApproval {
         approvedSubjectHash: replay.approvedSubjectHash, quorumSatisfied: replay.quorumSatisfied, replayed: true
       };
     }
-    const subject = await this.store.getApprovalSubject({ runId, approvalSubjectId: input.approvalSubjectId });
-    if (subject === undefined || subject.supersededBySubjectId !== undefined) throw new DomainNotFoundError('approval subject');
+    if (subject.supersededBySubjectId !== undefined) throw new DomainNotFoundError('approval subject');
     if (subject.subjectHash !== input.expectedSubjectHash) throw new DomainConflictError('Approval subject is stale');
-    const entry = subject.entries.find((candidate) => candidate.id === input.entryId);
-    if (entry === undefined || entry.category !== input.category) throw new DomainConflictError('Approval category does not match the required entry');
-    if (!entry.eligibleAuthorities.includes(input.authority)) throw new AuthorizationDeniedError('Requested authority cannot satisfy this approval entry');
+    if (entry.category !== input.category) throw new DomainConflictError('Approval category does not match the required entry');
 
     const alreadyApproved = new Set(subject.decisions.filter((decision) => decision.action !== 'reject').map((decision) => decision.entryId));
     if (entry.dependsOn.some((dependency) => !alreadyApproved.has(dependency))) throw new DomainConflictError('Underlying approval entries are incomplete');

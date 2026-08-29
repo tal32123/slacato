@@ -10,7 +10,7 @@ const origin = 'http://127.0.0.1:4173';
 const browserHeaders = { Origin: origin, 'Sec-Fetch-Site': 'same-site' };
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const suffix = `task13_${process.pid}`;
-const personaBase = 9_000_000 + process.pid * 5;
+const personaBase = 9_000_000 + process.pid * 10;
 const ids = {
   account: `ACC-${suffix}`,
   hiddenAccount: `ACC-hidden-${suffix}`,
@@ -21,12 +21,16 @@ const ids = {
   outsider: `USR-${personaBase + 2}`,
   reader: `USR-${personaBase + 3}`,
   stale: `USR-${personaBase + 4}`,
+  wrongAuthority: `USR-${personaBase + 5}`,
   run: `run-${suffix}`,
   hiddenRun: `run-hidden-${suffix}`,
   failedRun: `run-failed-${suffix}`,
   subject: `subject-${suffix}`,
   entry: `entry-${suffix}`,
   replacementSubject: `subject-replacement-${suffix}`,
+  crmEvidence: `evidence_crm_${suffix}`,
+  restrictedConversationEvidence: `evidence_conversation_${suffix}`,
+  deadEvidence: `evidence_dead_${suffix}`,
   replacementEntry: `entry-replacement-${suffix}`
 } as const;
 const subjectPayload = {
@@ -37,7 +41,11 @@ const subjectPayload = {
   negotiationState: { currentState: 'Legal terms require review.', risks: ['Approval outstanding'] },
   recommendedNextActions: { actions: [] },
   missingInformation: { items: [] },
-  sourceEvidence: { evidence: [] },
+  sourceEvidence: { evidence: [
+    { evidenceId: ids.crmEvidence, sourceType: 'crm', summary: 'Readable CRM evidence summary.', capturedAt: '2026-08-29T10:00:00.000Z', claims: [] },
+    { evidenceId: ids.restrictedConversationEvidence, sourceType: 'conversation', summary: 'Restricted conversation summary.', capturedAt: '2026-08-29T11:00:00.000Z', claims: [] },
+    { evidenceId: ids.deadEvidence, sourceType: 'conversation', summary: 'No persisted evidence row.', capturedAt: '2026-08-29T12:00:00.000Z', claims: [] }
+  ] },
   confidenceAndReviewWarnings: { overallConfidence: 0.8, warnings: [] }
 };
 const subjectHash = hashApprovalPayload(subjectPayload);
@@ -63,7 +71,7 @@ async function authenticateWithCsrf(app: NestExpressApplication, userId: string)
   return { agent, csrfToken: selected.body.csrfToken as string };
 }
 
-describe('run and approval query APIs', () => {
+describe.sequential('run and approval query APIs', () => {
   let app: NestExpressApplication;
   let sql: Sql;
 
@@ -78,7 +86,8 @@ describe('run and approval query APIs', () => {
       (${ids.approver}, 'Task 13 Legal Reviewer', 'Legal Reviewer', ${CANONICAL_FIXTURE_COMMIT}),
       (${ids.outsider}, 'Task 13 Outsider', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
       (${ids.reader}, 'Task 13 Reader', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
-      (${ids.stale}, 'Task 13 Stale Grant', 'Legal Reviewer', ${CANONICAL_FIXTURE_COMMIT})`;
+      (${ids.stale}, 'Task 13 Stale Grant', 'Legal Reviewer', ${CANONICAL_FIXTURE_COMMIT}),
+      (${ids.wrongAuthority}, 'Task 13 Wrong Authority', 'Deal Desk Approver', ${CANONICAL_FIXTURE_COMMIT})`;
     await sql`insert into permission_grants
       (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
       values
@@ -88,7 +97,23 @@ describe('run and approval query APIs', () => {
     await sql`insert into approval_authority_grants (id, persona_id, account_id, authority, source, source_commit)
       values
       (${`authority-${suffix}`}, ${ids.approver}, ${ids.account}, 'legal_reviewer', 'task-13-test', ${CANONICAL_FIXTURE_COMMIT}),
-      (${`authority-stale-${suffix}`}, ${ids.stale}, ${ids.account}, 'legal_reviewer', 'old-task-13-test', ${'a'.repeat(40)})`;
+      (${`authority-stale-${suffix}`}, ${ids.stale}, ${ids.account}, 'legal_reviewer', 'old-task-13-test', ${'a'.repeat(40)}),
+      (${`authority-wrong-${suffix}`}, ${ids.wrongAuthority}, ${ids.account}, 'deal_desk', 'task-13-test', ${CANONICAL_FIXTURE_COMMIT})`;
+    await sql`insert into permission_grants
+      (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
+      values
+      (${`grant-approver-crm-${suffix}`}, ${ids.approver}, ${ids.account}, 'salesforce', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
+      (${`grant-approver-conversation-${suffix}`}, ${ids.approver}, ${ids.account}, 'gong_summary', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT})`;
+    await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content)
+      values
+      (${`document-crm-${suffix}`}, ${`document-crm-${suffix}`}, 1, 'salesforce', ${`document-crm-hash-${suffix}`}, 'CRM fixture'),
+      (${`document-conversation-${suffix}`}, ${`document-conversation-${suffix}`}, 1, 'gong_summary', ${`document-conversation-hash-${suffix}`}, 'Conversation fixture')`;
+    await sql`insert into evidence_versions
+      (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content,
+        event_date, source_locator, reliability_class, classification_reason, policy_hash)
+      values
+      (${ids.crmEvidence}, ${`document-crm-${suffix}`}, ${ids.account}, ${ids.opportunity}, 0, 'salesforce', 'standard', ${`evidence-crm-hash-${suffix}`}, 'Readable CRM fixture', '2026-08-29', 'salesforce/opportunities.tsv#task13:0', 'authoritative_system', 'task13_test', ${'a'.repeat(64)}),
+      (${ids.restrictedConversationEvidence}, ${`document-conversation-${suffix}`}, ${ids.account}, ${ids.opportunity}, 0, 'gong_summary', 'restricted', ${`evidence-conversation-hash-${suffix}`}, 'Restricted conversation fixture', '2026-08-29', 'gong/calls.json#task13:0', 'direct_conversation', 'task13_test', ${'a'.repeat(64)})`;
     await sql`insert into runs
       (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
       values
@@ -220,6 +245,44 @@ describe('run and approval query APIs', () => {
     const detail = approvalDetailResponseSchema.parse((await approver.get(`/api/approvals/${ids.subject}`).set(browserHeaders).expect(200)).body);
     expect(detail.entries).toEqual([expect.objectContaining({ entryId: ids.entry, availableAuthority: 'legal_reviewer', decided: false })]);
     expect(detail.payload.executiveSummary.narrative).toBe('A validated summary for approval.');
-    expect(detail.capabilities).toEqual({ canReadDeal: false, evidenceIds: [] });
+    expect(detail.capabilities).toEqual({ canReadDeal: true, evidenceIds: [ids.crmEvidence] });
+  });
+  it('authorizes the exact current entry before exposing stale subject conflicts', async () => {
+    const opaqueBody = { code: 'NOT_FOUND', message: 'The requested resource was not found.' };
+    const wrongAuthority = await authenticateWithCsrf(app, ids.wrongAuthority);
+    const wrongInput = {
+      runId: ids.run,
+      approvalSubjectId: ids.replacementSubject,
+      expectedRunVersion: 7,
+      expectedSubjectHash: '0'.repeat(64),
+      entryId: ids.replacementEntry,
+      category: 'legal_terms',
+      authority: 'deal_desk',
+      action: 'approve_unchanged',
+      idempotencyKey: `wrong-authority-${suffix}`
+    };
+    const wrong = await wrongAuthority.agent.post('/api/approvals/decisions').set(browserHeaders)
+      .set('X-CSRF-Token', wrongAuthority.csrfToken).send(wrongInput).expect(404);
+    const missing = await wrongAuthority.agent.post('/api/approvals/decisions').set(browserHeaders)
+      .set('X-CSRF-Token', wrongAuthority.csrfToken)
+      .send({ ...wrongInput, approvalSubjectId: `subject-missing-${suffix}`, idempotencyKey: `wrong-missing-${suffix}` }).expect(404);
+    const authorized = await authenticateWithCsrf(app, ids.approver);
+    const superseded = await authorized.agent.post('/api/approvals/decisions').set(browserHeaders)
+      .set('X-CSRF-Token', authorized.csrfToken).send({
+        ...wrongInput,
+        approvalSubjectId: ids.subject,
+        entryId: ids.entry,
+        authority: 'legal_reviewer',
+        idempotencyKey: `authorized-superseded-${suffix}`
+      }).expect(404);
+    expect(wrong.body).toEqual(opaqueBody);
+    expect(missing.body).toEqual(opaqueBody);
+    expect(superseded.body).toEqual(opaqueBody);
+    await authorized.agent.post('/api/approvals/decisions').set(browserHeaders)
+      .set('X-CSRF-Token', authorized.csrfToken).send({
+        ...wrongInput,
+        authority: 'legal_reviewer',
+        idempotencyKey: `authorized-stale-${suffix}`
+      }).expect(409);
   });
 });

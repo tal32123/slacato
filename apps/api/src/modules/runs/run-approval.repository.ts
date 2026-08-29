@@ -209,7 +209,9 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
         ) limit 1`)[0];
     if (subject === undefined) return undefined;
 
-    const [entryRows, authorityRows, decisionRows, decidedEntryRows, readableSourceRows] = await Promise.all([
+    const payload = approvalBriefPayloadSchema.parse(subject.payload);
+    const payloadEvidenceIds = payload.sourceEvidence.evidence.map((evidence) => evidence.evidenceId);
+    const [entryRows, authorityRows, decisionRows, decidedEntryRows, readableDealRows, readableEvidenceRows] = await Promise.all([
       this.database.sql<ApprovalEntryRow[]>`select id entry_id, category, eligible_authorities, depends_on from approval_requirement_entries where approval_subject_id = ${subjectId} order by ordinal`,
       this.database.sql<{ authority: string }[]>`select authority from approval_authority_grants
         where persona_id = ${actorId} and source_commit = ${CANONICAL_FIXTURE_COMMIT}
@@ -220,13 +222,34 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
         from permission_grants permission join opportunities opportunity on opportunity.account_id = permission.account_id
         where permission.persona_id = ${actorId} and opportunity.id = ${subject.opportunity_id}
           and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT} and permission.can_read
-          and (not opportunity.restricted or permission.can_read_restricted)`
+          and (not opportunity.restricted or permission.can_read_restricted)`,
+      this.database.sql<{ id: string }[]>`select evidence.id
+        from evidence_versions evidence
+        join opportunities opportunity on opportunity.id = evidence.opportunity_id
+        where evidence.id = any(${payloadEvidenceIds}::text[])
+          and evidence.opportunity_id = ${subject.opportunity_id}
+          and evidence.account_id = opportunity.account_id
+          and evidence.source_locator is not null and btrim(evidence.source_locator) <> ''
+          and exists (
+            select 1 from permission_grants source_grant
+            where source_grant.persona_id = ${actorId}
+              and source_grant.account_id = evidence.account_id
+              and source_grant.source_type = evidence.source_type
+              and source_grant.can_read = true
+              and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+              and (opportunity.restricted = false or source_grant.can_read_restricted = true)
+              and (
+                evidence.sensitivity <> 'restricted'
+                or (evidence.source_type = 'pricing' and source_grant.sensitive_pricing = true)
+                or (evidence.source_type <> 'pricing' and source_grant.can_read_restricted = true)
+              )
+          )
+        order by evidence.id`
     ]);
     const actorAuthorities = new Set(authorityRows.map((row) => approvalAuthority(row.authority)));
     const decisions = decisionRows.map(mapDecision);
     const decidedEntries = new Set(decidedEntryRows.map((row) => row.entry_id));
-    const payload = approvalBriefPayloadSchema.parse(subject.payload);
-    const readableSources = new Set(readableSourceRows.map(({ source_type }) => source_type));
+    const readableEvidenceIds = new Set(readableEvidenceRows.map(({ id }) => id));
     return approvalDetailResponseSchema.parse({
       sessionVersion,
       approvalSubjectId: subject.approval_subject_id,
@@ -252,9 +275,9 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
       decisions,
       quorum: { completed: decisions.length, required: entryRows.length },
       capabilities: {
-        canReadDeal: readableSources.size > 0,
+        canReadDeal: readableDealRows.length > 0,
         evidenceIds: payload.sourceEvidence.evidence
-          .filter((evidence) => readableSources.has(evidence.sourceType))
+          .filter((evidence) => readableEvidenceIds.has(evidence.evidenceId))
           .map((evidence) => evidence.evidenceId)
       },
       createdAt: iso(subject.created_at),

@@ -92,8 +92,33 @@ test('partial quorum remains awaiting until a distinct authorized persona satisf
   await loginAs(page, 'Rina Vale', `/approvals/${fixtures.quorum.subject}`);
   await expect(page.getByRole('heading', { name: 'Required approvals' })).toBeVisible();
   await expect(page.getByText('Quorum 0 of 2')).toBeVisible();
-  await page.getByRole('button', { name: 'Approve unchanged' }).click();
+  let decisionAttempt = 0;
+  let releaseConflict: (() => void) | undefined;
+  const conflictGate = new Promise<void>((resolve) => { releaseConflict = resolve; });
+  await page.route('**/api/approvals/decisions', async (route) => {
+    decisionAttempt += 1;
+    if (decisionAttempt === 1) {
+      await conflictGate;
+      await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'CONFLICT', message: 'Approval changed' }) });
+    } else if (decisionAttempt === 2) {
+      await route.abort('connectionreset');
+    } else {
+      await route.continue();
+    }
+  });
+  const approve = page.getByRole('button', { name: 'Approve unchanged' });
+  await approve.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Recording approval…' })).toBeDisabled();
+  releaseConflict?.();
+  await expect(page.getByRole('button', { name: 'Reload approval' })).toBeVisible();
+  await page.getByRole('button', { name: 'Reload approval' }).click();
+  await approve.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Retry decision' })).toBeVisible();
+  await page.getByRole('button', { name: 'Retry decision' }).click();
   await expect(page.getByText('Quorum 1 of 2')).toBeVisible();
+  await page.unroute('**/api/approvals/decisions');
   await page.goto(`/runs/${fixtures.quorum.run}`);
   await expect(page.getByText('Awaiting approval', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Restricted Account Renewal' })).toBeVisible();
@@ -111,22 +136,64 @@ test('partial quorum remains awaiting until a distinct authorized persona satisf
   await expect(page.getByRole('button', { name: new RegExp(leaderName) })).toBeVisible();
   await page.goto(`/approvals/${fixtures.quorum.subject}`);
   await expect(page.getByText(/Your authority: Sales Leader/)).toBeVisible();
-  await page.getByRole('button', { name: 'Approve unchanged' }).click();
+  const finalApprove = page.getByRole('button', { name: 'Approve unchanged' });
+  await finalApprove.focus();
+  await page.keyboard.press('Enter');
+  const success = page.getByRole('status');
+  await expect(success).toContainText('Approval quorum is satisfied');
+  await expect(success).toBeFocused();
   await expect(page.getByText('Finalizing', { exact: true })).toBeVisible();
+  await expect(page.getByText('Finalizing', { exact: true }).locator('..').locator('.lucide-circle-dashed')).toBeVisible();
 });
 
-test('edit and approve creates a new immutable subject and editing alone never resumes the run', async ({ page }) => {
+test('edit and approve validates semantic fields, reflows at 320px and 200%-equivalent, and keeps replacement success focused', async ({ page }) => {
   await loginAs(page, 'Rina Vale', `/approvals/${fixtures.edit.subject}`);
-  await page.getByRole('button', { name: 'Edit and approve' }).click();
+  await expect(page).toHaveTitle('Approvals | SlaCato');
+  await expect(page.getByRole('link', { name: 'Approvals', exact: true }).first()).toHaveAttribute('aria-current', 'page');
+  for (const heading of [
+    'Deal snapshot', 'Executive summary', 'Buyer goals and business drivers', 'Stakeholder map',
+    'Negotiation state', 'Recommended next actions', 'Missing information',
+    'Authorized evidence summaries', 'Confidence and review warnings'
+  ]) await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  const edit = page.getByRole('button', { name: 'Edit and approve' });
+  await edit.focus();
+  await page.keyboard.press('Enter');
+  const summary = page.getByLabel('Executive summary');
+  const negotiation = page.getByLabel('Negotiation state');
+  await expect(summary).toHaveAttribute('maxlength', '8000');
+  await expect(negotiation).toHaveAttribute('maxlength', '8000');
+  await page.getByLabel('Rationale').fill('Clarify the approved commercial posture.');
+  await summary.fill('');
+  const submit = page.getByRole('button', { name: 'Submit edit for approval' });
+  await submit.focus();
+  await page.keyboard.press('Enter');
+  await expect(summary).toBeFocused();
+  await expect(summary).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByText('Enter an executive summary.')).toBeVisible();
+  await summary.fill(payload.executiveSummary.narrative);
+  await negotiation.fill('');
+  await submit.focus();
+  await page.keyboard.press('Enter');
+  await expect(negotiation).toBeFocused();
+  await expect(negotiation).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByText('Enter the negotiation state.')).toBeVisible();
+  await negotiation.fill(payload.negotiationState.currentState);
+  await page.setViewportSize({ width: 320, height: 700 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.setViewportSize({ width: 640, height: 700 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.getByLabel('Overall confidence').fill('0.7');
   await expect(page.getByRole('heading', { name: 'Change preview' })).toBeVisible();
-  await page.getByLabel('Rationale').fill('Clarify the approved commercial posture.');
   await expect(page).toHaveURL(new RegExp(`${fixtures.edit.subject}$`));
   const decisionResponse = page.waitForResponse((response) => response.url().includes('/api/approvals/') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Submit edit for approval' }).click();
+  await submit.focus();
+  await page.keyboard.press('Enter');
   const response = await decisionResponse;
   expect(response.ok(), `Approval edit failed with HTTP ${response.status()}`).toBe(true);
-  await expect(page.getByRole('status')).toContainText('Decision recorded');
+  const status = page.getByRole('status').filter({ hasText: 'Decision recorded' });
+  await expect(status).toContainText('Decision recorded');
+  await expect(status).toBeFocused();
   await expect(page).not.toHaveURL(new RegExp(`${fixtures.edit.subject}$`));
   await expect(page.getByText('Approval review')).toBeVisible();
   await page.getByRole('link', { name: 'View run' }).click();
@@ -135,11 +202,20 @@ test('edit and approve creates a new immutable subject and editing alone never r
 
 test('reject is terminal, duplicate action is disabled, and history remains inspectable', async ({ page }) => {
   await loginAs(page, 'Rina Vale', `/approvals/${fixtures.reject.subject}`);
-  await page.getByRole('button', { name: 'Reject' }).click();
+  const reject = page.getByRole('button', { name: 'Reject' });
+  await reject.focus();
+  await page.keyboard.press('Enter');
   await page.getByLabel('Rationale').fill('The commercial posture is not acceptable.');
   const confirm = page.getByRole('button', { name: 'Confirm rejection' });
-  await confirm.click();
+  await confirm.focus();
+  await page.keyboard.press('Space');
+  const rejectionStatus = page.getByRole('status');
+  await expect(rejectionStatus).toContainText('run was rejected');
+  await expect(rejectionStatus).toBeFocused();
   await expect(page.getByText('Rejected', { exact: true }).first()).toBeVisible();
+  const rejectedIcon = page.getByText('Rejected', { exact: true }).first().locator('..').locator('svg').first();
+  await expect(rejectedIcon).toBeVisible();
+  await expect(rejectedIcon).not.toHaveClass(/lock-keyhole/);
   await expect(page.getByRole('heading', { name: 'Decision history' })).toBeVisible();
   await page.getByRole('link', { name: 'View run' }).click();
   await expect(page.getByRole('heading', { name: 'Approval rejected' })).toBeVisible();
@@ -155,6 +231,7 @@ test('approval inbox is stacked and accessible on mobile while forbidden deep li
   await page.goto('/settings');
   await page.getByRole('radio', { name: /Harper Noor/ }).check();
   await page.getByRole('button', { name: 'Use selected persona' }).click();
+  await expect(page.getByRole('button', { name: /Harper Noor/ })).toBeVisible();
   for (const path of [
     `/runs/${fixtures.edit.run}`,
     `/approvals/${fixtures.edit.subject}`,
@@ -163,6 +240,10 @@ test('approval inbox is stacked and accessible on mobile while forbidden deep li
   ]) {
     await page.goto(path);
     const body = await page.locator('body').innerText();
+    if (path.startsWith('/approvals/')) {
+      await expect(page).toHaveTitle('Unavailable view | SlaCato');
+      await expect(page.locator('section[role="alert"]')).toBeFocused();
+    }
     expect(body).not.toContain('Eclipse BioMaterials');
     expect(body).not.toContain('Restricted Account Renewal');
     expect(body).not.toContain(subjectHash);
