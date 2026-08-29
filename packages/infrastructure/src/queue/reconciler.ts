@@ -168,7 +168,7 @@ export class PostgresCommandReconciler {
   }
 }
 
-/** Bounded background reconciler. It is separate from delivery so Redis I/O never occurs in a database transaction. */
+/** Runs bounded background reconciliation separately from delivery so Redis I/O never occurs in a database transaction. */
 export class ReconcilerLoop {
   private timer: NodeJS.Timeout | undefined;
   private stopping = false;

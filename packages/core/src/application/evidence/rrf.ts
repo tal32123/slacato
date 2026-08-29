@@ -1,7 +1,7 @@
 /** Stable fused identity and score, intentionally independent of evidence payloads. */
 export type RankedId = Readonly<{ id: string; score: number }>;
 
-/** Deterministic reciprocal-rank fusion. Duplicate IDs contribute once per input list. */
+/** Combines ranked evidence lists deterministically while counting each ID only once per list. */
 export function reciprocalRankFusion(lists: readonly (readonly string[])[], k = 60): RankedId[] {
   if (!Number.isInteger(k) || k <= 0) throw new Error('RRF k must be a positive integer');
   const scores = new Map<string, number>();

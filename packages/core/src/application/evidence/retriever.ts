@@ -48,10 +48,7 @@ export type AdjustmentInput = Readonly<{
   eventDate?: string | undefined;
 }>;
 
-/**
- * Applies small transparent boosts after RRF. Reliability is capped at +0.02;
- * recency is capped to [-0.02,+0.02], and policy is never age-penalized.
- */
+/** Adjusts fused evidence scores with capped reliability and recency signals while exempting policy from age penalties. */
 export function applyEvidenceAdjustments(input: AdjustmentInput, now = new Date()): Readonly<{
   score: number; reliabilityAdjustment: number; recencyAdjustment: number;
 }> {

@@ -2,6 +2,15 @@ import type { Persona } from '@slacato/contracts';
 import type { PermissionGrant } from '@slacato/core';
 
 export type CanonicalPersona = Readonly<Persona & { grants: readonly PermissionGrant[] }>;
+export type AuthenticatedPrincipal = Readonly<{
+  claims: Readonly<{ userId: string; issuedAt: number; version: string }>;
+  persona: CanonicalPersona;
+}>;
+
+/** @internal Request state shared only by the security guard and principal decorator. */
+export type PrincipalAwareRequest = {
+  auth?: AuthenticatedPrincipal;
+};
 
 /** Canonical identity lookup; adapters may only return identities already ingested into the system of record. */
 export interface CanonicalPersonaDirectory {

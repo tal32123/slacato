@@ -42,7 +42,7 @@ export function createEvidenceScopeBinding(
   };
 }
 
-/** Stable hash shared by retrieval persistence and downstream agent authorization checks. */
+/** Hashes normalized scope facts for retrieval persistence and downstream authorization checks. */
 export function hashEvidenceScopeBinding(binding: EvidenceScopeBinding): string {
   return createHash('sha256').update(stableJson(binding)).digest('hex');
 }

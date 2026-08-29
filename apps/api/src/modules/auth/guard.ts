@@ -2,13 +2,16 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Inject }
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
 import { ENDPOINT_ACCESS, type EndpointAccess } from '../../common/security/access.metadata.js';
-import { AUTH_OPTIONS, type AuthModuleOptions } from './contracts.js';
+import {
+  AUTH_OPTIONS,
+  type AuthenticatedPrincipal,
+  type AuthModuleOptions,
+  type PrincipalAwareRequest
+} from './contracts.js';
 import { AuthService } from './auth.service.js';
 import { BrowserRequestPolicy } from './session.js';
 
-export type AuthenticatedRequest = Request & {
-  auth?: Awaited<ReturnType<AuthService['requireSession']>>;
-};
+type SecurityGuardRequest = Request & PrincipalAwareRequest;
 
 /** Default-on browser provenance, authentication, and mutation-CSRF enforcement. */
 @Injectable()
@@ -23,10 +26,11 @@ export class ApplicationSecurityGuard implements CanActivate {
     this.policy = new BrowserRequestPolicy(options.allowedOrigins);
   }
 
+  /** Enforces endpoint access policy and installs the principal consumed by protected handlers. */
   public async canActivate(context: ExecutionContext): Promise<boolean> {
     const access = this.reflector.getAllAndOverride<EndpointAccess>(ENDPOINT_ACCESS, [context.getHandler(), context.getClass()]);
     const http = context.switchToHttp();
-    const request = http.getRequest<AuthenticatedRequest>();
+    const request = http.getRequest<SecurityGuardRequest>();
     const response = http.getResponse<Response>();
     if (access === 'non_browser_public') {
       if (['GET', 'HEAD'].includes(request.method.toUpperCase())) return true;
@@ -48,9 +52,9 @@ export class ApplicationSecurityGuard implements CanActivate {
       return true;
     }
 
-    const session = await this.auth.requireSession(request);
-    request.auth = session;
-    if (mutation) this.auth.assertAuthenticatedMutationCsrf(request, token, session.claims.version);
+    const principal: AuthenticatedPrincipal = await this.auth.requireSession(request);
+    request.auth = principal;
+    if (mutation) this.auth.assertAuthenticatedMutationCsrf(request, token, principal.claims.version);
     return true;
   }
 

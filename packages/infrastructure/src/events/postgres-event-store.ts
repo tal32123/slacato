@@ -84,7 +84,7 @@ function traceFromRow(row: TraceRow): TraceSpan {
   });
 }
 
-/** PostgreSQL-authoritative append/replay store. LISTEN/NOTIFY is only a wake-up hint. */
+/** Keeps run events and traces authoritative in PostgreSQL while using notifications only to wake subscribers. */
 export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSource, TraceStore {
   private readonly waiters = new Map<string, Set<WakeWaiter>>();
   private listener: Promise<ListenMeta> | undefined;

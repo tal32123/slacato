@@ -10,10 +10,12 @@ import type { DiagnosticsModuleOptions } from './modules/diagnostics/contracts.j
 import { DealsModule } from './modules/deals/deals.module.js';
 import type { DealsModuleOptions } from './modules/deals/contracts.js';
 import { ExportsModule } from './modules/exports/exports.module.js';
-import type { BriefExportService } from './modules/exports/exports.service.js';
+import type { BriefExportService } from './modules/exports/contracts.js';
 
+/** Composes the API delivery modules with their externally supplied dependencies. */
 @Module({})
 export class AppModule {
+  /** Registers the API modules and their optional delivery-layer ports. */
   public static register(
     auth: AuthModuleOptions,
     workflow?: WorkflowApiOptions,

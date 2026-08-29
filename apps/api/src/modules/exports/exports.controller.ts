@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
 import type { AuthenticatedPrincipal } from '../auth/contracts.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
-import { BRIEF_EXPORT_SERVICE, type BriefExportService } from './exports.service.js';
+import { BRIEF_EXPORT_SERVICE, type BriefExportService } from './contracts.js';
 
 const exportParamsSchema = z.object({
   runId: z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/),

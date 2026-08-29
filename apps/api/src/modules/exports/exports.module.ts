@@ -1,9 +1,11 @@
 import { DynamicModule, Module } from '@nestjs/common';
 import { ExportsController } from './exports.controller.js';
-import { BRIEF_EXPORT_SERVICE, type BriefExportService } from './exports.service.js';
+import { BRIEF_EXPORT_SERVICE, type BriefExportService } from './contracts.js';
 
+/** Binds the consumer-owned brief export port to the export delivery controller. */
 @Module({})
 export class ExportsModule {
+  /** Registers the export service supplied by the application composition root. */
   public static register(service: BriefExportService): DynamicModule {
     return {
       module: ExportsModule,
