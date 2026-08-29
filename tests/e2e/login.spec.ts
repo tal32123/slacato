@@ -9,13 +9,14 @@ test('keyboard persona login and persona switching update the authenticated work
   const maya = page.getByRole('button', { name: /Continue as Maya Levin/ });
   await maya.focus();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/');
+  await expect(page).toHaveURL('/deals');
   await expect(page.getByRole('heading', { name: /Welcome, Maya/ })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Change persona' }).click();
-  await page.getByRole('button', { name: /Continue as Owen Patel/ }).click();
-  await expect(page).toHaveURL('/');
-  await expect(page.getByRole('heading', { name: /Welcome, Owen/ })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('radio', { name: /Owen Patel/ }).check();
+  await page.getByRole('button', { name: 'Use selected persona' }).click();
+  await expect(page).toHaveURL('/settings');
+  await expect(page.getByRole('radio', { name: /Owen Patel/ })).toBeChecked();
 
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL('/login');

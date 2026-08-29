@@ -14,6 +14,7 @@ class UnconfiguredReadinessCheck implements ReadinessCheck {
       const unavailable = new UnconfiguredReadinessCheck();
       return new HealthService({ database: unavailable, migration: unavailable, redis: unavailable, index: unavailable, model: unavailable });
     }
-  }]
+  }],
+  exports: [HealthService]
 })
 export class HealthModule {}

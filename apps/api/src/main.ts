@@ -73,6 +73,10 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
     regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
     decideApproval: new DecideApproval(workflowStore, workflowAccess),
     runEvents: { bus: runEvents, query: new PostgresRunEventQuery(database) }
+  }, {
+    provider: env.AI_PROVIDER,
+    pinnedGenerationModel: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_CHAT_MODEL : 'mock-brief',
+    pinnedEmbeddingModel: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_EMBEDDING_MODEL : 'mock-embedding'
   }), { bodyParser: false });
   configureApiApplication(app);
   return app;

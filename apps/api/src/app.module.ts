@@ -5,15 +5,22 @@ import type { AuthModuleOptions } from './modules/auth/contracts.js';
 import { RunsModule } from './modules/runs/runs.module.js';
 import { ApprovalsModule } from './modules/approvals/approvals.module.js';
 import type { WorkflowApiOptions } from './modules/runs/contracts.js';
+import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module.js';
+import type { DiagnosticsModuleOptions } from './modules/diagnostics/contracts.js';
 
 @Module({})
 export class AppModule {
-  public static register(auth: AuthModuleOptions, workflow?: WorkflowApiOptions): DynamicModule {
+  public static register(
+    auth: AuthModuleOptions,
+    workflow?: WorkflowApiOptions,
+    diagnostics?: DiagnosticsModuleOptions
+  ): DynamicModule {
     return {
       module: AppModule,
       imports: [
         HealthModule,
         AuthModule.register(auth),
+        ...(diagnostics === undefined ? [] : [DiagnosticsModule.register(diagnostics)]),
         ...(workflow === undefined ? [] : [RunsModule.register(workflow), ApprovalsModule.register(workflow.decideApproval)])
       ]
     };
