@@ -118,3 +118,28 @@ pnpm typecheck
 git diff --check
 # clean
 ```
+
+## Round-3 review hardening
+
+Focused RED proof showed that replay lookup incorrectly rebound every decision on a superseded subject:
+
+```text
+pnpm vitest run tests/integration/workflow.test.ts -t "replays an unchanged|replays a rejection"
+# 1 file failed; 2 failed, 25 skipped
+# unchanged and rejected decisions both returned a later replacement subject ID
+```
+
+Replay now follows the original decision semantics: only `edit_and_approve` returns the replacement subject it created; `approve_unchanged` and `reject` remain bound to their original immutable subject and entry after later edit or regeneration.
+
+Final round-3 focused evidence:
+
+```text
+pnpm vitest run tests/integration/workflow.test.ts tests/integration/workflow-production.test.ts
+# 2 files passed, 28 tests passed
+
+pnpm typecheck
+# exit 0
+
+git diff --check
+# clean
+```

@@ -132,8 +132,10 @@ class MemoryWorkflowStore {
     if (subject === undefined || decision === undefined) throw new Error('missing replay decision');
     const stored = replay.result as { run: WorkflowRun; quorumSatisfied?: boolean; rejected?: boolean };
     return {
-      run: stored.run, approvalSubjectId: subject.supersededBySubjectId ?? subject.id, entryId: decision.entryId,
-      approvedSubjectHash: decision.approvedSubjectHash, quorumSatisfied: stored.quorumSatisfied ?? false, rejected: stored.rejected ?? false
+      run: stored.run,
+      approvalSubjectId: decision.action === 'edit_and_approve' ? subject.supersededBySubjectId ?? subject.id : subject.id,
+      entryId: decision.entryId, approvedSubjectHash: decision.approvedSubjectHash,
+      quorumSatisfied: stored.quorumSatisfied ?? false, rejected: stored.rejected ?? false
     };
   }
   public async recordDecisionAndEnqueueFinalization(input: Parameters<WorkflowStore['recordDecisionAndEnqueueFinalization']>[0]) {
@@ -399,6 +401,55 @@ describe('durable DealBrief workflow', () => {
     if (replacement === undefined || replacementEntry === undefined) throw new Error('missing replacement subject');
     await decide(system, runId, replacementEntry.id, 'USR-5005', 'deal_desk'); await system.drain();
     expect(system.memory.briefs.get(runId)?.subjectHash).toBe(result.approvedSubjectHash); expect(result.approvedSubjectHash).toBe(hash(edited)); expect(system.services.calls).toEqual(calls);
+  });
+
+  it('replays an unchanged approval on its original subject after a later edit supersedes it', async () => {
+    const system = harness(); system.services.policyByOpportunity = {
+      'OPP-1003': { ...safePolicy, discountPercent: 18 }
+    };
+    const runId = await startRun(system, 'OPP-1003'); await system.drain();
+    const subject = await system.memory.getApprovalSubject({ runId }); const run = system.memory.runs.get(runId);
+    const dealDesk = subject?.entries.find((entry) => entry.eligibleAuthorities.includes('deal_desk'));
+    const salesLeader = subject?.entries.find((entry) => entry.eligibleAuthorities.includes('sales_leader'));
+    if (subject === undefined || run === undefined || dealDesk === undefined || salesLeader === undefined) throw new Error('missing approval state');
+    const unchanged = {
+      runId, approvalSubjectId: subject.id, expectedRunVersion: run.version, expectedSubjectHash: subject.subjectHash,
+      entryId: dealDesk.id, category: dealDesk.category, authority: 'deal_desk' as const, actorId: 'USR-5005',
+      action: 'approve_unchanged' as const, idempotencyKey: 'unchanged-before-edit'
+    };
+    await system.decide.execute(unchanged);
+    const current = system.memory.runs.get(runId); if (current === undefined) throw new Error('missing current run');
+    await system.decide.execute({
+      runId, approvalSubjectId: subject.id, expectedRunVersion: current.version, expectedSubjectHash: subject.subjectHash,
+      entryId: salesLeader.id, category: salesLeader.category, authority: 'sales_leader', actorId: 'USR-5008',
+      action: 'edit_and_approve', rationale: 'Apply reviewed wording.', editedPayload: brief('Approved wording'),
+      idempotencyKey: 'edit-after-unchanged'
+    });
+    const replay = await system.decide.execute(unchanged);
+    expect(replay.approvalSubjectId).toBe(subject.id);
+    expect(replay.entryId).toBe(dealDesk.id);
+  });
+
+  it('replays a rejection on its rejected subject after regeneration supersedes it', async () => {
+    const system = harness(); system.services.policyByOpportunity = {
+      'OPP-1003': { ...safePolicy, discountPercent: 12 }
+    };
+    const runId = await startRun(system, 'OPP-1003'); await system.drain();
+    const subject = await system.memory.getApprovalSubject({ runId }); const run = system.memory.runs.get(runId);
+    const entry = subject?.entries[0];
+    if (subject === undefined || run === undefined || entry === undefined) throw new Error('missing approval state');
+    const rejection = {
+      runId, approvalSubjectId: subject.id, expectedRunVersion: run.version, expectedSubjectHash: subject.subjectHash,
+      entryId: entry.id, category: entry.category, authority: 'deal_desk' as const, actorId: 'USR-5005',
+      action: 'reject' as const, rationale: 'Reject this snapshot.', idempotencyKey: 'reject-before-regeneration'
+    };
+    await system.decide.execute(rejection);
+    await system.regenerate.execute({ runId, requestedBy: 'USR-5003', idempotencyKey: 'regenerate-rejected' });
+    await system.drain();
+    const replay = await system.decide.execute(rejection);
+    expect(replay.status).toBe('rejected');
+    expect(replay.approvalSubjectId).toBe(subject.id);
+    expect(replay.entryId).toBe(entry.id);
   });
 
   it('recomputes edited policy triggers and requires a fresh legal approval', async () => {

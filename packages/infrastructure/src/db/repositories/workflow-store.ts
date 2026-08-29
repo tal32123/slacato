@@ -221,7 +221,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     if (decision === undefined) return undefined;
     if (decision.request_hash !== input.requestHash) throw new DomainConflictError('Decision idempotency key conflicts with another decision');
     const run = await runById(this.database.sql, decision.run_id); if (run === undefined) throw new DomainNotFoundError('run');
-    if (decision.superseded_by_subject_id !== null) {
+    if (decision.action === 'edit_and_approve' && decision.superseded_by_subject_id !== null) {
       return {
         run: asRun(run), approvalSubjectId: decision.superseded_by_subject_id, entryId: decision.entry_id,
         approvedSubjectHash: decision.approved_subject_hash, quorumSatisfied: false, rejected: false
