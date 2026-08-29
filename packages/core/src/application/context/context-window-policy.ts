@@ -23,6 +23,10 @@ function estimateTokens(content: string): number { return Math.ceil(content.leng
 function messageTokens(messages: readonly ModelMessage[]): number { return messages.reduce((sum, message) => sum + estimateTokens(message.content), 0); }
 function takeTokens(content: string, tokenLimit: number): string { return content.slice(0, Math.max(0, tokenLimit * CHARS_PER_TOKEN)); }
 function copy(message: ModelMessage): ModelMessage { return { role: message.role, content: message.content }; }
+function isRepairFeedback(message: ModelMessage): boolean {
+  return message.content.includes('BEGIN_UNTRUSTED_INVALID_OUTPUT')
+    && message.content.includes('END_UNTRUSTED_INVALID_OUTPUT');
+}
 
 function requireInvariant(label: string, content: string, budget: number): void {
   if (estimateTokens(content) > budget) throw new ContextBudgetError(`${label} invariant exceeds its section budget`);
@@ -112,22 +116,29 @@ export class ContextWindowPolicy {
     const invariants = prepared.invariantMessages.map(copy);
     const invariantTokens = messageTokens(invariants);
     if (invariantTokens > availableTokens) throw new ContextBudgetError('Required context invariants exceed available input capacity');
-    let remainingTokens = availableTokens - invariantTokens;
+    const supplementalTokens = messageTokens(supplemental);
+    if (supplementalTokens > availableTokens - invariantTokens) throw new ContextBudgetError('Complete repair feedback exceeds available input capacity');
+    let remainingTokens = availableTokens - invariantTokens - supplementalTokens;
     const retained: ModelMessage[] = [];
-    for (const message of [...prepared.optionalMessages, ...supplemental].reverse()) {
+    for (const message of [...prepared.optionalMessages].reverse()) {
       if (remainingTokens <= 0) break;
       const content = takeTokens(message.content, remainingTokens);
       const tokens = estimateTokens(content);
       retained.unshift({ role: message.role, content });
       remainingTokens -= tokens;
     }
-    const result = [...invariants, ...retained];
+    const result = [...invariants, ...retained, ...supplemental.map(copy)];
     if (messageTokens(result) > availableTokens) throw new ContextBudgetError('Rebudgeted context exceeds available input capacity');
     return result;
   }
 
   public rebudgetRaw(messages: readonly ModelMessage[]): readonly ModelMessage[] {
-    let remainingTokens = this.settings.contextWindowTokens - this.settings.reservedOutputTokens;
+    const availableTokens = this.settings.contextWindowTokens - this.settings.reservedOutputTokens;
+    if (messages.some(isRepairFeedback)) {
+      if (messageTokens(messages) > availableTokens) throw new ContextBudgetError('Complete repair feedback exceeds available input capacity');
+      return messages.map(copy);
+    }
+    let remainingTokens = availableTokens;
     const retained: ModelMessage[] = [];
     for (const message of [...messages].reverse()) {
       if (remainingTokens <= 0) break;

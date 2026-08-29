@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 import {
   createBudgetedModelGateway,
+  ContextWindowPolicy,
   ModelGatewayTransportError,
   RunBudgetLedger,
   type GenerateObjectRequest,
@@ -242,6 +243,28 @@ describe('BudgetedModelGateway', () => {
     expect(requests[1]).toContain('stakeholders.0.role');
     expect(requests[1]).toContain(failedOutput);
     expect(requests[1]).toContain('END_OF_FAILED_OUTPUT');
+  });
+
+  it('fails explicitly instead of truncating repair feedback that cannot fit the context window', async () => {
+    let calls = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: true },
+      async generate() {
+        calls += 1;
+        return { text: 'x'.repeat(800), output: { stakeholders: [{ role: 'buyer' }] }, usage: { outputTokens: 10 } };
+      }
+    };
+    const policy = new ContextWindowPolicy({
+      contextWindowTokens: 128,
+      reservedOutputTokens: 32,
+      sectionTokenBudgets: { instructions: 16, currentTask: 16, evidence: 16, artifacts: 16, history: 16 }
+    });
+
+    await expect(createTestGateway(transport, policy).generateObject({
+      schema, messages: [{ role: 'user', content: 'Extract.' }], operation: 'oversized-native-repair',
+      limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 200 }
+    })).rejects.toThrow('Complete repair feedback exceeds available input capacity');
+    expect(calls).toBe(1);
   });
 
   it('enforces a shared budget across independent specialist calls', async () => {
