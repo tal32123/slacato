@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected an ISO date');
+const isCalendarIsoDate = (value: string): boolean => {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
+export const isoDateSchema = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected an ISO date')
+  .refine(isCalendarIsoDate, 'Expected a calendar-valid ISO date');
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const runStatusSchema = z.enum([
   'created', 'retrieving', 'specialists_running', 'synthesizing', 'validating',

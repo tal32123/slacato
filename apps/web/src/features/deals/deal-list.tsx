@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatDealAmount } from './deal-format';
 
 export function DealList({ deals }: Readonly<{ deals: readonly DealListItem[] }>): React.JSX.Element {
   if (deals.length === 0) return (
@@ -11,6 +12,7 @@ export function DealList({ deals }: Readonly<{ deals: readonly DealListItem[] }>
       <BriefcaseBusiness aria-hidden="true" className="mx-auto size-9 text-muted-foreground" />
       <h2 id="empty-deals-title" className="mt-4 text-lg font-semibold">No authorized deals</h2>
       <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">This signed persona has no readable opportunities. The list does not reveal hidden deal names or counts.</p>
+      <Button asChild variant="outline" className="mt-5"><a href="#active-persona-control">Review persona access</a></Button>
     </section>
   );
 
@@ -39,9 +41,10 @@ export function DealList({ deals }: Readonly<{ deals: readonly DealListItem[] }>
 function DealRow({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Element {
   return (
     <TableRow>
-      <TableCell><strong className="block font-semibold">{deal.opportunityId}</strong><span className="block max-w-sm text-sm">{deal.opportunityName}</span><span className="block text-xs text-muted-foreground">{deal.accountName}</span></TableCell>
-      <TableCell>{deal.stage}</TableCell><TableCell>{deal.owner ?? 'Not recorded'}</TableCell>
-      <TableCell>{deal.closeDate ?? 'Not recorded'}</TableCell><TableCell>{amount(deal)}</TableCell>
+      <TableCell><strong className="block font-semibold">{deal.opportunityId}</strong><span className="block max-w-sm text-sm">{deal.opportunityName}</span><span className="block text-xs text-muted-foreground">{deal.accountName}</span><span className="mt-1 block text-xs text-muted-foreground">Access: {deal.restricted ? 'Restricted deal — authorized' : 'Standard deal'}</span></TableCell>
+      <TableCell>{deal.stage}<span className="mt-1 block text-xs text-muted-foreground">Probability: {deal.probability === null ? 'Not recorded' : `${deal.probability}%`}</span></TableCell>
+      <TableCell>{deal.owner ?? 'Not recorded'}<span className="mt-1 block text-xs text-muted-foreground">Latest run: {deal.latestRun === null ? 'No run yet' : `${deal.latestRun.status.replaceAll('_', ' ')} · ${new Date(deal.latestRun.updatedAt).toLocaleString()}`}</span></TableCell>
+      <TableCell>{deal.closeDate ?? 'Not recorded'}</TableCell><TableCell>{formatDealAmount(deal)}</TableCell>
       <TableCell><StatusBadge status={deal.riskLevel === 'high' ? 'attention' : deal.riskLevel === 'low' ? 'ready' : 'readonly'} label={`${title(deal.riskLevel)} risk`} /></TableCell>
       <TableCell className="text-right"><Button asChild variant="outline"><Link to={`/deals/${deal.opportunityId}`} aria-label={`Open ${deal.opportunityId} workspace`}>Open<ArrowRight aria-hidden="true" /></Link></Button></TableCell>
     </TableRow>
@@ -51,7 +54,7 @@ function DealRow({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Element 
 function DealRecord({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Element {
   const facts = [
     ['Opportunity', deal.opportunityName], ['Account', deal.accountName], ['Stage', deal.stage], ['Owner', deal.owner ?? 'Not recorded'],
-    ['Close date', deal.closeDate ?? 'Not recorded'], ['ACV', amount(deal)], ['Probability', deal.probability === null ? 'Not recorded' : `${deal.probability}%`],
+    ['Close date', deal.closeDate ?? 'Not recorded'], ['ACV', formatDealAmount(deal)], ['Probability', deal.probability === null ? 'Not recorded' : `${deal.probability}%`],
     ['Risk', `${title(deal.riskLevel)} risk`], ['Latest run', deal.latestRun === null ? 'No run yet' : `${deal.latestRun.status.replaceAll('_', ' ')} · ${new Date(deal.latestRun.updatedAt).toLocaleString()}`],
     ['Access', deal.restricted ? 'Restricted deal — authorized' : 'Standard deal']
   ] as const;
@@ -64,8 +67,4 @@ function DealRecord({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Eleme
   );
 }
 
-function amount(deal: DealListItem): string {
-  if (deal.amount === null) return 'Not recorded';
-  return deal.currency === null ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(deal.amount) : new Intl.NumberFormat('en-US', { style: 'currency', currency: deal.currency, maximumFractionDigits: 0 }).format(deal.amount);
-}
 function title(value: string): string { return `${value.charAt(0).toUpperCase()}${value.slice(1)}`; }

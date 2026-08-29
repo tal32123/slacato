@@ -34,19 +34,16 @@ export type EvidenceRow = Readonly<{
 export type EvidenceCategory = 'opportunity' | 'stakeholders' | 'supplemental';
 
 export type EvidenceScope = Readonly<{
+  personaId: string;
   opportunityId: string;
   accountId: string;
-  sourceTypes: readonly string[];
-  canViewSensitivePricing: boolean;
-  canViewRestrictedEvidence: boolean;
 }>;
 
 export interface DealQueryRepository {
   listAuthorizedDeals(
+    personaId: string,
     accountIds: readonly string[],
-    restrictedAccountIds: readonly string[],
-    salesforceAccountIds: readonly string[],
-    restrictedSalesforceAccountIds: readonly string[]
+    restrictedAccountIds: readonly string[]
   ): Promise<readonly AuthorizedDealRow[]>;
   findAuthorizedDeal(opportunityId: string, accountIds: readonly string[], restrictedAccountIds: readonly string[]): Promise<AuthorizedDealRow | undefined>;
   findLatestRun(opportunityId: string): Promise<LatestRunRow | undefined>;

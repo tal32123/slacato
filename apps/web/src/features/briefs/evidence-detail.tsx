@@ -20,6 +20,12 @@ export function EvidenceDetail({ evidence, desktop, onClose }: Readonly<{
       ref={desktopPanel}
       tabIndex={-1}
       aria-label="Evidence detail"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          onClose();
+        }
+      }}
       className="sticky top-24 max-h-[calc(100dvh-7rem)] w-[clamp(360px,28vw,440px)] self-start overflow-y-auto rounded-xl border bg-card shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <EvidenceHeader evidence={evidence} onClose={onClose} />
@@ -32,12 +38,13 @@ export function EvidenceDetail({ evidence, desktop, onClose }: Readonly<{
 
 function ModalEvidence({ evidence, onClose }: Readonly<{ evidence: EvidenceDetailView; onClose: () => void }>): React.JSX.Element {
   useEffect(() => {
-    const main = document.getElementById('main-content');
+    const protectedShell = document.querySelector('[data-protected-app-shell]');
+    const previousInert = protectedShell instanceof HTMLElement ? protectedShell.inert : false;
     const previousOverflow = document.body.style.overflow;
-    if (main instanceof HTMLElement) main.inert = true;
+    if (protectedShell instanceof HTMLElement) protectedShell.inert = true;
     document.body.style.overflow = 'hidden';
     return () => {
-      if (main instanceof HTMLElement) main.inert = false;
+      if (protectedShell instanceof HTMLElement) protectedShell.inert = previousInert;
       document.body.style.overflow = previousOverflow;
     };
   }, []);

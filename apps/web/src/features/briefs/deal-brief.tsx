@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatDealAmount } from '@/features/deals/deal-format';
 
 const sectionOrder = [
   'dealSnapshot', 'executiveSummary', 'buyerGoalsAndBusinessDrivers', 'stakeholderMap', 'negotiationState',
@@ -28,7 +29,7 @@ export function DealBrief({ workspace, selectedEvidenceId, onEvidence }: Readonl
       </header>
 
       <section className="grid gap-3 border-b py-6 sm:grid-cols-2 xl:grid-cols-4" aria-label="Deal metrics">
-        <Metric icon={CircleDollarSign} label="Annual contract value" value={deal.amount === null ? 'Not recorded' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(deal.amount)} />
+        <Metric icon={CircleDollarSign} label="Annual contract value" value={formatDealAmount(deal)} />
         <Metric icon={CalendarDays} label="Close date" value={deal.closeDate ?? 'Not recorded'} />
         <Metric icon={Gauge} label="Stage and risk" value={`${deal.stage} · ${title(deal.riskLevel)} risk`} />
         <Metric icon={UserRound} label="Owner and latest run" value={`${deal.owner ?? 'Owner not recorded'} · ${deal.latestRun === null ? 'No run yet' : deal.latestRun.status.replaceAll('_', ' ')}`} />
@@ -66,14 +67,14 @@ function CitationControls({ citationIds, evidence, selectedEvidenceId, onEvidenc
 }>): React.JSX.Element | null {
   const citations = citationIds.map((id) => evidence.get(id)).filter((item): item is DealWorkspaceView['evidence'][number] => item !== undefined);
   if (citations.length === 0) return null;
-  return <div className="mt-5 flex flex-wrap gap-2" aria-label="Section citations">{citations.map((citation) => (
-    <Button key={citation.id} type="button" variant={selectedEvidenceId === citation.id ? 'secondary' : 'outline'} className="h-auto min-h-11 max-w-full justify-start whitespace-normal break-words text-left text-xs" aria-label={`Open evidence: ${citation.citationLabel}`} aria-pressed={selectedEvidenceId === citation.id} onClick={(event) => onEvidence(citation.id, event.currentTarget)}>{citation.citationLabel}</Button>
-  ))}</div>;
+  return <ul className="mt-5 flex flex-wrap gap-2" aria-label="Section citations">{citations.map((citation) => (
+    <li key={citation.id} className="max-w-full"><Button type="button" variant={selectedEvidenceId === citation.id ? 'secondary' : 'outline'} className="h-auto min-h-11 max-w-full justify-start whitespace-normal break-words text-left text-xs" aria-label={`Open evidence: ${citation.citationLabel}`} aria-pressed={selectedEvidenceId === citation.id} onClick={(event) => onEvidence(citation.id, event.currentTarget)}>{citation.citationLabel}</Button></li>
+  ))}</ul>;
 }
 
 function Stakeholders({ stakeholders }: Readonly<{ stakeholders: readonly StakeholderView[] }>): React.JSX.Element {
   if (stakeholders.length === 0) return <p className="mt-5 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No authorized stakeholder records are available.</p>;
-  return <div className="mt-6"><div className="hidden md:block"><Table aria-label="Stakeholders"><TableCaption>Complete authorized stakeholder records.</TableCaption><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Role</TableHead><TableHead>Influence</TableHead><TableHead>Relationship</TableHead><TableHead>Concerns</TableHead></TableRow></TableHeader><TableBody>{stakeholders.map((stakeholder) => <TableRow key={stakeholder.name}><TableCell><strong>{stakeholder.name}</strong><span className="block text-xs text-muted-foreground">{stakeholder.title ?? 'Title not recorded'}</span></TableCell><TableCell>{stakeholder.role}</TableCell><TableCell>{stakeholder.influence}</TableCell><TableCell>{stakeholder.relationship}</TableCell><TableCell className="max-w-sm">{stakeholder.concerns.join(' ') || 'None recorded'}</TableCell></TableRow>)}</TableBody></Table></div><ul className="grid gap-3 md:hidden" aria-label="Stakeholders">{stakeholders.map((stakeholder) => <li key={stakeholder.name} className="rounded-lg border p-4"><strong>{stakeholder.name}</strong><dl className="mt-3 grid gap-2 text-sm"><Fact label="Title" value={stakeholder.title ?? 'Not recorded'} /><Fact label="Role" value={stakeholder.role} /><Fact label="Influence" value={stakeholder.influence} /><Fact label="Relationship" value={stakeholder.relationship} /><Fact label="Goals" value={stakeholder.goals.join(' ') || 'None recorded'} /><Fact label="Concerns" value={stakeholder.concerns.join(' ') || 'None recorded'} /></dl></li>)}</ul></div>;
+  return <div className="mt-6"><div className="hidden md:block overflow-x-auto"><Table aria-label="Stakeholders"><TableCaption>Complete authorized stakeholder records.</TableCaption><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Role</TableHead><TableHead>Influence</TableHead><TableHead>Relationship</TableHead><TableHead>Goals</TableHead><TableHead>Concerns</TableHead></TableRow></TableHeader><TableBody>{stakeholders.map((stakeholder) => <TableRow key={stakeholder.name}><TableCell><strong>{stakeholder.name}</strong><span className="block text-xs text-muted-foreground">{stakeholder.title ?? 'Title not recorded'}</span></TableCell><TableCell>{stakeholder.role}</TableCell><TableCell>{stakeholder.influence}</TableCell><TableCell>{stakeholder.relationship}</TableCell><TableCell className="max-w-xs whitespace-normal">{stakeholder.goals.join(' ') || 'None recorded'}</TableCell><TableCell className="max-w-xs whitespace-normal">{stakeholder.concerns.join(' ') || 'None recorded'}</TableCell></TableRow>)}</TableBody></Table></div><ul className="grid gap-3 md:hidden" aria-label="Stakeholders">{stakeholders.map((stakeholder) => <li key={stakeholder.name} className="rounded-lg border p-4"><strong>{stakeholder.name}</strong><dl className="mt-3 grid gap-2 text-sm"><Fact label="Title" value={stakeholder.title ?? 'Not recorded'} /><Fact label="Role" value={stakeholder.role} /><Fact label="Influence" value={stakeholder.influence} /><Fact label="Relationship" value={stakeholder.relationship} /><Fact label="Goals" value={stakeholder.goals.join(' ') || 'None recorded'} /><Fact label="Concerns" value={stakeholder.concerns.join(' ') || 'None recorded'} /></dl></li>)}</ul></div>;
 }
 
 function Actions({ actions }: Readonly<{ actions: readonly RecommendedActionView[] }>): React.JSX.Element {

@@ -12,10 +12,9 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
   public constructor(private readonly database: DatabaseClient) {}
 
   public async listAuthorizedDeals(
+    personaId: string,
     accountIds: readonly string[],
-    restrictedAccountIds: readonly string[],
-    salesforceAccountIds: readonly string[],
-    restrictedSalesforceAccountIds: readonly string[]
+    restrictedAccountIds: readonly string[]
   ): Promise<readonly AuthorizedDealRow[]> {
     if (accountIds.length === 0) return [];
     return this.database.sql<AuthorizedDealRow[]>`
@@ -30,8 +29,15 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
         where evidence.opportunity_id = opportunity.id
           and evidence.source_type = 'salesforce'
           and evidence.source_locator like 'salesforce/opportunities.tsv#%'
-          and opportunity.account_id = any(${salesforceAccountIds}::text[])
-          and (opportunity.restricted = false or opportunity.account_id = any(${restrictedSalesforceAccountIds}::text[]))
+          and exists (
+            select 1 from permission_grants source_grant
+            where source_grant.persona_id = ${personaId}
+              and source_grant.account_id = opportunity.account_id
+              and source_grant.source_type = 'salesforce'
+              and source_grant.can_read = true
+              and (evidence.sensitivity <> 'restricted' or source_grant.can_read_restricted = true)
+              and (opportunity.restricted = false or source_grant.can_read_restricted = true)
+          )
         order by evidence.id limit 1
       ) opportunity_record on true
       left join lateral (
@@ -75,18 +81,25 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
   }
 
   public async listEvidence(scope: EvidenceScope, category: EvidenceCategory): Promise<readonly EvidenceRow[]> {
-    if (scope.sourceTypes.length === 0) return [];
     return this.database.sql<EvidenceRow[]>`
       select evidence.id, evidence.source_type, evidence.sensitivity, evidence.event_date::text,
         evidence.source_locator, evidence.content, evidence.created_at
       from evidence_versions evidence
       where evidence.opportunity_id = ${scope.opportunityId}
         and evidence.account_id = ${scope.accountId}
-        and evidence.source_type = any(${scope.sourceTypes}::text[])
-        and (
-          evidence.sensitivity <> 'restricted'
-          or (evidence.source_type = 'pricing' and ${scope.canViewSensitivePricing} = true)
-          or (evidence.source_type <> 'pricing' and ${scope.canViewRestrictedEvidence} = true)
+        and evidence.source_locator is not null
+        and btrim(evidence.source_locator) <> ''
+        and exists (
+          select 1 from permission_grants source_grant
+          where source_grant.persona_id = ${scope.personaId}
+            and source_grant.account_id = evidence.account_id
+            and source_grant.source_type = evidence.source_type
+            and source_grant.can_read = true
+            and (
+              evidence.sensitivity <> 'restricted'
+              or (evidence.source_type = 'pricing' and source_grant.sensitive_pricing = true)
+              or (evidence.source_type <> 'pricing' and source_grant.can_read_restricted = true)
+            )
         )
         and (
           (${category} = 'opportunity' and evidence.source_type = 'salesforce' and evidence.source_locator like 'salesforce/opportunities.tsv#%')

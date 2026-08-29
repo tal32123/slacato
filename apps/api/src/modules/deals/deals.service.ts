@@ -2,6 +2,7 @@ import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import {
   dealListItemSchema,
   dealWorkspaceViewSchema,
+  isoDateSchema,
   type BriefSectionView,
   type DealBriefView,
   type DealListItem,
@@ -41,10 +42,9 @@ export class DealsService {
   public async listAuthorizedDeals(session: DealQuerySession): Promise<DealListItem[]> {
     const access = readableAccounts(session.persona.grants);
     const rows = await this.options.repository.listAuthorizedDeals(
+      session.persona.userId,
       access.accountIds,
-      access.restrictedAccountIds,
-      access.salesforceAccountIds,
-      access.restrictedSalesforceAccountIds
+      access.restrictedAccountIds
     );
     return rows.map((row) => mapDeal(row, row.latest_run_status === null || row.latest_run_updated_at === null ? undefined : {
       status: row.latest_run_status,
@@ -57,17 +57,10 @@ export class DealsService {
     const target = await this.options.repository.findAuthorizedDeal(opportunityId, access.accountIds, access.restrictedAccountIds);
     if (target === undefined) this.forbidden();
 
-    const grants = session.persona.grants.filter((grant) =>
-      grant.accountId === target.account_id
-      && grant.canRead
-      && (!target.restricted || grant.canReadRestricted)
-    );
     const scope: EvidenceScope = {
+      personaId: session.persona.userId,
       opportunityId: target.opportunity_id,
-      accountId: target.account_id,
-      sourceTypes: [...new Set(grants.map((grant) => grant.sourceType))].sort(),
-      canViewSensitivePricing: grants.some((grant) => grant.sourceType === 'pricing' && grant.sensitivePricing),
-      canViewRestrictedEvidence: grants.some((grant) => grant.canReadRestricted)
+      accountId: target.account_id
     };
 
     const [latestRun, opportunityRows, stakeholderRows, supplementalRows] = await Promise.all([
@@ -76,11 +69,16 @@ export class DealsService {
       this.options.repository.listEvidence(scope, 'stakeholders'),
       this.options.repository.listEvidence(scope, 'supplemental')
     ]);
-    const evidence = [...opportunityRows, ...stakeholderRows, ...supplementalRows].map(mapEvidence);
-    const opportunityRecord = opportunityRows[0];
+    const opportunityEvidence = opportunityRows.map(mapEvidence).filter(isDefined);
+    const stakeholderEvidence = stakeholderRows.map(mapEvidence).filter(isDefined);
+    const supplementalEvidence = supplementalRows.map(mapEvidence).filter(isDefined);
+    const evidence = [...opportunityEvidence, ...stakeholderEvidence, ...supplementalEvidence];
+    const includedEvidenceIds = new Set(evidence.map((item) => item.id));
+    const provenancedStakeholderRows = stakeholderRows.filter((row) => includedEvidenceIds.has(row.id));
+    const opportunityRecord = opportunityRows.find((row) => includedEvidenceIds.has(row.id));
     const fields = parseRecord(opportunityRecord?.content ?? '');
     const deal = mapDeal({ ...target, record_content: opportunityRecord?.content ?? null }, latestRun);
-    const brief = buildBrief(deal, fields, stakeholderRows, evidence);
+    const brief = buildBrief(deal, fields, provenancedStakeholderRows, evidence);
 
     return dealWorkspaceViewSchema.parse({ sessionVersion: session.claims.version, deal, brief, evidence });
   }
@@ -93,16 +91,11 @@ export class DealsService {
 function readableAccounts(grants: readonly PermissionGrant[]): Readonly<{
   accountIds: readonly string[];
   restrictedAccountIds: readonly string[];
-  salesforceAccountIds: readonly string[];
-  restrictedSalesforceAccountIds: readonly string[];
 }> {
   const readable = grants.filter((grant) => grant.canRead);
-  const salesforce = readable.filter((grant) => grant.sourceType === 'salesforce');
   return {
     accountIds: [...new Set(readable.map((grant) => grant.accountId))].sort(),
-    restrictedAccountIds: [...new Set(readable.filter((grant) => grant.canReadRestricted).map((grant) => grant.accountId))].sort(),
-    salesforceAccountIds: [...new Set(salesforce.map((grant) => grant.accountId))].sort(),
-    restrictedSalesforceAccountIds: [...new Set(salesforce.filter((grant) => grant.canReadRestricted).map((grant) => grant.accountId))].sort()
+    restrictedAccountIds: [...new Set(readable.filter((grant) => grant.canReadRestricted).map((grant) => grant.accountId))].sort()
   };
 }
 
@@ -116,7 +109,7 @@ function mapDeal(row: AuthorizedDealRow, latestRun: LatestRunRow | undefined): D
     owner: fields.owner ?? null,
     closeDate: isoDateOrNull(fields.closeDate),
     amount: numberOrNull(fields.acv),
-    currency: null,
+    currency: currencyOrNull(fields.currency ?? fields.currencyIsoCode),
     probability: numberOrNull(fields.probability),
     riskLevel: riskLevel(fields.riskLevel),
     restricted: row.restricted,
@@ -125,10 +118,15 @@ function mapDeal(row: AuthorizedDealRow, latestRun: LatestRunRow | undefined): D
   });
 }
 
-function mapEvidence(row: EvidenceRow): EvidenceDetail {
+function mapEvidence(row: EvidenceRow): EvidenceDetail | undefined {
+  const locator = row.source_locator?.trim();
+  if (!locator) return undefined;
   const fields = parseRecord(row.content);
-  const sourcePath = (row.source_locator ?? 'source/unavailable').split('#', 1)[0] ?? 'source/unavailable';
-  const identity = stableIdentity(sourcePath, fields, row.source_locator, row.id);
+  const sourcePath = locator.split('#', 1)[0];
+  if (!sourcePath) return undefined;
+  const identity = stableIdentity(sourcePath, fields, locator);
+  if (identity === undefined || !identity.key || !identity.id) return undefined;
+  const eventDate = isoDateOrNull(row.event_date ?? undefined);
   return {
     id: row.id,
     sourceType: row.source_type as EvidenceDetail['sourceType'],
@@ -137,20 +135,24 @@ function mapEvidence(row: EvidenceRow): EvidenceDetail {
     stableId: identity.id,
     citationLabel: `source=${sourcePath}, ${identity.key}=${identity.id}`,
     chunkId: row.id,
-    capturedAt: row.event_date === null ? toIsoDateTime(row.created_at) : `${row.event_date}T00:00:00.000Z`,
+    capturedAt: eventDate === null ? toIsoDateTime(row.created_at) : `${eventDate}T00:00:00.000Z`,
     content: row.content
   };
 }
 
-function stableIdentity(sourcePath: string, fields: Readonly<Record<string, string>>, locator: string | null, fallback: string): Readonly<{ key: string; id: string }> {
-  if (sourcePath.endsWith('/opportunities.tsv')) return { key: 'opportunity_id', id: fields.opportunityId ?? locatorId(locator) ?? fallback };
-  if (sourcePath.endsWith('/accounts.tsv')) return { key: 'account_id', id: fields.accountId ?? locatorId(locator) ?? fallback };
-  if (sourcePath.endsWith('/contacts.tsv')) return { key: 'contact_id', id: fields.contactId ?? locatorId(locator) ?? fallback };
-  if (sourcePath.includes('/gong_call_summaries.tsv') || sourcePath.includes('/transcripts/')) return { key: 'call_id', id: fields.callId ?? callIdFromPath(sourcePath) ?? locatorId(locator) ?? fallback };
-  if (sourcePath.endsWith('/pricing_notes.tsv')) return { key: 'pricing_note_id', id: fields.pricingNoteId ?? locatorId(locator) ?? fallback };
-  if (sourcePath.endsWith('/account_team_updates.tsv')) return { key: 'update_id', id: fields.updateId ?? locatorId(locator) ?? fallback };
+function stableIdentity(sourcePath: string, fields: Readonly<Record<string, string>>, locator: string): Readonly<{ key: string; id: string }> | undefined {
+  if (sourcePath.endsWith('/opportunities.tsv')) return identity('opportunity_id', fields.opportunityId ?? locatorId(locator));
+  if (sourcePath.endsWith('/accounts.tsv')) return identity('account_id', fields.accountId ?? locatorId(locator));
+  if (sourcePath.endsWith('/contacts.tsv')) return identity('contact_id', fields.contactId ?? locatorId(locator));
+  if (sourcePath.includes('/gong_call_summaries.tsv') || sourcePath.includes('/transcripts/')) return identity('call_id', fields.callId ?? callIdFromPath(sourcePath) ?? locatorId(locator));
+  if (sourcePath.endsWith('/pricing_notes.tsv')) return identity('pricing_note_id', fields.pricingNoteId ?? locatorId(locator));
+  if (sourcePath.endsWith('/account_team_updates.tsv')) return identity('update_id', fields.updateId ?? locatorId(locator));
   if (sourcePath.endsWith('/deal_desk_policy.md')) return { key: 'policy_id', id: 'deal-desk-policy' };
-  return { key: 'record_id', id: locatorId(locator) ?? fallback };
+  return identity('record_id', locatorId(locator));
+}
+
+function identity(key: string, id: string | undefined): Readonly<{ key: string; id: string }> | undefined {
+  return id === undefined || id.trim().length === 0 ? undefined : { key, id: id.trim() };
 }
 
 function buildBrief(deal: DealListItem, fields: Readonly<Record<string, string>>, stakeholderRows: readonly EvidenceRow[], evidence: readonly EvidenceDetail[]): DealBriefView {
@@ -158,7 +160,7 @@ function buildBrief(deal: DealListItem, fields: Readonly<Record<string, string>>
   const opportunity = evidence.find((item) => item.sourcePath.endsWith('/opportunities.tsv'));
   const latestConversation = evidence.filter((item) => item.sourceType === 'gong_summary').sort((left, right) => right.capturedAt.localeCompare(left.capturedAt))[0];
   const slack = evidence.filter((item) => item.sourceType === 'slack');
-  const gapUpdate = slack.find((item) => /not yet|does not contain|no confirmed|missing|incomplete/i.test(item.content));
+  const gapUpdate = slack.find(isExplicitUnresolvedUpdate);
   const alignmentUpdate = slack.find((item) => item.id !== gapUpdate?.id) ?? slack[0];
   const conversationFields = parseRecord(latestConversation?.content ?? '');
   const gapFields = parseRecord(gapUpdate?.content ?? '');
@@ -185,7 +187,7 @@ function buildBrief(deal: DealListItem, fields: Readonly<Record<string, string>>
     negotiationState: section('negotiationState', [conversationFields.risks ?? `${deal.riskLevel} risk is recorded for the opportunity.`, gapFields.updateText ?? 'No later authorized account-team change is recorded.'], [fields.nextStep].filter(isPresent), [...conversationCitation, ...gapCitation], gapUpdate !== undefined),
     recommendedNextActions: section('recommendedNextActions', ['Complete the source-backed actions before treating the brief as ready for external use.'], actions.map((action) => action.action), actions.flatMap((action) => action.citationIds), actions.some((action) => action.accountTeamUpdateImpact)),
     missingInformation: section('missingInformation', [gapFields.updateText ?? 'No explicit authorized account-team information gap is recorded.'], gapUpdate === undefined ? [] : ['Confirm this account-team gap with the named owner.'], gapCitation, gapUpdate !== undefined),
-    sourceEvidence: section('sourceEvidence', [`${evidence.length} authorized source records support this workspace. Citation controls open representative immutable record identifiers.`], representativeEvidence.map((item) => item.citationLabel), representativeEvidence.map((item) => item.id)),
+    sourceEvidence: section('sourceEvidence', [`${evidence.length} authorized source records support this workspace. Citation controls open representative immutable record identifiers.`], [], representativeEvidence.map((item) => item.id)),
     confidenceAndReviewWarnings: section('confidenceAndReviewWarnings', [`Overall source-backed confidence is ${Math.round(confidenceForRisk(deal.riskLevel) * 100)}%.`], warnings.map((warning) => warning.message), warnings.flatMap((warning) => warning.citationIds), warnings.some((warning) => warning.accountTeamUpdateImpact))
   };
 
@@ -259,8 +261,28 @@ function ids(item: EvidenceDetail | undefined): string[] { return item === undef
 function isPresent(value: string | undefined): value is string { return value !== undefined && value.length > 0; }
 function splitList(value: string | undefined): string[] { return value?.split(',').map((item) => item.trim()).filter(Boolean) ?? []; }
 function numberOrNull(value: string | undefined): number | null { const parsed = value === undefined ? Number.NaN : Number(value); return Number.isFinite(parsed) ? parsed : null; }
-function isoDateOrNull(value: string | undefined): string | null { return value !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null; }
-function dateInside(value: string | undefined): string | null { return value?.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0] ?? null; }
+function isoDateOrNull(value: string | undefined): string | null { return value !== undefined && isoDateSchema.safeParse(value).success ? value : null; }
+function dateInside(value: string | undefined): string | null {
+  const candidate = value?.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0];
+  return candidate !== undefined && isoDateSchema.safeParse(candidate).success ? candidate : null;
+}
+function currencyOrNull(value: string | undefined): string | null {
+  const candidate = value?.trim().toUpperCase();
+  return candidate !== undefined && /^[A-Z]{3}$/.test(candidate) ? candidate : null;
+}
+function isDefined<T>(value: T | undefined): value is T { return value !== undefined; }
+function isExplicitUnresolvedUpdate(item: EvidenceDetail): boolean {
+  const fields = parseRecord(item.content);
+  if (fields.updateStatus !== undefined) return fields.updateStatus.trim().toLowerCase() === 'unresolved';
+  const text = fields.updateText ?? '';
+  if (/\b(?:is now|has now been|has been)\b[^.]*\b(?:confirmed|resolved|completed|approved|provided)\b/i.test(text)) return false;
+  return [
+    /\bhas not yet been confirmed\b/i,
+    /\bno confirmed\b[^.]*\b(?:yet|incomplete)\b/i,
+    /\bdoes not contain\b[^.]*\b(?:missing input|information gap)\b/i,
+    /\btreat this as unresolved\b/i
+  ].some((pattern) => pattern.test(text));
+}
 function riskLevel(value: string | undefined): DealListItem['riskLevel'] { return value === 'low' || value === 'medium' || value === 'high' ? value : 'unknown'; }
 function confidenceForRisk(value: DealListItem['riskLevel']): number { return value === 'low' ? 0.82 : value === 'medium' ? 0.7 : value === 'high' ? 0.55 : 0.5; }
 function toIsoDateTime(value: Date | string): string { return (value instanceof Date ? value : new Date(value)).toISOString(); }

@@ -25,7 +25,7 @@ export function AppShell({ session, onLogout }: Readonly<{
   }, []);
 
   return (
-    <div className="min-h-dvh bg-background lg:grid lg:grid-cols-[auto_minmax(0,1fr)]">
+    <div data-protected-app-shell className="min-h-dvh bg-background lg:grid lg:grid-cols-[auto_minmax(0,1fr)]">
       <a
         href="#main-content"
         className="fixed left-4 top-4 z-50 -translate-y-24 rounded-md bg-primary px-4 py-3 font-medium text-primary-foreground transition-transform focus:translate-y-0"
@@ -103,7 +103,7 @@ export function AppShell({ session, onLogout }: Readonly<{
               <Link to="/deals" className="inline-flex min-h-11 min-w-11 items-center text-base font-semibold tracking-tight lg:hidden">SlaCato</Link>
               <p className="hidden text-sm text-muted-foreground sm:block lg:block">Negotiation preparation, grounded in authorized evidence</p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div id="active-persona-control" className="flex shrink-0 items-center gap-2">
               <span className="hidden sm:inline-flex"><StatusBadge status="ready" label="Signed session" /></span>
               <PersonaMenu session={session} onLogout={onLogout} />
             </div>

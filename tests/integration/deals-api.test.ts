@@ -39,13 +39,16 @@ describe('authorized deal API projection', () => {
     seedDatabase = postgres(databaseUrl, { max: 1 });
     await seedDatabase`insert into personas (id, display_name, role, source_commit) values
       ('USR-91201', 'Gong Only', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
-      ('USR-91202', 'Mixed Restricted', 'Restricted Account Owner', ${CANONICAL_FIXTURE_COMMIT})`;
+      ('USR-91202', 'Mixed Restricted', 'Restricted Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
+      ('USR-91203', 'Mixed Standard', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT})`;
     await seedDatabase`insert into permission_grants
       (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
       values
       ('grant:USR-91201:ACC-2001:gong_summary', 'USR-91201', 'ACC-2001', 'gong_summary', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
       ('grant:USR-91202:ACC-2003:salesforce', 'USR-91202', 'ACC-2003', 'salesforce', true, true, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
-      ('grant:USR-91202:ACC-2003:slack', 'USR-91202', 'ACC-2003', 'slack', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT})`;
+      ('grant:USR-91202:ACC-2003:slack', 'USR-91202', 'ACC-2003', 'slack', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
+      ('grant:USR-91203:ACC-2001:salesforce', 'USR-91203', 'ACC-2001', 'salesforce', true, true, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
+      ('grant:USR-91203:ACC-2001:slack', 'USR-91203', 'ACC-2001', 'slack', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT})`;
     app = await createApiApplication({ environment: {
       ...process.env,
       NODE_ENV: 'test',
@@ -59,8 +62,8 @@ describe('authorized deal API projection', () => {
 
   afterAll(async () => {
     await app.close();
-    await seedDatabase`delete from permission_grants where persona_id in ('USR-91201', 'USR-91202')`;
-    await seedDatabase`delete from personas where id in ('USR-91201', 'USR-91202')`;
+    await seedDatabase`delete from permission_grants where persona_id in ('USR-91201', 'USR-91202', 'USR-91203')`;
+    await seedDatabase`delete from personas where id in ('USR-91201', 'USR-91202', 'USR-91203')`;
     await seedDatabase.end({ timeout: 1 });
   });
 
@@ -157,5 +160,64 @@ describe('authorized deal API projection', () => {
       expect.objectContaining({ sourceType: 'slack' })
     ]));
     expect(JSON.stringify(workspace.body)).not.toContain('account_team_updates.tsv');
+  });
+
+  it('authorizes restricted evidence against the matching source grant and requires real provenance', async () => {
+    await seedDatabase`insert into document_versions
+      (id, external_id, version, source_type, content_hash, content)
+      values
+      ('task12-doc-restricted-slack', 'task12-doc-restricted-slack', 1, 'slack', 'task12-doc-restricted-slack', 'restricted Slack')
+      on conflict do nothing`;
+    await seedDatabase`insert into evidence_versions
+      (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content,
+        source_locator, reliability_class, classification_reason, policy_hash)
+      values ('task12:restricted-slack:0', 'task12-doc-restricted-slack', 'ACC-2001', 'OPP-1001', 0, 'slack', 'restricted',
+        'task12-restricted-slack', 'updateId: SLK-TASK12-RESTRICTED\nupdateText: PRIVATE RESTRICTED SLACK ROW',
+        'slack/account_team_updates.tsv#SLK-TASK12-RESTRICTED#chunk-0', 'direct_conversation', 'task12_test', ${'a'.repeat(64)})
+      on conflict do nothing`;
+    const mixed = await authenticate(app, 'USR-91203');
+    const workspace = await mixed.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
+    expect(workspace.body.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceType: 'slack', stableId: 'SLK-1001-01' })
+    ]));
+    expect(JSON.stringify(workspace.body)).not.toContain('PRIVATE RESTRICTED SLACK ROW');
+
+    await seedDatabase`insert into document_versions
+      (id, external_id, version, source_type, content_hash, content)
+      values
+      ('task12-doc-null-provenance', 'task12-doc-null-provenance', 1, 'slack', 'task12-doc-null-provenance', 'legacy')
+      on conflict do nothing`;
+    await seedDatabase`insert into evidence_versions
+      (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content)
+      values ('slack:legacy-null-provenance:999', 'task12-doc-null-provenance', 'ACC-2001', 'OPP-1001', 0, 'slack', 'standard',
+        'task12-null-provenance', 'PRIVATE LEGACY ROW WITHOUT PROVENANCE')
+      on conflict do nothing`;
+    const maya = await authenticate(app, 'USR-5001');
+    const mayaWorkspace = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
+    expect(JSON.stringify(mayaWorkspace.body)).not.toContain('PRIVATE LEGACY ROW WITHOUT PROVENANCE');
+    expect(JSON.stringify(mayaWorkspace.body)).not.toContain('source/unavailable');
+  });
+
+  it('does not project restricted Salesforce evidence through a standard opportunity list', async () => {
+    await seedDatabase`insert into document_versions
+      (id, external_id, version, source_type, content_hash, content)
+      values
+      ('task12-doc-restricted-salesforce', 'task12-doc-restricted-salesforce', 1, 'salesforce', 'task12-doc-restricted-salesforce', 'restricted CRM')
+      on conflict do nothing`;
+    await seedDatabase`insert into evidence_versions
+      (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content,
+        source_locator, reliability_class, classification_reason, policy_hash)
+      values ('000-task12-restricted-salesforce', 'task12-doc-restricted-salesforce', 'ACC-2001', 'OPP-1001', 0, 'salesforce', 'restricted',
+        'task12-restricted-salesforce',
+        'opportunityId: OPP-1001\nstage: SECRET STAGE\nowner: SECRET OWNER\ncloseDate: 2026-12-31\nacv: 999999\nprobability: 99\nriskLevel: high',
+        'salesforce/opportunities.tsv#OPP-1001#task12-restricted', 'authoritative_system', 'task12_test', ${'b'.repeat(64)})
+      on conflict do nothing`;
+    const harper = await authenticate(app, 'USR-5007');
+    const list = await harper.get('/api/deals').set(browserHeaders).expect(200);
+    expect(list.body.deals).toEqual([expect.objectContaining({
+      opportunityId: 'OPP-1001', stage: '6.0 Order Review', owner: 'Maya Levin',
+      closeDate: '2026-05-17', amount: 4_217_500, probability: 78, riskLevel: 'medium'
+    })]);
+    expect(JSON.stringify(list.body)).not.toContain('SECRET');
   });
 });

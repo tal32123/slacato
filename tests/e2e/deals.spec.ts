@@ -41,6 +41,10 @@ test('lists only the signed persona authorized deals and opens the brief-first w
   await expect(deals.getByText('OPP-1001', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('OPP-1002')).toHaveCount(0);
   await expect(page.getByText('OPP-1003')).toHaveCount(0);
+  const desktopRow = deals.getByRole('row').filter({ hasText: 'OPP-1001' });
+  await expect(desktopRow).toContainText('Probability: 78%');
+  await expect(desktopRow).toContainText('Latest run: No run yet');
+  await expect(desktopRow).toContainText('Access: Standard deal');
 
   await page.getByRole('link', { name: /Open OPP-1001/ }).click();
   await expect(page).toHaveURL('/deals/OPP-1001');
@@ -53,11 +57,17 @@ test('lists only the signed persona authorized deals and opens the brief-first w
     await expect(page.getByRole('heading', { name: section, exact: true })).toBeVisible();
   }
   await expect(page.getByRole('table', { name: 'Stakeholders' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Goals' })).toBeVisible();
+  const elena = page.getByRole('table', { name: 'Stakeholders' }).getByRole('row').filter({ hasText: 'Elena Voss' });
+  await expect(elena).toContainText('None recorded');
+  await expect(elena).toContainText('Wants a clean renewal path');
   await expect(page.getByRole('table', { name: 'Recommended actions' })).toBeVisible();
   await expect(page.getByText('Account-team update impact').first()).toBeVisible();
   await expect(page.getByRole('button', {
     name: /source=slack\/account_team_updates\.tsv, update_id=SLK-1001-02/
   }).first()).toBeVisible();
+  const sourceEvidence = page.getByRole('heading', { name: 'Source Evidence', exact: true }).locator('..').locator('..');
+  await expect(sourceEvidence.getByText('source=slack/account_team_updates.tsv, update_id=SLK-1001-02', { exact: true })).toHaveCount(1);
   await expectNoHorizontalOverflow(page);
 
   const historyCitation = page.getByRole('button', {
@@ -70,7 +80,7 @@ test('lists only the signed persona authorized deals and opens the brief-first w
 });
 
 test('desktop evidence uses one non-modal complementary region with replace and back history', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1440, height: 600 });
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
 
   const first = page.getByRole('button', {
@@ -98,13 +108,20 @@ test('desktop evidence uses one non-modal complementary region with replace and 
   await expect(second).toHaveAttribute('aria-pressed', 'true');
   await expect(first).toHaveAttribute('aria-pressed', 'false');
   await expect(page).toHaveURL(/evidence=gong_summary%3ACALL-008%3Asummary%3A0/);
+  expect(await detail.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await detail.evaluate((element) => { element.scrollTop = 120; });
+  expect(await detail.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await detail.focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  expect(await detail.evaluate((element) => !element.contains(document.activeElement))).toBe(true);
 
   await page.goBack();
   await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toHaveCount(0);
   await expect(page).toHaveURL('/deals/OPP-1001');
 
   await openCitation(page, first);
-  await page.getByRole('button', { name: 'Close evidence detail' }).click();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toHaveCount(0);
   await expect(first).toBeFocused();
 });
@@ -126,8 +143,11 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
   await expect(sheet.getByText('Authorized source record and stable citation identifiers.')).toBeVisible();
   const sheetBox = await sheet.boundingBox();
   expect(sheetBox!.height).toBeGreaterThanOrEqual(840);
-  expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden');
-  await expect(page.locator('#main-content')).toHaveAttribute('inert', '');
+  const protectedShell = page.locator('[data-protected-app-shell]');
+  await expect(protectedShell).toHaveAttribute('inert', '');
+  for (const selector of ['header', '#main-content', 'nav[data-layout="mobile"]']) {
+    expect(await page.locator(selector).first().evaluate((element) => (element.closest('[data-protected-app-shell]') as HTMLElement | null)?.inert)).toBe(true);
+  }
 
   await page.keyboard.press('Tab');
   await expect(sheet.getByRole('button', { name: 'Close evidence detail' })).toBeFocused();
@@ -137,12 +157,29 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
   await expect(sheet).toHaveCount(0);
   await expect(citation).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+  await expect(protectedShell).not.toHaveAttribute('inert', '');
   await expectNoHorizontalOverflow(page);
+
+  await citation.click();
+  await page.getByRole('button', { name: 'Close evidence detail' }).click();
+  await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toHaveCount(0);
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+  await expect(protectedShell).not.toHaveAttribute('inert', '');
+
+  await protectedShell.evaluate((element) => { (element as HTMLElement).inert = true; });
+  await citation.evaluate((element) => { (element as HTMLButtonElement).click(); });
+  await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toHaveCount(0);
+  await expect(protectedShell).toHaveAttribute('inert', '');
+  await protectedShell.evaluate((element) => { (element as HTMLElement).inert = false; });
 
   await page.goto('/deals/OPP-1001?evidence=slack%3ASLK-1001-02%3A0');
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toHaveCount(0);
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+  await expect(protectedShell).not.toHaveAttribute('inert', '');
 
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations).toEqual([]);
@@ -156,4 +193,95 @@ test('uses a modal rather than shrinking the main column when a desktop-width vi
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
+});
+
+test('preserves complete responsive records at 320px and a short 200%-zoom equivalent', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await loginAs(page, 'Maya Levin');
+  await expect(page.getByRole('table', { name: 'Authorized deals' })).toHaveCount(0);
+  const dealRecord = page.getByRole('list', { name: 'Authorized deals' }).getByRole('listitem');
+  for (const value of ['Northstar Foods Cooperative - Global Access Renewal', '6.0 Order Review', 'Maya Levin', '2026-05-17', '4,217,500', '78%', 'Medium risk', 'No run yet', 'Standard deal']) {
+    await expect(dealRecord).toContainText(value);
+  }
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('link', { name: /Open OPP-1001/ }).click();
+  const stakeholder = page.getByRole('list', { name: 'Stakeholders' }).getByRole('listitem').filter({ hasText: 'Elena Voss' });
+  await expect(stakeholder).toContainText('Goals');
+  await expect(stakeholder).toContainText('None recorded');
+  await expect(stakeholder).toContainText('Wants a clean renewal path');
+  await expect(page.getByText('4,217,500', { exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 640, height: 320 });
+  const citation = page.getByRole('button', { name: /source=slack\/account_team_updates\.tsv, update_id=SLK-1001-02/ }).first();
+  await citation.click();
+  const sheet = page.getByRole('dialog', { name: 'Evidence detail' });
+  await expect(sheet).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box!.height).toBeGreaterThanOrEqual(316);
+  expect(await sheet.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto');
+  expect(await sheet.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await expectNoHorizontalOverflow(page);
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+});
+
+test('renders deterministic loading and safe error states at the production route boundary', async ({ page }) => {
+  await loginAs(page, 'Maya Levin');
+  await page.route('**/api/deals/OPP-1001', async (route) => {
+    const delay = Promise.withResolvers<void>();
+    setTimeout(delay.resolve, 350);
+    await delay.promise;
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'UNAVAILABLE', message: 'Unavailable' }) });
+  });
+  await page.getByRole('link', { name: /Open OPP-1001/ }).click();
+  await expect(page.getByRole('status', { name: 'Loading destination' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'This view could not be loaded' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test('renders safe empty list and workspace states with a persona recovery path', async ({ page, context }) => {
+  await loginAs(page, 'Maya Levin');
+  const sessionVersion = await page.evaluate(async () => {
+    const response = await fetch('/api/auth/session', { credentials: 'same-origin' });
+    const session = await response.json() as { version: string };
+    return session.version;
+  });
+  const workspaceResponse = await page.evaluate(async () => {
+    const response = await fetch('/api/deals/OPP-1001', { credentials: 'same-origin' });
+    return response.json();
+  });
+  await page.route('**/api/deals', async (route) => {
+    if (new URL(route.request().url()).pathname !== '/api/deals') return route.fallback();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessionVersion, deals: [] }) });
+  });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'No authorized deals' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Review persona access' })).toHaveAttribute('href', '#active-persona-control');
+  await expect(page.getByText(/does not reveal hidden deal names or counts/i)).toBeVisible();
+
+  const workspacePage = await context.newPage();
+  await workspacePage.route('**/api/deals/OPP-1001', async (route) => {
+    const body = workspaceResponse as {
+      brief: { sections: Record<string, { items: string[]; citationIds: string[]; accountTeamUpdateImpact: boolean }> };
+    };
+    const sectionsWithoutEvidence = Object.fromEntries(Object.entries(body.brief.sections).map(([id, section]) => [
+      id, { ...section, items: [], citationIds: [], accountTeamUpdateImpact: false }
+    ]));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ...body,
+      evidence: [],
+      brief: { ...body.brief, sections: sectionsWithoutEvidence, stakeholders: [], actions: [], warnings: [] }
+    }) });
+  });
+  await workspacePage.goto('/deals/OPP-1001');
+  await expect(workspacePage.getByRole('heading', { name: 'Stakeholder Map' })).toBeVisible();
+  await expect(workspacePage.getByText('No authorized stakeholder records are available.')).toBeVisible();
+  await expect(workspacePage.getByText('No source-backed actions are available.')).toBeVisible();
+  await expect(workspacePage.getByRole('button', { name: /Open evidence:/ })).toHaveCount(0);
+  await expectNoHorizontalOverflow(workspacePage);
+  await workspacePage.close();
 });

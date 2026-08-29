@@ -152,17 +152,17 @@ The post-implementation review identified four boundary cases, each converted to
 ### Focused API and concurrency tests
 
 ```text
-DATABASE_URL=… pnpm exec vitest run tests/unit/deals.service.test.ts tests/integration/deals-api.test.ts
-Test Files 2 passed (2)
-Tests 6 passed (6)
+DATABASE_URL=… pnpm exec vitest run tests/unit/deals.service.test.ts tests/unit/deal-format.test.ts tests/integration/deals-api.test.ts
+Test Files 3 passed (3)
+Tests 12 passed (12)
 ```
 
 ### Task 12 browser suite
 
 ```text
 DATABASE_URL=… pnpm exec playwright test tests/e2e/deals.spec.ts tests/e2e/no-leak-ui.spec.ts --workers=1
-Running 6 tests using 1 worker
-6 passed (8.6s)
+Running 9 tests using 1 worker
+9 passed (10.3s)
 ```
 
 ### Related Task 11 login flow
@@ -170,7 +170,7 @@ Running 6 tests using 1 worker
 ```text
 DATABASE_URL=… pnpm exec playwright test tests/e2e/login.spec.ts --workers=1
 Running 5 tests using 1 worker
-5 passed (6.5s)
+5 passed (5.3s)
 ```
 
 ### Type safety
@@ -203,7 +203,7 @@ The real Vite/Nest/PostgreSQL surface was driven in Chromium after focused autom
 - 390×844 mobile evidence:
   - modal measured exactly 390×844
   - document width remained 390px
-  - body overflow was `hidden`, `#main-content` was inert, and focus entered `Close evidence detail`
+  - body overflow was `hidden`; one preserved native-inert application ancestor covered header, main content, desktop rail, and mobile navigation; focus entered `Close evidence detail`
   - the source record wrapped without horizontal overflow
 - 390×844 mobile workspace:
   - full-width hierarchy, stacked metrics, bottom navigation, and complete mobile records remained legible
@@ -219,3 +219,30 @@ The real Vite/Nest/PostgreSQL surface was driven in Chromium after focused autom
 - A source-backed workspace can contain many authorized chunks. The Source Evidence section visibly offers a bounded representative set of 12 citation controls while the API retains the complete authorized evidence collection for real section citations and deep links.
 - Sensitive pricing evidence remains absent for personas without `sensitivePricing`, even when other authorized conversation text contains the ordinary word “pricing.” Tests assert the source-type and locator boundary rather than censoring benign authorized prose.
 - The desktop split decision is based on measured workspace width, not viewport width alone. A 1024px viewport correctly uses the modal because the Task 11 rail and content padding would otherwise shrink the main column below 640px.
+
+## Review fix round
+
+The code, security, and UX review findings were converted into focused regressions and closed before Task 13:
+
+1. Workspace evidence authorization now uses a PostgreSQL `permission_grants` `EXISTS` predicate matched on persona, account, and each evidence row's source type. Restricted-read authority can no longer union across sources.
+2. The deal-list Salesforce lateral lookup applies that matching Salesforce grant to the selected row's sensitivity. A restricted CRM row on a standard opportunity cannot override visible list fields for an ordinary grant.
+3. Evidence without a non-empty real source locator or derivable stable record identity is excluded. The projection no longer manufactures `source/unavailable` or substitutes a chunk ID as source identity.
+4. Response contracts and source extraction use one calendar-valid ISO-date schema; impossible dates are rejected or omitted.
+5. Slack gap handling requires an explicit unresolved signal and rejects resolving language, preventing false warnings, actions, or impact markers.
+6. List and workspace ACV use one formatter: ISO currency styling when currency is present and a number-only fallback otherwise.
+7. Desktop stakeholder records now include Goals with the same value and fallback as mobile records.
+8. Desktop and mobile deal lists both expose probability, latest-run status, and access state without adding wide desktop columns.
+9. Task 12 browser coverage now includes 320px, a 640×320 short/200%-zoom equivalent, route loading/error, safe empty list/workspace responses, desktop Escape and non-trap behavior, real panel scrolling, responsive data parity, and modal cleanup across Escape, close-button, Back, and pre-existing inert state.
+10. Source Evidence is one semantic interactive citation list; duplicate non-interactive labels were removed.
+11. The modal preserves and restores native inert on the entire protected application shell plus the prior body overflow value.
+12. The opaque empty-list state links to the active persona access control without revealing hidden names or counts.
+
+Final Chromium inspection after the fixes confirmed:
+
+- 1440×900 list: 1440px document width with no overflow; the desktop row visibly included `Probability: 78%`, `Latest run: No run yet`, and `Access: Standard deal`.
+- 1440×900 workspace: Goals was a desktop column; all nine sections remained present; Source Evidence had 12 interactive list items and zero duplicate text-only items.
+- 1440×900 evidence: the complementary panel remained 403.1875px, the main remained 708.8125px, focus entered the panel, and `overflow-y` remained `auto`.
+- 320×568 list/workspace: the complete stacked record contained identity, stage, owner, close, ACV, probability, risk, latest run, and access; `scrollWidth === clientWidth === 320`.
+- 640×320 modal: the Sheet was 440×320, independently scrollable with `overflow-y: auto`, body scroll was locked, and the inert shell covered header, main, and mobile navigation; document width remained 640.
+- Real database-backed empty list: no hidden deal identity appeared and `Review persona access` targeted the active persona control.
+- Real database-backed empty workspace: all nine headings remained, no citation controls rendered, and explicit stakeholder/action empty states were visible.
