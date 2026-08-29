@@ -171,3 +171,25 @@ pnpm vitest run tests/integration/migration-catalog-parity.test.ts
 pnpm typecheck
 # exit 0
 ```
+
+## Round-5 migration registration
+
+The catalog regression was added before registration and failed because the clean catalog contained none of the four replay-result columns:
+
+```text
+pnpm vitest run tests/integration/migration-catalog-parity.test.ts
+# 1 file failed; 1 failed, 2 passed
+# expected approval_decisions result_* catalog columns, received []
+```
+
+Migration `0015_immutable_approval_replays` is now registered after `0014` in both the Drizzle journal and the catalog suite's ordered migration list. The focused test compares a clean install, a staged upgrade, and the real Drizzle migrator catalog, then verifies the four columns' SQL types, absent defaults, non-nullability, and result check constraints.
+
+Final round-5 evidence:
+
+```text
+pnpm vitest run tests/integration/migration-catalog-parity.test.ts
+# 1 file passed, 3 tests passed
+
+pnpm typecheck
+# exit 0
+```

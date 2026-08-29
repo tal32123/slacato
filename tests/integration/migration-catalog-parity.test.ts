@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { execFile as execFileCallback } from 'node:child_process';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres, { type Sql } from 'postgres';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getTableConfig } from '../../packages/infrastructure/node_modules/drizzle-orm/pg-core/utils.js';
@@ -16,12 +18,13 @@ import {
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 15 }, (_, index) =>
+const migrationFiles = Array.from({ length: 16 }, (_, index) =>
   resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
     'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
     'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
     'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance',
-    'persona_provenance', 'authorized_retrieval', 'manifest_replay', 'durable_brief_approvals'
+    'persona_provenance', 'authorized_retrieval', 'manifest_replay', 'durable_brief_approvals',
+    'immutable_approval_replays'
   ][index]}.sql`)
 );
 const temporaryDatabases: string[] = [];
@@ -117,12 +120,17 @@ describe('durable migration catalog', () => {
 
     const cleanName = makeDatabaseName();
     const upgradeName = makeDatabaseName();
-    await Promise.all([createTemporaryDatabase(cleanName), createTemporaryDatabase(upgradeName)]);
+    const runnerName = makeDatabaseName();
+    await Promise.all([
+      createTemporaryDatabase(cleanName), createTemporaryDatabase(upgradeName), createTemporaryDatabase(runnerName)
+    ]);
     const clean = postgres(urlForDatabase(cleanName), { max: 1 });
     const upgrade = postgres(urlForDatabase(upgradeName), { max: 1 });
+    const runner = postgres(urlForDatabase(runnerName), { max: 1 });
     try {
       await applyMigrations(clean, migrationFiles);
       await applyMigrations(upgrade, migrationFiles.slice(0, 8));
+      await migrate(drizzle(runner), { migrationsFolder: resolve(process.cwd(), 'drizzle') });
       await upgrade`insert into personas (id, display_name, role) values ('legacy-user', 'Legacy user', 'seller')`;
       await upgrade`insert into accounts (id, name) values ('legacy-account', 'Legacy account')`;
       await upgrade`insert into opportunities (id, account_id, name) values ('legacy-opportunity', 'legacy-account', 'Legacy opportunity')`;
@@ -137,8 +145,51 @@ describe('durable migration catalog', () => {
         { id: 'legacy-reservation-a', operation: 'legacy:legacy-reservation-a', ordinal: 1 },
         { id: 'legacy-reservation-b', operation: 'legacy:legacy-reservation-b', ordinal: 1 }
       ]);
-      const [cleanCatalog, upgradeCatalog] = await Promise.all([catalog(clean), catalog(upgrade)]);
+      const [cleanCatalog, upgradeCatalog, runnerCatalog] = await Promise.all([
+        catalog(clean), catalog(upgrade), catalog(runner)
+      ]);
       expect(cleanCatalog).toEqual(upgradeCatalog);
+      expect(cleanCatalog).toEqual(runnerCatalog);
+
+      expect((cleanCatalog.columns as readonly {
+        table_name: string; column_name: string; type: string; typmod: number; default: string | null;
+        generated: string; identity: string; nullable: boolean
+      }[]).filter((column) =>
+        column.table_name === 'approval_decisions' && column.column_name.startsWith('result_')
+      )).toEqual([
+        {
+          table_name: 'approval_decisions', column_name: 'result_run_version', type: 'integer', typmod: -1,
+          default: null, generated: '', identity: '', nullable: false
+        },
+        {
+          table_name: 'approval_decisions', column_name: 'result_status', type: 'text', typmod: -1,
+          default: null, generated: '', identity: '', nullable: false
+        },
+        {
+          table_name: 'approval_decisions', column_name: 'result_quorum_satisfied', type: 'boolean', typmod: -1,
+          default: null, generated: '', identity: '', nullable: false
+        },
+        {
+          table_name: 'approval_decisions', column_name: 'result_rejected', type: 'boolean', typmod: -1,
+          default: null, generated: '', identity: '', nullable: false
+        }
+      ]);
+      expect((cleanCatalog.constraints as readonly {
+        table_name: string; name: string; type: string; definition: string
+      }[])).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          table_name: 'approval_decisions', name: 'approval_decisions_result_run_version_ck', type: 'c',
+          definition: expect.stringContaining('result_run_version >= 0')
+        }),
+        expect.objectContaining({
+          table_name: 'approval_decisions', name: 'approval_decisions_result_status_ck', type: 'c',
+          definition: expect.stringContaining("'awaiting_approval'::text")
+        }),
+        expect.objectContaining({
+          table_name: 'approval_decisions', name: 'approval_decisions_result_consistency_ck', type: 'c',
+          definition: expect.stringContaining("result_rejected = (result_status = 'rejected'::text)")
+        })
+      ]));
 
       const serialized = JSON.stringify(cleanCatalog).toLowerCase();
       expect(serialized).toContain('"name":"vector"');
@@ -172,6 +223,7 @@ describe('durable migration catalog', () => {
     } finally {
       await clean.end({ timeout: 1 });
       await upgrade.end({ timeout: 1 });
+      await runner.end({ timeout: 1 });
     }
   });
 
