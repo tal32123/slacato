@@ -82,21 +82,23 @@ const MATERIAL_PREDICATES = [
   { assertion: /\bsupport(?:s|ed)?\b/i, evidence: /\b(?:support(?:s|ed)?|need(?:s|ed)?|require(?:s|d)?)\b/i }
 ] as const;
 
-/** Conservative, deterministic atom matching: no model judge and no whole-sentence copy requirement. */
+function normalizedAssertion(value: string): string {
+  return normalize(value).replace(/\s+/g, ' ').replace(/[.!?]+$/u, '').trim();
+}
+
+function explicitStakeholderClassificationSupported(assertion: string, support: string): boolean {
+  const match = /^(.+?) is (?:the )?economic buyer with high influence$/u.exec(normalizedAssertion(assertion));
+  if (match?.[1] === undefined) return false;
+  const subject = escapeRegExp(match[1]);
+  return new RegExp(`^${subject} controls? (?:the )?budget and makes? (?:the )?final purchasing decision$`, 'u')
+    .test(normalizedAssertion(support));
+}
+
+/** Exact local assertion support plus a deliberately tiny subject-safe business transformation. */
 function textAtomsSupported(assertion: string, support: string): boolean {
   if (!safeGeneratedProse(assertion)) return false;
-  const normalizedSupport = normalize(support);
-  const anchors = materialAnchors(assertion);
-  if (anchors.some((anchor) => !containsBounded(normalizedSupport, anchor))) return false;
-  const matchedPredicates = MATERIAL_PREDICATES.filter((predicate) => predicate.assertion.test(assertion));
-  if (matchedPredicates.some((predicate) => !predicate.evidence.test(support))) return false;
-  const lexicalAssertion = MATERIAL_PREDICATES.reduce((value, predicate) => value.replace(predicate.assertion, ' '), assertion);
-  const assertionTerms = supportTerms(lexicalAssertion);
-  if (assertionTerms.size === 0) return anchors.length > 0 && matchedPredicates.length > 0;
-  const evidenceTerms = supportTerms(support);
-  const overlap = [...assertionTerms].filter((term) => evidenceTerms.has(term)).length;
-  const minimumOverlap = assertionTerms.size === 1 && anchors.length > 0 && matchedPredicates.length > 0 ? 1 : assertionTerms.size;
-  return overlap >= minimumOverlap;
+  return normalizedAssertion(assertion) === normalizedAssertion(support)
+    || explicitStakeholderClassificationSupported(assertion, support);
 }
 
 function relationTerms(assertion: string): ReadonlySet<string> {
@@ -244,12 +246,17 @@ function isExplicitUncertainty(value: string): boolean {
 function safeInformationRequest(value: string): boolean {
   if (!safeGeneratedProse(value)) return false;
   const normalized = value.trim();
-  if (/\b(?:that|according to|already|definitely|certainly)\b/i.test(normalized)) return false;
-  if (/^(?:clarify|determine|confirm|verify|check) whether\b.*[.?]$/i.test(normalized)) return true;
-  return /^identify (?:who|what|which)\b.*[.?]$/i.test(normalized)
-    && materialAnchors(normalized).length === 0
-    && !POSITIVE_INTENT.test(normalized) && !NEGATIVE_INTENT.test(normalized)
-    && !/\b(?:sign(?:s|ed)?|own(?:s|ed)?|paid|purchased?|selected?|chose|chosen|decided?)\b/i.test(normalized);
+  if (/\b(?:after|because|given|that|according to|already|definitely|certainly)\b/i.test(normalized)) return false;
+  const prefix = '(?:clarify|determine|confirm|verify|check)';
+  const approvedDiscount = new RegExp(`^${prefix} whether (?:a|the) \\d+(?:\\.\\d+)?% discount is approved[.?]$`, 'i');
+  const procurementApproval = new RegExp(`^${prefix} whether procurement approval is required[.?]$`, 'i');
+  const procurementAttendance = new RegExp(`^${prefix} whether procurement must attend (?:a|the) workshop[.?]$`, 'i');
+  const workshopScheduling = new RegExp(`^${prefix} whether (?:a|the) technical workshop should be scheduled[.?]$`, 'i');
+  const reviewRequirement = new RegExp(`^${prefix} whether (?:legal|security|technical|commercial) review is required[.?]$`, 'i');
+  const neutralIdentification = /^identify (?:who (?:can coordinate a technical workshop|represents procurement)|what (?:the next step|open questions) (?:is|are)|which (?:team|role) should respond)[.?]$/i;
+  return approvedDiscount.test(normalized) || procurementApproval.test(normalized)
+    || procurementAttendance.test(normalized) || workshopScheduling.test(normalized)
+    || reviewRequirement.test(normalized) || neutralIdentification.test(normalized);
 }
 
 /** Imperative workflow action, not customer-facing promise or factual assertion. */

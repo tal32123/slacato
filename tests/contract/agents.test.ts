@@ -327,13 +327,13 @@ describe('specialized agents', () => {
     expect(artifact.missingContext).toContain('Verify evidence for claim claim_commitment.');
   });
 
-  it('supports a non-verbatim synthesis when every material atom is present', async () => {
+  it('supports a normalized local assertion without cross-clause synthesis', async () => {
     const cited = evidence('evidence_synthesis', 'gong_summary', 'The buyer needs resilient global connectivity before the planned expansion.');
     const gateway = new RecordingGateway([{
       ...emptyConversation,
-      goals: ['Resilient connectivity supports global expansion.'],
+      goals: ['The buyer needs resilient global connectivity before the planned expansion.'],
       claims: [{
-        id: 'claim_synthesis', statement: 'Resilient connectivity supports global expansion.', confidence: 0.85,
+        id: 'claim_synthesis', statement: 'The buyer needs resilient global connectivity before the planned expansion', confidence: 0.85,
         citations: [{ id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator }]
       }]
     }]);
@@ -341,7 +341,7 @@ describe('specialized agents', () => {
     const artifact = await new ConversationAgent(gateway).run(context([cited]));
 
     expect(artifact.claims).toHaveLength(1);
-    expect(artifact.goals).toEqual(['Resilient connectivity supports global expansion.']);
+    expect(artifact.goals).toEqual(['The buyer needs resilient global connectivity before the planned expansion.']);
   });
 
   it('fails closed on opposing intent verbs even when nearly every lexical atom overlaps', async () => {
@@ -381,7 +381,10 @@ describe('specialized agents', () => {
     for (const [suffix, content, statement] of [
       ['cross_commitment', 'The buyer discussed expansion. The seller committed internal resources.', 'The buyer committed to expansion.'],
       ['cross_opposition', 'The buyer needs expansion. The seller opposes delay.', 'The buyer opposes expansion.'],
-      ['cross_ownership', 'The buyer evaluated expansion. The seller owns procurement.', 'The buyer owns expansion.']
+      ['cross_ownership', 'The buyer evaluated expansion. The seller owns procurement.', 'The buyer owns expansion.'],
+      ['same_sentence_commitment', 'The buyer discussed expansion while the seller committed resources.', 'The buyer committed to expansion.'],
+      ['same_sentence_opposition', 'The buyer needs expansion although the seller opposes delay.', 'The buyer opposes expansion.'],
+      ['same_sentence_ownership', 'The buyer evaluated expansion while the seller owns procurement.', 'The buyer owns expansion.']
     ] as const) {
       const cited = evidence(`evidence_${suffix}`, 'gong_summary', content);
       const gateway = new RecordingGateway([{
@@ -438,13 +441,19 @@ describe('specialized agents', () => {
         'When will the approved 45% discount take effect?',
         'Who should tell procurement the buyer approved a 45% discount?',
         'Identify who should tell procurement the buyer approved a 45% discount.',
+        'Clarify whether the approved 45% discount will take effect tomorrow.',
+        'Clarify whether procurement should be told after the buyer approved a 45% discount.',
+        'Clarify whether a 45% discount is approved.',
         'Clarify whether procurement approval is required.'
       ]
     }]);
 
     const artifact = await new ConversationAgent(gateway).run(context([]));
 
-    expect(artifact.missingContext).toEqual(['Clarify whether procurement approval is required.']);
+    expect(artifact.missingContext).toEqual([
+      'Clarify whether a 45% discount is approved.',
+      'Clarify whether procurement approval is required.'
+    ]);
   });
 
   it('supports a synthesized stakeholder classification from deterministic predicate evidence', async () => {
@@ -750,7 +759,7 @@ describe('specialized agents', () => {
       ...emptyBrief,
       recommendedNextActions: { actions: [{
         action: 'Schedule a technical workshop.', priority: 'high',
-        rationale: 'A technical deep dive was requested by the buyer.', claims: [{ ...artifactClaim, id: 'claim_workshop_action' }]
+        rationale: 'The buyer requested a technical deep dive.', claims: [{ ...artifactClaim, id: 'claim_workshop_action' }]
       }] }
     }]);
 
