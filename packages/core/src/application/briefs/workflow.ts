@@ -23,6 +23,7 @@ export interface DealBriefWorkflowServices {
 }
 export type StartDealBriefCommand = Readonly<{ opportunityId: string; requestedBy: string; idempotencyKey: string; budget: Readonly<{ maxCalls: number; maxInputTokens: number; maxOutputTokens: number; deadlineMs: number }> }>;
 export type RegenerateDealBriefCommand = Readonly<{ runId: string; requestedBy: string; idempotencyKey: string }>;
+export type CancelDealBriefCommand = Readonly<{ runId: string; requestedBy: string }>;
 export type ProcessDealBriefStepCommand = Readonly<{ command: WorkflowCommand; workerId: string }>;
 type WorkflowStep = 'start' | 'retrieve' | 'specialists' | 'synthesize' | 'validate' | 'finalize';
 const SECTION_IDS = Object.freeze(['section:dealSnapshot', 'section:executiveSummary', 'section:buyerGoalsAndBusinessDrivers', 'section:stakeholderMap', 'section:negotiationState', 'section:recommendedNextActions', 'section:missingInformation', 'section:sourceEvidence', 'section:confidenceAndReviewWarnings']);
@@ -111,6 +112,26 @@ export class RegenerateDealBrief {
   }
 }
 
+/** Cancels an active run while retaining its checkpoints, artifacts, events, and trace history. */
+export class CancelDealBrief {
+  public constructor(
+    private readonly store: Pick<WorkflowStore, 'getRun' | 'cancelRun'>,
+    private readonly access: Pick<DealBriefAccessControl, 'authorizeStart' | 'recordOpaqueDenial'>
+  ) {}
+
+  public async execute(input: CancelDealBriefCommand): Promise<WorkflowRun> {
+    const run = await this.store.getRun(input.runId as RunId);
+    if (run === undefined) throw new DomainNotFoundError('run');
+    const authorization = await this.access.authorizeStart({ requestedBy: input.requestedBy, opportunityId: run.opportunityId });
+    if (!authorization.allowed || run.requestedBy !== input.requestedBy) {
+      await this.access.recordOpaqueDenial({ type: 'deal_brief_cancellation_denied', actorId: input.requestedBy, reason: 'forbidden' });
+      throw new AuthorizationDeniedError('DealBrief cancellation denied');
+    }
+    if (['completed', 'rejected', 'failed', 'cancelled'].includes(run.status)) throw new DomainConflictError('Terminal runs cannot be cancelled');
+    return this.store.cancelRun({ runId: run.id, expectedVersion: run.version, cancelledBy: run.requestedBy });
+  }
+}
+
 class FatalDealBriefWorkflowError extends Error {
   public constructor(public readonly reason: string, cause: unknown) { super(reason, { cause }); this.name = 'FatalDealBriefWorkflowError'; }
 }
@@ -119,7 +140,7 @@ export class ProcessDealBriefStep {
   private readonly leaseMs: number;
   public constructor(private readonly store: WorkflowStore, private readonly services: DealBriefWorkflowServices, options: Readonly<{ leaseMs: number }>) { if (!Number.isInteger(options.leaseMs) || options.leaseMs < 1_000) throw new RangeError('Workflow lease must be at least one second'); this.leaseMs = options.leaseMs; }
   public async execute(input: ProcessDealBriefStepCommand): Promise<void> {
-    const step = readStep(input.command); const run = await this.store.getRun(input.command.runId); if (run === undefined) throw new DomainNotFoundError('run'); if (['completed', 'rejected', 'failed', 'awaiting_approval'].includes(run.status)) return;
+    const step = readStep(input.command); const run = await this.store.getRun(input.command.runId); if (run === undefined) throw new DomainNotFoundError('run'); if (['completed', 'rejected', 'failed', 'cancelled', 'awaiting_approval'].includes(run.status)) return;
     const lease = await this.store.claimStep({ runId: run.id, step, invocationId: stableId('invocation', input.command.id, input.workerId, crypto.randomUUID()), causalCommandId: input.command.id, owner: input.workerId, leaseMs: this.leaseMs }); if (lease === undefined) return;
     const current = await this.store.getRun(run.id); if (current === undefined) throw new DomainNotFoundError('run');
     const heartbeat = setInterval(() => { void this.store.heartbeatStep({ invocationId: lease.invocationId, owner: lease.owner, leaseToken: lease.leaseToken, leaseMs: this.leaseMs }); }, Math.max(500, Math.floor(this.leaseMs / 3))); heartbeat.unref();

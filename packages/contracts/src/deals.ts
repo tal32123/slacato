@@ -10,7 +10,7 @@ export const isoDateSchema = z.string()
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const runStatusSchema = z.enum([
   'created', 'retrieving', 'specialists_running', 'synthesizing', 'validating',
-  'awaiting_approval', 'finalizing', 'completed', 'rejected', 'failed'
+  'awaiting_approval', 'finalizing', 'completed', 'rejected', 'failed', 'cancelled'
 ]);
 
 export const dealSummarySchema = z.object({

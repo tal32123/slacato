@@ -13,7 +13,8 @@ export const runStatusSchema = z.enum([
   'finalizing',
   'completed',
   'rejected',
-  'failed'
+  'failed',
+  'cancelled'
 ]);
 
 export const runBudgetSchema = z.object({
@@ -30,6 +31,11 @@ export const startBriefRequestSchema = z.object({
 }).strict();
 
 export const startBriefResponseSchema = z.object({ runId: opaqueIdSchema }).strict();
+export const cancelRunResponseSchema = z.object({
+  runId: opaqueIdSchema,
+  status: z.literal('cancelled'),
+  version: z.number().int().nonnegative()
+}).strict();
 
 export const runListItemSchema = z.object({
   runId: opaqueIdSchema,
@@ -90,6 +96,7 @@ export type RunStatus = z.infer<typeof runStatusSchema>;
 export type RunBudget = z.infer<typeof runBudgetSchema>;
 export type StartBriefRequest = z.infer<typeof startBriefRequestSchema>;
 export type StartBriefResponse = z.infer<typeof startBriefResponseSchema>;
+export type CancelRunResponse = z.infer<typeof cancelRunResponseSchema>;
 export type RunListItem = z.infer<typeof runListItemSchema>;
 export type RunListResponse = z.infer<typeof runListResponseSchema>;
 export type RunProgress = z.infer<typeof runProgressSchema>;
