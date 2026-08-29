@@ -1,8 +1,9 @@
 import {
   DomainConflictError, DomainNotFoundError, canonicalJson, dealBriefSchema, hashApprovalPayload, transitionRun,
-  type ApprovalAuthority, type ApprovalCategory, type ApprovalDecision, type ApprovalDecisionInput, type ApprovalDecisionStoreResult,
-  type ApprovalRequirementEntry, type ApprovalSubject, type AwaitApprovalInput, type CommitStepInput, type FinalizeRunInput,
-  type RegenerateRunInput, type ReplaceApprovalSubjectInput, type SaveCheckpointInput, type StartRunInput, type StepLease, type WorkflowCommand, type WorkflowRun, type WorkflowStore
+  type ApprovalAuthority, type ApprovalCategory, type ApprovalDecision, type ApprovalDecisionInput, type ApprovalDecisionReplay,
+  type ApprovalDecisionStoreResult, type ApprovalRequirementEntry, type ApprovalSubject, type AwaitApprovalInput, type CommitStepInput,
+  type FinalizeRunInput, type RegenerateRunInput, type ReplaceApprovalSubjectInput, type SaveCheckpointInput, type StartRunInput,
+  type StepLease, type WorkflowCommand, type WorkflowRun, type WorkflowStore
 } from '@slacato/core';
 import type { JSONValue, Sql, TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../client.js';
@@ -34,6 +35,35 @@ async function insertCommand(sql: SqlExecutor, command: WorkflowCommand): Promis
 async function appendEvent(sql: SqlExecutor, runId: string, type: string, payload: Record<string, unknown>): Promise<void> {
   await sql`insert into run_events (id, run_id, sequence, type, payload)
     select ${`event_${crypto.randomUUID()}`}, ${runId}, coalesce(max(sequence), 0) + 1, ${type}, ${jsonText(payload)}::jsonb from run_events where run_id = ${runId}`;
+}
+async function replayDecision(sql: SqlExecutor, input: Readonly<{ idempotencyKey: string; requestHash: string }>): Promise<ApprovalDecisionReplay | undefined> {
+  const decision = (await sql<{
+    approval_subject_id: string; entry_id: string; approved_subject_hash: string; action: ApprovalDecision['action'];
+    request_hash: string; run_id: string; superseded_by_subject_id: string | null;
+    result_run_version: number; result_status: 'awaiting_approval' | 'finalizing' | 'rejected';
+    result_quorum_satisfied: boolean; result_rejected: boolean;
+  }[]>`select decision.approval_subject_id, decision.entry_id, decision.approved_subject_hash, decision.action,
+    decision.request_hash, decision.result_run_version, decision.result_status,
+    decision.result_quorum_satisfied, decision.result_rejected, subject.run_id, subject.superseded_by_subject_id
+    from approval_decisions decision
+    join approval_subjects subject on subject.id = decision.approval_subject_id
+    where decision.idempotency_key = ${input.idempotencyKey}`)[0];
+  if (decision === undefined) return undefined;
+  if (decision.request_hash !== input.requestHash) throw new DomainConflictError('Decision idempotency key conflicts with another decision');
+  const currentRun = await runById(sql, decision.run_id);
+  if (currentRun === undefined) throw new DomainNotFoundError('run');
+  const approvalSubjectId = decision.action === 'edit_and_approve'
+    ? decision.superseded_by_subject_id
+    : decision.approval_subject_id;
+  if (approvalSubjectId === null) throw new DomainConflictError('Replacement approval subject is unavailable');
+  return {
+    run: { ...asRun(currentRun), status: decision.result_status, version: decision.result_run_version },
+    approvalSubjectId,
+    entryId: decision.entry_id,
+    approvedSubjectHash: decision.approved_subject_hash,
+    quorumSatisfied: decision.result_quorum_satisfied,
+    rejected: decision.result_rejected
+  };
 }
 async function ownLease(sql: SqlExecutor, input: Readonly<{ invocationId: string; invocationOwner: string; leaseToken: string }>): Promise<void> {
   const rows = await sql<{ id: string }[]>`select id from step_invocations where id = ${input.invocationId} and owner = ${input.invocationOwner} and lease_token = ${input.leaseToken} and status = 'leased' and lease_expires_at > now() for update`;
@@ -211,46 +241,26 @@ export class PostgresWorkflowStore implements WorkflowStore {
   }
 
   public async findDecisionByIdempotencyKey(input: Parameters<WorkflowStore['findDecisionByIdempotencyKey']>[0]) {
-    const decision = (await this.database.sql<{
-      approval_subject_id: string; entry_id: string; approved_subject_hash: string; action: ApprovalDecision['action'];
-      request_hash: string; run_id: string; superseded_by_subject_id: string | null;
-    }[]>`select decision.approval_subject_id, decision.entry_id, decision.approved_subject_hash, decision.action,
-      decision.request_hash, subject.run_id, subject.superseded_by_subject_id
-      from approval_decisions decision join approval_subjects subject on subject.id = decision.approval_subject_id
-      where decision.idempotency_key = ${input.idempotencyKey}`)[0];
-    if (decision === undefined) return undefined;
-    if (decision.request_hash !== input.requestHash) throw new DomainConflictError('Decision idempotency key conflicts with another decision');
-    const run = await runById(this.database.sql, decision.run_id); if (run === undefined) throw new DomainNotFoundError('run');
-    if (decision.action === 'edit_and_approve' && decision.superseded_by_subject_id !== null) {
-      return {
-        run: asRun(run), approvalSubjectId: decision.superseded_by_subject_id, entryId: decision.entry_id,
-        approvedSubjectHash: decision.approved_subject_hash, quorumSatisfied: false, rejected: false
-      };
-    }
-    const counts = (await this.database.sql<{ required: number; approved: number; rejected: number }[]>`select
-      (select count(*)::int from approval_requirement_entries where approval_subject_id = ${decision.approval_subject_id}) required,
-      count(*) filter (where action <> 'reject')::int approved, count(*) filter (where action = 'reject')::int rejected
-      from approval_decisions where approval_subject_id = ${decision.approval_subject_id}`)[0];
-    return {
-      run: asRun(run), approvalSubjectId: decision.approval_subject_id, entryId: decision.entry_id,
-      approvedSubjectHash: decision.approved_subject_hash, quorumSatisfied: counts !== undefined && counts.required === counts.approved,
-      rejected: (counts?.rejected ?? 0) > 0
-    };
+    return replayDecision(this.database.sql, input);
   }
   public async recordDecisionAndEnqueueFinalization(input: ApprovalDecisionInput): Promise<ApprovalDecisionStoreResult> {
     return this.database.sql.begin(async (sql) => {
-      const prior = (await sql<{ approval_subject_id: string; approved_subject_hash: string; request_hash: string }[]>`select approval_subject_id, approved_subject_hash, request_hash from approval_decisions where idempotency_key = ${input.idempotencyKey} for update`)[0];
+      const prior = (await sql<{ request_hash: string }[]>`select request_hash from approval_decisions where idempotency_key = ${input.idempotencyKey} for update`)[0];
       if (prior !== undefined) {
         if (prior.request_hash !== input.requestHash) throw new DomainConflictError('Decision idempotency key conflicts with another decision');
-        const replayRun = await runById(sql, input.runId, true); if (replayRun === undefined) throw new DomainNotFoundError('run');
-        const counts = (await sql<{ required: number; approved: number; rejected: number }[]>`select (select count(*)::int from approval_requirement_entries where approval_subject_id = ${input.approvalSubjectId}) required,
-          count(*) filter (where action <> 'reject')::int approved, count(*) filter (where action = 'reject')::int rejected from approval_decisions where approval_subject_id = ${input.approvalSubjectId}`)[0];
-        return { run: asRun(replayRun), quorumSatisfied: counts !== undefined && counts.required === counts.approved, rejected: (counts?.rejected ?? 0) > 0, replayed: true, approvedSubjectHash: prior.approved_subject_hash };
+        const replay = await replayDecision(sql, input);
+        if (replay === undefined) throw new DomainConflictError('Persisted decision result is unavailable');
+        return {
+          run: replay.run, quorumSatisfied: replay.quorumSatisfied, rejected: replay.rejected,
+          replayed: true, approvedSubjectHash: replay.approvedSubjectHash
+        };
       }
       const current = await runById(sql, input.runId, true); if (current === undefined) throw new DomainNotFoundError('run'); if (current.status !== 'awaiting_approval' || current.version !== input.expectedVersion) throw new DomainConflictError('Run version is stale');
       const subject = (await sql<{ subject_hash: string }[]>`select subject_hash from approval_subjects where id = ${input.approvalSubjectId} and run_id = ${input.runId} for share`)[0];
       if (subject?.subject_hash !== input.expectedSubjectHash) throw new DomainConflictError('Approval subject is stale');
-      const entry = (await sql<{ category: ApprovalCategory; eligible_authorities: ApprovalAuthority[]; depends_on: string[] }[]>`select category, eligible_authorities, depends_on from approval_requirement_entries where approval_subject_id = ${input.approvalSubjectId} and id = ${input.entryId} for share`)[0];
+      const entry = (await sql<{ category: ApprovalCategory; eligible_authorities: ApprovalAuthority[]; depends_on: string[]; required: number }[]>`select category, eligible_authorities, depends_on,
+        (select count(*)::int from approval_requirement_entries where approval_subject_id = ${input.approvalSubjectId}) required
+        from approval_requirement_entries where approval_subject_id = ${input.approvalSubjectId} and id = ${input.entryId} for share`)[0];
       if (entry === undefined || entry.category !== input.category || !entry.eligible_authorities.includes(input.authority)) throw new DomainConflictError('Approval category or authority mismatch');
       const approved = await sql<{ entry_id: string; approved_subject_hash: string; actor_id: string; category: ApprovalCategory; authority: ApprovalAuthority }[]>`
         select entry_id, approved_subject_hash, actor_id, category, authority from approval_decisions
@@ -262,16 +272,15 @@ export class PostgresWorkflowStore implements WorkflowStore {
         && approved.some((prior) => prior.category === 'commercial_discount' && prior.authority === oppositeCommercialAuthority && prior.actor_id === input.actorId)) {
         throw new DomainConflictError('Distinct approval actors are required');
       }
-      await sql`insert into approval_decisions (id, approval_subject_id, entry_id, action, actor_id, category, authority, idempotency_key, request_hash, rationale, original_payload, approved_payload, edited_payload, original_subject_hash, approved_subject_hash, diff, created_at)
+      const rejected = input.decision.action === 'reject';
+      const quorumSatisfied = !rejected && entry.required === approved.length + 1;
+      const event = rejected ? 'approval_rejected' : quorumSatisfied ? 'approval_granted' : undefined;
+      const status = event === undefined ? current.status : transitionRun(current.status, event);
+      await sql`insert into approval_decisions (id, approval_subject_id, entry_id, action, actor_id, category, authority, idempotency_key, request_hash, rationale, original_payload, approved_payload, edited_payload, original_subject_hash, approved_subject_hash, diff, result_run_version, result_status, result_quorum_satisfied, result_rejected, created_at)
         values (${`decision_${crypto.randomUUID()}`}, ${input.approvalSubjectId}, ${input.entryId}, ${input.decision.action}, ${input.actorId}, ${input.category}, ${input.authority}, ${input.idempotencyKey}, ${input.requestHash},
           ${input.decision.rationale ?? null}, ${jsonText(input.decision.originalPayload)}::jsonb, ${jsonText(input.decision.approvedPayload)}::jsonb,
           ${input.decision.editedPayload === undefined ? null : jsonText(input.decision.editedPayload)}::jsonb, ${input.expectedSubjectHash}, ${input.decision.approvedSubjectHash},
-          ${input.decision.diff === undefined ? null : jsonText(input.decision.diff)}::jsonb, ${input.decision.decidedAt}::timestamptz)`;
-      const counts = (await sql<{ required: number; approved: number; rejected: number }[]>`select (select count(*)::int from approval_requirement_entries where approval_subject_id = ${input.approvalSubjectId}) required,
-        count(*) filter (where action <> 'reject')::int approved, count(*) filter (where action = 'reject')::int rejected from approval_decisions where approval_subject_id = ${input.approvalSubjectId}`)[0];
-      if (counts === undefined) throw new DomainConflictError('Approval quorum could not be evaluated');
-      const rejected = counts.rejected > 0; const quorumSatisfied = !rejected && counts.required === counts.approved;
-      const event = rejected ? 'approval_rejected' : quorumSatisfied ? 'approval_granted' : undefined; const status = event === undefined ? current.status : transitionRun(current.status, event);
+          ${input.decision.diff === undefined ? null : jsonText(input.decision.diff)}::jsonb, ${current.version + 1}, ${status}, ${quorumSatisfied}, ${rejected}, ${input.decision.decidedAt}::timestamptz)`;
       const row = (await sql<RunRow[]>`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`)[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
       await appendEvent(sql, input.runId, event ?? 'approval_entry_recorded', { version: row.version, approvalSubjectId: input.approvalSubjectId, entryId: input.entryId, category: input.category, authority: input.authority, action: input.decision.action, approvedSubjectHash: input.decision.approvedSubjectHash });
@@ -285,19 +294,22 @@ export class PostgresWorkflowStore implements WorkflowStore {
       const prior = (await sql<{ request_hash: string }[]>`select request_hash from approval_decisions where idempotency_key = ${input.idempotencyKey} for update`)[0];
       if (prior !== undefined) {
         if (prior.request_hash !== input.requestHash) throw new DomainConflictError('Decision idempotency key conflicts with another decision');
-        const replayRun = await runById(sql, input.runId, true); const replaySubject = await this.getApprovalSubject({ runId: input.runId });
-        if (replayRun === undefined || replaySubject === undefined) throw new DomainConflictError('Replacement approval subject is unavailable');
-        return { run: asRun(replayRun), subject: replaySubject, replayed: true };
+        const replay = await replayDecision(sql, input);
+        if (replay === undefined) throw new DomainConflictError('Persisted decision result is unavailable');
+        const replaySubject = await this.getApprovalSubject({ runId: input.runId, approvalSubjectId: replay.approvalSubjectId });
+        if (replaySubject === undefined) throw new DomainConflictError('Replacement approval subject is unavailable');
+        return { run: replay.run, subject: replaySubject, replayed: true };
       }
       const current = await runById(sql, input.runId, true);
       if (current === undefined) throw new DomainNotFoundError('run');
       if (current.status !== 'awaiting_approval' || current.version !== input.expectedVersion) throw new DomainConflictError('Run version is stale');
       const old = (await sql<{ id: string }[]>`select id from approval_subjects where id = ${input.priorSubjectId} and run_id = ${input.runId} and superseded_by_subject_id is null for update`)[0];
       if (old === undefined) throw new DomainConflictError('Approval subject is stale');
-      await sql`insert into approval_decisions (id, approval_subject_id, entry_id, action, actor_id, category, authority, idempotency_key, request_hash, rationale, original_payload, approved_payload, edited_payload, original_subject_hash, approved_subject_hash, diff, created_at)
+      await sql`insert into approval_decisions (id, approval_subject_id, entry_id, action, actor_id, category, authority, idempotency_key, request_hash, rationale, original_payload, approved_payload, edited_payload, original_subject_hash, approved_subject_hash, diff, result_run_version, result_status, result_quorum_satisfied, result_rejected, created_at)
         values (${`decision_${crypto.randomUUID()}`}, ${input.priorSubjectId}, ${input.priorDecision.entryId}, ${input.priorDecision.action}, ${input.priorDecision.actorId}, ${input.priorDecision.category}, ${input.priorDecision.authority},
           ${input.idempotencyKey}, ${input.requestHash}, ${input.priorDecision.rationale ?? null}, ${jsonText(input.priorDecision.originalPayload)}::jsonb, ${jsonText(input.priorDecision.approvedPayload)}::jsonb,
-          ${jsonText(input.priorDecision.editedPayload)}::jsonb, ${hashApprovalPayload(input.priorDecision.originalPayload)}, ${input.priorDecision.approvedSubjectHash}, ${jsonText(input.priorDecision.diff ?? {})}::jsonb, ${input.priorDecision.decidedAt}::timestamptz)`;
+          ${jsonText(input.priorDecision.editedPayload)}::jsonb, ${hashApprovalPayload(input.priorDecision.originalPayload)}, ${input.priorDecision.approvedSubjectHash}, ${jsonText(input.priorDecision.diff ?? {})}::jsonb,
+          ${current.version + 1}, 'awaiting_approval', false, false, ${input.priorDecision.decidedAt}::timestamptz)`;
       await sql`insert into approval_subjects (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
         values (${input.subject.id}, ${input.runId}, ${current.version + 1}, ${input.subject.subjectHash}, ${jsonText(input.subject.payload)}::jsonb, ${jsonText(input.subject.sectionIds)}::jsonb,
           ${jsonText(input.subject.recommendationIds)}::jsonb, ${jsonText(input.subject.citationIds)}::jsonb, ${jsonText(input.subject.policyTriggers)}::jsonb, ${input.subject.quorumVersion})`;

@@ -143,3 +143,31 @@ pnpm typecheck
 git diff --check
 # clean
 ```
+
+## Round-4 replay-integrity hardening
+
+The PostgreSQL-backed regression failed before the production change and exposed both mutable replay fields:
+
+```text
+pnpm vitest run tests/integration/workflow-production.test.ts -t "replays the original"
+# 1 file failed; 2 failed, 1 skipped
+# approve_unchanged replay changed quorumSatisfied from false to true and run version from 6 to 7
+# reject replay changed its persisted terminal run status/version from rejected@12 to synthesizing@13 after regeneration
+```
+
+Approval decisions now persist their decision-time run version, status, quorum outcome, and rejection outcome in immutable decision rows. Replay reads those fields directly, keeps unchanged/rejected decisions bound to their original subject and entry, and allows only `edit_and_approve` to return the immediate replacement subject recorded by the original subject's immutable supersession link. Full request-hash conflicts remain checked before returning a replay.
+
+The cumulative migration backfills existing decisions from their decision-time approval events, adds result consistency constraints, and restores the immutable-row trigger. Drizzle schema mapping and migration catalog assertions cover all four result columns.
+
+Final round-4 focused evidence:
+
+```text
+pnpm vitest run tests/integration/workflow-production.test.ts
+# 1 file passed, 3 tests passed
+
+pnpm vitest run tests/integration/migration-catalog-parity.test.ts
+# 1 file passed, 3 tests passed
+
+pnpm typecheck
+# exit 0
+```

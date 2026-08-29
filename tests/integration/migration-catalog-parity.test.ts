@@ -239,7 +239,10 @@ describe('durable migration catalog', () => {
     expect(Object.keys(approvalSubjects)).toEqual(expect.arrayContaining(['policyTriggers', 'runId', 'subjectHash', 'sectionIds', 'recommendationIds', 'citationIds', 'quorumVersion']));
     expect(approvalSubjects.policyTriggers.getSQLType()).toBe('jsonb');
     expect(Object.keys(approvalRequirementEntries)).toEqual(expect.arrayContaining(['approvalSubjectId', 'category', 'eligibleAuthorities', 'dependsOn', 'ordinal']));
-    expect(Object.keys(approvalDecisions)).toEqual(expect.arrayContaining(['entryId', 'category', 'authority', 'idempotencyKey', 'originalPayload', 'approvedPayload', 'approvedSubjectHash', 'diff']));
+    expect(Object.keys(approvalDecisions)).toEqual(expect.arrayContaining([
+      'entryId', 'category', 'authority', 'idempotencyKey', 'originalPayload', 'approvedPayload', 'approvedSubjectHash', 'diff',
+      'resultRunVersion', 'resultStatus', 'resultQuorumSatisfied', 'resultRejected'
+    ]));
     expect(Object.keys(approvalAuthorityGrants)).toEqual(expect.arrayContaining(['personaId', 'accountId', 'authority', 'demoOnly', 'source']));
     expect(Object.keys(opportunityPolicyFacts)).toEqual(expect.arrayContaining(['opportunityId', 'discountPercent', 'renewalUpliftPercent', 'liabilityCapChanged']));
     expect(Object.keys(briefs)).toEqual(expect.arrayContaining(['approvalSubjectId', 'runId', 'subjectHash', 'draftVersion']));

@@ -4,10 +4,10 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import postgres from 'postgres';
 import request from 'supertest';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
-  DecideApproval, DomainValidationError, ProcessDealBriefStep, RegenerateDealBrief, StartDealBrief,
-  dealBriefSchema, type DealBriefWorkflowServices
+  DecideApproval, DomainConflictError, DomainValidationError, ProcessDealBriefStep, RegenerateDealBrief, StartDealBrief,
+  dealBriefSchema, hashApprovalPayload, type DealBriefWorkflowServices
 } from '@slacato/core';
 import {
   BullMqCommandQueue, OutboxDispatcher, OutboxDispatcherLoop, PostgresDealBriefAccessControl, PostgresWorkflowStore,
@@ -33,6 +33,17 @@ let processor: DealBriefProcessor | undefined;
 let loop: OutboxDispatcherLoop | undefined;
 let queue: BullMqCommandQueue | undefined;
 
+function approvalBrief(label: string) {
+  return dealBriefSchema.parse({
+    dealSnapshot: { accountName: label, opportunityName: `${label} Opportunity`, stage: 'Negotiate' },
+    executiveSummary: { narrative: 'Insufficient supported evidence is available for an executive summary.' },
+    buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] }, stakeholderMap: { stakeholders: [] },
+    negotiationState: { currentState: 'Insufficient supported evidence is available.', risks: [] },
+    recommendedNextActions: { actions: [] }, missingInformation: { items: [] }, sourceEvidence: { evidence: [] },
+    confidenceAndReviewWarnings: { overallConfidence: 0.9, warnings: [] }
+  });
+}
+
 async function waitFor<T>(read: () => Promise<T | undefined>, attempts = 20_000): Promise<T> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const value = await read(); if (value !== undefined) return value;
@@ -40,6 +51,22 @@ async function waitFor<T>(read: () => Promise<T | undefined>, attempts = 20_000)
   }
   throw new Error('Durable workflow state was not observed');
 }
+
+beforeAll(async () => {
+  const approvalCatalog = await admin<{ present: boolean }[]>`select to_regclass('approval_authority_grants') is not null present`;
+  if (approvalCatalog[0]?.present !== true) {
+    const migration = await readFile(resolve(process.cwd(), 'drizzle/0014_durable_brief_approvals.sql'), 'utf8');
+    await admin.unsafe(migration);
+  }
+  const replayCatalog = await admin<{ present: boolean }[]>`select exists (
+    select 1 from information_schema.columns
+    where table_schema = current_schema() and table_name = 'approval_decisions' and column_name = 'result_status'
+  ) present`;
+  if (replayCatalog[0]?.present !== true) {
+    const migration = await readFile(resolve(process.cwd(), 'drizzle/0015_immutable_approval_replays.sql'), 'utf8');
+    await admin.unsafe(migration);
+  }
+});
 
 afterAll(async () => {
   if (loop !== undefined) await loop.stop();
@@ -52,11 +79,6 @@ afterAll(async () => {
 
 describe('production DealBrief seams', () => {
   it('crosses authenticated API, PostgreSQL outbox, BullMQ processor, approval wait, quorum, and deterministic finalization', async () => {
-    const catalog = await admin<{ present: boolean }[]>`select to_regclass('approval_authority_grants') is not null present`;
-    if (catalog[0]?.present !== true) {
-      const migration = await readFile(resolve(process.cwd(), 'drizzle/0014_durable_brief_approvals.sql'), 'utf8');
-      await admin.unsafe(migration);
-    }
     await admin`insert into personas (id, display_name, role) values (${requester}, 'Workflow Requester', 'Account Owner'), (${approver}, 'Workflow Approver', 'Deal Desk Approver')`;
     await admin`insert into accounts (id, name) values (${account}, 'Workflow Account')`;
     await admin`insert into opportunities (id, account_id, name, restricted) values (${opportunity}, ${account}, 'Workflow Opportunity', false)`;
@@ -165,4 +187,163 @@ describe('production DealBrief seams', () => {
     const completed = await waitFor(async () => (await store.getRun(runId as never))?.status === 'completed' ? store.getRun(runId as never) : undefined);
     expect(completed.status).toBe('completed'); expect(strategyCalls.get(runId)).toBe(2);
   }, 20_000);
+
+  it('replays the original non-quorate unchanged approval after a later edit supersedes its subject', async () => {
+    const replaySuffix = crypto.randomUUID().replaceAll('-', '');
+    const replayNumeric = BigInt(`0x${replaySuffix.slice(0, 15)}`).toString();
+    const replayRequester = `USR-${replayNumeric}1`;
+    const firstApprover = `USR-${replayNumeric}2`;
+    const secondApprover = `USR-${replayNumeric}3`;
+    const replayAccount = `ACC-${replayNumeric}`;
+    const replayOpportunity = `OPP-${replayNumeric}`;
+    const runId = `run_${replaySuffix}`;
+    const subjectId = `approval_subject_${replaySuffix}`;
+    const replacementId = `approval_subject_replacement_${replaySuffix}`;
+    const firstEntryId = `entry_first_${replaySuffix}`;
+    const secondEntryId = `entry_second_${replaySuffix}`;
+    const payload = approvalBrief('Replay Integrity');
+    const subjectHash = hashApprovalPayload(payload);
+    const unchangedRequestHash = `request_unchanged_${replaySuffix}`;
+    const editRequestHash = `request_edit_${replaySuffix}`;
+
+    await admin`insert into personas (id, display_name, role) values
+      (${replayRequester}, 'Replay Requester', 'Account Owner'),
+      (${firstApprover}, 'First Replay Approver', 'Deal Desk Approver'),
+      (${secondApprover}, 'Second Replay Approver', 'Sales Leader')`;
+    await admin`insert into accounts (id, name) values (${replayAccount}, 'Replay Integrity Account')`;
+    await admin`insert into opportunities (id, account_id, name, restricted)
+      values (${replayOpportunity}, ${replayAccount}, 'Replay Integrity Opportunity', false)`;
+    await admin`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
+      values (${runId}, ${replayOpportunity}, ${replayRequester}, 'awaiting_approval', 'mock', 'mock-brief', ${'a'.repeat(64)}, 5)`;
+    await admin`insert into approval_subjects
+      (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
+      values (${subjectId}, ${runId}, 5, ${subjectHash}, ${JSON.stringify(payload)}::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'replay-v1')`;
+    await admin`insert into approval_requirement_entries
+      (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal) values
+      (${firstEntryId}, ${subjectId}, 'commercial_discount', '["deal_desk"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0),
+      (${secondEntryId}, ${subjectId}, 'commercial_discount', '["sales_leader"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 1)`;
+
+    const replayStore = new PostgresWorkflowStore(database);
+    const unchanged = await replayStore.recordDecisionAndEnqueueFinalization({
+      runId: runId as never, expectedVersion: 5, approvalSubjectId: subjectId, expectedSubjectHash: subjectHash,
+      entryId: firstEntryId, category: 'commercial_discount', authority: 'deal_desk', actorId: firstApprover as never,
+      idempotencyKey: `unchanged-${replaySuffix}`, requestHash: unchangedRequestHash,
+      decision: {
+        action: 'approve_unchanged', entryId: firstEntryId, category: 'commercial_discount', authority: 'deal_desk',
+        actorId: firstApprover as never, originalPayload: payload, approvedPayload: payload, approvedSubjectHash: subjectHash,
+        requestHash: unchangedRequestHash, decidedAt: new Date().toISOString()
+      },
+      finalizationCommand: {
+        id: `command_unchanged_${replaySuffix}`, runId: runId as never, type: 'process-deal-brief-step',
+        payload: { step: 'finalize' }, idempotencyKey: `finalize-unchanged-${replaySuffix}`
+      }
+    });
+    expect(unchanged).toMatchObject({
+      run: { id: runId, status: 'awaiting_approval', version: 6 },
+      quorumSatisfied: false, rejected: false, replayed: false, approvedSubjectHash: subjectHash
+    });
+
+    await replayStore.replaceApprovalSubject({
+      runId: runId as never, expectedVersion: 6, priorSubjectId: subjectId,
+      idempotencyKey: `edit-${replaySuffix}`, requestHash: editRequestHash,
+      priorDecision: {
+        action: 'edit_and_approve', entryId: secondEntryId, category: 'commercial_discount', authority: 'sales_leader',
+        actorId: secondApprover as never, originalPayload: payload, approvedPayload: payload, editedPayload: payload,
+        approvedSubjectHash: subjectHash, diff: { changed: false }, rationale: 'Regenerate approvals.',
+        requestHash: editRequestHash, decidedAt: new Date().toISOString()
+      },
+      subject: {
+        id: replacementId, runId: runId as never, subjectHash, payload, sectionIds: [], recommendationIds: [], citationIds: [],
+        policyTriggers: [], entries: [{
+          id: `replacement_entry_${replaySuffix}`, category: 'commercial_discount',
+          eligibleAuthorities: ['deal_desk'], policyTriggers: [], dependsOn: []
+        }], quorumVersion: 'replay-v2'
+      }
+    });
+
+    const replay = await replayStore.findDecisionByIdempotencyKey({
+      idempotencyKey: `unchanged-${replaySuffix}`, requestHash: unchangedRequestHash
+    });
+    expect(replay).toMatchObject({
+      run: { id: runId, status: 'awaiting_approval', version: 6 },
+      approvalSubjectId: subjectId, entryId: firstEntryId, approvedSubjectHash: subjectHash,
+      quorumSatisfied: false, rejected: false
+    });
+    await expect(replayStore.findDecisionByIdempotencyKey({
+      idempotencyKey: `unchanged-${replaySuffix}`, requestHash: `mismatch-${replaySuffix}`
+    })).rejects.toBeInstanceOf(DomainConflictError);
+  });
+
+  it('replays the original terminal rejection after regeneration supersedes its subject', async () => {
+    const replaySuffix = crypto.randomUUID().replaceAll('-', '');
+    const replayNumeric = BigInt(`0x${replaySuffix.slice(0, 15)}`).toString();
+    const replayRequester = `USR-${replayNumeric}1`;
+    const rejectingApprover = `USR-${replayNumeric}2`;
+    const replayAccount = `ACC-${replayNumeric}`;
+    const replayOpportunity = `OPP-${replayNumeric}`;
+    const runId = `run_${replaySuffix}`;
+    const subjectId = `approval_subject_${replaySuffix}`;
+    const regeneratedSubjectId = `approval_subject_regenerated_${replaySuffix}`;
+    const entryId = `entry_reject_${replaySuffix}`;
+    const payload = approvalBrief('Rejected Replay Integrity');
+    const subjectHash = hashApprovalPayload(payload);
+    const rejectRequestHash = `request_reject_${replaySuffix}`;
+
+    await admin`insert into personas (id, display_name, role) values
+      (${replayRequester}, 'Rejected Replay Requester', 'Account Owner'),
+      (${rejectingApprover}, 'Rejecting Replay Approver', 'Deal Desk Approver')`;
+    await admin`insert into accounts (id, name) values (${replayAccount}, 'Rejected Replay Account')`;
+    await admin`insert into opportunities (id, account_id, name, restricted)
+      values (${replayOpportunity}, ${replayAccount}, 'Rejected Replay Opportunity', false)`;
+    await admin`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
+      values (${runId}, ${replayOpportunity}, ${replayRequester}, 'awaiting_approval', 'mock', 'mock-brief', ${'b'.repeat(64)}, 11)`;
+    await admin`insert into approval_subjects
+      (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
+      values (${subjectId}, ${runId}, 11, ${subjectHash}, ${JSON.stringify(payload)}::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'replay-v1')`;
+    await admin`insert into approval_requirement_entries
+      (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
+      values (${entryId}, ${subjectId}, 'commercial_discount', '["deal_desk"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0)`;
+
+    const replayStore = new PostgresWorkflowStore(database);
+    const rejection = await replayStore.recordDecisionAndEnqueueFinalization({
+      runId: runId as never, expectedVersion: 11, approvalSubjectId: subjectId, expectedSubjectHash: subjectHash,
+      entryId, category: 'commercial_discount', authority: 'deal_desk', actorId: rejectingApprover as never,
+      idempotencyKey: `reject-${replaySuffix}`, requestHash: rejectRequestHash,
+      decision: {
+        action: 'reject', entryId, category: 'commercial_discount', authority: 'deal_desk',
+        actorId: rejectingApprover as never, originalPayload: payload, approvedPayload: payload, approvedSubjectHash: subjectHash,
+        rationale: 'The commercial position is not acceptable.', requestHash: rejectRequestHash, decidedAt: new Date().toISOString()
+      },
+      finalizationCommand: {
+        id: `command_reject_${replaySuffix}`, runId: runId as never, type: 'process-deal-brief-step',
+        payload: { step: 'finalize' }, idempotencyKey: `finalize-reject-${replaySuffix}`
+      }
+    });
+    expect(rejection).toMatchObject({
+      run: { id: runId, status: 'rejected', version: 12 },
+      quorumSatisfied: false, rejected: true, replayed: false, approvedSubjectHash: subjectHash
+    });
+
+    await replayStore.regenerateRun({
+      runId: runId as never, expectedVersion: 12, requestedBy: replayRequester as never,
+      idempotencyKey: `regenerate-${replaySuffix}`, requestHash: `request_regenerate_${replaySuffix}`,
+      command: {
+        id: `command_regenerate_${replaySuffix}`, runId: runId as never, type: 'process-deal-brief-step',
+        payload: { step: 'synthesize' }, idempotencyKey: `regenerate-command-${replaySuffix}`
+      }
+    });
+    await admin`insert into approval_subjects
+      (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
+      values (${regeneratedSubjectId}, ${runId}, 13, ${subjectHash}, ${JSON.stringify(payload)}::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'replay-v2')`;
+    await admin`update approval_subjects set superseded_by_subject_id = ${regeneratedSubjectId} where id = ${subjectId}`;
+
+    const replay = await replayStore.findDecisionByIdempotencyKey({
+      idempotencyKey: `reject-${replaySuffix}`, requestHash: rejectRequestHash
+    });
+    expect(replay).toMatchObject({
+      run: { id: runId, status: 'rejected', version: 12 },
+      approvalSubjectId: subjectId, entryId, approvedSubjectHash: subjectHash,
+      quorumSatisfied: false, rejected: true
+    });
+  });
 });

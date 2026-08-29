@@ -161,10 +161,15 @@ export const approvalDecisions = pgTable('approval_decisions', {
   action: text('action').notNull(), actorId: text('actor_id').notNull().references(() => personas.id), category: text('category').notNull(), authority: text('authority').notNull(),
   idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(), rationale: text('rationale'), originalPayload: json<Record<string, unknown>>('original_payload').notNull(),
   approvedPayload: json<Record<string, unknown>>('approved_payload').notNull(), editedPayload: json<Record<string, unknown>>('edited_payload'),
-  originalSubjectHash: text('original_subject_hash').notNull(), approvedSubjectHash: text('approved_subject_hash').notNull(), diff: json<Record<string, unknown>>('diff'), createdAt: now()
+  originalSubjectHash: text('original_subject_hash').notNull(), approvedSubjectHash: text('approved_subject_hash').notNull(), diff: json<Record<string, unknown>>('diff'),
+  resultRunVersion: integer('result_run_version').notNull(), resultStatus: text('result_status').notNull(),
+  resultQuorumSatisfied: boolean('result_quorum_satisfied').notNull(), resultRejected: boolean('result_rejected').notNull(), createdAt: now()
 }, (table) => [
   unique('approval_decisions_subject_entry_uq').on(table.approvalSubjectId, table.entryId), unique('approval_decisions_idempotency_uq').on(table.idempotencyKey),
-  foreignKey({ columns: [table.approvalSubjectId, table.entryId], foreignColumns: [approvalRequirementEntries.approvalSubjectId, approvalRequirementEntries.id], name: 'approval_decisions_entry_fk' })
+  foreignKey({ columns: [table.approvalSubjectId, table.entryId], foreignColumns: [approvalRequirementEntries.approvalSubjectId, approvalRequirementEntries.id], name: 'approval_decisions_entry_fk' }),
+  check('approval_decisions_result_run_version_ck', sql`${table.resultRunVersion} >= 0`),
+  check('approval_decisions_result_status_ck', sql`${table.resultStatus} in ('awaiting_approval','finalizing','rejected')`),
+  check('approval_decisions_result_consistency_ck', sql`${table.resultQuorumSatisfied} = (${table.resultStatus} = 'finalizing') and ${table.resultRejected} = (${table.resultStatus} = 'rejected')`)
 ]);
 export const briefs = pgTable('briefs', { id: text('id').primaryKey(), runId: text('run_id').notNull().references(() => runs.id), approvalSubjectId: text('approval_subject_id'), draftVersion: integer('draft_version').notNull().default(0), payload: json<Record<string, unknown>>('payload'), subjectHash: text('subject_hash').notNull(), finalizedAt: timestamp('finalized_at', { withTimezone: true }), createdAt: now() }, (table) => [
   uniqueIndex('briefs_run_version_uq').on(table.runId, table.draftVersion), check('briefs_subject_hash_check', sql`length(${table.subjectHash}) > 0`), check('briefs_draft_version_ck', sql`${table.draftVersion} >= 0`),
