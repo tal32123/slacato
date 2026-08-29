@@ -121,10 +121,11 @@ export class EmbeddingIndexer {
   }
 
   private completeProvenancePredicate() {
+    const prefixes = this.corpus?.sourceLocatorPrefixes.map((prefix) => `${prefix}%`) ?? [];
     return this.database.sql`evidence.reliability_class is not null and evidence.classification_reason is not null
-      and evidence.policy_hash ~ '^[0-9a-f]{64}$' and evidence.source_locator is not null
+      and evidence.policy_hash ~ '^[0-9a-f]{64}$' and evidence.source_locator like any(${prefixes}::text[])
       and document.reliability_class is not null and document.classification_reason is not null
-      and document.policy_hash = evidence.policy_hash and document.source_locator is not null
+      and document.policy_hash = evidence.policy_hash and document.source_locator like any(${prefixes}::text[])
       and document.source_type = evidence.source_type`;
   }
 

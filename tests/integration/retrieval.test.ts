@@ -186,6 +186,20 @@ describe('provider-neutral embedding indexing', () => {
       corpus: { sourceLocatorPrefixes: [prefix], requireCompleteProvenance: true }
     }).index()).rejects.toThrow('provenance is incomplete');
   });
+
+  it('requires both evidence and parent document locators to belong to the canonical corpus', async () => {
+    const seeded = await seed();
+    const suffix = randomUUID().replaceAll('-', '');
+    const prefix = `canonical/both/${suffix}/`;
+    const documentId = `document_wrong_parent_locator_${suffix}`;
+    await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+      values (${documentId}, ${documentId}, 1, 'salesforce', 'wrong-parent-doc', 'canonical candidate', '2026-08-01', 'authoritative_system', 'unrelated/document', 'canonical_rule', ${'c'.repeat(64)})`;
+    await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+      values (${`evidence_wrong_parent_locator_${suffix}`}, ${documentId}, ${seeded.accountId}, ${seeded.opportunityId}, 0, 'salesforce', 'standard', 'wrong-parent-chunk', 'canonical candidate', '2026-08-01', 'authoritative_system', ${`${prefix}evidence`}, 'canonical_rule', ${'c'.repeat(64)})`;
+    await expect(new EmbeddingIndexer(database, mock.embeddingGateway, profile, {
+      corpus: { sourceLocatorPrefixes: [prefix], requireCompleteProvenance: true }
+    }).index()).rejects.toThrow('Canonical embedding corpus provenance is incomplete');
+  });
 });
 
 describe('authorized hybrid retrieval and citations', () => {
@@ -193,6 +207,39 @@ describe('authorized hybrid retrieval and citations', () => {
     personaId: seeded.userId, allowed: true as const, accountIds: [seeded.accountId],
     sourceTypes: ['policy', 'pricing', 'salesforce', 'slack'] as const,
     canViewSensitivePricing: false, canRequestApproval: true, canApprove: false, canViewRestrictedAccounts: false
+  });
+
+  async function addExactCrmEvidence(seeded: Awaited<ReturnType<typeof seed>>): Promise<Readonly<{ ids: readonly string[]; prefix: string }>> {
+    const suffix = randomUUID().replaceAll('-', '');
+    const prefix = `round2/${suffix}/`;
+    const rows = [
+      [`evidence_exact_account_${suffix}`, `${prefix}salesforce/accounts.tsv#${seeded.accountId}`, 'Account Acme canonical record'],
+      [`evidence_exact_opportunity_${suffix}`, `${prefix}salesforce/opportunities.tsv#${seeded.opportunityId}`, 'Renewal opportunity canonical record'],
+      [`evidence_exact_contact_${suffix}`, `${prefix}salesforce/contacts.tsv#CON-EXACT`, 'Executive buyer canonical contact']
+    ] as const;
+    for (const [evidenceId, locator, content] of rows) {
+      const documentId = `document_${evidenceId}`;
+      await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+        values (${documentId}, ${documentId}, 1, 'salesforce', ${`doc-${evidenceId}`}, ${content}, '2026-08-20', 'authoritative_system', ${locator}, 'canonical_crm', ${'a'.repeat(64)})`;
+      await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+        values (${evidenceId}, ${documentId}, ${seeded.accountId}, ${seeded.opportunityId}, 0, 'salesforce', 'standard', ${`chunk-${evidenceId}`}, ${content}, '2026-08-20', 'authoritative_system', ${`${locator}:0`}, 'canonical_crm', ${'a'.repeat(64)})`;
+    }
+    return { ids: rows.map(([id]) => id), prefix };
+  }
+
+  it('returns exact authorized CRM evidence with citations and persists it in the immutable manifest', async () => {
+    const seeded = await seed();
+    const exact = await addExactCrmEvidence(seeded);
+    await new EmbeddingIndexer(database, mock.embeddingGateway, profile, { corpus: { sourceLocatorPrefixes: [...seededFixtureCorpus.sourceLocatorPrefixes, exact.prefix], requireCompleteProvenance: true } }).index();
+    const result = await new PostgresHybridEvidenceRetriever(database, mock.embeddingGateway, profile).search({
+      query: 'termination', accountId: seeded.accountId, opportunityId: seeded.opportunityId, runId: seeded.runId,
+      limit: 5, maxContextCharacters: 500, scope: authorizedScope(seeded)
+    });
+    expect(result.evidence.filter((entry) => exact.ids.includes(entry.evidenceId)).map((entry) => entry.evidenceId).sort()).toEqual([...exact.ids].sort());
+    expect(result.evidence.filter((entry) => exact.ids.includes(entry.evidenceId)).every((entry) => entry.citationId.startsWith('citation_'))).toBe(true);
+    const persisted = await sql<{ evidence_version_id: string }[]>`select evidence_version_id from run_evidence_manifest_entries where manifest_id = ${result.manifest.id}`;
+    expect(persisted.filter((entry) => exact.ids.includes(entry.evidence_version_id))).toHaveLength(3);
+    expect(result.evidence.reduce((sum, entry) => sum + entry.content.length, 0)).toBeLessThanOrEqual(500);
   });
 
   it('binds the persisted run to the requested opportunity and persona before retrieval or manifest persistence', async () => {
@@ -274,6 +321,23 @@ describe('authorized hybrid retrieval and citations', () => {
     expect(result.diagnostics.mandatoryPolicy).toBe('included');
   });
 
+  it('reserves the best ranked authorized policy chunk instead of the first fixed-source row', async () => {
+    const seeded = await seed();
+    const suffix = randomUUID().replaceAll('-', '');
+    const documentId = `document_policy_ranked_${suffix}`;
+    const evidenceId = `zz_evidence_policy_ranked_${suffix}`;
+    await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+      values (${documentId}, ${documentId}, 1, 'policy', 'ranked-policy-document', 'quantum zebra exception requires CFO approval', '2026-08-01', 'authoritative_policy', 'fixture#policy-ranked', 'test_classification', ${'a'.repeat(64)})`;
+    await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+      values (${evidenceId}, ${documentId}, ${seeded.accountId}, ${seeded.opportunityId}, 0, 'policy', 'standard', 'ranked-policy-chunk', 'quantum zebra exception requires CFO approval', '2026-08-01', 'authoritative_policy', 'fixture#policy-ranked:0', 'test_classification', ${'a'.repeat(64)})`;
+    await new EmbeddingIndexer(database, mock.embeddingGateway, profile, { corpus: seededFixtureCorpus }).index();
+    const result = await new PostgresHybridEvidenceRetriever(database, mock.embeddingGateway, profile).search({
+      query: 'quantum zebra exception', accountId: seeded.accountId, opportunityId: seeded.opportunityId, runId: seeded.runId,
+      limit: 2, maxContextCharacters: 100, scope: authorizedScope(seeded)
+    });
+    expect(result.evidence.filter((entry) => entry.sourceType === 'policy').map((entry) => entry.evidenceId)).toEqual([evidenceId]);
+  });
+
   it('replays the same immutable manifest idempotently and conflicts on changed inputs', async () => {
     const seeded = await seed();
     await new EmbeddingIndexer(database, mock.embeddingGateway, profile, { corpus: seededFixtureCorpus }).index();
@@ -285,6 +349,21 @@ describe('authorized hybrid retrieval and citations', () => {
     expect(replay).toEqual(first);
     await expect(sql`select id from run_evidence_manifests where run_id = ${seeded.runId}`).resolves.toHaveLength(1);
     await expect(retriever.search({ ...request, query: 'changed retrieval intent' })).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('replays the immutable snapshot before inspecting newly changed corpus readiness or policy lineage', async () => {
+    const seeded = await seed();
+    await new EmbeddingIndexer(database, mock.embeddingGateway, profile, { corpus: seededFixtureCorpus }).index();
+    const retriever = new PostgresHybridEvidenceRetriever(database, mock.embeddingGateway, profile, () => new Date('2026-08-28T00:00:00.000Z'));
+    const request = { query: 'termination', accountId: seeded.accountId, opportunityId: seeded.opportunityId, runId: seeded.runId, limit: 3, scope: authorizedScope(seeded) };
+    const first = await retriever.search(request);
+    const suffix = randomUUID().replaceAll('-', '');
+    const documentId = `document_after_manifest_${suffix}`;
+    await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+      values (${documentId}, ${documentId}, 1, 'salesforce', 'after-manifest-doc', 'new unindexed corpus state', '2026-08-29', 'authoritative_system', 'fixture#sf-after', 'test_classification', ${'b'.repeat(64)})`;
+    await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+      values (${`evidence_after_manifest_${suffix}`}, ${documentId}, ${seeded.accountId}, ${seeded.opportunityId}, 0, 'salesforce', 'standard', 'after-manifest-chunk', 'new unindexed corpus state', '2026-08-29', 'authoritative_system', 'fixture#sf-after:0', 'test_classification', ${'b'.repeat(64)})`;
+    await expect(retriever.search(request)).resolves.toEqual(first);
   });
 
   it('rejects inconsistent canonical policy content hashes before ranking', async () => {
