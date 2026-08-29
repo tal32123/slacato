@@ -1,11 +1,13 @@
 # SlaCato Design Specification
 
 Date: 2026-08-28  
-Status: Approved direction; implementation not started
+Status: Approved direction; implementation in progress (use the implementation plan and SDD ledger for task status)
 
 ## 1. Product Summary
 
 SlaCato is a responsive deal-intelligence application that generates evidence-grounded strategic deal briefs from Salesforce, Gong, Slack, policy, pricing, and permission data. It is designed as a polished sales product rather than an engineering console, while still making authorization, evidence, workflow progress, approvals, and audit details inspectable.
+
+The product is a **seller-assist system**: it prepares an auditable internal brief and routes sensitive recommendations to people. It does not autonomously negotiate, send customer-facing material, optimize for “winning” at any cost, or replace the account owner, Sales Leader, Deal Desk, or legal judgment.
 
 The submission must satisfy every mandatory requirement in `Cato_GTM_AI_Engineer_Home_Task.docx` and add a small number of defensible differentiators: hybrid retrieval, provider portability, durable approvals, strong authorization boundaries, evaluation coverage, and a polished responsive interface.
 
@@ -34,8 +36,27 @@ The submission must satisfy every mandatory requirement in `Cato_GTM_AI_Engineer
 - Python or the Ragas package.
 - PDF export unless later explicitly requested.
 - Raw chain-of-thought display or persistence.
+- Bonus cost-aware model routing or synthetic-data generators beyond the mandatory reviewed Slack fixture. Token/call budgets are reliability controls, not a claim that bonus model routing is implemented.
 
 ## 3. Assignment Compliance
+
+The following requirement IDs are binding acceptance gates and are used by the implementation-plan traceability matrix:
+
+| ID | Mandatory outcome |
+|---|---|
+| `ASG-PROD-01` | Seller-assist positioning is visible in product copy, README, and presentation; no autonomous customer action. |
+| `ASG-DATA-01` | All eight provided source groups are parsed and exercised: accounts, opportunities, contacts, Gong summaries, Gong transcripts, pricing notes, access permissions, and Deal Desk policy; reviewed Slack is the additional ninth source. |
+| `ASG-SLACK-01` | At least two clearly synthetic updates per opportunity pass PII, chronology, novelty, reinforcement, ambiguity/conflict, ingestion, authorization, citation, and brief-impact checks. |
+| `ASG-LIVE-01` | Reviewer/demo/submission briefs, approvals, specialist artifacts, and traces are produced with live LLM calls. Mock is permitted only for deterministic tests and local development. |
+| `ASG-AUTH-01` | Authorization occurs before retrieval and generation; denied results and traces leak no source/account details; authorization lookups are distinguished from evidence retrieval. |
+| `ASG-CITE-01` | Every important claim resolves to an authorized manifest entry and visibly renders `source=<relative path>, <stable key>=<stable ID>`. |
+| `ASG-HITL-01` | Category-specific approval requirements and multi-role quorum are deterministic, durable, immutable, and tested. |
+| `ASG-AGENT-01` | At least three LLM-backed specialists have typed contracts, defined tools, validation, observable invocations, and explicit failure/degraded behavior. |
+| `ASG-GUARD-01` | Unsupported claims, restricted data, prompt injection, unsafe customer language, low confidence, conflicting evidence, and missing evidence are blocked or routed to review. |
+| `ASG-TRACE-01` | Retrieval, every agent attempt, tool/validation/repair action, policy/guardrail decision, approval, recommendation, usage, and finalization are linked in a replayable trace. |
+| `ASG-DEMO-01` | Authorized standard, authorized restricted-with-approval, unauthorized restricted, and Slack-impact scenarios pass end to end, including malformed/missing/partial-failure paths. |
+| `ASG-DOC-01` | Runnable prototype, logical and deployment diagrams, README, technical overview, security notes, sample artifacts, and an actual timed 15-minute presentation are delivered. |
+| `ASG-PROVIDER-01` | Supported provider/model, inference parameters, environment variables, secret setup, live probe, and reviewer runbook are documented and verified. |
 
 SlaCato will provide:
 
@@ -49,6 +70,8 @@ SlaCato will provide:
 - Two or more synthetic Slack updates per opportunity in a documented TSV format.
 - Demonstrations for authorized OPP-1001/OPP-1002, restricted OPP-1003 with approval, unauthorized OPP-1003 with no leakage, and a brief citing Slack.
 - A README describing architecture, setup, models, environment variables, commands, assumptions, and demo flow.
+
+Mock-generated output may demonstrate deterministic tests, but it never satisfies `ASG-LIVE-01`. Before review, demo, or submission, Ollama Cloud must pass its credentialed capability probe and the mandatory artifacts must be regenerated live.
 
 Every brief contains:
 
@@ -94,9 +117,20 @@ It does not expose hidden chain of thought. User-facing reasoning is a concise, 
 
 There is no pause/resume button. When policy requires approval, the workflow persists an immutable, versioned approval subject and stops consuming model work. The assigned approver can approve unchanged, edit and approve with rationale, or reject with rationale. Compare-and-swap prevents stale decisions; edited content is revalidated for schema, citations, authorization, claim support, policy, and unsafe language. Approval finalizes that exact snapshot without another model synthesis. Closing and reopening the browser rejoins the persisted run.
 
+Approval authority is category-specific and derived from the canonical policy plus explicit persona grants, never from a model-produced role label:
+
+- The account owner may request approval. `can_request_approval` does not grant Deal Desk, Sales Leader, or legal approval authority.
+- A discount greater than 10%, or any negative renewal uplift, requires Deal Desk approval.
+- A discount greater than 15% requires a quorum of both Deal Desk and Sales Leader approvals from authorized actors; one decision cannot silently satisfy both roles.
+- Liability-cap changes and data-retention, restricted-research, or customer-specific security language require distinct legal authority. The canonical fixture has neither a legal-approval flag nor a Sales Leader scoped to restricted OPP-1003, so those authorities must be represented by explicit, documented candidate-created demo grants; otherwise the request remains safely pending and customer-facing language is unavailable.
+- Low-confidence, conflicting, or missing-evidence recommendations require a scoped human-review decision by an account owner or Sales Leader, recorded separately from commercial/legal approvals.
+- Customer-facing concession language additionally requires account-owner confirmation after every underlying commercial, legal, and human-review requirement is satisfied. Until then the UI may show only an internal draft, never ready-to-send copy.
+
+An approval subject can therefore require several entries. Every required entry must be approved; any rejection rejects the subject. The persisted decision records the actor, authority, subject hash, category, rationale, and time, and enforces separation between requesting a decision and possessing the authority to grant it.
+
 ### Demo Login and Settings
 
-The login page is a polished persona selector backed by the canonical identities in the permissions fixture. Selecting a persona creates a signed, HTTP-only demo session. There are no passwords and no arbitrary role creation.
+The login page is a polished persona selector backed by the canonical identities in the permissions fixture. Because the source policy requires legal approval but supplies no legal approver identity or Sales Leader scoped to restricted OPP-1003, clearly labeled candidate-created synthetic Legal Reviewer and Restricted Sales Leader personas may be added with only the explicit authority and minimum account scope needed for the demo. These grants are controls, not evidence, and cannot weaken canonical denials. Selecting a persona creates a signed, HTTP-only demo session. There are no passwords and no runtime arbitrary role creation.
 
 Settings includes:
 
@@ -176,6 +210,8 @@ Specialist agents cannot call one another. The strategy agent receives validated
 
 Salesforce loading, authorization, retrieval, citation validation, and policy enforcement remain deterministic tools or services rather than being mislabeled as agents.
 
+Each contract defines `success`, `degraded`, and `failed` outcomes. Conversation failure removes conversation-derived assertions and creates a warning; stakeholder failure preserves deterministic CRM contacts but marks inferred roles unavailable; commercial/policy failure is fatal because approval cannot be decided safely; strategy failure is fatal because no brief exists. Partial specialist failure is persisted and traced, and synthesis may continue only when its explicit degraded-mode contract can still satisfy grounding and approval safety.
+
 ## 6. Generic Infrastructure Boundaries
 
 ### Model Gateway
@@ -245,6 +281,8 @@ The effective evidence scope is calculated before retrieval from the signed pers
 
 Authorization is checked again when resolving citations and before rendering persisted artifacts. This defense-in-depth prevents a stale or malformed artifact from becoming a disclosure path.
 
+The opportunity-to-account, requester, and permission-profile reads required to compute scope are recorded as redacted `authorization_lookup` trace events. They are not evidence retrieval, are never placed in model context, and are excluded from evidence/citation counts. Authorized evidence queries are separately recorded as `evidence_retrieval`; a denial trace contains only the safe decision code and correlation identifiers.
+
 ### Part 1 Retrieval
 
 - PostgreSQL full-text search for lexical and keyword matching
@@ -255,10 +293,13 @@ Authorization is checked again when resolving citations and before rendering per
 - Transparent recency and source-reliability adjustments
 - Policy documents treated deterministically and not penalized simply for age
 - Stable chunk and citation identifiers
+- Visible citation labels in the exact shape `source=<repository-relative path>, <stable key>=<stable ID>` (for example, `source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-008`), with the internal chunk ID available in evidence detail
 
 ### Deferred Decision — Part 2 Reranking
 
 After implementing and evaluating the baseline retrieval system, pause to discuss whether to prototype cross-encoder/reranking. Do not implement it automatically. Review baseline metrics together first.
+
+Hybrid FTS + bi-encoder similarity + deterministic fusion is the required internal baseline. Cross-encoder reranking is an optional post-baseline experiment only; submission wording must not imply that it is implemented unless a separate measured experiment is accepted. Likewise, source reliability and recency adjustments may be reported only when exercised by tests and evaluation output.
 
 ## 9. Structured Generation and Reliability
 
@@ -278,7 +319,7 @@ The canonical brief JSON includes all nine sections, stable claim IDs, citation 
 
 ## 10. Model Providers
 
-The initial-release development/demo default is the deterministic `AI_PROVIDER=mock` adapter. It is provider-neutral infrastructure, uses generic scriptable responses through the same budgeted gateway, and emits a documented `mock-*` profile with 64-dimensional deterministic unit-normalized non-empty embeddings. It is not live Ollama compatibility and cannot be used to infer a real-model dimension.
+The deterministic-test and local-development default is the `AI_PROVIDER=mock` adapter. It is provider-neutral infrastructure, uses generic scriptable responses through the same budgeted gateway, and emits a documented `mock-*` profile with 64-dimensional deterministic unit-normalized non-empty embeddings. It is not a reviewer/demo/submission mode, is not live Ollama compatibility, and cannot be used to infer a real-model dimension.
 
 `AI_PROVIDER=ollama` is the production AI mode. It uses server-side `OLLAMA_API_KEY`, base URL, generation model, and embedding model; all three required Ollama variables are strictly validated only in this mode. Ollama remains explicitly unverified until its credentialed discovery, schema, and embedding probe succeeds.
 
@@ -306,6 +347,10 @@ All project-owned evaluation logic remains TypeScript.
 - Policy-trigger and approval-decision correctness
 - Context relevance, context recall, faithfulness, and answer relevance using Promptfoo-style RAG assertions
 - Prompt injection, RBAC/BOLA, source attribution, and poisoned-context fixtures
+- Slack synthetic-marker and PII checks (real names, customer names, emails, phone numbers, and sensitive identifiers), semantic novelty/non-duplication checks against the eight provided source groups, `source_type=slack` authorization, citation, and ablation showing a visible brief difference with Slack excluded
+- Trace-completeness assertions linking authorization lookup, evidence retrieval, every specialist/strategy attempt, validation/repair, guardrail/policy decision, approval requirement/decision, recommendation, finalization, and usage
+- Per-agent malformed-output, timeout, unavailable-provider, missing-input, denied-source, degraded-specialist, fatal-commercial/policy, and multi-agent partial-failure cases
+- End-to-end malformed request, missing opportunity/source data, opaque denial, partial agent failure, approval quorum, unsafe-language rejection, and Slack-impact paths on desktop and mobile
 
 Custom evaluators are limited to domain-specific behavior Promptfoo cannot know: citation authorization, stable citation resolution, policy triggers, permission leakage, and golden chunk identity. NDCG and broad bespoke evaluation frameworks are omitted unless baseline results later justify them.
 
@@ -325,6 +370,7 @@ Pull requests run deterministic lint, typecheck, unit, integration, and fixture-
 - Output encoding and safe Markdown rendering
 - No raw chain of thought
 - No sensitive content in URLs, client state, toast messages, or unauthorized counts
+- Deterministic unsafe-language checks before persistence, approval, export, and rendering block threats, deception, discriminatory or harassing language, fabricated commitments, unapproved legal/pricing promises, and instructions to bypass policy. Ambiguous customer-facing text is routed to human review rather than silently rewritten as approved copy.
 
 ## 13. Deployment and Operations
 
@@ -356,6 +402,12 @@ User-facing errors contain safe next actions and correlation IDs. Internal detai
 - Evaluation methodology and report interpretation
 - Demo script covering every required scenario
 - Known limitations and the explicit Part 2 reranking decision point
+- A logical diagram showing agents, orchestration, RAG, state, approvals, guardrails, observability, and output channels
+- A deployment diagram showing web/API/worker, PostgreSQL/pgvector, Redis, secrets, model gateway, monitoring, and trust boundaries
+- A technical overview covering production scalability, high availability, monitoring, secrets management, incident/dead-letter operations, backups, retention, and support ownership
+- Security notes covering the authorization lookup/evidence boundary, default-deny retrieval, approval authorities/quorum, prompt injection, unsafe-language checks, secrets, log redaction, and known limitations
+- A real, timed 15-minute presentation artifact and speaker/demo script covering business value, design choices, live demo, evaluation results, and production failure modes; “slide-ready notes” alone do not satisfy this deliverable
+- Provider documentation with exact Ollama Cloud model identifiers, supported output mode, inference parameters, required environment variables, secret configuration, live-probe result, and commands reviewers use to produce non-mock artifacts
 
 ## 16. Open Implementation Assumptions
 
@@ -366,6 +418,8 @@ User-facing errors contain safe next actions and correlation IDs. Internal detai
 - The one-time generated Slack TSV will be reviewed before being treated as canonical fixture data.
 
 These assumptions must be validated during setup and surfaced clearly when unmet; they do not authorize silent fallbacks that would weaken the assignment requirements.
+
+If Ollama Cloud is unavailable, deterministic development remains usable, but reviewer/demo/submission acceptance is blocked rather than silently falling back to mock.
 
 ## 17. Decision Summary
 

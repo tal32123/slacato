@@ -19,7 +19,7 @@
 - Slack influences collaboration patterns only; do not copy Slack marks or trade dress.
 - Enforce authorization before retrieval, prompting, citation resolution, logging, and rendering; unauthorized responses reveal no hidden counts or metadata.
 - Persist run IDs before model calls and persist every attempt, usage record, validated artifact, checkpoint, approval, and final brief.
-- Default initial-release development/demo mode to the deterministic mock provider; provider and transport modules contain no Cato or sales rules. Ollama stays a server-only, credentialed production-AI gate and must not be claimed compatible until its live probe succeeds.
+- Default deterministic tests and local development to the mock provider; provider and transport modules contain no Cato or sales rules. Reviewer runs, the interview demo, and submitted generated artifacts MUST use live Ollama Cloud after its server-only credentialed probe succeeds. Mock output is never accepted as assignment evidence.
 - Stream safe workflow progress and completed validated sections over SSE; never stream or store raw chain of thought.
 - Embedding model is deployment configuration and cannot be changed in the UI.
 - Part 1 uses PostgreSQL FTS, exact cosine over the authorized pgvector subset, and RRF; HNSW, pg_trgm, and cross-encoder reranking remain deferred until baseline metrics justify them.
@@ -69,6 +69,28 @@ tests/{unit,integration,contract,e2e}/**
 Task numbers below remain stable references, but execution MUST follow this dependency order: **1 → 2 → 7 → 3 → 4 → 5 → 6 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17**. Task 7's mock profile enables development/demo work; Task 3 must use a dimension-flexible vector column and persist profile metadata rather than pinning its typmod to mock or unverified live dimensions. Task 4 ingests records only and Task 6 creates embeddings/indexes.
 
 The architecture, AI/RAG, and UI/UX reviews resolved these choices: NestJS plus BullMQ and a PostgreSQL transactional outbox instead of in-request work or a general workflow platform; exact authorized vector search instead of HNSW; capability-aware native schema or prompted-JSON generation; immutable versioned approval subjects; provider-neutral context budgeting; read-only diagnostics instead of model/theme controls; and mandatory live artifacts before packaging.
+
+## Assignment Traceability Closeout
+
+Tasks already completed keep their original implementation history. The following assignment gates are normative for remaining implementation and closeout verification; Task 15 adds regression proof for completed foundations instead of rewriting their history.
+
+| Requirement ID | Concrete acceptance evidence | Owning tasks |
+|---|---|---|
+| `ASG-PROD-01` | Product copy, README, and timed presentation state seller-assist/no autonomous customer action. | 11, 17 |
+| `ASG-DATA-01` | Fixture inventory proves all eight provided source groups are parsed; scenario traces prove seven evidence groups affect retrieval/briefs while access permissions are used only for authorization. | 4, 6, 10, 15 |
+| `ASG-SLACK-01` | PII/synthetic/chronology/novelty/category tests, `source_type=slack` authorization test, stable citation, and with/without-Slack brief diff. | 4, 5, 6, 15, 16 |
+| `ASG-LIVE-01` | Non-mock provider markers, four nonzero-usage agent invocations, live approval output, and live traces for mandatory scenarios. | 7, 8, 9, 16 |
+| `ASG-AUTH-01` | Pre-retrieval/pre-generation denial tests plus distinct safe `authorization_lookup` and `evidence_retrieval` trace kinds. | 5, 6, 8, 10, 15 |
+| `ASG-CITE-01` | Claim resolver and UI/export tests render `source=<path>, <stable key>=<stable ID>` and reject unauthorized/stale IDs. | 6, 8, 12, 14, 15 |
+| `ASG-HITL-01` | Deterministic category matrix, distinct authority grants, multi-actor quorum, immutable subject/CAS, low-confidence and customer-language gates. | 5, 9, 13, 15 |
+| `ASG-AGENT-01` | Four typed LLM-backed contracts with no tools, validation, trace, and per-agent degraded/fatal failure tests. | 7, 8, 9, 10, 15 |
+| `ASG-GUARD-01` | Unsupported/restricted/injected/unsafe output is blocked; low confidence, conflict, missing evidence, and customer language route to required review. | 8, 9, 15 |
+| `ASG-TRACE-01` | Trace completeness checker links authorization, retrieval, all attempts, validation/repair, guardrails, approvals, recommendations, usage, and finalization. | 3, 7, 9, 10, 14, 15 |
+| `ASG-DEMO-01` | E2E passes authorized standard, authorized restricted/quorum, opaque denial, malformed input, missing data, partial failure, and visible Slack-impact scenarios. | 9, 12, 13, 15, 16 |
+| `ASG-DOC-01` | Runnable prototype, two explicit diagrams, technical overview, security notes, sample artifacts, and a timed presentation deck/script. | 16, 17 |
+| `ASG-PROVIDER-01` | `.env.example`, compatibility probe, exact Ollama model/parameters/secrets/run commands, and verifier rejection of mock artifacts. | 1, 7, 16, 17 |
+
+The Part 1 baseline is PostgreSQL FTS plus bi-encoder embeddings, exact authorized-subset cosine search, and RRF. Cross-encoder reranking is optional only after baseline evaluation and discussion. Do not claim the bonus cost-aware router, cross-encoder, or additional synthetic-data generator unless separately implemented, measured, and accepted.
 
 ---
 
@@ -283,6 +305,18 @@ it('requires two synthetic Slack updates per opportunity', () => {
   expect([...counts.values()].every(rows => rows.length >= 2)).toBe(true);
   expect(parsed.every(row => row.syntheticNotice === true)).toBe(true);
 });
+
+it('rejects Slack PII and duplicated source text', () => {
+  expect(() => validateSlackFixture(piiCandidate, providedSourceCorpus)).toThrow('slack_pii');
+  expect(() => validateSlackFixture(verbatimDuplicate, providedSourceCorpus)).toThrow('slack_not_novel');
+});
+
+it('loads every mandatory provided source group', () => {
+  expect(parseFixtureSet(root).inventory).toEqual([
+    'accounts', 'opportunities', 'contacts', 'gong_summaries', 'gong_transcripts',
+    'pricing_notes', 'access_permissions', 'deal_desk_policy', 'slack_updates',
+  ]);
+});
 ```
 
 - [ ] **Step 2: Fetch the pinned source fixtures**
@@ -300,12 +334,12 @@ Chunk by semantic record boundaries: one Salesforce row, one Gong summary, trans
 
 - [ ] **Step 5: Generate Slack fixtures once through the gateway**
 
-Use structured output to propose at least two updates per opportunity. Validate that every opportunity has a reinforcing fact, missing context, and ambiguity/conflict; validate chronology and synthetic notices. Persist the reviewed TSV plus provider, model, prompt hash, timestamp, and validation result in `generation.json`. Runtime ingestion never regenerates these rows.
+Use structured output to propose at least two updates per opportunity. Validate that every opportunity has a reinforcing fact, missing context, and ambiguity/conflict; validate chronology and synthetic notices. Reject real person/customer names, emails, phone numbers, sensitive identifiers, and verbatim/near-verbatim duplication of provided evidence; compare normalized n-grams and deterministic similarity against the eight provided source groups, then require human review of novelty classifications. Persist the reviewed TSV plus provider, model, prompt hash, timestamp, validation result, and per-row `reinforces | adds_context | ambiguity_conflict` label in `generation.json`. Runtime ingestion never regenerates these rows.
 
 - [ ] **Step 6: Verify record-only ingestion idempotency**
 
 Run: `pnpm vitest run tests/unit/fixture-schemas.test.ts tests/unit/chunk.test.ts && pnpm ingest:records && pnpm ingest:records`  
-Expected: PASS; the second ingest creates zero duplicates, no embedding call occurs, and policy-derived sensitive pricing is stored as restricted.
+Expected: PASS; all eight provided source groups plus Slack appear in the inventory, the second ingest creates zero duplicates, no embedding call occurs, PII/novelty/category checks pass, Slack retains `source_type=slack`, and policy-derived sensitive pricing is stored as restricted.
 
 - [ ] **Step 7: Commit**
 
@@ -339,13 +373,13 @@ Expected: FAIL because authorization is undefined.
 
 - [ ] **Step 3: Implement signed HTTP-only persona sessions**
 
-Sign `{ userId, issuedAt, version }` with HMAC-SHA256 and constant-time verification. Cookies are `httpOnly`, `sameSite=lax`, `secure` in production, and expire after eight hours. Only canonical fixture personas can be selected.
+Sign `{ userId, issuedAt, version }` with HMAC-SHA256 and constant-time verification. Cookies are `httpOnly`, `sameSite=lax`, `secure` in production, and expire after eight hours. Only canonical fixture personas and the checked-in, clearly synthetic Legal Reviewer and Restricted Sales Leader personas needed to exercise otherwise-unrepresented OPP-1003 policy authorities can be selected; their minimum-scope grants are controls, never evidence, and runtime arbitrary role creation is forbidden.
 
 Bind production to one browser origin: the public web container reverse-proxies `/api` and SSE to the private API, and Vite uses the same proxy contract in development. Use a host-only `__Host-slacato_session` cookie (`Secure`, `HttpOnly`, `Path=/`, no `Domain`) in production. `GET /api/auth/csrf` bootstraps a session-bound token; the SPA returns it as `X-CSRF-Token` on login, persona changes, approvals, generation, and logout. Rotate it after authentication/persona/logout. Reject missing or hostile `Origin`/`Sec-Fetch-Site`; allow documented non-browser health traffic only on read-only endpoints. All authenticated fetches use `credentials: 'include'`. Keep an exact non-wildcard development CORS allowlist only where the proxy cannot be used, with `Vary: Origin`.
 
 - [ ] **Step 4: Implement `AccessScope` from canonical grants**
 
-Return an opaque denial or an allowed scope containing only permitted account IDs, source types, sensitive-pricing access, approval authority, and restricted-account access. Do not put denied opportunity details in errors, logs, or URLs.
+Return an opaque denial or an allowed scope containing only permitted account IDs, source types, sensitive-pricing access, category-specific approval authorities, and restricted-account access. Keep `canRequestApproval` separate from `approvalAuthorities`; account owners cannot approve as Deal Desk, Sales Leader, or legal merely because they may request approval. Do not put denied opportunity details in errors, logs, or URLs.
 
 - [ ] **Step 5: Build and test the persona login**
 
@@ -398,6 +432,8 @@ Immediately persist an immutable `RunEvidenceManifest` containing authorized chu
 - [ ] **Step 5: Implement citation resolution defense-in-depth**
 
 Resolve only stable citation IDs through both the current `AccessScope` and run evidence manifest. A denied, stale, or out-of-manifest citation returns the same opaque forbidden error as a denied opportunity and never reveals source type or existence.
+
+Each authorized result also exposes a deterministic display label `source=<repository-relative path>, <stable key>=<stable ID>`; for example, `source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-008`. Internal chunk IDs remain secondary evidence-detail metadata and never replace the assignment-visible source path/stable ID.
 
 - [ ] **Step 6: Verify golden retrieval and query plans**
 
@@ -478,7 +514,7 @@ it('commercial agent receives only authorized commercial evidence', async () => 
 
 - [ ] **Step 2: Define narrow agent schemas and prompts**
 
-Each agent receives a bounded immutable evidence manifest and opportunity context through a shared prompt envelope: trusted system policy, trusted task instructions, and untrusted evidence records encoded as inert data with stable IDs and fixed delimiters. Evidence instructions, role claims, tool requests, schemas, and citation forgeries are explicitly non-executable. Agents have `tools: none` and no repository access. Artifacts reference evidence IDs instead of copying excerpts. Strategy receives bounded artifacts plus only their cited excerpts. Deterministic pruning priority is mandatory policy, canonical CRM facts, cited contradictions, then remaining ranked chunks.
+Each agent receives a bounded immutable evidence manifest and opportunity context through a shared prompt envelope: trusted system policy, trusted task instructions, and untrusted evidence records encoded as inert data with stable IDs and fixed delimiters. Evidence instructions, role claims, tool requests, schemas, and citation forgeries are explicitly non-executable. Agents have `tools: none` and no repository access. Artifacts reference evidence IDs instead of copying excerpts. Strategy receives bounded artifacts plus only their cited excerpts. Deterministic pruning priority is mandatory policy, canonical CRM facts, cited contradictions, then remaining ranked chunks. Every contract returns a discriminated `success | degraded | failed` outcome with safe error code, validation issues, and trace linkage.
 
 - [ ] **Step 3: Implement agents over `ModelGateway`**
 
@@ -488,10 +524,12 @@ Use composition, not inheritance. Each module owns its prompt and Zod schema and
 
 Reject duplicate claim IDs, unknown/stale citations, wrong opportunity/account bindings, and confidence outside `[0,1]`. Validate critical entities, numbers, currencies, percentages, dates, quotes, competitors, stakeholders, and legal terms against authorized manifest evidence; classify support as `supported`, `contradicted`, or `insufficient`. Critical/material claims require 100% support. Contradicted claims fail; insufficient claims are removed from factual/recommendation assertions and become Missing Information or explicitly labeled hypotheses requiring review. Test worst-case three-specialist and corrective-retry fan-in against the smallest configured model window.
 
+Run deterministic unsafe-language validation over recommendation and customer-language fields before an artifact is accepted. Block threats, deception, discriminatory/harassing language, fabricated commitments, unapproved pricing/legal promises, and instructions to bypass policy. `confidence < 0.70`, conflict, or missing material evidence creates a human-review trigger and cannot be rendered as approved customer language.
+
 - [ ] **Step 5: Verify all agent contracts**
 
 Run: `pnpm vitest run tests/contract/agents.test.ts && pnpm typecheck`  
-Expected: four agents pass; the dependency-boundary lint rule rejects a deliberate cross-agent import, then passes after removing it.
+Expected: four agents pass; malformed structured output, timeout/provider failure, missing required input, denied evidence, and unsafe language each produce the declared safe outcome. Conversation failure degrades by omitting conversation assertions; stakeholder failure degrades to deterministic CRM contacts with inferred roles unavailable; commercial/policy failure and strategy failure are fatal. The dependency-boundary lint rule rejects a deliberate cross-agent import, then passes after removing it.
 
 - [ ] **Step 6: Commit**
 
@@ -527,22 +565,22 @@ it('stops at approval and resumes without repeating completed agents', async () 
 
 - [ ] **Step 2: Implement policy rules as deterministic code**
 
-Parse the canonical policy into explicit tested rules for discounts, non-standard legal/commercial terms, restricted accounts, sensitive pricing, and approver roles. Agents may summarize policy but cannot decide authorization or mandatory approval.
+Parse the canonical policy into explicit tested rules for discounts, non-standard legal/commercial terms, restricted accounts, sensitive pricing, and approver roles. Represent approval as a set of required category/authority entries, not one boolean: `discount > 10%` or negative renewal uplift requires Deal Desk; `discount > 15%` requires the distinct quorum Deal Desk **and** Sales Leader; liability-cap changes and data-retention/restricted-research/customer-specific-security language require Legal Reviewer authority; low confidence (`< 0.70`), conflicting evidence, or missing material evidence requires scoped human review by the account owner or Sales Leader; customer-facing concession language requires account-owner confirmation after all underlying entries pass. `canRequestApproval` only permits submission and never satisfies an authority. One actor may satisfy only authorities explicitly granted to that persona, each required entry has its own decision, all entries must approve, and any rejection rejects the immutable subject. Add checked-in candidate-created synthetic Legal Reviewer and Restricted Sales Leader grants because the source fixture defines those OPP-1003 approval needs but has no appropriately scoped personas; keep them out of evidence retrieval, prevent them from weakening canonical denials, and document them as demo-only identities. Agents may summarize policy but cannot decide authorization or mandatory approval.
 
 - [ ] **Step 3: Implement checkpointed orchestration**
 
-Create the run and outbox command in one transaction. The outbox dispatcher publishes an idempotent BullMQ job; its thin processor invokes `ProcessDealBriefStep`. Specialists use independently checkpointed `Promise.allSettled`, with bounded retry and an explicit degraded/fatal policy. Duplicate delivery or process loss reruns only uncommitted step invocations. Concurrent start/approval commands use idempotency keys, optimistic versions, and active-run rejoin rather than duplicate paid calls. When approval is required, persist `awaiting_approval` and finish the job; the decision endpoint atomically records the immutable decision and outbox continuation/finalization command.
+Create the run and outbox command in one transaction. The outbox dispatcher publishes an idempotent BullMQ job; its thin processor invokes `ProcessDealBriefStep`. Specialists use independently checkpointed `Promise.allSettled`, with bounded retry and the explicit Task 8 degraded/fatal matrix: conversation or stakeholder degradation may continue with warnings and removed/limited claims, while commercial/policy or strategy failure is fatal. Duplicate delivery or process loss reruns only uncommitted step invocations. Concurrent start/approval commands use idempotency keys, optimistic versions, and active-run rejoin rather than duplicate paid calls. When approval is required, persist `awaiting_approval` and finish the job; the decision endpoint atomically records each authority decision and enqueues continuation/finalization only after quorum is satisfied.
 
 Model retries belong only to the Task 7 retry controller. BullMQ attempts recover delivery/process failure and never create an unbounded inner model retry loop. Configure lock renewal for long calls, one initial worker replica, explicit worker/model concurrency and rate limits, graceful draining, and a per-run call/token budget shared by all specialists. A crash-ambiguous provider call may repeat and is labeled/counts as `possible_duplicate`; exactly-once paid inference is not claimed.
 
 - [ ] **Step 4: Persist every generation and audit event**
 
-Create the run before any model call. Approval binds to immutable `draftVersion`, `subjectHash`, exact section/recommendation IDs, citations, and policy triggers. Actions are `approve_unchanged`, `edit_and_approve`, and `reject`; edit-and-approve and reject require rationale. Use compare-and-swap for stale tabs, store original/edited/diff/actor/time, and revalidate the exact approved payload for schema, authorization, claim support, citations, policy, and unsafe language. Finalize that snapshot without another LLM call. A regeneration creates a new version and invalidates prior approval.
+Create the run before any model call. Approval binds to immutable `draftVersion`, `subjectHash`, exact section/recommendation IDs, citations, policy triggers, required authority, and quorum version. Actions are `approve_unchanged`, `edit_and_approve`, and `reject`; edit-and-approve and reject require rationale. Use compare-and-swap for stale tabs, store original/edited/diff/actor/authority/category/time, and revalidate the exact approved payload for schema, authorization, claim support, citations, confidence, policy, and unsafe language. Finalize that snapshot without another LLM call only after all required entries approve. A regeneration creates a new version and invalidates every prior entry.
 
 - [ ] **Step 5: Verify restricted and unauthorized scenarios**
 
 Run: `pnpm test:integration -- workflow.test.ts`  
-Expected: authorized OPP-1001/1002 complete; authorized OPP-1003 has no parked queue job while waiting, then `DecideApproval` creates exactly one deterministic finalization for approve/edit-and-approve and none for reject; the approved snapshot hash is unchanged and agent call counts do not increase. Stale/double/conflicting decisions are safe; USR-5007 creates no generation attempt or artifact but does create an opaque denial audit event containing no restricted metadata.
+Expected: authorized OPP-1001/1002 complete; authorized OPP-1003 has no parked queue job while waiting and cannot finalize after only one approver. The 18% discount requires separate Deal Desk and Sales Leader entries, legal language requires the synthetic Legal Reviewer, and customer-facing concession language requires account-owner confirmation; category mismatches and a requester attempting to use ungranted authority fail closed. Satisfying the complete quorum creates exactly one deterministic finalization for approve/edit-and-approve and none for reject; the approved snapshot hash is unchanged and agent call counts do not increase. Low-confidence/conflicting/missing-evidence cases stay review-gated; unsafe language cannot be approved. Stale/double/conflicting decisions are safe; conversation/stakeholder partial failure follows degraded mode, commercial/policy or strategy failure is terminal, and USR-5007 creates no generation attempt or artifact but does create an opaque denial audit event containing no restricted metadata.
 
 - [ ] **Step 6: Commit**
 
@@ -571,7 +609,9 @@ it('replays only authorized events after Last-Event-ID', async () => {
 
 - [ ] **Step 2: Implement generic event envelopes**
 
-Keep append-only traces separate from the user-facing SSE projection. Trace spans record trace/span/parent IDs, run/step/attempt, kind, timestamps, status, safe hashes, retrieval result IDs/scores, policy decisions, approval subject, recommendation IDs, model parameters, and usage. SSE envelopes contain DB-backed monotonic sequence, stream ID, type, version, timestamp, and safe Zod-validated payload; transport has no deal semantics. After committing an event the worker emits PostgreSQL `NOTIFY`; every API replica owns one dedicated `LISTEN` connection as a wake-up only, then reads authoritative ordered events from PostgreSQL.
+Keep append-only traces separate from the user-facing SSE projection. Trace spans record trace/span/parent IDs, run/step/attempt, kind, timestamps, status, safe hashes, retrieval result IDs/scores, policy/guardrail decisions, approval subject/category/authority decision, recommendation IDs, model parameters, and usage. Record pre-retrieval opportunity/account/requester/permission reads as redacted `authorization_lookup` spans; they are excluded from evidence/result counts and model context. Record authorized search separately as `evidence_retrieval`. A denied lookup trace contains only safe decision/correlation data. SSE envelopes contain DB-backed monotonic sequence, stream ID, type, version, timestamp, and safe Zod-validated payload; transport has no deal semantics. After committing an event the worker emits PostgreSQL `NOTIFY`; every API replica owns one dedicated `LISTEN` connection as a wake-up only, then reads authoritative ordered events from PostgreSQL.
+
+Implement `assertTraceComplete(runId)` for deterministic tests and artifact verification. A permitted terminal run must link authorization, evidence retrieval, each specialist and strategy attempt, model call, validation/repair, guardrail, policy/approval requirement, recommendation, all approval decisions, finalization, and usage. A denied run requires only its safe authorization chain and must contain no evidence, agent, citation, recommendation, or restricted locator spans. A degraded/failed run must link the triggering agent attempt and typed partial/fatal decision.
 
 - [ ] **Step 3: Implement authorized SSE route**
 
@@ -580,7 +620,7 @@ The initial state query returns a snapshot watermark. The first/reloaded native 
 - [ ] **Step 4: Verify reconnect behavior**
 
 Run: `pnpm vitest run tests/unit/event-bus.test.ts && pnpm test:integration -- sse-controller.test.ts`  
-Expected: snapshot/subscribe race, reload cursor, native reconnect, duplicates, expired-cursor resync, terminal close, clean abort, heartbeat framing, worker-to-API cross-process wakeup, and two API replicas all pass without gaps or cross-run events.
+Expected: snapshot/subscribe race, reload cursor, native reconnect, duplicates, expired-cursor resync, terminal close, clean abort, heartbeat framing, worker-to-API cross-process wakeup, and two API replicas all pass without gaps or cross-run events. Trace completeness passes for completed, awaiting-approval, degraded, failed, and denied runs; authorization lookups are never mislabeled or counted as evidence.
 
 - [ ] **Step 5: Commit**
 
@@ -620,7 +660,7 @@ Define the concrete React Router tree, protected auth bootstrap, intended-destin
 
 - [ ] **Step 3: Implement the settings views**
 
-Settings contains only persona/session controls. A secondary read-only Demo Diagnostics page shows permission matrix, output mode, pinned generation/embedding model, index health, and runtime readiness. Persona switching aborts SSE, closes Sheets/dialogs, clears client caches, reauthorizes the route, and safely redirects if access changed.
+Settings contains only persona/session controls. A secondary read-only Demo Diagnostics page shows a permission matrix that separates request permission from Account Owner, Sales Leader, Deal Desk, and Legal Reviewer decision authority, plus output mode, pinned generation/embedding model, index health, and runtime readiness. Persona switching aborts SSE, closes Sheets/dialogs, clears client caches, reauthorizes the route, and safely redirects if access changed. Product copy identifies SlaCato as a negotiation-preparation assistant: recommendations are internal, evidence-backed suggestions; sellers own judgment; no control autonomously sends customer-facing content.
 
 - [ ] **Step 4: Verify visual tokens and responsive behavior**
 
@@ -660,7 +700,7 @@ NestJS controllers call authorization-aware application queries and list only de
 
 - [ ] **Step 3: Implement brief-first deal workspace**
 
-Compose shadcn header, status badges, metric cards, nine brief sections, stakeholder table, actions, warnings, and citations. Avoid nested cards and show designed empty/loading/error states.
+Compose shadcn header, status badges, metric cards, nine brief sections, stakeholder table, actions, warnings, and citations. Every visible citation uses `source=<repository-relative path>, <stable key>=<stable ID>`; the citation control's accessible name includes that label and evidence detail shows the secondary chunk ID. Add an explicit “Account-team update impact” indicator when cited Slack evidence changes a finding, warning, missing-information item, or recommendation. Avoid nested cards and show designed empty/loading/error states.
 
 - [ ] **Step 4: Implement responsive evidence detail**
 
@@ -669,7 +709,7 @@ Clicking a real, labeled citation control opens a 360–440px desktop non-modal 
 - [ ] **Step 5: Verify desktop and mobile stories**
 
 Run: `pnpm test:e2e -- deals.spec.ts no-leak-ui.spec.ts`  
-Expected: authorized briefs render all sections and citations; unauthorized navigation leaks no names, counts, source types, or snippets.
+Expected: authorized briefs render all sections and path/stable-ID citations; a Slack-cited scenario visibly identifies the affected brief content. Unauthorized navigation leaks no names, counts, source types, snippets, or citation locators.
 
 - [ ] **Step 6: Commit**
 
@@ -709,7 +749,7 @@ Render phase, specialist status, retrieval counts, validation retry summaries, a
 
 - [ ] **Step 4: Implement approval inbox and decisions**
 
-The `/runs` index lists only scoped runs with safe deal identity, initiator, updated time, status, and Rejoin/View action, including active, awaiting approval, completed, rejected, failed, and empty states. Approval inbox orders pending first, separates decided history, shows age/category/assigned approver, deep-links authorized evidence/run, and uses stacked mobile rows. Actions are Approve unchanged, Edit and approve, and Reject, with rationale/diff/CAS semantics from Task 9; editing alone never resumes.
+The `/runs` index lists only scoped runs with safe deal identity, initiator, updated time, status, and Rejoin/View action, including active, awaiting approval, completed, rejected, failed, and empty states. Approval inbox orders pending first, separates decided history, shows age/category/required authority/quorum progress/assigned approver, deep-links authorized evidence/run, and uses stacked mobile rows. Actions are Approve unchanged, Edit and approve, and Reject, with rationale/diff/CAS semantics from Task 9; editing alone never resumes, an actor cannot operate a category without its explicit grant, and partially satisfied quorum remains awaiting approval.
 
 - [ ] **Step 5: Verify refresh, reconnect, and role switch behavior**
 
@@ -763,7 +803,7 @@ git commit -m "feat: add safe audit logging and exports"
 ### Task 15: Add Full-Pipeline Evaluation, Promptfoo, and Security Regression Gates
 
 **Files:**
-- Create: `evals/promptfooconfig.yaml`, `evals/golden-retrieval.json`, `evals/security-cases.json`, `scripts/evaluate.ts`, `tests/security/authorization.test.ts`, `tests/security/prompt-injection.test.ts`, `.github/workflows/ci.yml`, `.github/workflows/live-eval.yml`
+- Create: `evals/promptfooconfig.yaml`, `evals/golden-retrieval.json`, `evals/security-cases.json`, `scripts/evaluate.ts`, `tests/security/authorization.test.ts`, `tests/security/prompt-injection.test.ts`, `tests/integration/{source-utilization,trace-completeness,partial-failure}.test.ts`, `tests/e2e/assignment-scenarios.spec.ts`, `.github/workflows/ci.yml`, `.github/workflows/live-eval.yml`
 
 **Interfaces:**
 - Produces: `pnpm eval:deterministic`; `pnpm eval:live`; reports under ignored `artifacts/evals/`.
@@ -776,24 +816,34 @@ it('fails the suite on any permission leakage', () => {
   expect(report.permissionLeakageRate).toBe(1);
   expect(() => assertEvaluationThresholds(report)).toThrow('permission leakage');
 });
+
+it('fails when a terminal run omits a required trace stage', () => {
+  expect(() => assertTraceComplete(traceWithoutCommercialAttempt)).toThrow('trace_incomplete');
+});
+
+it('keeps authorization lookup out of evidence accounting', () => {
+  expect(scoreTrace(traceWithAuthLookup).retrievedEvidenceCount).toBe(0);
+});
 ```
 
 - [ ] **Step 2: Implement focused TypeScript evaluators**
 
-Compute precision@k, recall@k, citation resolution/authorization, claim support, required-section completeness, policy trigger correctness, injection containment, and permission leakage. Hard gates are leakage `= 0`, citation resolution `= 100%`, critical/material claim support `= 100%`, required sections `= 100%`, policy/approval correctness `= 100%`, context overflow `= 0`, compaction authorization leakage `= 0`, and retry/call-budget violations `= 0`. Label retrieval thresholds before freezing them.
+Compute precision@k, recall@k, citation resolution/authorization, claim support, required-section completeness, policy trigger/quorum correctness, injection/unsafe-language containment, source utilization, trace completeness, Slack novelty/authorization/impact, and permission leakage. Hard gates are leakage `= 0`, citation resolution and required visible path/stable-ID labels `= 100%`, critical/material claim support `= 100%`, required sections `= 100%`, policy/approval correctness `= 100%`, required trace stages `= 100%`, eight provided source groups inventoried `= 100%`, Slack PII violations `= 0`, context overflow `= 0`, compaction authorization leakage `= 0`, and retry/call-budget violations `= 0`. Label retrieval thresholds before freezing them.
 
 - [ ] **Step 3: Configure Promptfoo narrowly**
 
-Use a custom TypeScript Promptfoo provider that calls the full authorized retrieval → agents → grounding → policy pipeline through a test-run harness with a fixed persona, isolated run namespace, deterministic fixture reset, bounded terminal polling, and explicit `completed | awaiting_approval | denied | failed` expectations. Score approval drafts before applying a deterministic authorized decision. Evaluate context relevance/recall, faithfulness, answer relevance, and required sections. Add checked-in RBAC/BOLA, permission-revocation after compaction, evidence-reingestion resume, irrelevant-but-valid citation, partial numeric support, conflicting/stale evidence, cross-source injection propagation, multiple/trailing/deep prompted-JSON, RAG attribution, and poisoned-context fixtures. Disable sharing/telemetry and sanitize unauthorized reports of evidence IDs, scores, account metadata, prompts, source bodies, and locators. Do not use hosted poison generation or Python.
+Use a custom TypeScript Promptfoo provider that calls the full authorized retrieval → agents → grounding → policy pipeline through a test-run harness with a fixed persona, isolated run namespace, deterministic fixture reset, bounded terminal polling, and explicit `completed | awaiting_approval | denied | failed` expectations. Score approval drafts before applying deterministic authorized decisions for every required quorum entry. Evaluate context relevance/recall, faithfulness, answer relevance, and required sections. Add checked-in RBAC/BOLA, permission-revocation after compaction, evidence-reingestion resume, irrelevant-but-valid citation, partial numeric support, conflicting/stale evidence, cross-source injection propagation, multiple/trailing/deep prompted-JSON, RAG attribution, poisoned-context, unsafe customer language, low-confidence, category-mismatched approver, and incomplete-quorum fixtures. Disable sharing/telemetry and sanitize unauthorized reports of evidence IDs, scores, account metadata, prompts, source bodies, and locators. Do not use hosted poison generation or Python.
+
+Add deterministic integration/E2E scenarios for malformed opportunity IDs and request bodies, missing opportunity/source data, opaque OPP-1003 denial, conversation-only and stakeholder-only degraded runs, commercial/policy and strategy fatal runs, partial multi-agent failure, stale/double approval, incomplete and complete quorum, and Slack impact. The Slack test runs the same authorized case against manifests with and without Slack, requires at least one stable Slack citation in the enabled run, and asserts a specific changed finding/warning/action without requiring unstable prose equality.
 
 - [ ] **Step 4: Configure CI separation**
 
-PR CI runs install, lint, typecheck, unit, integration, build, Playwright critical paths, and deterministic evals. `live-eval.yml` runs manually/scheduled with Ollama secrets and uploads Promptfoo/red-team reports. It never runs untrusted fork code with secrets.
+PR CI runs install, lint, typecheck, unit, integration, build, Playwright critical paths including `assignment-scenarios.spec.ts`, and deterministic evals. `live-eval.yml` runs manually/scheduled with Ollama secrets, fails if the provider reports `mock`, and uploads sanitized Promptfoo/red-team reports. It never runs untrusted fork code with secrets.
 
 - [ ] **Step 5: Verify all gates locally**
 
 Run: `pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration && pnpm build && pnpm test:e2e && pnpm eval:deterministic`  
-Expected: all deterministic gates pass and permission leakage is exactly 0.
+Expected: all deterministic gates pass; permission leakage, Slack PII violations, unsafe-language escapes, and authorization-lookups-counted-as-evidence are exactly 0; citation/source/trace/section/policy/quorum completeness are 100%; every degraded/fatal agent path matches its declared behavior.
 
 - [ ] **Step 6: Commit**
 
@@ -812,16 +862,16 @@ git commit -m "test: add RAG and security evaluation gates"
 
 - [ ] **Step 1: Implement the live scenario runner**
 
-Run OPP-1001 and OPP-1002 as their authorized owners, OPP-1003 as its authorized owner through Deal Desk approval, OPP-1003 as USR-5007 to prove denial, and at least one Slack-cited brief. Disable fake gateways and replay; require four distinct specialist invocations with nonzero usage.
+Run OPP-1001 and OPP-1002 as their authorized owners; run OPP-1003 as its authorized owner through its complete Deal Desk + Sales Leader + Legal Reviewer + account-owner-confirmation quorum when those categories are triggered; run OPP-1003 as USR-5007 to prove denial; and run one authorized case with and without Slack to demonstrate a specific brief impact and stable Slack citation. Disable fake gateways and replay; require four distinct specialist invocations with nonzero usage. Abort immediately when capability/provider metadata reports `mock`, required Ollama credentials/models are absent, or the credentialed probe has not passed.
 
 - [ ] **Step 2: Export sanitized, provenance-rich artifacts**
 
-Save canonical brief JSON/Markdown, specialist artifacts, reviewed Slack TSV, immutable approval subject/decision/diff, trace export, capability/output mode, provider/model, timestamps, usage/cost, prompt/schema/evidence hashes, and evaluation summary. Exclude secrets and restricted source bodies.
+Save canonical brief JSON/Markdown, specialist artifacts, reviewed Slack TSV, with/without-Slack impact comparison, immutable approval subject/all quorum decisions/diffs, complete trace export, capability/output mode, exact provider/model and inference parameters, timestamps, usage/cost, prompt/schema/evidence hashes, and evaluation summary. Citations use the visible path/stable-ID format. Exclude secrets and restricted source bodies.
 
 - [ ] **Step 3: Verify artifact authenticity and compliance**
 
 Run: `pnpm demo:generate-live && pnpm verify:live-artifacts`  
-Expected: every required scenario exists, live markers and nonzero usage verify, all nine sections and citations validate, Slack is cited, approval history is complete, and unauthorized artifacts contain no restricted metadata.
+Expected: every required scenario exists, live Ollama markers and nonzero usage verify, all nine sections and path/stable-ID citations validate, the Slack ablation records a concrete brief difference, all required approval authorities/quorum entries are complete, trace completeness is 100%, and unauthorized artifacts contain no restricted metadata. Verification fails on any mock marker.
 
 - [ ] **Step 4: Commit**
 
@@ -833,7 +883,7 @@ git commit -m "test: add live submission artifacts"
 ### Task 17: Package, Document, and Verify the Submission
 
 **Files:**
-- Create: `apps/web/Dockerfile`, `apps/api/Dockerfile`, `apps/worker/Dockerfile`, `railway.json`, `README.md`, `docs/architecture/*.md`, `docs/data-dictionary.md`, `docs/evaluation.md`, `docs/demo-script.md`, `docs/known-limitations.md`
+- Create: `apps/web/Dockerfile`, `apps/api/Dockerfile`, `apps/worker/Dockerfile`, `railway.json`, `README.md`, `docs/architecture/{technical-overview,logical-diagram,deployment-diagram}.md`, `docs/security.md`, `docs/data-dictionary.md`, `docs/evaluation.md`, `docs/demo-script.md`, `docs/presentation/slacato-15-minute.md`, `docs/known-limitations.md`
 - Modify: `docker-compose.yml`, `.env.example`, `package.json`
 
 **Interfaces:**
@@ -845,15 +895,15 @@ Use multi-stage pnpm builds. The public unprivileged web container serves compil
 
 - [ ] **Step 2: Write architecture and operations documentation**
 
-Document module boundaries, deterministic workflow, transactional outbox/reconciler, invocation leases, at-least-once inference, BullMQ retry/dead-letter behavior, context budgeting/compaction, provider capability modes, authorization-before-retrieval, RRF, cross-process SSE replay, immutable approval, exact environment variables, Ollama Cloud setup, migrations, ingestion/indexing, tests, Promptfoo, logs, Docker, Railway, and troubleshooting. Include logical and deployment diagrams plus slide-ready material for the required 15-minute walkthrough. Railway uses a public web service and private API/worker/PostgreSQL/pgvector/Redis services, bounded pools and concurrency, health checks, backups, explicit migrations, outbox-age/queue-depth/dead-letter alerts, and retention policies. Record exact build/start commands, private targets, proxy rules, preview/custom-domain behavior, and deployed smoke tests. Vercel Workflow and Eve are documented as considered but unnecessary for this bounded workflow.
+Document module boundaries, deterministic workflow, transactional outbox/reconciler, invocation leases, at-least-once inference, BullMQ retry/dead-letter behavior, context budgeting without unnecessary initial-release compaction, provider capability modes, authorization-before-retrieval, authorization-lookups-versus-evidence trace separation, RRF, cross-process SSE replay, immutable category/quorum approval, exact environment variables, Ollama Cloud setup/model IDs/inference parameters, migrations, ingestion/indexing, tests, Promptfoo, logs, Docker, Railway, and troubleshooting. Create an explicit logical Mermaid diagram showing agents, orchestration, RAG, state, human approvals, guardrails, observability, and output channels, and a separate deployment Mermaid diagram showing web/API/worker, PostgreSQL/pgvector, Redis, secrets, model gateway, monitoring, and trust boundaries. The technical overview explains the production delta for scalability, high availability, monitoring, secrets, backups/retention, incident/dead-letter operations, and support ownership. `docs/security.md` explains default-deny authorization, source sensitivity, approval authority/quorum, prompt injection, unsafe language, citation authorization, log redaction, secrets, and residual risks. Railway uses a public web service and private API/worker/PostgreSQL/pgvector/Redis services, bounded pools and concurrency, health checks, backups, explicit migrations, outbox-age/queue-depth/dead-letter alerts, and retention policies. Record exact build/start commands, private targets, proxy rules, preview/custom-domain behavior, and deployed smoke tests. Vercel Workflow and Eve are documented as considered but unnecessary for this bounded workflow.
 
 - [ ] **Step 3: Write the mandatory demo script**
 
-Include exact persona/opportunity steps for authorized OPP-1001, authorized OPP-1002, authorized restricted OPP-1003 with Deal Desk approval, unauthorized OPP-1003 with no leakage, and a brief that cites Slack. Include expected visible outcomes and safe failure recovery.
+Include exact persona/opportunity steps for authorized OPP-1001, authorized OPP-1002, authorized restricted OPP-1003 with every required approval authority/quorum entry, unauthorized OPP-1003 with no leakage, and the with/without-Slack impact demonstration. Include expected visible outcomes and safe failure recovery. Create `docs/presentation/slacato-15-minute.md` as the actual presentation artifact with timed sections totaling 15 minutes: business value, architecture/design choices, live provider demo, evaluation results, production failure modes/operational delta, and closing. Include slide titles, speaker notes, and exact demo transitions; slide-ready notes elsewhere do not satisfy this gate.
 
 - [ ] **Step 4: Record limitations and Part 2 decision**
 
-State that cross-encoder reranking is intentionally deferred. Include the exact decision: after baseline evaluation, discuss whether to prototype reranking; do not implement automatically.
+State that cross-encoder reranking is intentionally deferred. Include the exact decision: after the internal hybrid baseline evaluation, discuss whether to prototype reranking; do not implement automatically. Do not claim bonus cost-aware routing or an additional synthetic-data generator; report only implemented and verified bonus behavior.
 
 - [ ] **Step 5: Run final clean-room verification**
 
@@ -890,36 +940,37 @@ git commit -m "docs: package and document SlaCato submission"
 
 ## Plan-Level Verification Matrix
 
-| Requirement | Owning tasks |
-|---|---|
-| Four real specialized LLM agents | 7, 8, 9 |
-| Live model calls and structured outputs | 7, 8, 9 |
-| Indexed RAG with metadata filters | 3, 4, 6 |
-| Permissions before retrieval/generation/render | 5, 6, 8, 9, 12, 14, 15 |
-| Human approval and persistence | 3, 9, 13 |
-| Traces, attempts, usage, audit logs | 3, 7, 9, 10, 14 |
-| Nine brief sections and evidence | 2, 8, 9, 12, 14 |
-| Synthetic Slack updates | 4 |
-| Required demo scenarios | 9, 12, 13, 16 |
-| Responsive polished product UI | 1, 11, 12, 13 |
-| Ollama Cloud chat and embeddings | 6, 7 |
-| Hybrid retrieval and RRF | 6 |
-| TypeScript evaluation and Promptfoo | 15 |
-| Durable Docker and Railway deployment | 3, 17 |
-| Context budgeting and threshold compaction | 7, 8, 9, 15 |
-| Mandatory live artifacts | 16 |
-| Deferred reranking discussion | 6, 17 |
+| Requirement | Assignment IDs | Owning tasks |
+|---|---|---|
+| Seller-assist business principle and responsive sales UI | `ASG-PROD-01` | 11, 12, 17 |
+| Four real specialized LLM agents with failure contracts | `ASG-LIVE-01`, `ASG-AGENT-01` | 7, 8, 9, 15, 16 |
+| All eight provided sources plus generated Slack | `ASG-DATA-01`, `ASG-SLACK-01` | 4, 5, 6, 10, 15, 16 |
+| Indexed RAG, metadata filters, grounded visible citations | `ASG-CITE-01` | 3, 4, 6, 8, 12, 14, 15 |
+| Authorization before retrieval/generation/render and lookup/evidence separation | `ASG-AUTH-01` | 5, 6, 8, 9, 10, 12, 14, 15 |
+| Category-specific human approval, multi-role quorum, and persistence | `ASG-HITL-01` | 3, 5, 9, 13, 15, 16 |
+| Unsupported/restricted/unsafe language guardrails and review gates | `ASG-GUARD-01` | 8, 9, 12, 15 |
+| Complete traces, attempts, usage, recommendations, and audit logs | `ASG-TRACE-01` | 3, 7, 9, 10, 14, 15, 16 |
+| Nine brief sections and required positive/negative/partial-failure demos | `ASG-DEMO-01` | 2, 8, 9, 12, 13, 15, 16 |
+| Live Ollama configuration and reviewer-verifiable artifacts | `ASG-LIVE-01`, `ASG-PROVIDER-01` | 1, 6, 7, 16, 17 |
+| Logical/deployment diagrams, overview, security notes, and presentation | `ASG-DOC-01` | 16, 17 |
+| Durable Docker/Railway deployment and operations | `ASG-DOC-01` | 3, 17 |
+| Context budgeting without unnecessary initial-release compaction | `ASG-AGENT-01` | 7, 8, 9, 15 |
+| Optional post-baseline reranking discussion; no unimplemented bonus claims | — | 6, 15, 17 |
 
-## Acceptance Gates Before Full Implementation
+## Submission Acceptance Gates
 
 1. Exact runtime/package tuple installs, typechecks, and compiles the Ollama adapter.
 2. Live probes confirm chat, embedding, dimension, normalization, and actual native-schema capability; all four schemas pass through the selected mode.
-3. The binding task order has no dependency on a later task; vector dimension is pinned before migration and record ingestion is separate from embedding indexing.
+3. The binding task order has no dependency on a later task; the migration remains dimension-flexible, the live embedding profile/dimension is verified before activation, and record ingestion is separate from embedding indexing.
 4. Transactional outbox recovery, BullMQ duplicate delivery, atomic step invocation, command idempotency, dead-letter handling, and concurrent start/approval behavior are specified and tested.
-5. Approval binds to an immutable version/hash, uses compare-and-swap, revalidates edit-and-approve, and never runs post-approval synthesis.
+5. Approval binds to an immutable version/hash, uses compare-and-swap, enforces category-specific authority and complete multi-role quorum, revalidates edit-and-approve, and never runs post-approval synthesis.
 6. Pricing classification occurs before indexing, unknowns fail closed, and opaque denial audit events contain no restricted metadata.
 7. Claim-support rules and the untrusted-evidence envelope have explicit pass/fail behavior and adversarial fixtures.
 8. Every primary route exists; deal-to-run, Runs index, approval, route-state, responsive, focus, and persona-switch journeys have acceptance tests.
 9. Full-pipeline evaluation entry points and hard safety/completeness thresholds are fixed before prompt tuning.
-10. Live artifact commands and output paths cover briefs, Slack, approval, traces, usage, evaluation, diagrams, and presentation material.
+10. Live artifact commands reject mock output and cover briefs, Slack impact, complete approval quorum, trace completeness, usage, evaluation, explicit logical/deployment diagrams, security notes, and the timed presentation artifact.
 11. Context policy tests prove bounded inputs, invariant retention, immutable raw history, structured checkpoint validation, and hard stop limits; bounded Part 1 agents do not compact unnecessarily.
+12. The source inventory proves all eight provided source groups are utilized, keeps access-permission lookups out of evidence accounting, and proves the additional Slack source is synthetic, PII-free, novel, authorized, cited, and materially visible in one brief comparison.
+13. Trace completeness is 100% for permitted terminal/approval runs, while denied traces contain no evidence, agent, citation, recommendation, source locator, or restricted metadata.
+14. E2E covers malformed input, missing data, opaque denial, per-agent degraded/fatal behavior, multi-agent partial failure, unsafe language, incomplete/complete approval quorum, and Slack impact on desktop and mobile.
+15. Documentation names exact Ollama models, inference parameters, environment variables and secret setup; the live probe and generated artifacts prove those settings were used, and the presentation is timed to 15 minutes.
