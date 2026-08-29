@@ -169,6 +169,22 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
     ...spansOfKind(spans, 'specialist_attempt'),
     ...spansOfKind(spans, 'strategy_attempt')
   ];
+  const partialFailures = spansOfKind(spans, 'partial_failure');
+  for (const partial of partialFailures) {
+    const triggering = parentOf(partial, byId);
+    if (triggering === undefined || triggering.status !== 'degraded' || !['specialist_attempt', 'strategy_attempt'].includes(triggering.kind)) {
+      throw new TraceCompletenessError('Partial decision is not linked to its degraded triggering attempt');
+    }
+    if (partial.status !== 'degraded' || partial.data.decision !== 'partial') {
+      throw new TraceCompletenessError('Partial decision is not typed as degraded');
+    }
+  }
+  for (const attempt of attempts.filter((span) => span.status === 'degraded')) {
+    if (!partialFailures.some((span) => span.parentSpanId === attempt.spanId)) {
+      throw new TraceCompletenessError(`Degraded attempt ${attempt.step} is missing its linked partial decision`);
+    }
+  }
+
   const fatalFailures = spansOfKind(spans, 'fatal_failure');
   for (const fatal of fatalFailures) {
     const triggering = parentOf(fatal, byId);
@@ -198,25 +214,6 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
   assertAttemptEvidence(spans, strategy);
   requireSpan(spans, 'policy_decision', 'policy decision');
   requireSpan(spans, 'recommendation', 'recommendation IDs');
-
-  for (const partial of spansOfKind(spans, 'partial_failure')) {
-    const triggering = parentOf(partial, byId);
-    if (triggering === undefined || !['specialist_attempt', 'strategy_attempt'].includes(triggering.kind)) {
-      throw new TraceCompletenessError('Partial decision is not linked to its triggering attempt');
-    }
-    if (partial.status !== 'degraded' || partial.data.decision !== 'partial') {
-      throw new TraceCompletenessError('Partial decision is not typed as degraded');
-    }
-  }
-  for (const attempt of [
-    ...spansOfKind(spans, 'specialist_attempt'),
-    ...spansOfKind(spans, 'strategy_attempt')
-  ].filter((span) => span.status === 'degraded')) {
-    const partial = spansOfKind(spans, 'partial_failure').find((span) => span.parentSpanId === attempt.spanId);
-    if (partial === undefined || partial.status !== 'degraded' || partial.data.decision !== 'partial') {
-      throw new TraceCompletenessError(`Degraded attempt ${attempt.step} is missing its linked partial decision`);
-    }
-  }
 
   const requirements = spansOfKind(spans, 'approval_requirement');
   for (const requirement of requirements) {

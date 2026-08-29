@@ -126,3 +126,33 @@ pnpm vitest run tests/integration/workflow-production.test.ts --reporter dot --s
 pnpm typecheck
 # exit 0
 ```
+
+## Review hardening — round 3
+
+The second re-review found that the fatal-path early return still preceded degraded-attempt validation, allowing a mixed degraded-then-fatal trace to omit the degraded attempt's partial decision.
+
+RED proof added that mixed outcome and reproduced the bypass:
+
+```text
+pnpm vitest run tests/unit/event-bus.test.ts --reporter dot --silent
+# 1 failed, 8 passed
+# expected mixed degraded/fatal completeness validation to throw, but it returned
+```
+
+Completeness now validates all partial decisions and every degraded attempt before evaluating any fatal early return. A partial decision must itself be degraded and link to a degraded specialist or strategy attempt. The mixed degraded-without-partial then fatal case is covered adversarially.
+
+Fresh round-3 evidence:
+
+```text
+pnpm vitest run tests/unit/event-bus.test.ts --reporter dot --silent
+# 1 file passed, 9 tests passed
+
+pnpm vitest run tests/integration/sse-controller.test.ts --reporter dot --silent
+# 1 file passed, 15 tests passed
+
+pnpm vitest run tests/integration/workflow-production.test.ts --reporter dot --silent
+# 1 file passed, 3 tests passed
+
+pnpm typecheck
+# exit 0
+```
