@@ -286,7 +286,7 @@ The opportunity-to-account, requester, and permission-profile reads required to 
 ### Part 1 Retrieval
 
 - PostgreSQL full-text search for lexical and keyword matching
-- Exact cosine search over the already-authorized `pgvector` subset for semantic similarity
+- Adaptive semantic search: exact cosine for small/selective authorized domains and HNSW for large promoted security domains
 - Permission and metadata filters applied inside retrieval queries
 - Parallel lexical and semantic retrieval
 - Reciprocal Rank Fusion for deterministic result merging
@@ -294,6 +294,8 @@ The opportunity-to-account, requester, and permission-profile reads required to 
 - Policy documents treated deterministically and not penalized simply for age
 - Stable chunk and citation identifiers
 - Visible citation labels in the exact shape `source=<repository-relative path>, <stable key>=<stable ID>` (for example, `source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-008`), with the internal chunk ID available in evidence detail
+
+HNSW is an internal candidate adapter, never a global shared graph or an authorization boundary. Iterative scans and bounded overfetch feed a full PostgreSQL authorization rejoin and exact full-precision rerank. Mandatory policy and exact CRM grounding remain independent of ANN. Exact search is the oracle and fallback; HNSW activates per embedding profile and promoted security domain only after recall, underfill, leakage, latency, and operational gates pass. The immutable manifest records the adapter, index generation, settings hash, profile, and fallback mode. See [`docs/hnsw-retrieval-architecture.md`](../../hnsw-retrieval-architecture.md).
 
 ### Deferred Decision — Part 2 Reranking
 
@@ -323,7 +325,7 @@ The deterministic-test and local-development default is the `AI_PROVIDER=mock` a
 
 `AI_PROVIDER=ollama` is the production AI mode. It uses server-side `OLLAMA_API_KEY`, base URL, generation model, and embedding model; all three required Ollama variables are strictly validated only in this mode. Ollama remains explicitly unverified until its credentialed discovery, schema, and embedding probe succeeds.
 
-Task 3 stores embeddings in a dimension-flexible pgvector column with persisted provider/model/dimension/profile metadata. Exact authorized-subset cosine search remains the baseline and HNSW remains deferred. Application invariants reject mixed profiles; activating a real provider requires full re-embedding plus an explicit pre-production migration/operational gate, not runtime switching.
+Task 3 stores authoritative embeddings in a dimension-flexible pgvector column with persisted provider/model/dimension/profile metadata. After the live provider probe establishes dimension and normalization, indexing creates a rebuildable fixed-dimension search projection for that profile. Application invariants reject mixed profiles. HNSW activates only for eligible promoted security domains after shadow comparison against exact authorized-subset search; exact remains the oracle, fallback, and kill-switch target. Activating a new provider requires full re-embedding and a blue/green projection generation, not runtime switching.
 
 ## 11. Evaluation and Testing
 

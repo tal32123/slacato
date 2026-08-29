@@ -15,12 +15,16 @@ submitted Slack generation, and all other submitted LLM-produced artifacts.
 model: composition must supply a type-safe scriptable fixture resolver (Task 8
 or API composition owns those fixtures) and fails immediately if it is absent.
 
-Task 3 must use a dimension-flexible pgvector column, persist model, dimension,
-and profile metadata with embeddings, and reject cross-profile comparisons in
-application invariants. The initial baseline remains exact authorized-subset
-search with no HNSW. Switching to a real model requires a full re-embedding,
-an explicit pre-production migration/operational gate, and refreshed profile
-metadata; it is not runtime model switching.
+Task 3 uses a dimension-flexible authoritative pgvector column, persists model,
+dimension, and profile metadata with embeddings, and rejects cross-profile
+comparisons in application invariants. After the live embedding probe establishes
+the real dimension and normalization behavior, indexing builds a rebuildable,
+fixed-dimension search projection for that profile. Eligible promoted security
+domains may activate HNSW only after recall, leakage, underfill, latency, and
+operational gates pass. Exact authorized-subset search remains the oracle and
+fallback. Switching profiles requires full re-embedding and a blue/green search
+projection generation; it is not runtime model switching. See
+[Adaptive Authorized HNSW Retrieval](hnsw-retrieval-architecture.md).
 
 ## Ollama Cloud production gate
 

@@ -13,7 +13,8 @@ import {
   PostgresDealBriefAccessControl,
   PostgresEventStore,
   PostgresRunEventQuery,
-  PostgresWorkflowStore
+  PostgresWorkflowStore,
+  type Env
 } from '@slacato/infrastructure';
 import { PostgresSessionRegistry } from './modules/auth/postgres-session-registry.js';
 import { AppModule } from './app.module.js';
@@ -25,6 +26,16 @@ import { WireContractInterceptor } from './common/wire/wire-contract.interceptor
 
 export interface ApiApplicationOptions {
   environment?: NodeJS.ProcessEnv;
+}
+
+export function configuredProviderModels(environment: Env): Readonly<{ generation: string; embedding: string }> {
+  if (environment.AI_PROVIDER === 'ollama') {
+    return { generation: environment.OLLAMA_CHAT_MODEL, embedding: environment.OLLAMA_EMBEDDING_MODEL };
+  }
+  if (environment.AI_PROVIDER === 'openrouter') {
+    return { generation: environment.OPENROUTER_CHAT_MODEL, embedding: environment.OPENROUTER_EMBEDDING_MODEL };
+  }
+  return { generation: 'mock-brief', embedding: 'mock-embedding' };
 }
 
 const bodyParserErrorHandler: ErrorRequestHandler = (error: unknown, _request, response, next) => {
@@ -59,6 +70,7 @@ export function configureApiApplication(app: NestExpressApplication): void {
 /** Creates the API only after server-only configuration has validated successfully. */
 export async function createApiApplication(options: ApiApplicationOptions = {}): Promise<NestExpressApplication> {
   const env = loadRuntimeEnv(options.environment ?? process.env);
+  const models = configuredProviderModels(env);
   const database = createDatabaseClient(env.DATABASE_URL, 5);
   const personas = new PostgresCanonicalPersonaDirectory(database);
   const workflowStore = new PostgresWorkflowStore(database);
@@ -75,7 +87,7 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
   }, {
     startDealBrief: new StartDealBrief(workflowStore, workflowAccess, {
       provider: env.AI_PROVIDER,
-      model: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_CHAT_MODEL : 'mock-brief'
+      model: models.generation
     }),
     regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
     decideApproval: new DecideApproval(workflowStore, workflowAccess),
@@ -83,8 +95,8 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
     runEvents: { bus: runEvents, query: new PostgresRunEventQuery(database) }
   }, {
     provider: env.AI_PROVIDER,
-    pinnedGenerationModel: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_CHAT_MODEL : 'mock-brief',
-    pinnedEmbeddingModel: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_EMBEDDING_MODEL : 'mock-embedding'
+    pinnedGenerationModel: models.generation,
+    pinnedEmbeddingModel: models.embedding
   }, {
     repository: dealQueries
   }, new PostgresBriefExportService(database)), { bodyParser: false });

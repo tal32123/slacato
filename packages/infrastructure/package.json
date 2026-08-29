@@ -4,13 +4,20 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    "./config/env": { "types": "./dist/config/env.d.ts", "default": "./dist/config/env.js" },
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+    "./config/env": {
+      "types": "./dist/config/env.d.ts",
+      "default": "./dist/config/env.js"
+    },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
     "build": "tsc -b"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.51",
     "@slacato/contracts": "workspace:*",
     "@slacato/core": "workspace:*",
     "ai": "7.0.83",

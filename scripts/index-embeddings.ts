@@ -1,31 +1,91 @@
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import type { EmbeddingProfile, ProviderAttemptLedger } from '../packages/core/src/index.js';
-import { EmbeddingIndexer, createDatabaseClient, createMockModelGateways } from '../packages/infrastructure/src/index.js';
+import type { EmbeddingGateway, EmbeddingProfile, ProviderAttemptLedger } from '../packages/core/src/index.js';
+import { EmbeddingIndexer, createDatabaseClient, createMockModelGateways, createOpenRouterModelGateways } from '../packages/infrastructure/src/index.js';
 
 const DEFAULT_DATABASE_URL = 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const DEFAULT_OPENROUTER_CHAT_MODEL = 'openai/gpt-5.6-luna';
+const DEFAULT_OPENROUTER_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
+const DEFAULT_OPENROUTER_EMBEDDING_DIMENSION = 1536;
+const MAX_OPENROUTER_EMBEDDING_DIMENSION = 16_000;
 const unusedGenerationLedger: ProviderAttemptLedger = {
   async beginAttempt() { throw new Error('Generation is unavailable in the embedding index command'); },
   async settleAttempt() {},
   async releaseAttempt() {}
 };
 
-export async function indexEmbeddings(input: Readonly<{ databaseUrl: string; batchSize?: number }>): Promise<Readonly<{ indexed: number; skipped: number; batches: number }>> {
-  if ((process.env.AI_PROVIDER ?? 'mock') !== 'mock') {
+type IndexEnvironment = Readonly<Record<string, string | undefined>>;
+
+function openRouterEmbeddingDimension(environment: IndexEnvironment, model: string): number {
+  const configured = environment.OPENROUTER_EMBEDDING_DIMENSION;
+  if (configured === undefined) {
+    if (model === DEFAULT_OPENROUTER_EMBEDDING_MODEL) return DEFAULT_OPENROUTER_EMBEDDING_DIMENSION;
+    throw new Error('Custom OpenRouter embedding models require OPENROUTER_EMBEDDING_DIMENSION');
+  }
+  const dimension = Number(configured);
+  if (!Number.isInteger(dimension) || dimension <= 0 || dimension > MAX_OPENROUTER_EMBEDDING_DIMENSION) {
+    throw new Error(`OPENROUTER_EMBEDDING_DIMENSION must be an integer between 1 and ${MAX_OPENROUTER_EMBEDDING_DIMENSION}`);
+  }
+  if (model === DEFAULT_OPENROUTER_EMBEDDING_MODEL && dimension !== DEFAULT_OPENROUTER_EMBEDDING_DIMENSION) {
+    throw new Error(`The default OpenRouter embedding model requires dimension ${DEFAULT_OPENROUTER_EMBEDDING_DIMENSION}`);
+  }
+  return dimension;
+}
+
+function openRouterProfileName(model: string, dimension: number): string {
+  return `openrouter-${model.replaceAll(/[^a-zA-Z0-9]+/g, '-')}-${dimension}`;
+}
+
+export function resolveEmbeddingIndexConfiguration(environment: IndexEnvironment): Readonly<{
+  gateway: EmbeddingGateway;
+  profile: EmbeddingProfile;
+}> {
+  const provider = environment.AI_PROVIDER ?? 'mock';
+  if (provider === 'mock') {
+    const mock = createMockModelGateways({ resolve: () => ({ text: '{}' }), attemptLedger: unusedGenerationLedger });
+    return {
+      gateway: mock.embeddingGateway,
+      profile: {
+        provider: mock.embeddingProfile.providerId,
+        model: mock.embeddingProfile.modelId,
+        dimension: mock.embeddingProfile.dimension,
+        profile: 'mock-token-hash-64',
+        version: 'v1',
+        normalization: 'l2'
+      }
+    };
+  }
+  if (provider !== 'openrouter') {
     throw new Error('Ollama embedding activation requires the credentialed compatibility probe and an explicit embedding profile gate');
   }
-  const mock = createMockModelGateways({ resolve: () => ({ text: '{}' }), attemptLedger: unusedGenerationLedger });
-  const profile: EmbeddingProfile = {
-    provider: mock.embeddingProfile.providerId,
-    model: mock.embeddingProfile.modelId,
-    dimension: mock.embeddingProfile.dimension,
-    profile: 'mock-token-hash-64',
-    version: 'v1',
-    normalization: 'l2'
+  const apiKey = environment.OPENROUTER_API_KEY;
+  if (apiKey === undefined || apiKey.trim().length === 0) throw new Error('OpenRouter embedding indexing requires OPENROUTER_API_KEY');
+  const embeddingModelId = environment.OPENROUTER_EMBEDDING_MODEL ?? DEFAULT_OPENROUTER_EMBEDDING_MODEL;
+  const dimension = openRouterEmbeddingDimension(environment, embeddingModelId);
+  const openrouter = createOpenRouterModelGateways({
+    apiKey,
+    generationModelId: environment.OPENROUTER_CHAT_MODEL ?? DEFAULT_OPENROUTER_CHAT_MODEL,
+    embeddingModelId,
+    attemptLedger: unusedGenerationLedger
+  });
+  return {
+    gateway: openrouter.embeddingGateway,
+    profile: {
+      provider: 'openrouter',
+      model: embeddingModelId,
+      dimension,
+      profile: openRouterProfileName(embeddingModelId, dimension),
+      version: 'v1',
+      normalization: 'l2'
+    }
   };
+}
+
+export async function indexEmbeddings(input: Readonly<{ databaseUrl: string; batchSize?: number }>): Promise<Readonly<{ indexed: number; skipped: number; batches: number }>> {
+  const configuration = resolveEmbeddingIndexConfiguration(process.env);
   const database = createDatabaseClient(input.databaseUrl, 2);
   try {
-    return await new EmbeddingIndexer(database, mock.embeddingGateway, profile, {
+    return await new EmbeddingIndexer(database, configuration.gateway, configuration.profile, {
       batchSize: input.batchSize,
       corpus: { sourceLocatorPrefixes: ['salesforce/', 'gong/', 'pricing/', 'slack/', 'policies/'], requireCompleteProvenance: true }
     }).index();

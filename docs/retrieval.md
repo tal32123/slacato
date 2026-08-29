@@ -1,6 +1,10 @@
-# Authorized retrieval baseline
+# Adaptive authorized retrieval
 
-SlaCato Part 1 uses PostgreSQL full-text search and exact pgvector cosine distance over the caller's authorized account/opportunity subset. Authorization and sensitive-pricing predicates are inside the candidate CTE, before lexical or semantic rank. There is deliberately no HNSW, IVFFlat, cross-encoder, or reranker in this baseline; the integration suite compares the selective query with an exact baseline and inspects `EXPLAIN` to prevent an accidental ANN path. Reranking remains a Part 2 experiment after baseline metrics are reviewed.
+SlaCato Part 1 uses PostgreSQL full-text search plus adaptive pgvector semantic search. The retrieval module recomputes authorization before search, uses exact cosine for small or highly selective authorized domains, and uses HNSW only for large, stable, promoted security domains that pass activation gates. It never uses one global shared HNSW graph.
+
+HNSW is an internal candidate adapter: iterative scans and bounded overfetch find candidate IDs, the IDs are rejoined through the complete current authorization relation, and results are reranked with full-precision exact cosine before RRF, recency/reliability adjustments, and manifest commit. Exact search remains the oracle, bounded fallback, and kill-switch target. Mandatory policy and exact CRM grounding do not depend on ANN.
+
+The full physical design, filtering behavior, rollout, and measurable gates are in [Adaptive Authorized HNSW Retrieval](hnsw-retrieval-architecture.md).
 
 `EvidencePlan` is the stable execution recipe. It runs the user query plus fixed brief-section queries, applies distinct per-source limits, and fuses stable evidence IDs with RRF (`k = 60`). Reliability and recency adjustments are transparent and bounded to ±0.02. Exact authorized account, opportunity, and contact records are returned as cited evidence and persisted in the manifest; their counts remain separately visible in diagnostics. These structured grounding records use the context budget but do not displace the ranked top-k quality set. Packing reserves a meaningful minimum eight-character excerpt for every ranked and exact grounding item; a budget too small for that invariant fails explicitly instead of silently dropping evidence.
 

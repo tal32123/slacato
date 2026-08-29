@@ -32,6 +32,19 @@ describe('envSchema', () => {
     })).toMatchObject({ AI_PROVIDER: 'ollama', OLLAMA_CHAT_MODEL: 'chat-model' });
   });
 
+  it('requires an OpenRouter API key and supplies fixed model defaults in openrouter mode', () => {
+    expect(() => envSchema.parse({ ...baseEnvironment, AI_PROVIDER: 'openrouter' })).toThrow();
+    expect(envSchema.parse({
+      ...baseEnvironment,
+      AI_PROVIDER: 'openrouter',
+      OPENROUTER_API_KEY: 'server-only-key'
+    })).toMatchObject({
+      AI_PROVIDER: 'openrouter',
+      OPENROUTER_CHAT_MODEL: 'openai/gpt-5.6-luna',
+      OPENROUTER_EMBEDDING_MODEL: 'openai/text-embedding-3-small'
+    });
+  });
+
   it('fails mock composition immediately when no fixture resolver is supplied', () => {
     expect(() => createConfiguredModelGateways(envSchema.parse(baseEnvironment), {} as never)).toThrow('mock fixture resolver');
   });
@@ -56,6 +69,23 @@ describe('envSchema', () => {
     const attemptLedger = new PostgresProviderAttemptLedger(database);
     expect(createConfiguredModelGateways(environment, { attemptLedger }).registry.resolve('brief')).toMatchObject({ providerId: 'ollama', modelId: 'chat' });
     expect(() => createConfiguredModelGateways(environment, { attemptLedger, mock: { resolve: async () => ({ text: '{}' }) } })).toThrow('Ollama composition does not accept a mock fixture resolver');
+    void database.close();
+  });
+
+  it('selects OpenRouter for structured generation and embeddings without accepting a mock resolver', () => {
+    const database = createDatabaseClient(baseEnvironment.DATABASE_URL, 1);
+    const environment = envSchema.parse({
+      ...baseEnvironment, AI_PROVIDER: 'openrouter', OPENROUTER_API_KEY: 'server-only-key'
+    });
+    const attemptLedger = new PostgresProviderAttemptLedger(database);
+    const gateways = createConfiguredModelGateways(environment, { attemptLedger });
+
+    expect(gateways.provider).toBe('openrouter');
+    expect(gateways.registry.resolve('brief')).toMatchObject({ providerId: 'openrouter', modelId: 'openai/gpt-5.6-luna', nativeStructuredOutput: true });
+    expect(gateways.registry.resolve('embedding')).toMatchObject({ providerId: 'openrouter', modelId: 'openai/text-embedding-3-small' });
+    expect(() => createConfiguredModelGateways(environment, {
+      attemptLedger, mock: { resolve: async () => ({ text: '{}' }) }
+    })).toThrow('OpenRouter composition does not accept a mock fixture resolver');
     void database.close();
   });
 });

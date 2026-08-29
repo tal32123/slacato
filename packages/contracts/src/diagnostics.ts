@@ -25,8 +25,8 @@ export const permissionGrantViewSchema = z.object({
 }).strict();
 
 export const providerHealthViewSchema = z.object({
-  provider: z.enum(['mock', 'ollama']),
-  outputMode: z.enum(['deterministic_mock', 'capability_probe_required']),
+  provider: z.enum(['mock', 'ollama', 'openrouter']),
+  outputMode: z.enum(['deterministic_mock', 'capability_probe_required', 'native_schema']),
   pinnedGenerationModel: z.string().trim().min(1).max(200),
   pinnedEmbeddingModel: z.string().trim().min(1).max(200),
   indexHealth: readinessStateSchema,

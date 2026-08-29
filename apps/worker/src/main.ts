@@ -23,7 +23,10 @@ export class WorkerModelGatewayFactory {
       if (options.mockFixtureResolver === undefined) throw new Error('Worker mock model composition requires a fixture resolver');
       return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger, mock: { resolve: options.mockFixtureResolver } });
     }
-    return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger, ...(options.ollamaCapabilities === undefined ? {} : { ollamaCapabilities: options.ollamaCapabilities }) });
+    if (this.environment.AI_PROVIDER === 'ollama') {
+      return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger, ...(options.ollamaCapabilities === undefined ? {} : { ollamaCapabilities: options.ollamaCapabilities }) });
+    }
+    return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger });
   }
 }
 

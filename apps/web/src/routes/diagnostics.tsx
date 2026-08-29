@@ -71,7 +71,7 @@ export function DiagnosticsRoute(): React.JSX.Element {
           </CardHeader>
           <CardContent>
             <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
-              <DiagnosticValue icon={Bot} label="Provider" value={health.provider === 'mock' ? 'Mock development provider' : 'Ollama'} />
+              <DiagnosticValue icon={Bot} label="Provider" value={providerLabel(health.provider)} />
               <DiagnosticValue icon={Bot} label="Output mode" value={outputModeLabel(health.outputMode)} />
               <DiagnosticValue icon={Bot} label="Pinned generation model" value={health.pinnedGenerationModel} />
               <DiagnosticValue icon={SearchCheck} label="Pinned embedding model" value={health.pinnedEmbeddingModel} />
@@ -118,7 +118,13 @@ function DiagnosticValue({ icon: Icon, label, value }: Readonly<{
 }
 
 function outputModeLabel(mode: ProviderHealthView['outputMode']): string {
-  return mode === 'deterministic_mock' ? 'Deterministic development output' : 'Capability probe required';
+  if (mode === 'deterministic_mock') return 'Deterministic development output';
+  return mode === 'native_schema' ? 'Native structured output' : 'Capability probe required';
+}
+
+function providerLabel(provider: ProviderHealthView['provider']): string {
+  if (provider === 'mock') return 'Mock development provider';
+  return provider === 'openrouter' ? 'OpenRouter' : 'Ollama';
 }
 
 function readinessLabel(status: ProviderHealthView['checks'][keyof ProviderHealthView['checks']]): string {

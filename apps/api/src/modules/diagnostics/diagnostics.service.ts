@@ -21,7 +21,8 @@ export class DiagnosticsService {
       permissions: session.persona.grants.map((grant) => permissionView(session.persona.role, grant)),
       providerHealth: {
         provider: this.options.provider,
-        outputMode: this.options.provider === 'mock' ? 'deterministic_mock' : 'capability_probe_required',
+        outputMode: this.options.provider === 'mock' ? 'deterministic_mock'
+          : this.options.provider === 'openrouter' ? 'native_schema' : 'capability_probe_required',
         pinnedGenerationModel: this.options.pinnedGenerationModel,
         pinnedEmbeddingModel: this.options.pinnedEmbeddingModel,
         indexHealth: readiness.checks.index,

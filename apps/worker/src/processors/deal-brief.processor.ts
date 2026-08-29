@@ -32,9 +32,12 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
     const grants = await this.readGrants(run.requestedBy, opportunity.account_id);
     const authorized = authorizeOpportunity({ userId: run.requestedBy, grants }, { accountId: opportunity.account_id, restricted: opportunity.restricted });
     if (!authorized.allowed) throw new Error('Authorized opportunity context is unavailable');
+    const configuredEmbedding = this.gateways.registry.resolve('embedding');
     const profile = (await this.database.sql<{ provider: string; model: string; dimension: number; profile: string; version: string; normalization: string }[]>`select embedding_provider provider, embedding_model model, embedding_dimension dimension,
       embedding_profile profile, embedding_version version, embedding_normalization normalization from evidence_versions
-      where embedding is not null and account_id = ${opportunity.account_id} order by created_at desc limit 1`)[0];
+      where embedding is not null and account_id = ${opportunity.account_id}
+        and embedding_provider = ${configuredEmbedding.providerId} and embedding_model = ${configuredEmbedding.modelId}
+      order by created_at desc limit 1`)[0];
     if (profile === undefined) throw new Error('Authorized evidence index is unavailable');
     const budget = await this.budgetFor(run.id);
     const logicalGenerationId = this.generationId(run.id, 'retrieval-embedding');

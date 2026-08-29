@@ -3,10 +3,11 @@ import type { BudgetedModelGateway, EmbeddingGateway, GenerateObjectRequest, Gen
 import { PostgresProviderAttemptLedger } from '../db/repositories/provider-attempt-ledger.js';
 import { createMockModelGateways, MOCK_EMBEDDING_PROFILE, type MockModelGatewayOptions } from './mock.js';
 import { createOllamaModelGateways } from './ollama.js';
+import { createOpenRouterModelGateways } from './openrouter.js';
 import type { OllamaCapabilities } from './capabilities.js';
 
 export type ConfiguredModelGateways = Readonly<{
-  provider: 'mock' | 'ollama';
+  provider: 'mock' | 'ollama' | 'openrouter';
   embeddingGateway: EmbeddingGateway;
   registry: ModelRegistry;
   embeddingProfile?: typeof MOCK_EMBEDDING_PROFILE;
@@ -23,6 +24,7 @@ export type RunScopedModelGateway = Readonly<{
 
 export type MockCompositionOptions = Readonly<{ attemptLedger: PostgresProviderAttemptLedger; mock: Omit<MockModelGatewayOptions, 'attemptLedger'>; ollamaCapabilities?: never }>;
 export type OllamaCompositionOptions = Readonly<{ attemptLedger: PostgresProviderAttemptLedger; mock?: undefined; ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'> }>;
+export type OpenRouterCompositionOptions = Readonly<{ attemptLedger: PostgresProviderAttemptLedger; mock?: undefined; ollamaCapabilities?: never }>;
 
 /**
  * Selects the configured infrastructure adapter at composition time. Ollama
@@ -31,11 +33,12 @@ export type OllamaCompositionOptions = Readonly<{ attemptLedger: PostgresProvide
  */
 export function createConfiguredModelGateways(environment: Env & Readonly<{ AI_PROVIDER: 'mock' }>, options: MockCompositionOptions): ConfiguredModelGateways;
 export function createConfiguredModelGateways(environment: Env & Readonly<{ AI_PROVIDER: 'ollama' }>, options: OllamaCompositionOptions): ConfiguredModelGateways;
+export function createConfiguredModelGateways(environment: Env & Readonly<{ AI_PROVIDER: 'openrouter' }>, options: OpenRouterCompositionOptions): ConfiguredModelGateways;
 export function createConfiguredModelGateways(
   environment: Env,
-  options: MockCompositionOptions | OllamaCompositionOptions
+  options: MockCompositionOptions | OllamaCompositionOptions | OpenRouterCompositionOptions
 ): ConfiguredModelGateways {
-  const runScopedEmbedding = (gateway: EmbeddingGateway, attemptLedger: PostgresProviderAttemptLedger, provider: 'mock' | 'ollama', model: string) => async (input: ProviderRunScope): Promise<EmbeddingGateway> => {
+  const runScopedEmbedding = (gateway: EmbeddingGateway, attemptLedger: PostgresProviderAttemptLedger, provider: ConfiguredModelGateways['provider'], model: string) => async (input: ProviderRunScope): Promise<EmbeddingGateway> => {
     if (input.budget.scope !== input.runScope) throw new Error('Run budget scope must match the gateway run scope');
     await attemptLedger.assertRunBudget(input.budget);
     return { async embed(values: readonly string[]) {
@@ -57,7 +60,7 @@ export function createConfiguredModelGateways(
       }
     } };
   };
-  const runScoped = (gateway: BudgetedModelGateway, attemptLedger: PostgresProviderAttemptLedger, provider: 'mock' | 'ollama', model: string) => async (input: ProviderRunScope): Promise<RunScopedModelGateway> => {
+  const runScoped = (gateway: BudgetedModelGateway, attemptLedger: PostgresProviderAttemptLedger, provider: ConfiguredModelGateways['provider'], model: string) => async (input: ProviderRunScope): Promise<RunScopedModelGateway> => {
     if (input.budget.scope !== input.runScope) throw new Error('Run budget scope must match the gateway run scope');
     await attemptLedger.assertRunBudget(input.budget);
     return { async generateObject<Value>(request: Omit<GenerateObjectRequest<Value>, 'durableAttempt'>) {
@@ -76,6 +79,19 @@ export function createConfiguredModelGateways(
     return { provider: 'mock', embeddingGateway: mock.embeddingGateway, registry: mock.registry, embeddingProfile: mock.embeddingProfile,
       forRun: runScoped(mock.modelGateway, attemptLedger, 'mock', mock.registry.resolve('brief').modelId),
       embeddingForRun: runScopedEmbedding(mock.embeddingGateway, attemptLedger, 'mock', mock.registry.resolve('embedding').modelId) };
+  }
+  if (environment.AI_PROVIDER === 'openrouter') {
+    if ('mock' in options && options.mock !== undefined) throw new Error('OpenRouter composition does not accept a mock fixture resolver');
+    const attemptLedger = options.attemptLedger;
+    const openrouter = createOpenRouterModelGateways({
+      apiKey: environment.OPENROUTER_API_KEY,
+      generationModelId: environment.OPENROUTER_CHAT_MODEL,
+      embeddingModelId: environment.OPENROUTER_EMBEDDING_MODEL,
+      attemptLedger
+    });
+    return { provider: 'openrouter', embeddingGateway: openrouter.embeddingGateway, registry: openrouter.registry,
+      forRun: runScoped(openrouter.modelGateway, attemptLedger, 'openrouter', environment.OPENROUTER_CHAT_MODEL),
+      embeddingForRun: runScopedEmbedding(openrouter.embeddingGateway, attemptLedger, 'openrouter', environment.OPENROUTER_EMBEDDING_MODEL) };
   }
   if ('mock' in options && options.mock !== undefined) throw new Error('Ollama composition does not accept a mock fixture resolver');
   const attemptLedger = options.attemptLedger;

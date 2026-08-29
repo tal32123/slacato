@@ -1,6 +1,7 @@
 export { loadRuntimeEnv } from './config/runtime-env.js';
 export { envSchema, parseEnv, type Env } from './config/env.js';
 export { createOllamaModelGateways, probeOllamaCapabilities, type OllamaGatewayConfig } from './model/ollama.js';
+export { createOpenRouterModelGateways, type OpenRouterGatewayConfig } from './model/openrouter.js';
 export {
   createMockModelGateways,
   MOCK_EMBEDDING_DIMENSION,

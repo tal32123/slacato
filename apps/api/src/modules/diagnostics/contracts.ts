@@ -1,5 +1,5 @@
 export type DiagnosticsModuleOptions = Readonly<{
-  provider: 'mock' | 'ollama';
+  provider: 'mock' | 'ollama' | 'openrouter';
   pinnedGenerationModel: string;
   pinnedEmbeddingModel: string;
 }>;
