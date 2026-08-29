@@ -25,7 +25,7 @@
 - Part 1 uses PostgreSQL FTS, exact cosine over the authorized pgvector subset, and RRF; HNSW, pg_trgm, and cross-encoder reranking remain deferred until baseline metrics justify them.
 - Docker Compose with `web`, `api`, `worker`, `db`, and `redis` is the local deployment; Railway is the production reference. Vercel Workflow and Eve are intentionally not used.
 - Keep PostgreSQL authoritative for business workflow state. BullMQ transports short idempotent commands; human approval persists `awaiting_approval` and ends the current job rather than parking a worker.
-- Enforce a provider-neutral context budget before every model call. Bound retrieval/tool payloads first; persist structured summary checkpoints only if a future multi-turn session crosses the threshold, while retaining immutable raw history.
+- Enforce a provider-neutral context budget before every model call and bound retrieval/tool payloads first. Keep the already-built `ContextCompactor` dormant for possible future multi-turn activation; initial-release workflows and submission acceptance do not invoke or depend on it.
 - Runtime provider/model selection, theme preferences, and audit-visibility preferences are out of scope. Persona switching remains; model/index/permission information is read-only Demo Diagnostics.
 - Use TDD, focused modules, rationale-oriented JSDoc for public contracts, structured redacted logs, and frequent task-level commits.
 - Canonical fixture source is branch `home-task`, commit `076c659c3c7afd416f8d26729774b67042a55761` of `https://github.com/danaabramov/Cato-IS-AI-Engineer-Exam.git`.
@@ -66,7 +66,7 @@ tests/{unit,integration,contract,e2e}/**
 
 ## Binding Execution Order and Review Decisions
 
-Task numbers below remain stable references, but execution MUST follow this dependency order: **1 → 2 → 7 → 3 → 4 → 5 → 6 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17**. Task 7's mock profile enables development/demo work; Task 3 must use a dimension-flexible vector column and persist profile metadata rather than pinning its typmod to mock or unverified live dimensions. Task 4 ingests records only and Task 6 creates embeddings/indexes.
+Task numbers below remain stable references, but execution MUST follow this dependency order: **1 → 2 → 7 → 3 → 4 → 5 → 6 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17**. Task 7's mock profile enables deterministic tests and local development only; reviewer/demo/submission work requires the live gate. Task 3 must use a dimension-flexible vector column and persist profile metadata rather than pinning its typmod to mock or unverified live dimensions. Task 4 ingests records only and Task 6 creates embeddings/indexes.
 
 The architecture, AI/RAG, and UI/UX reviews resolved these choices: NestJS plus BullMQ and a PostgreSQL transactional outbox instead of in-request work or a general workflow platform; exact authorized vector search instead of HNSW; capability-aware native schema or prompted-JSON generation; immutable versioned approval subjects; provider-neutral context budgeting; read-only diagnostics instead of model/theme controls; and mandatory live artifacts before packaging.
 
@@ -77,8 +77,8 @@ Tasks already completed keep their original implementation history. The followin
 | Requirement ID | Concrete acceptance evidence | Owning tasks |
 |---|---|---|
 | `ASG-PROD-01` | Product copy, README, and timed presentation state seller-assist/no autonomous customer action. | 11, 17 |
-| `ASG-DATA-01` | Fixture inventory proves all eight provided source groups are parsed; scenario traces prove seven evidence groups affect retrieval/briefs while access permissions are used only for authorization. | 4, 6, 10, 15 |
-| `ASG-SLACK-01` | PII/synthetic/chronology/novelty/category tests, `source_type=slack` authorization test, stable citation, and with/without-Slack brief diff. | 4, 5, 6, 15, 16 |
+| `ASG-DATA-01` | Sanitized `source-coverage.json` proves each of eight provided groups across inventory → authorized retrieval/control → intended agent receipt → resulting claim/section/citation, with access permissions explicitly authorization-only; any missing stage fails. | 4, 6, 8, 10, 15, 16 |
+| `ASG-SLACK-01` | Submission Slack is regenerated with live Ollama, records real provider/model/usage/provenance and row-level categories, is reviewed/reingested/reindexed, passes PII/novelty/authorization checks, and yields a stable citation plus with/without-Slack brief diff. | 4, 5, 6, 15, 16 |
 | `ASG-LIVE-01` | Non-mock provider markers, four nonzero-usage agent invocations, live approval output, and live traces for mandatory scenarios. | 7, 8, 9, 16 |
 | `ASG-AUTH-01` | Pre-retrieval/pre-generation denial tests plus distinct safe `authorization_lookup` and `evidence_retrieval` trace kinds. | 5, 6, 8, 10, 15 |
 | `ASG-CITE-01` | Claim resolver and UI/export tests render `source=<path>, <stable key>=<stable ID>` and reject unauthorized/stale IDs. | 6, 8, 12, 14, 15 |
@@ -129,8 +129,18 @@ import { describe, expect, it } from 'vitest';
 import { envSchema } from '@slacato/infrastructure/config/env';
 
 describe('envSchema', () => {
-  it('rejects a configuration without server secrets', () => {
-    expect(() => envSchema.parse({ NODE_ENV: 'test' })).toThrow();
+  const common = {
+    NODE_ENV: 'test',
+    DATABASE_URL: 'postgres://postgres:postgres@127.0.0.1:54329/slacato',
+    SESSION_SECRET: 'x'.repeat(32),
+  } as const;
+
+  it('accepts mock without Ollama credentials', () => {
+    expect(envSchema.parse({ ...common, AI_PROVIDER: 'mock' }).AI_PROVIDER).toBe('mock');
+  });
+
+  it('rejects live Ollama without every required credential/model', () => {
+    expect(() => envSchema.parse({ ...common, AI_PROVIDER: 'ollama' })).toThrow();
   });
 });
 ```
@@ -145,16 +155,37 @@ Expected: FAIL because `src/lib/env.ts` does not exist.
 ```ts
 import { z } from 'zod';
 
-export const envSchema = z.object({
+const commonEnvironment = {
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().url(),
+  REDIS_URL: z.string().url().default('redis://127.0.0.1:56379'),
+  WEB_ORIGIN: z.string().url().default('http://127.0.0.1:4173'),
   SESSION_SECRET: z.string().min(32),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+};
+
+const mockEnvironment = z.object({
+  ...commonEnvironment,
+  AI_PROVIDER: z.literal('mock'),
+  OLLAMA_API_KEY: z.string().min(1).optional(),
+  OLLAMA_BASE_URL: z.string().url().optional(),
+  OLLAMA_CHAT_MODEL: z.string().min(1).optional(),
+  OLLAMA_EMBEDDING_MODEL: z.string().min(1).optional(),
+}).strict();
+
+const ollamaEnvironment = z.object({
+  ...commonEnvironment,
+  AI_PROVIDER: z.literal('ollama'),
   OLLAMA_API_KEY: z.string().min(1),
   OLLAMA_BASE_URL: z.string().url().default('https://ollama.com/api'),
   OLLAMA_CHAT_MODEL: z.string().min(1),
   OLLAMA_EMBEDDING_MODEL: z.string().min(1),
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-});
+}).strict();
+
+export const envSchema = z.preprocess(input => {
+  if (typeof input !== 'object' || input === null || Array.isArray(input) || 'AI_PROVIDER' in input) return input;
+  return { ...input, AI_PROVIDER: 'mock' };
+}, z.discriminatedUnion('AI_PROVIDER', [mockEnvironment, ollamaEnvironment]));
 
 export type Env = z.infer<typeof envSchema>;
 export const parseEnv = (input: NodeJS.ProcessEnv): Env => envSchema.parse(input);
@@ -334,7 +365,7 @@ Chunk by semantic record boundaries: one Salesforce row, one Gong summary, trans
 
 - [ ] **Step 5: Generate Slack fixtures once through the gateway**
 
-Use structured output to propose at least two updates per opportunity. Validate that every opportunity has a reinforcing fact, missing context, and ambiguity/conflict; validate chronology and synthetic notices. Reject real person/customer names, emails, phone numbers, sensitive identifiers, and verbatim/near-verbatim duplication of provided evidence; compare normalized n-grams and deterministic similarity against the eight provided source groups, then require human review of novelty classifications. Persist the reviewed TSV plus provider, model, prompt hash, timestamp, validation result, and per-row `reinforces | adds_context | ambiguity_conflict` label in `generation.json`. Runtime ingestion never regenerates these rows.
+Use structured output to propose at least two updates per opportunity. Validate that every opportunity has a reinforcing fact, missing context, and ambiguity/conflict; validate chronology and synthetic notices. Reject real person/customer names, emails, phone numbers, sensitive identifiers, and verbatim/near-verbatim duplication of provided evidence; compare normalized n-grams and deterministic similarity against the eight provided source groups, then require human review of novelty classifications. Persist the reviewed TSV plus provider, model, prompt hash, timestamp, validation result, usage, input/output hashes, and a row-level `reinforces | adds_context | ambiguity_conflict` category keyed by `update_id` in `generation.json`. Runtime ingestion never regenerates these rows. A mock-generated fixture is valid only for deterministic tests/local development; Task 16 must replace it with a reviewed live-Ollama fixture before creating submission samples.
 
 - [ ] **Step 6: Verify record-only ingestion idempotency**
 
@@ -472,7 +503,7 @@ it('returns Zod issues to the model before succeeding', async () => {
 
 - [ ] **Step 3: Implement Ollama Cloud registry**
 
-Create the deterministic mock provider as the initial-release default and `createOllama({ baseURL: env.OLLAMA_BASE_URL, headers: { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } })` as the strictly configured production-AI mode. Compile Ollama against the pinned AI SDK 7/provider tuple and its actual embedding factory. Register aliases centrally; mock aliases are explicit `mock-*` IDs and must not be confused with live capability metadata. A live probe records exact Ollama model IDs, embedding dimension/normalization, and native schema support in `docs/compatibility.md`; it is required before production AI activation, not before Task 3's dimension-flexible migration.
+Create the deterministic mock provider as the test/local-development default and `createOllama({ baseURL: env.OLLAMA_BASE_URL, headers: { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } })` as the strictly configured production-AI and reviewer/demo/submission mode. Compile Ollama against the pinned AI SDK 7/provider tuple and its actual embedding factory. Register aliases centrally; mock aliases are explicit `mock-*` IDs and must not be confused with live capability metadata. A live probe records exact Ollama model IDs, embedding dimension/normalization, and native schema support in `docs/compatibility.md`; it is required before live Slack generation, production AI activation, reviewer runs, interview demos, or submission artifacts, not before Task 3's dimension-flexible migration.
 
 - [ ] **Step 4: Implement structured generation and bounded repair**
 
@@ -480,10 +511,10 @@ Set AI SDK `maxRetries: 0`. When the probe proves native schema support, use `ge
 
 - [ ] **Step 5: Verify contract and live opt-in health tests**
 
-Implement a deterministic, model-free `ContextWindowPolicy` with provider/model context metadata, reserved output capacity, per-section budgets, and stable retention of instructions, current task input, evidence/citation IDs, and recent messages. A separate `ContextCompactor` uses a non-recursive gateway mode that cannot compact itself. Bind checkpoints to covered message ranges, scope/policy/evidence/prompt/schema/model hashes and validation state; reauthorize before reuse and rebuild after access narrows. Enforce hard call/step/token/repeated-invocation limits. Bounded Part 1 agent calls should normally require no summary generation.
+Implement a deterministic, model-free `ContextWindowPolicy` with provider/model context metadata, reserved output capacity, per-section budgets, and stable retention of instructions, current task input, evidence/citation IDs, and recent messages. Keep the separately built `ContextCompactor` dormant behind a future-only composition flag; it uses a non-recursive gateway mode and remains unit-tested, but no initial-release workflow enables it. Bound Part 1 agents through pruning and retrieval limits and assert zero compactor invocations in release flows.
 
 Run: `pnpm vitest run tests/contract/model-gateway.test.ts tests/unit/retry.test.ts tests/unit/context-window-policy.test.ts`  
-Expected: PASS with exact call counts; oversized inputs are bounded, invariants survive compaction, raw history is unchanged, and runaway loops stop. Run `LIVE_AI=1 pnpm vitest run tests/contract/ollama-live.test.ts`; it validates chat, embedding dimension, warnings, and all four real agent schemas through the selected output mode.
+Expected: PASS with exact call counts; oversized inputs are bounded, runaway loops stop, and initial-release paths invoke the dormant compactor zero times. Its existing isolated contract tests remain green but are not a live submission gate. Run `LIVE_AI=1 pnpm vitest run tests/contract/ollama-live.test.ts`; it validates chat, embedding dimension, warnings, and all four real agent schemas through the selected output mode.
 
 - [ ] **Step 6: Commit**
 
@@ -806,7 +837,7 @@ git commit -m "feat: add safe audit logging and exports"
 - Create: `evals/promptfooconfig.yaml`, `evals/golden-retrieval.json`, `evals/security-cases.json`, `scripts/evaluate.ts`, `tests/security/authorization.test.ts`, `tests/security/prompt-injection.test.ts`, `tests/integration/{source-utilization,trace-completeness,partial-failure}.test.ts`, `tests/e2e/assignment-scenarios.spec.ts`, `.github/workflows/ci.yml`, `.github/workflows/live-eval.yml`
 
 **Interfaces:**
-- Produces: `pnpm eval:deterministic`; `pnpm eval:live`; reports under ignored `artifacts/evals/`.
+- Produces: `pnpm eval:deterministic`; `pnpm eval:live`; sanitized `artifacts/evals/source-coverage.json`; reports under ignored `artifacts/evals/`.
 
 - [ ] **Step 1: Write deterministic metric tests**
 
@@ -824,15 +855,22 @@ it('fails when a terminal run omits a required trace stage', () => {
 it('keeps authorization lookup out of evidence accounting', () => {
   expect(scoreTrace(traceWithAuthLookup).retrievedEvidenceCount).toBe(0);
 });
+
+it('fails when any canonical source misses an expected utilization stage', () => {
+  const report = buildSourceCoverage(traceFixtures.withoutGongTranscriptReceipt);
+  expect(() => assertSourceCoverage(report)).toThrow('gong_transcripts:agent_receipt_missing');
+});
 ```
 
 - [ ] **Step 2: Implement focused TypeScript evaluators**
 
-Compute precision@k, recall@k, citation resolution/authorization, claim support, required-section completeness, policy trigger/quorum correctness, injection/unsafe-language containment, source utilization, trace completeness, Slack novelty/authorization/impact, and permission leakage. Hard gates are leakage `= 0`, citation resolution and required visible path/stable-ID labels `= 100%`, critical/material claim support `= 100%`, required sections `= 100%`, policy/approval correctness `= 100%`, required trace stages `= 100%`, eight provided source groups inventoried `= 100%`, Slack PII violations `= 0`, context overflow `= 0`, compaction authorization leakage `= 0`, and retry/call-budget violations `= 0`. Label retrieval thresholds before freezing them.
+Compute precision@k, recall@k, citation resolution/authorization, claim support, required-section completeness, policy trigger/quorum correctness, injection/unsafe-language containment, source utilization, trace completeness, Slack novelty/authorization/impact, and permission leakage. Build `source-coverage.json` with exactly eight entries containing `sourceGroup`, inventory count/hash, authorized retrieval/control trace ID, expected and observed agent IDs, resulting section/claim/citation label, `expectedUtilizationRule`, and status; sanitize source bodies, prompts, denied locators, and restricted metadata. Hard gates are leakage `= 0`, citation resolution and required visible path/stable-ID labels `= 100%`, critical/material claim support `= 100%`, required sections `= 100%`, policy/approval correctness `= 100%`, required trace stages `= 100%`, all eight source-utilization entries and every required stage `= pass`, Slack PII violations `= 0`, context overflow `= 0`, initial-release compactor calls `= 0`, and retry/call-budget violations `= 0`. Inventory alone is never sufficient. Label retrieval thresholds before freezing them.
+
+Use these executable utilization rules: accounts → exact authorized retrieval → Stakeholder receipt → Deal Snapshot claim/citation; opportunities → exact authorized retrieval → Commercial receipt → Deal Snapshot or Negotiation State claim/citation; contacts → exact authorized retrieval → Stakeholder receipt → Stakeholder Map claim/citation; Gong summaries → authorized retrieval → Conversation receipt → Buyer Goals or Negotiation State claim/citation; Gong transcripts → authorized retrieval → Conversation receipt → Buyer Goals, Negotiation State, or Missing Information claim/citation; pricing notes → sensitivity-filtered retrieval in a pricing-authorized scenario → Commercial receipt → commercial claim/recommendation/warning and citation; access permissions → `authorization_lookup` → allowed scope or opaque denial, with zero agent receipt/evidence count/claim/citation; Deal Desk policy → mandatory authorized retrieval plus deterministic policy evaluation and Commercial receipt → approval or review warning with policy citation. Reject unexpected agent receipt as well as missing stages.
 
 - [ ] **Step 3: Configure Promptfoo narrowly**
 
-Use a custom TypeScript Promptfoo provider that calls the full authorized retrieval → agents → grounding → policy pipeline through a test-run harness with a fixed persona, isolated run namespace, deterministic fixture reset, bounded terminal polling, and explicit `completed | awaiting_approval | denied | failed` expectations. Score approval drafts before applying deterministic authorized decisions for every required quorum entry. Evaluate context relevance/recall, faithfulness, answer relevance, and required sections. Add checked-in RBAC/BOLA, permission-revocation after compaction, evidence-reingestion resume, irrelevant-but-valid citation, partial numeric support, conflicting/stale evidence, cross-source injection propagation, multiple/trailing/deep prompted-JSON, RAG attribution, poisoned-context, unsafe customer language, low-confidence, category-mismatched approver, and incomplete-quorum fixtures. Disable sharing/telemetry and sanitize unauthorized reports of evidence IDs, scores, account metadata, prompts, source bodies, and locators. Do not use hosted poison generation or Python.
+Use a custom TypeScript Promptfoo provider that calls the full authorized retrieval → agents → grounding → policy pipeline through a test-run harness with a fixed persona, isolated run namespace, deterministic fixture reset, bounded terminal polling, and explicit `completed | awaiting_approval | denied | failed` expectations. Score approval drafts before applying deterministic authorized decisions for every required quorum entry. Evaluate context relevance/recall, faithfulness, answer relevance, and required sections. Add checked-in RBAC/BOLA, evidence-reingestion resume, irrelevant-but-valid citation, partial numeric support, conflicting/stale evidence, cross-source injection propagation, multiple/trailing/deep prompted-JSON, RAG attribution, poisoned-context, unsafe customer language, low-confidence, category-mismatched approver, and incomplete-quorum fixtures. Disable sharing/telemetry and sanitize unauthorized reports of evidence IDs, scores, account metadata, prompts, source bodies, and locators. Do not use hosted poison generation or Python. Dormant compactor contract tests remain isolated infrastructure tests and do not enter the initial-release live evaluation.
 
 Add deterministic integration/E2E scenarios for malformed opportunity IDs and request bodies, missing opportunity/source data, opaque OPP-1003 denial, conversation-only and stakeholder-only degraded runs, commercial/policy and strategy fatal runs, partial multi-agent failure, stale/double approval, incomplete and complete quorum, and Slack impact. The Slack test runs the same authorized case against manifests with and without Slack, requires at least one stable Slack citation in the enabled run, and asserts a specific changed finding/warning/action without requiring unstable prose equality.
 
@@ -855,28 +893,63 @@ git commit -m "test: add RAG and security evaluation gates"
 ### Task 16: Generate and Verify Mandatory Live Submission Artifacts
 
 **Files:**
-- Create: `scripts/generate-live-artifacts.ts`, `scripts/verify-live-artifacts.ts`, `artifacts/samples/README.md`, sanitized `artifacts/samples/**`
+- Create: `scripts/generate-live-artifacts.ts`, `scripts/verify-live-artifacts.ts`, `scripts/approve-slack-fixture.ts`, `tests/contract/live-artifacts.test.ts`, `artifacts/samples/README.md`, sanitized `artifacts/samples/**`
+- Modify: `scripts/generate-slack-fixtures.ts`, `fixtures/cato/slack/{account_team_updates.tsv,generation.json}`, `package.json`
 
 **Interfaces:**
-- Produces: `pnpm demo:generate-live`; `pnpm verify:live-artifacts`.
+- Produces: `pnpm fixtures:slack:live`; `pnpm fixtures:slack:approve`; `pnpm demo:generate-live`; `pnpm verify:live-artifacts`.
 
-- [ ] **Step 1: Implement the live scenario runner**
+- [ ] **Step 1: Write failing live-provenance and source-coverage tests**
+
+```ts
+it.each(['mock', 'replay', 'fake'])('rejects %s Slack or sample provenance', marker => {
+  expect(() => verifyLiveSubmission(fixtureWithProviderMarker(marker))).toThrow('live_provenance_required');
+});
+
+it('rejects samples built from a different Slack fixture version', () => {
+  expect(() => verifyLiveSubmission(sampleWithSlackHash('stale-hash'))).toThrow('slack_fixture_hash_mismatch');
+});
+
+it('rejects canonical source coverage with a missing stage', () => {
+  expect(() => verifyLiveSubmission(coverageWithout('pricing_notes', 'agentReceipt')))
+    .toThrow('source_coverage_incomplete');
+});
+```
+
+Run: `pnpm vitest run tests/contract/live-artifacts.test.ts`
+Expected: FAIL because the live submission verifier and coverage gate do not exist.
+
+- [ ] **Step 2: Regenerate, review, and reingest the submitted Slack fixture with live Ollama**
+
+Run the credentialed probe, then generate into the canonical fixture path with fake/replay disabled:
+
+```bash
+LIVE_AI=1 AI_PROVIDER=ollama pnpm vitest run tests/contract/ollama-live.test.ts
+LIVE_AI=1 AI_PROVIDER=ollama pnpm fixtures:slack:live -- --require-live --output fixtures/cato/slack
+pnpm fixtures:slack:approve -- --reviewer candidate --input fixtures/cato/slack
+LIVE_AI=1 AI_PROVIDER=ollama pnpm ingest:records
+LIVE_AI=1 AI_PROVIDER=ollama pnpm index:embeddings
+```
+
+`fixtures:slack:live` overwrites any mock-development TSV/metadata only after atomic validation succeeds. `generation.json` must contain provider `ollama`, exact model and output mode, provider request IDs when available, nonzero calls/input/output/total tokens, prompt/schema/source-corpus/output hashes, generated time, no replay/fake marker, and row-level `reinforces | adds_context | ambiguity_conflict` category keyed by every `update_id`. The approval command reruns deterministic PII/novelty/chronology/category validation and records reviewer/time/status without changing rows. Ingestion and indexing persist the approved TSV content hash and live embedding profile; subsequent sample manifests must bind to that hash. Any failure leaves the previous fixture intact and blocks submission.
+
+- [ ] **Step 3: Implement the live scenario runner**
 
 Run OPP-1001 and OPP-1002 as their authorized owners; run OPP-1003 as its authorized owner through its complete Deal Desk + Sales Leader + Legal Reviewer + account-owner-confirmation quorum when those categories are triggered; run OPP-1003 as USR-5007 to prove denial; and run one authorized case with and without Slack to demonstrate a specific brief impact and stable Slack citation. Disable fake gateways and replay; require four distinct specialist invocations with nonzero usage. Abort immediately when capability/provider metadata reports `mock`, required Ollama credentials/models are absent, or the credentialed probe has not passed.
 
-- [ ] **Step 2: Export sanitized, provenance-rich artifacts**
+- [ ] **Step 4: Export sanitized, provenance-rich artifacts**
 
-Save canonical brief JSON/Markdown, specialist artifacts, reviewed Slack TSV, with/without-Slack impact comparison, immutable approval subject/all quorum decisions/diffs, complete trace export, capability/output mode, exact provider/model and inference parameters, timestamps, usage/cost, prompt/schema/evidence hashes, and evaluation summary. Citations use the visible path/stable-ID format. Exclude secrets and restricted source bodies.
+Save canonical brief JSON/Markdown, specialist artifacts, the reviewed live Slack TSV and `generation.json`, with/without-Slack impact comparison, immutable approval subject/all quorum decisions/diffs, complete trace export, capability/output mode, exact provider/model and inference parameters, timestamps, usage/cost, prompt/schema/evidence/Slack-fixture hashes, evaluation summary, and sanitized `source-coverage.json`. The coverage file has exactly the eight required canonical groups and proves each inventory → authorized retrieval/control → intended agent receipt → result chain or the access-permissions authorization-only rule. Citations use the visible path/stable-ID format. Exclude secrets, source bodies, prompts, unauthorized locators, and restricted metadata.
 
-- [ ] **Step 3: Verify artifact authenticity and compliance**
+- [ ] **Step 5: Verify artifact authenticity and compliance**
 
 Run: `pnpm demo:generate-live && pnpm verify:live-artifacts`  
-Expected: every required scenario exists, live Ollama markers and nonzero usage verify, all nine sections and path/stable-ID citations validate, the Slack ablation records a concrete brief difference, all required approval authorities/quorum entries are complete, trace completeness is 100%, and unauthorized artifacts contain no restricted metadata. Verification fails on any mock marker.
+Expected: every required scenario exists; the submitted Slack fixture and every LLM-produced sample have live Ollama provenance and nonzero usage; every sample manifest uses the approved live Slack content hash; all nine sections and path/stable-ID citations validate; the Slack ablation records a concrete brief difference; all eight canonical source groups pass every expected utilization stage; all required approval authorities/quorum entries are complete; trace completeness is 100%; and unauthorized artifacts contain no restricted metadata. Verification fails on any mock/replay/fake/zero-usage marker, stale Slack ingestion/index, fixture/sample hash mismatch, missing row category, or incomplete source group/stage.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add scripts artifacts/samples package.json
+git add scripts tests/contract/live-artifacts.test.ts fixtures/cato/slack artifacts/samples package.json
 git commit -m "test: add live submission artifacts"
 ```
 
@@ -954,7 +1027,7 @@ git commit -m "docs: package and document SlaCato submission"
 | Live Ollama configuration and reviewer-verifiable artifacts | `ASG-LIVE-01`, `ASG-PROVIDER-01` | 1, 6, 7, 16, 17 |
 | Logical/deployment diagrams, overview, security notes, and presentation | `ASG-DOC-01` | 16, 17 |
 | Durable Docker/Railway deployment and operations | `ASG-DOC-01` | 3, 17 |
-| Context budgeting without unnecessary initial-release compaction | `ASG-AGENT-01` | 7, 8, 9, 15 |
+| Context budgeting with dormant, non-invoked future compactor infrastructure | `ASG-AGENT-01` | 7, 8, 9, 15 |
 | Optional post-baseline reranking discussion; no unimplemented bonus claims | — | 6, 15, 17 |
 
 ## Submission Acceptance Gates
@@ -968,9 +1041,9 @@ git commit -m "docs: package and document SlaCato submission"
 7. Claim-support rules and the untrusted-evidence envelope have explicit pass/fail behavior and adversarial fixtures.
 8. Every primary route exists; deal-to-run, Runs index, approval, route-state, responsive, focus, and persona-switch journeys have acceptance tests.
 9. Full-pipeline evaluation entry points and hard safety/completeness thresholds are fixed before prompt tuning.
-10. Live artifact commands reject mock output and cover briefs, Slack impact, complete approval quorum, trace completeness, usage, evaluation, explicit logical/deployment diagrams, security notes, and the timed presentation artifact.
-11. Context policy tests prove bounded inputs, invariant retention, immutable raw history, structured checkpoint validation, and hard stop limits; bounded Part 1 agents do not compact unnecessarily.
-12. The source inventory proves all eight provided source groups are utilized, keeps access-permission lookups out of evidence accounting, and proves the additional Slack source is synthetic, PII-free, novel, authorized, cited, and materially visible in one brief comparison.
+10. Live artifact commands reject mock/replay/fake/zero-usage output, regenerate and reingest the reviewed submission Slack fixture with live Ollama provenance and row categories, bind every sample to its content hash, and cover briefs, Slack impact, complete approval quorum, trace completeness, usage, evaluation, explicit logical/deployment diagrams, security notes, and the timed presentation artifact.
+11. Context policy tests prove bounded initial-release inputs and hard stop limits, and release traces prove exactly zero `ContextCompactor` calls. The already-built dormant compactor may retain isolated contract coverage but is not a live submission acceptance dependency.
+12. Sanitized `source-coverage.json` hard-fails unless every one of the eight provided groups proves inventory → authorized retrieval/control → intended agent receipt → claim/section/citation, or the explicit access-permissions authorization-only rule. It also proves the live additional Slack source is synthetic, PII-free, novel, authorized, cited, and materially visible in one brief comparison.
 13. Trace completeness is 100% for permitted terminal/approval runs, while denied traces contain no evidence, agent, citation, recommendation, source locator, or restricted metadata.
 14. E2E covers malformed input, missing data, opaque denial, per-agent degraded/fatal behavior, multi-agent partial failure, unsafe language, incomplete/complete approval quorum, and Slack impact on desktop and mobile.
 15. Documentation names exact Ollama models, inference parameters, environment variables and secret setup; the live probe and generated artifacts prove those settings were used, and the presentation is timed to 15 minutes.

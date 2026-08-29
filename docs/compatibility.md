@@ -1,15 +1,17 @@
 # Model provider compatibility gates
 
-## Accepted initial-release mock profile
+## Deterministic test and local-development mock profile
 
-`AI_PROVIDER=mock` is the accepted initial-release development/demo gate. It is
+`AI_PROVIDER=mock` is the accepted deterministic test and local-development gate. It is
 not Ollama and must never be represented as live compatibility: registry IDs
 are `mock-*`, generation results include the `mock_provider` warning, and its
 documented profile is `mock/mock-embedding`, dimension **64**, deterministic
 token-hashing/bag-of-words, unit-normalized for non-empty strings. Empty or
 whitespace-only strings produce the zero vector. It uses no network, key, or
 randomness. This dimension is a mock-only profile, not an inferred or approved
-Ollama dimension. `mock` is the default provider mode, not a self-generating
+Ollama dimension. Mock is forbidden for reviewer runs, the interview demo,
+submitted Slack generation, and all other submitted LLM-produced artifacts.
+`mock` is the local default provider mode, not a self-generating
 model: composition must supply a type-safe scriptable fixture resolver (Task 8
 or API composition owns those fixtures) and fails immediately if it is absent.
 
@@ -33,7 +35,7 @@ This follows the installed `ai@7.0.83` sources and bundled docs:
 - `packages/core/node_modules/ai/src/embed/embed-many.ts` documents `embedMany({ model, values, maxRetries: 0 })`.
 - `packages/infrastructure/node_modules/ollama-ai-provider-v2/README.md` and `dist/index.d.ts` document `createOllama`, bearer headers, and `.embedding(modelId)` for `ollama-ai-provider-v2@4.0.1`.
 
-## Required credentialed gate before production AI mode
+## Required credentialed gate before live, reviewer, demo, submission, or production AI mode
 
 Run:
 
@@ -42,7 +44,7 @@ LIVE_AI=1 OLLAMA_API_KEY=... OLLAMA_CHAT_MODEL=... OLLAMA_EMBEDDING_MODEL=... \
   pnpm vitest run tests/contract/ollama-live.test.ts
 ```
 
-The test performs a separate `/api/tags` discovery probe, a native-schema probe, an embedding probe, and all four real agent-schema checks. It deliberately fails (rather than skipping or reporting success) if `LIVE_AI=1` lacks a required credential/model variable. On success, copy the observed model IDs, embedding dimension, normalization observation, native-schema result, and warnings below before enabling production Ollama generation.
+The test performs a separate `/api/tags` discovery probe, a native-schema probe, an embedding probe, and all four real agent-schema checks. It deliberately fails (rather than skipping or reporting success) if `LIVE_AI=1` lacks a required credential/model variable. On success, copy the observed model IDs, embedding dimension, normalization observation, native-schema result, and warnings below before generating the submitted Slack fixture, running reviewer/interview scenarios, creating submission artifacts, or enabling production Ollama generation.
 
 | Field | Observed value |
 | --- | --- |
@@ -52,3 +54,9 @@ The test performs a separate `/api/tags` discovery probe, a native-schema probe,
 | Unit normalized | Pending credentialed probe |
 | Native schema support | Pending credentialed probe |
 | Provider warnings | Pending credentialed probe |
+
+## Mandatory live Slack and submission provenance
+
+Before submission, run the credentialed probe and regenerate `fixtures/cato/slack/account_team_updates.tsv` with live Ollama. Its `generation.json` must record provider `ollama`, the exact model/output mode, provider request IDs when available, nonzero call and token usage, prompt/schema/source/output hashes, generation time, reviewer approval, and a row-level `reinforces | adds_context | ambiguity_conflict` category for every update. Reingest and reindex the approved fixture before generating sample runs; every sample evidence manifest must bind to that fixture content hash.
+
+`pnpm verify:live-artifacts` fails on `mock`, replay, fake, zero-usage, missing-provenance, stale-ingestion, row-category gaps, or Slack fixture/sample hash mismatch. Deterministic mock fixtures remain valid only for ordinary tests and local development.

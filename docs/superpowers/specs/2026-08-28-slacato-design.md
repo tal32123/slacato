@@ -45,8 +45,8 @@ The following requirement IDs are binding acceptance gates and are used by the i
 | ID | Mandatory outcome |
 |---|---|
 | `ASG-PROD-01` | Seller-assist positioning is visible in product copy, README, and presentation; no autonomous customer action. |
-| `ASG-DATA-01` | All eight provided source groups are parsed and exercised: accounts, opportunities, contacts, Gong summaries, Gong transcripts, pricing notes, access permissions, and Deal Desk policy; reviewed Slack is the additional ninth source. |
-| `ASG-SLACK-01` | At least two clearly synthetic updates per opportunity pass PII, chronology, novelty, reinforcement, ambiguity/conflict, ingestion, authorization, citation, and brief-impact checks. |
+| `ASG-DATA-01` | All eight provided source groups are proved end to end through inventory, authorized retrieval/control use, intended agent receipt, and a resulting brief claim/section/citation or the explicit authorization-only rule: accounts, opportunities, contacts, Gong summaries, Gong transcripts, pricing notes, access permissions, and Deal Desk policy. Reviewed Slack is the additional ninth source. |
+| `ASG-SLACK-01` | At least two clearly synthetic updates per opportunity are regenerated for submission with live Ollama, persist real provider/model/usage/provenance, pass PII, chronology, novelty, reinforcement, ambiguity/conflict, ingestion, authorization, citation, and brief-impact checks, and are the rows used by submitted sample runs. |
 | `ASG-LIVE-01` | Reviewer/demo/submission briefs, approvals, specialist artifacts, and traces are produced with live LLM calls. Mock is permitted only for deterministic tests and local development. |
 | `ASG-AUTH-01` | Authorization occurs before retrieval and generation; denied results and traces leak no source/account details; authorization lookups are distinguished from evidence retrieval. |
 | `ASG-CITE-01` | Every important claim resolves to an authorized manifest entry and visibly renders `source=<relative path>, <stable key>=<stable ID>`. |
@@ -71,7 +71,7 @@ SlaCato will provide:
 - Demonstrations for authorized OPP-1001/OPP-1002, restricted OPP-1003 with approval, unauthorized OPP-1003 with no leakage, and a brief citing Slack.
 - A README describing architecture, setup, models, environment variables, commands, assumptions, and demo flow.
 
-Mock-generated output may demonstrate deterministic tests, but it never satisfies `ASG-LIVE-01`. Before review, demo, or submission, Ollama Cloud must pass its credentialed capability probe and the mandatory artifacts must be regenerated live.
+Mock-generated output may demonstrate deterministic tests and local development, but it never satisfies `ASG-LIVE-01`. Before review, demo, or submission, Ollama Cloud must pass its credentialed capability probe; the Slack fixture must be regenerated live, validated, reviewed, persisted with live provenance/usage, reingested and reindexed; and every mandatory sample artifact must be generated from that live Slack version. Mock, replay, and fake markers fail verification.
 
 Every brief contains:
 
@@ -273,7 +273,7 @@ State transitions are explicit and validated. PostgreSQL stores checkpoints, att
 
 The canonical assignment repository is imported by a repeatable TypeScript command. Parsers normalize Salesforce, Gong summaries, transcripts, policies, pricing, permissions, and reviewed Slack TSV data into source documents and chunks with stable IDs and source metadata.
 
-Slack fixtures are generated once with live Ollama Cloud assistance, validated by deterministic TypeScript rules, reviewed, and committed as TSV plus generation metadata. Runtime ingestion consumes the reviewed fixture; it does not regenerate Slack messages for each run.
+Slack fixtures are generated once per release candidate with live Ollama Cloud assistance, validated by deterministic TypeScript rules, reviewed, and committed as TSV plus generation metadata. The metadata records real provider/model identifiers, capability/output mode, nonzero call/token usage, prompt/schema/input/output hashes, generation time, and reviewer status. Submission preparation replaces any mock-development Slack fixture, reingests and reindexes the approved live TSV, and binds sample evidence manifests to its content/version hash. Runtime ingestion consumes that reviewed fixture; it does not regenerate Slack messages for each run. The live verifier rejects `mock`, replay, fake, zero-usage, missing-provenance, stale-ingestion, or sample/fixture hash mismatch markers.
 
 ### Authorization Boundary
 
@@ -313,7 +313,7 @@ Each attempt persists safe metadata, validation issues, duration, and usage. If 
 
 `BudgetedModelGateway` is the only model-call interface exposed to agents and scripts. It always applies a deterministic, model-free `ContextWindowPolicy`, which reserves output capacity, budgets system instructions, current task input, validated specialist artifacts, and authorized retrieved evidence, and prevents large tool or retrieval payloads from entering context unbounded. Provider adapters remain private. Generated schemas bound every array, string, claim, citation, and total serialized artifact size. Specialist artifacts reference one immutable evidence manifest rather than duplicating excerpts; strategy receives bounded artifacts and only their cited evidence.
 
-The Part 1 agents perform bounded analyses, so pruning and retrieval limits are the normal path. If a future multi-turn session crosses its configured threshold, a separate `ContextCompactor` makes a non-recursive budgeted summary call, validates a structured checkpoint, persists it alongside immutable raw history, and retains a recent tail. The checkpoint binds to covered message ranges, citations, evidence versions, authorization scope, policy, prompt, schema, model, and validation hashes. Authorization is recomputed before reuse; narrowed access invalidates and rebuilds the checkpoint from still-authorized raw history. Compaction has hard input-token, output-token, step, retry, and repeated-call limits. It is an application capability, not a reason to adopt a separate agent runtime; Vercel Eve and Workflow are not required.
+The Part 1 agents perform bounded analyses, so pruning and retrieval limits are the normal path. A dormant, already-built `ContextCompactor` exists for a future multi-turn session: it can make a non-recursive budgeted summary call, validate a structured checkpoint, persist it alongside immutable raw history, and retain a recent tail. Its checkpoint binds to covered message ranges, citations, evidence versions, authorization scope, policy, prompt, schema, model, and validation hashes; narrowed access invalidates reuse. Initial-release workflows do not invoke it, and compaction activation or live compaction evaluation is not a submission acceptance gate. It remains application infrastructure, not a reason to adopt a separate agent runtime; Vercel Eve and Workflow are not required.
 
 The canonical brief JSON includes all nine sections, stable claim IDs, citation IDs, confidence values, and review warnings. The UI renders this model with shadcn components. Markdown and JSON exports are supported.
 
@@ -351,6 +351,19 @@ All project-owned evaluation logic remains TypeScript.
 - Trace-completeness assertions linking authorization lookup, evidence retrieval, every specialist/strategy attempt, validation/repair, guardrail/policy decision, approval requirement/decision, recommendation, finalization, and usage
 - Per-agent malformed-output, timeout, unavailable-provider, missing-input, denied-source, degraded-specialist, fatal-commercial/policy, and multi-agent partial-failure cases
 - End-to-end malformed request, missing opportunity/source data, opaque denial, partial agent failure, approval quorum, unsafe-language rejection, and Slack-impact paths on desktop and mobile
+
+`artifacts/evals/source-coverage.json` is a sanitized machine-readable hard gate with one entry for each provided source group. Each entry records its inventory count/hash, authorized retrieval/control event, intended agent(s), observed receipt IDs, resulting section/claim/citation label, expected-utilization rule, and pass/fail status without source bodies or unauthorized metadata. The required rules are:
+
+- accounts → authorized exact evidence lookup → Stakeholder Agent → Deal Snapshot account claim and citation;
+- opportunities → authorized exact evidence lookup → Commercial Agent → Deal Snapshot/Negotiation State claim and citation;
+- contacts → authorized exact evidence lookup → Stakeholder Agent → Stakeholder Map claim and citation;
+- Gong summaries → authorized retrieval → Conversation Agent → Buyer Goals or Negotiation State claim and citation;
+- Gong transcripts → authorized retrieval → Conversation Agent → Buyer Goals, Negotiation State, or Missing Information claim and citation;
+- pricing notes → authorized sensitivity-filtered retrieval → Commercial Agent → commercial claim/recommendation/warning and citation for a pricing-authorized scenario;
+- access permissions → redacted `authorization_lookup` only → computed scope or opaque denial; never agent context, evidence count, claim, or citation;
+- Deal Desk policy → mandatory authorized retrieval plus deterministic policy engine and Commercial Agent receipt → approval/review-warning result with policy citation.
+
+Coverage fails if any group is absent at any required stage, reaches an unintended agent, lacks its expected output/control effect, or violates the authorization-only exception. Inventory alone never passes `ASG-DATA-01`.
 
 Custom evaluators are limited to domain-specific behavior Promptfoo cannot know: citation authorization, stable citation resolution, policy triggers, permission leakage, and golden chunk identity. NDCG and broad bespoke evaluation frameworks are omitted unless baseline results later justify them.
 
@@ -434,7 +447,7 @@ If Ollama Cloud is unavailable, deterministic development remains usable, but re
 - Approval: immutable versioned inbox subject, approve unchanged/edit-and-approve/reject, no post-approval synthesis
 - Evaluation: Vitest, Playwright, Promptfoo, focused TypeScript evaluators
 - Theme: Cato production green palette with Slack-inspired collaboration patterns
-- Context: provider-aware budgeting and pruning, with persisted structured compaction only when thresholds require it
+- Context: provider-aware budgeting and pruning in the initial release; dormant structured compaction infrastructure retained for future multi-turn activation
 - Deployment: Docker Compose locally; Railway `web` + `api` + `worker` + PostgreSQL/pgvector + Redis in production
 - Submission: sanitized mandatory live briefs, specialist artifacts, approvals, traces, usage, and evaluation reports
 - Deferred: cross-encoder reranking discussion after Part 1 baseline evaluation
