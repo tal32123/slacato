@@ -95,3 +95,16 @@ A real Chromium session was driven against the built application and a fresh mig
 ### Round 2 browser findings
 
 A real Chromium session was driven against the built application and fresh round-2 database. At 1440 × 1000, approval detail visibly rendered Deal snapshot, Executive summary, Buyer goals and business drivers, Stakeholder map, Negotiation state, Recommended next actions, Missing information, Authorized evidence summaries, and Confidence and review warnings. At 320 × 700, the open semantic editor had `scrollWidth === clientWidth === 320`; the full surface and controls reflowed without horizontal overflow. Separate immutable detail checks showed Finalizing with the neutral dashed-circle treatment and Rejected with attention styling rather than a misleading locked state. A missing approval set `Unavailable view | SlaCato` and focused its `role="alert"` section.
+
+## Review hardening — round 3
+
+- Overall confidence is now validated from the raw field value before numeric conversion. Blank or whitespace-only input, non-finite numbers, and values outside 0–1 receive the exact field-bound error, `aria-invalid`, `aria-describedby`, and focus treatment.
+- The edited payload is not constructed until confidence has a valid numeric value. The change preview uses that same normalized value, so its reviewed value cannot disagree with the submitted numeric payload.
+- Browser coverage clears confidence, submits by keyboard, verifies the exact error and focus semantics, and proves that no decision request is emitted before correcting the value.
+
+### Round 3 red and green evidence
+
+- RED: the focused edit browser test navigated away after blank confidence was silently coerced to zero, so the confidence control could not receive validation focus.
+- `pnpm exec playwright test tests/e2e/approval.spec.ts --workers=1 -g "edit and approve validates"` — 1 Chromium test passed after the fix.
+- `pnpm exec playwright test tests/e2e/approval.spec.ts --workers=1` — 4 Chromium tests passed.
+- `pnpm exec tsc -b apps/web --pretty false` — passed.

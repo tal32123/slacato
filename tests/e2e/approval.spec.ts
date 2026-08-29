@@ -147,6 +147,10 @@ test('partial quorum remains awaiting until a distinct authorized persona satisf
 });
 
 test('edit and approve validates semantic fields, reflows at 320px and 200%-equivalent, and keeps replacement success focused', async ({ page }) => {
+  let decisionRequestCount = 0;
+  page.on('request', (request) => {
+    if (request.url().includes('/api/approvals/') && request.method() === 'POST') decisionRequestCount += 1;
+  });
   await loginAs(page, 'Rina Vale', `/approvals/${fixtures.edit.subject}`);
   await expect(page).toHaveTitle('Approvals | SlaCato');
   await expect(page.getByRole('link', { name: 'Approvals', exact: true }).first()).toHaveAttribute('aria-current', 'page');
@@ -183,7 +187,16 @@ test('edit and approve validates semantic fields, reflows at 320px and 200%-equi
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.setViewportSize({ width: 640, height: 700 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await page.getByLabel('Overall confidence').fill('0.7');
+  const confidence = page.getByLabel('Overall confidence');
+  await confidence.fill('');
+  await submit.focus();
+  await page.keyboard.press('Enter');
+  await expect(confidence).toBeFocused();
+  await expect(confidence).toHaveAttribute('aria-invalid', 'true');
+  await expect(confidence).toHaveAttribute('aria-describedby', 'confidence-error');
+  await expect(page.getByText('Enter a confidence value from 0 to 1.', { exact: true })).toBeVisible();
+  expect(decisionRequestCount).toBe(0);
+  await confidence.fill('0.7');
   await expect(page.getByRole('heading', { name: 'Change preview' })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`${fixtures.edit.subject}$`));
   const decisionResponse = page.waitForResponse((response) => response.url().includes('/api/approvals/') && response.request().method() === 'POST');

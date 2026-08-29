@@ -79,20 +79,26 @@ function ApprovalDecisionPage({ detail, session, refetch }: Readonly<{
   const actionable = detail.entries.find((entry) => !entry.decided && entry.availableAuthority !== null
     && entry.dependsOn.every((dependency) => decidedIds.has(dependency)));
   const blocked = detail.entries.some((entry) => !entry.decided && entry.availableAuthority !== null) && actionable === undefined;
-  const editedPayload = useMemo((): ApprovalBriefPayload => ({
+  const confidenceValue = useMemo(() => {
+    const trimmed = confidence.trim();
+    if (trimmed === '') return null;
+    const value = Number(trimmed);
+    return Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+  }, [confidence]);
+  const editedPayload = useMemo((): ApprovalBriefPayload | null => confidenceValue === null ? null : ({
     ...detail.payload,
     executiveSummary: { ...detail.payload.executiveSummary, narrative: executiveSummary },
     negotiationState: { ...detail.payload.negotiationState, currentState: negotiationState },
     confidenceAndReviewWarnings: {
       ...detail.payload.confidenceAndReviewWarnings,
-      overallConfidence: Number(confidence)
+      overallConfidence: confidenceValue
     }
-  }), [confidence, detail.payload, executiveSummary, negotiationState]);
+  }), [confidenceValue, detail.payload, executiveSummary, negotiationState]);
   const preview = useMemo(() => [
     { label: 'Executive summary', before: detail.payload.executiveSummary.narrative, after: executiveSummary },
     { label: 'Negotiation state', before: detail.payload.negotiationState.currentState, after: negotiationState },
-    { label: 'Overall confidence', before: String(detail.payload.confidenceAndReviewWarnings.overallConfidence), after: confidence }
-  ].filter((field) => field.before !== field.after), [confidence, detail.payload, executiveSummary, negotiationState]);
+    { label: 'Overall confidence', before: String(detail.payload.confidenceAndReviewWarnings.overallConfidence), after: confidenceValue === null ? 'No valid value entered' : String(confidenceValue) }
+  ].filter((field) => field.before !== field.after), [confidenceValue, detail.payload, executiveSummary, negotiationState]);
 
   useEffect(() => {
     if (successMessage !== '') statusRef.current?.focus();
@@ -146,14 +152,17 @@ function ApprovalDecisionPage({ detail, session, refetch }: Readonly<{
       else if (executiveSummary.length > 8_000) errors.executiveSummary = 'Executive summary must be 8,000 characters or fewer.';
       if (negotiationState.trim().length === 0) errors.negotiationState = 'Enter the negotiation state.';
       else if (negotiationState.length > 8_000) errors.negotiationState = 'Negotiation state must be 8,000 characters or fewer.';
-      const parsed = approvalBriefPayloadSchema.safeParse(editedPayload);
-      if (!parsed.success) {
-        for (const issue of parsed.error.issues) {
-          const section = issue.path[0];
-          if (section === 'executiveSummary') errors.executiveSummary ??= 'Review the executive summary and keep it within 8,000 characters.';
-          else if (section === 'negotiationState') errors.negotiationState ??= 'Review the negotiation state and keep it within 8,000 characters.';
-          else if (section === 'confidenceAndReviewWarnings') errors.confidence ??= 'Enter a confidence value from 0 to 1.';
-          else errors.editedPayload ??= 'The edited brief does not satisfy the approval contract.';
+      if (confidenceValue === null) errors.confidence = 'Enter a confidence value from 0 to 1.';
+      if (editedPayload !== null) {
+        const parsed = approvalBriefPayloadSchema.safeParse(editedPayload);
+        if (!parsed.success) {
+          for (const issue of parsed.error.issues) {
+            const section = issue.path[0];
+            if (section === 'executiveSummary') errors.executiveSummary ??= 'Review the executive summary and keep it within 8,000 characters.';
+            else if (section === 'negotiationState') errors.negotiationState ??= 'Review the negotiation state and keep it within 8,000 characters.';
+            else if (section === 'confidenceAndReviewWarnings') errors.confidence ??= 'Enter a confidence value from 0 to 1.';
+            else errors.editedPayload ??= 'The edited brief does not satisfy the approval contract.';
+          }
         }
       }
     }
@@ -167,6 +176,7 @@ function ApprovalDecisionPage({ detail, session, refetch }: Readonly<{
       });
       return;
     }
+    if (action === 'edit_and_approve' && editedPayload === null) return;
     const base = {
       runId: detail.runId,
       approvalSubjectId: detail.approvalSubjectId,
