@@ -3,6 +3,7 @@ export * from './application/agents/conversation.js';
 export * from './application/agents/stakeholder.js';
 export * from './application/agents/commercial.js';
 export * from './application/agents/strategy.js';
+export * from './application/agents/validation.js';
 export * from './application/context/contracts.js';
 export * from './application/context/context-window-policy.js';
 export * from './application/evidence/fixture-schemas.js';

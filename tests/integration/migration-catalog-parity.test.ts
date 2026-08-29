@@ -145,10 +145,10 @@ describe('durable migration catalog', () => {
       expect(serialized).toContain('"column_name":"embedding","type":"vector","typmod":-1');
       expect(serialized).toContain('"column_name":"lexical_content"');
       expect(serialized).toContain('vector_dims(embedding) = embedding_dimension');
-      expect(serialized).toContain('briefs_approval_subject_snapshot_fk');
+      expect(serialized).toContain('briefs_approval_subject_run_fk');
       expect(serialized).toContain('step_invocations_one_active_causal_command_uq');
       expect(serialized).toContain('run_budget_reservations_attempt_fk');
-      expect(serialized).toContain('run_budget_reservations_invocation_operation_ordinal_uq');
+      expect(serialized).toContain('run_budget_reservations_generation_operation_ordinal_uq');
       expect(serialized).toContain('document_versions_provenance_ck');
       expect(serialized).toContain('evidence_versions_provenance_ck');
       expect(serialized).toContain('evidence_versions_provenance_idx');
@@ -165,9 +165,8 @@ describe('durable migration catalog', () => {
       expect(serialized).toContain('"column_name":"source_locator"');
       expect(serialized).toContain('"column_name":"classification_reason"');
       expect(serialized).toContain('"column_name":"policy_hash"');
-      expect(serialized).toContain('nulls not distinct');
       expect((cleanCatalog.constraints as readonly { table_name: string; name: string; definition: string }[])).toEqual(expect.arrayContaining([
-        expect.objectContaining({ table_name: 'run_budget_reservations', name: 'run_budget_reservations_invocation_operation_ordinal_uq', definition: expect.stringContaining('NULLS NOT DISTINCT') })
+        expect.objectContaining({ table_name: 'run_budget_reservations', name: 'run_budget_reservations_generation_operation_ordinal_uq' })
       ]));
       expect(serialized).not.toContain('hnsw');
     } finally {
@@ -248,7 +247,10 @@ describe('durable migration catalog', () => {
     const pendingIndex = getTableConfig(outboxCommands).indexes.find((entry) => entry.config.name === 'outbox_commands_pending_idx');
     expect(pendingIndex?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['status', 'available_at', 'id']);
     expect(Object.keys(stepInvocations)).toEqual(expect.arrayContaining(['causalCommandId', 'leaseToken']));
-    expect(Object.keys(runs)).toEqual(expect.arrayContaining(['idempotencyKey']));
+    expect(Object.keys(runs)).toEqual(expect.arrayContaining(['idempotencyKey', 'startRequestHash']));
+    const runIndexes = getTableConfig(runs).indexes;
+    expect(runIndexes.find((entry) => entry.config.name === 'runs_idempotency_key_uq')?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['idempotency_key']);
+    expect(runIndexes.find((entry) => entry.config.name === 'runs_one_active_opportunity_uq')?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['opportunity_id']);
     expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens', 'deadlineMs', 'deadlineAt']));
     const reservationConstraint = getTableConfig(runBudgetReservations).uniqueConstraints.find((entry) => entry.name === 'run_budget_reservations_generation_operation_ordinal_uq');
     expect(reservationConstraint?.columns.map((column) => column.name)).toEqual(['run_id', 'logical_generation_id', 'operation', 'ordinal']);

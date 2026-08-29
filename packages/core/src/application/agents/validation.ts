@@ -380,7 +380,7 @@ function briefClaimGroups(brief: DealBrief): readonly (readonly Claim[])[] {
   ];
 }
 
-export function validateDealBrief(value: unknown, evidence: readonly AgentEvidenceRecord[], context: AgentContext): DealBrief {
+export function validateDealBrief(value: unknown, evidence: readonly AgentEvidenceRecord[], context: Pick<AgentContext, 'account' | 'opportunity'>): DealBrief {
   const parsed = dealBriefSchema.parse(value);
   assertUniqueClaims(briefClaimGroups(parsed));
   const map = evidenceMap(evidence);

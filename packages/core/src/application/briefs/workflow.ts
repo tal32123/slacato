@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { decideApprovalRequirement, type ApprovalAuthority, type ApprovalRequirementInput } from '../../domain/briefs/policy.js';
+import { decideApprovalRequirement, type ApprovalAuthority, type ApprovalRequirement, type ApprovalRequirementInput } from '../../domain/briefs/policy.js';
 import { dealBriefSchema, type DealBrief } from '../../domain/briefs/schema.js';
 import { AuthorizationDeniedError, DomainConflictError, DomainNotFoundError, DomainValidationError } from '../../domain/shared/errors.js';
 import type { RunId } from '../../domain/shared/ids.js';
@@ -9,6 +9,7 @@ import type { StepLease, WorkflowRun, WorkflowStore } from '../workflow/workflow
 export interface DealBriefAccessControl {
   authorizeStart(input: Readonly<{ requestedBy: string; opportunityId: string }>): Promise<Readonly<{ allowed: false }> | Readonly<{ allowed: true; accountId: string }>>;
   authoritiesFor(input: Readonly<{ actorId: string; opportunityId: string }>): Promise<readonly ApprovalAuthority[]>;
+  validateApprovalEdit(input: Readonly<{ actorId: string; opportunityId: string; runId: string; payload: DealBrief }>): Promise<ApprovalRequirement>;
   recordOpaqueDenial(event: Readonly<Record<string, unknown>>): Promise<void>;
 }
 export interface DealBriefWorkflowServices {
@@ -20,7 +21,8 @@ export interface DealBriefWorkflowServices {
   approvalInput(run: WorkflowRun, brief: DealBrief, commercial: Readonly<Record<string, unknown>>): ApprovalRequirementInput | Promise<ApprovalRequirementInput>;
   validateDraft(payload: unknown): DealBrief | Promise<DealBrief>;
 }
-export type StartDealBriefCommand = Readonly<{ opportunityId: string; requestedBy: string; idempotencyKey: string; generationProvider: string; generationModel: string; budget: Readonly<{ maxCalls: number; maxInputTokens: number; maxOutputTokens: number; deadlineMs: number }> }>;
+export type StartDealBriefCommand = Readonly<{ opportunityId: string; requestedBy: string; idempotencyKey: string; budget: Readonly<{ maxCalls: number; maxInputTokens: number; maxOutputTokens: number; deadlineMs: number }> }>;
+export type RegenerateDealBriefCommand = Readonly<{ runId: string; requestedBy: string; idempotencyKey: string }>;
 export type ProcessDealBriefStepCommand = Readonly<{ command: WorkflowCommand; workerId: string }>;
 type WorkflowStep = 'start' | 'retrieve' | 'specialists' | 'synthesize' | 'validate' | 'finalize';
 const SECTION_IDS = Object.freeze(['section:dealSnapshot', 'section:executiveSummary', 'section:buyerGoalsAndBusinessDrivers', 'section:stakeholderMap', 'section:negotiationState', 'section:recommendedNextActions', 'section:missingInformation', 'section:sourceEvidence', 'section:confidenceAndReviewWarnings']);
@@ -55,20 +57,54 @@ export function assertApprovableBrief(value: unknown): DealBrief {
 }
 
 export class StartDealBrief {
-  public constructor(private readonly store: WorkflowStore, private readonly access: DealBriefAccessControl) {}
+  public constructor(
+    private readonly store: WorkflowStore,
+    private readonly access: DealBriefAccessControl,
+    private readonly model: Readonly<{ provider: string; model: string }>
+  ) {}
   public async execute(input: StartDealBriefCommand): Promise<RunId> {
     if (input.idempotencyKey.trim().length === 0) throw new DomainValidationError('Idempotency key is required');
-    const replay = await this.store.findRunByIdempotencyKey(input.idempotencyKey); if (replay !== undefined) return replay.id;
     const authorization = await this.access.authorizeStart({ requestedBy: input.requestedBy, opportunityId: input.opportunityId });
     if (!authorization.allowed) { await this.access.recordOpaqueDenial({ type: 'deal_brief_start_denied', actorId: input.requestedBy, reason: 'forbidden' }); throw new AuthorizationDeniedError('DealBrief start denied'); }
-    const active = await this.store.findActiveRun({ opportunityId: input.opportunityId as WorkflowRun['opportunityId'] }); if (active !== undefined) return active.id;
+    const requestHash = hashApprovalPayload({ opportunityId: input.opportunityId, requestedBy: input.requestedBy, idempotencyKey: input.idempotencyKey, budget: input.budget, generationProvider: this.model.provider, generationModel: this.model.model });
+    const scope = { idempotencyKey: input.idempotencyKey, requestedBy: input.requestedBy as WorkflowRun['requestedBy'], opportunityId: input.opportunityId as WorkflowRun['opportunityId'] };
+    const replay = await this.store.findRunByIdempotencyKey(scope);
+    if (replay !== undefined) {
+      if (replay.startRequestHash !== requestHash) throw new DomainConflictError('Start idempotency key is bound to a different command');
+      return replay.id;
+    }
+    const active = await this.store.findActiveRun(scope); if (active !== undefined) return active.id;
     const runId = stableId('run', input.requestedBy, input.opportunityId, input.idempotencyKey) as RunId;
     try {
-      return (await this.store.startRun({ id: runId, opportunityId: input.opportunityId as WorkflowRun['opportunityId'], requestedBy: input.requestedBy as WorkflowRun['requestedBy'], status: 'created', generationProvider: input.generationProvider, generationModel: input.generationModel, idempotencyKey: input.idempotencyKey, command: workflowCommand(runId, 'start', 'v1'), budget: { scope: runId, ...input.budget } })).id;
+      return (await this.store.startRun({ id: runId, opportunityId: scope.opportunityId, requestedBy: scope.requestedBy, status: 'created', generationProvider: this.model.provider, generationModel: this.model.model, startRequestHash: requestHash, idempotencyKey: input.idempotencyKey, command: workflowCommand(runId, 'start', 'v1'), budget: { scope: runId, ...input.budget } })).id;
     } catch (error) {
-      if (!(error instanceof DomainConflictError)) throw error; const concurrent = await this.store.findActiveRun({ opportunityId: input.opportunityId as WorkflowRun['opportunityId'] }); if (concurrent === undefined) throw error; return concurrent.id;
+      if (!(error instanceof DomainConflictError)) throw error; const concurrent = await this.store.findActiveRun(scope); if (concurrent === undefined) throw error; return concurrent.id;
     }
   }
+}
+
+export class RegenerateDealBrief {
+  public constructor(private readonly store: WorkflowStore, private readonly access: DealBriefAccessControl) {}
+  public async execute(input: RegenerateDealBriefCommand): Promise<RunId> {
+    const run = await this.store.getRun(input.runId as RunId);
+    if (run === undefined) throw new DomainNotFoundError('run');
+    const authorized = await this.access.authorizeStart({ requestedBy: input.requestedBy, opportunityId: run.opportunityId });
+    if (!authorized.allowed || run.requestedBy !== input.requestedBy) {
+      await this.access.recordOpaqueDenial({ type: 'deal_brief_regeneration_denied', actorId: input.requestedBy, reason: 'forbidden' });
+      throw new AuthorizationDeniedError('DealBrief regeneration denied');
+    }
+    if (!['awaiting_approval', 'rejected'].includes(run.status)) throw new DomainConflictError('Only an approval-bound draft can be regenerated');
+    const draftVersion = run.version + 1;
+    await this.store.regenerateRun({
+      runId: run.id, expectedVersion: run.version, requestedBy: run.requestedBy, idempotencyKey: input.idempotencyKey,
+      command: workflowCommand(run.id, 'synthesize', `regenerate:${draftVersion}`, { draftVersion })
+    });
+    return run.id;
+  }
+}
+
+class FatalDealBriefWorkflowError extends Error {
+  public constructor(public readonly reason: string, cause: unknown) { super(reason, { cause }); this.name = 'FatalDealBriefWorkflowError'; }
 }
 
 export class ProcessDealBriefStep {
@@ -87,11 +123,15 @@ export class ProcessDealBriefStep {
       else if (step === 'validate') await this.validate(current, lease, input.command);
       else await this.finalize(current, lease, input.command);
     } catch (error) {
-      const latest = await this.store.getRun(run.id); if (latest !== undefined && !['completed', 'rejected', 'failed', 'awaiting_approval'].includes(latest.status)) await this.store.failRun({ runId: latest.id, expectedVersion: latest.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: input.command.id, reason: error instanceof Error ? error.name : 'UnknownWorkflowError' });
+      if (!(error instanceof FatalDealBriefWorkflowError)) throw error;
+      const latest = await this.store.getRun(run.id);
+      if (latest !== undefined && !['completed', 'rejected', 'failed', 'awaiting_approval'].includes(latest.status)) {
+        await this.store.failRun({ runId: latest.id, expectedVersion: latest.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: input.command.id, reason: error.reason });
+      }
     } finally { clearInterval(heartbeat); }
   }
-  private async advance(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand, event: Parameters<WorkflowStore['commitStepAndEnqueueNext']>[0]['event'], checkpointStep: string, checkpoint: Readonly<Record<string, unknown>>, next: WorkflowStep) {
-    await this.store.commitStepAndEnqueueNext({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, event, checkpointStep, checkpoint, nextCommand: workflowCommand(run.id, next, event) });
+  private async advance(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand, event: Parameters<WorkflowStore['commitStepAndEnqueueNext']>[0]['event'], checkpointStep: string, checkpoint: Readonly<Record<string, unknown>>, next: WorkflowStep, nextPayload: Readonly<Record<string, unknown>> = {}) {
+    await this.store.commitStepAndEnqueueNext({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, event, checkpointStep, checkpoint, nextCommand: workflowCommand(run.id, next, `${event}:${String(nextPayload.draftVersion ?? '')}`, nextPayload) });
   }
   private async retrieve(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand) {
     const existing = await this.store.getCheckpoint({ runId: run.id, step: 'retrieval' }); const retrieved = existing ?? { status: 'completed', value: await this.services.retrieve(run, lease.invocationId) }; await this.advance(run, lease, causal, 'retrieval_completed', 'retrieval', retrieved, 'specialists');
@@ -104,18 +144,26 @@ export class ProcessDealBriefStep {
       try { const checkpoint = { status: 'completed', value: await this.services[name](run, context, lease.invocationId), generation: generationMetadata }; return this.store.saveCheckpoint({ runId: run.id, step, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, logicalGenerationId: generationMetadata.logicalGenerationId, checkpoint }); }
       catch (error) { if (name === 'commercial') throw error; const checkpoint = { status: 'degraded', value: { warnings: [`${name}_unavailable`], claims: [] }, warning: `${name} specialist unavailable; dependent claims removed`, generation: generationMetadata }; return this.store.saveCheckpoint({ runId: run.id, step, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, logicalGenerationId: generationMetadata.logicalGenerationId, checkpoint }); }
     }));
-    if (results[2]?.status === 'rejected') throw results[2].reason; await this.advance(run, lease, causal, 'specialists_completed', 'specialists', { status: 'completed' }, 'synthesize');
+    if (results[2]?.status === 'rejected') throw new FatalDealBriefWorkflowError('commercial_specialist_failed', results[2].reason); await this.advance(run, lease, causal, 'specialists_completed', 'specialists', { status: 'completed' }, 'synthesize');
   }
   private async synthesize(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand) {
     const context = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'retrieval' }), 'retrieval'); const conversation = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'specialist:conversation' }), 'conversation'); const stakeholder = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'specialist:stakeholder' }), 'stakeholder'); const commercial = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'specialist:commercial' }), 'commercial');
-    const existing = await this.store.getCheckpoint({ runId: run.id, step: 'strategy' }); const value = existing?.value ?? await this.services.strategy(run, { context, conversation, stakeholder, commercial }, lease.invocationId); const parsed = await this.services.validateDraft(value);
-    if (existing === undefined) { const generationMetadata = generation(run, lease, 'strategy'); await this.store.saveCheckpoint({ runId: run.id, step: 'strategy', invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, logicalGenerationId: generationMetadata.logicalGenerationId, checkpoint: { status: 'completed', value: parsed, generation: generationMetadata } }); }
-    await this.advance(run, lease, causal, 'synthesis_completed', 'synthesis', { status: 'completed' }, 'validate');
+    const draftVersion = typeof causal.payload.draftVersion === 'number' ? causal.payload.draftVersion : 1; const strategyStep = `strategy:${draftVersion}`;
+    const existing = await this.store.getCheckpoint({ runId: run.id, step: strategyStep });
+    let parsed: DealBrief;
+    try { const value = existing?.value ?? await this.services.strategy(run, { context, conversation, stakeholder, commercial }, lease.invocationId); parsed = await this.services.validateDraft(value); }
+    catch (error) { throw new FatalDealBriefWorkflowError('strategy_generation_failed', error); }
+    if (existing === undefined) { const generationMetadata = generation(run, lease, `strategy:${draftVersion}`); await this.store.saveCheckpoint({ runId: run.id, step: strategyStep, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, logicalGenerationId: generationMetadata.logicalGenerationId, checkpoint: { status: 'completed', value: parsed, generation: generationMetadata } }); }
+    await this.advance(run, lease, causal, 'synthesis_completed', `synthesis:${draftVersion}`, { status: 'completed' }, 'validate', { draftVersion });
   }
   private async validate(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand) {
-    const strategy = await this.store.getCheckpoint({ runId: run.id, step: 'strategy' }); const commercial = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'specialist:commercial' }), 'commercial'); const payload = assertApprovableBrief(await this.services.validateDraft(strategy?.value)); const requirement = decideApprovalRequirement(await this.services.approvalInput(run, payload, commercial)); const subjectHash = hashApprovalPayload(payload); const recommendationIds = payload.recommendedNextActions.actions.map((action, index) => `recommendation:${index}:${hashApprovalPayload(action).slice(0, 16)}`);
-    if (requirement.entries.length > 0) { await this.store.awaitApproval({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, subject: { id: stableId('approval_subject', run.id, String(run.version + 1), subjectHash), runId: run.id, subjectHash, payload, sectionIds: SECTION_IDS, recommendationIds, citationIds: collectCitationIds(payload), policyTriggers: requirement.policyTriggers, entries: requirement.entries, quorumVersion: requirement.quorumVersion } }); return; }
-    await this.store.commitStepAndEnqueueNext({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, event: 'validation_completed', checkpointStep: 'validation', checkpoint: { status: 'completed', subjectHash, payload }, nextCommand: workflowCommand(run.id, 'finalize', subjectHash, { subjectHash, payload }) });
+    const draftVersion = typeof causal.payload.draftVersion === 'number' ? causal.payload.draftVersion : 1; const strategy = await this.store.getCheckpoint({ runId: run.id, step: `strategy:${draftVersion}` }); const commercial = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'specialist:commercial' }), 'commercial');
+    let payload: DealBrief; let requirement;
+    try { payload = assertApprovableBrief(await this.services.validateDraft(strategy?.value)); requirement = decideApprovalRequirement(await this.services.approvalInput(run, payload, commercial)); }
+    catch (error) { throw new FatalDealBriefWorkflowError('draft_validation_failed', error); }
+    const subjectHash = hashApprovalPayload(payload); const recommendationIds = payload.recommendedNextActions.actions.map((action, index) => `recommendation:${index}:${hashApprovalPayload(action).slice(0, 16)}`);
+    if (requirement.entries.length > 0) { await this.store.awaitApproval({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, subject: { id: stableId('approval_subject', run.id, String(draftVersion), subjectHash), runId: run.id, subjectHash, payload, sectionIds: SECTION_IDS, recommendationIds, citationIds: collectCitationIds(payload), policyTriggers: requirement.policyTriggers, entries: requirement.entries, quorumVersion: requirement.quorumVersion } }); return; }
+    await this.store.commitStepAndEnqueueNext({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, event: 'validation_completed', checkpointStep: `validation:${draftVersion}`, checkpoint: { status: 'completed', subjectHash, payload }, nextCommand: workflowCommand(run.id, 'finalize', subjectHash, { subjectHash, payload }) });
   }
   private async finalize(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand) {
     const payload = assertApprovableBrief(causal.payload.payload); const subjectHash = causal.payload.subjectHash; if (typeof subjectHash !== 'string' || hashApprovalPayload(payload) !== subjectHash) throw new DomainConflictError('Finalization payload hash mismatch'); await this.store.finalizeRun({ runId: run.id, expectedVersion: run.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: causal.id, subjectHash, payload, ...(typeof causal.payload.approvalSubjectId === 'string' ? { approvalSubjectId: causal.payload.approvalSubjectId } : {}) });

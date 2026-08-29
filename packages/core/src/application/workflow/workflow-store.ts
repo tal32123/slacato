@@ -13,6 +13,7 @@ export type WorkflowRun = Readonly<{
   version: number;
   generationProvider: string;
   generationModel: string;
+  startRequestHash: string;
 }>;
 
 export type StepLease = Readonly<{
@@ -40,6 +41,7 @@ export type ApprovalDecision = Readonly<{
   editedPayload?: DealBrief | undefined;
   diff?: Readonly<Record<string, unknown>> | undefined;
   rationale?: string | undefined;
+  requestHash: string;
   decidedAt: string;
 }>;
 
@@ -56,12 +58,14 @@ export type ApprovalSubject = Readonly<{
   entries: readonly ApprovalRequirementEntry[];
   quorumVersion: string;
   decisions: readonly ApprovalDecision[];
+  supersededBySubjectId?: string | undefined;
 }>;
 
 export type StartRunInput = Readonly<Omit<WorkflowRun, 'version'> & {
   command: WorkflowCommand;
   budget: RunBudgetLimits;
-  idempotencyKey?: string;
+  idempotencyKey: string;
+  startRequestHash: string;
 }>;
 
 export type SaveCheckpointInput = Readonly<{
@@ -117,6 +121,7 @@ export type ApprovalDecisionInput = Readonly<{
   actorId: UserId;
   idempotencyKey: string;
   decision: ApprovalDecision;
+  requestHash: string;
   finalizationCommand: WorkflowCommand;
 }>;
 
@@ -126,6 +131,24 @@ export type ApprovalDecisionStoreResult = Readonly<{
   rejected: boolean;
   replayed: boolean;
   approvedSubjectHash: string;
+}>;
+
+export type ReplaceApprovalSubjectInput = Readonly<{
+  runId: RunId;
+  expectedVersion: number;
+  priorSubjectId: string;
+  priorDecision: ApprovalDecision;
+  idempotencyKey: string;
+  requestHash: string;
+  subject: Omit<ApprovalSubject, 'draftVersion' | 'decisions'>;
+}>;
+
+export type RegenerateRunInput = Readonly<{
+  runId: RunId;
+  expectedVersion: number;
+  requestedBy: UserId;
+  idempotencyKey: string;
+  command: WorkflowCommand;
 }>;
 
 export type FinalizeRunInput = Readonly<{
@@ -142,8 +165,8 @@ export type FinalizeRunInput = Readonly<{
 
 /** Atomic workflow transition seam. Implementations persist state, events and commands in one transaction. */
 export interface WorkflowStore {
-  findRunByIdempotencyKey(idempotencyKey: string): Promise<WorkflowRun | undefined>;
-  findActiveRun(input: Readonly<{ opportunityId: OpportunityId; requestedBy?: UserId | undefined }>): Promise<WorkflowRun | undefined>;
+  findRunByIdempotencyKey(input: Readonly<{ idempotencyKey: string; requestedBy: UserId; opportunityId: OpportunityId }>): Promise<WorkflowRun | undefined>;
+  findActiveRun(input: Readonly<{ opportunityId: OpportunityId; requestedBy: UserId }>): Promise<WorkflowRun | undefined>;
   getRun(runId: RunId): Promise<WorkflowRun | undefined>;
   startRun(input: StartRunInput): Promise<WorkflowRun>;
   claimStep(input: Readonly<{ runId: RunId; step: string; invocationId: string; causalCommandId: string; owner: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
@@ -154,6 +177,8 @@ export interface WorkflowStore {
   awaitApproval(input: AwaitApprovalInput): Promise<WorkflowRun>;
   getApprovalSubject(input: Readonly<{ runId: RunId; approvalSubjectId?: string | undefined }>): Promise<ApprovalSubject | undefined>;
   recordDecisionAndEnqueueFinalization(input: ApprovalDecisionInput): Promise<ApprovalDecisionStoreResult>;
+  replaceApprovalSubject(input: ReplaceApprovalSubjectInput): Promise<Readonly<{ run: WorkflowRun; subject: ApprovalSubject; replayed: boolean }>>;
+  regenerateRun(input: RegenerateRunInput): Promise<WorkflowRun>;
   finalizeRun(input: FinalizeRunInput): Promise<WorkflowRun>;
   failRun(input: Readonly<{ runId: RunId; expectedVersion: number; invocationId: string; invocationOwner: string; leaseToken: string; causalCommandId: string; reason: string }>): Promise<WorkflowRun>;
 }

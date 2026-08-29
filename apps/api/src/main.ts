@@ -5,7 +5,7 @@ import { HttpException, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import type { ErrorRequestHandler } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { DecideApproval, StartDealBrief } from '@slacato/core';
+import { DecideApproval, RegenerateDealBrief, StartDealBrief } from '@slacato/core';
 import { createDatabaseClient, loadRuntimeEnv, PostgresCanonicalPersonaDirectory, PostgresDealBriefAccessControl, PostgresWorkflowStore } from '@slacato/infrastructure';
 import { AppModule } from './app.module.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
@@ -57,7 +57,11 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
     allowedOrigins: [env.WEB_ORIGIN],
     personaDirectory: personas
   }, {
-    startDealBrief: new StartDealBrief(workflowStore, workflowAccess),
+    startDealBrief: new StartDealBrief(workflowStore, workflowAccess, {
+      provider: env.AI_PROVIDER,
+      model: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_CHAT_MODEL : 'mock-brief'
+    }),
+    regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
     decideApproval: new DecideApproval(workflowStore, workflowAccess)
   }), { bodyParser: false });
   configureApiApplication(app);

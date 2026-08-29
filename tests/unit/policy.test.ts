@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEMO_APPROVAL_IDENTITIES,
+  dealBriefSchema,
   decideApprovalRequirement,
+  extractEditedPolicySignals,
+  hashApprovalPayload,
+  validateDealBrief,
   type ApprovalRequirementInput
 } from '@slacato/core';
-
 const safe: ApprovalRequirementInput = {
   discountPercent: 10,
   renewalUpliftPercent: 0,
@@ -24,6 +27,20 @@ function entries(input: Partial<ApprovalRequirementInput>) {
     eligibleAuthorities,
     dependsOn
   }));
+}
+
+function editedBrief(narrative: string) {
+  return dealBriefSchema.parse({
+    dealSnapshot: { accountName: 'Account', opportunityName: 'Opportunity', stage: 'Negotiate' },
+    executiveSummary: { narrative },
+    buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
+    stakeholderMap: { stakeholders: [] },
+    negotiationState: { currentState: 'Insufficient supported evidence is available.', risks: [] },
+    recommendedNextActions: { actions: [] },
+    missingInformation: { items: [] },
+    sourceEvidence: { evidence: [] },
+    confidenceAndReviewWarnings: { overallConfidence: 0.9, warnings: [] }
+  });
 }
 
 describe('deterministic brief approval policy', () => {
@@ -81,6 +98,23 @@ describe('deterministic brief approval policy', () => {
     expect(confirmation?.dependsOn).toEqual(requirement.entries.slice(0, -1).map((entry) => entry.id));
     expect(new Set(requirement.entries.map((entry) => entry.id)).size).toBe(requirement.entries.length);
     expect(requirement.quorumVersion).toBe('deal-brief-approval-v1');
+  });
+
+  it.each([
+    ['we will accept broader exposure', { liabilityCapChanged: true, customerFacingConcessionLanguage: false }],
+    ['we can offer a reduction', { liabilityCapChanged: false, customerFacingConcessionLanguage: true }]
+  ] as const)('semantically gates adversarial edited wording: %s', (narrative, expected) => {
+    expect(extractEditedPolicySignals(editedBrief(narrative))).toMatchObject(expected);
+  });
+
+  it('changes unsupported free narrative under the production claim-support validator', () => {
+    const edited = editedBrief('we can offer a reduction');
+    const grounded = validateDealBrief(edited, [], {
+      account: { id: 'ACC-1', name: 'Account' },
+      opportunity: { id: 'OPP-1', name: 'Opportunity', stage: 'Negotiate' }
+    });
+    expect(hashApprovalPayload(grounded)).not.toBe(hashApprovalPayload(edited));
+    expect(grounded.executiveSummary.narrative).toContain('Insufficient supported evidence');
   });
 
   it('checks in demo-only Legal Reviewer and restricted Sales Leader identities without retrieval access', () => {

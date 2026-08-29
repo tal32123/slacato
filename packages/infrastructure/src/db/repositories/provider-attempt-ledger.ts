@@ -19,7 +19,8 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
   /** Verifies the atomically-created workflow budget before exposing a run gateway. */
   public async assertRunBudget(input: Pick<RunBudgetLimits, 'scope' | 'maxCalls' | 'maxInputTokens' | 'maxOutputTokens' | 'deadlineMs'>): Promise<void> {
     await this.database.sql`update run_budgets set deadline_ms = ${input.deadlineMs}
-      where run_id = ${input.scope} and deadline_ms is null`;
+      where run_id = ${input.scope} and deadline_ms is null and max_calls = ${input.maxCalls}
+        and max_input_tokens = ${input.maxInputTokens} and max_output_tokens = ${input.maxOutputTokens}`;
     const budget = (await this.database.sql<Pick<BudgetRow, 'max_calls' | 'max_input_tokens' | 'max_output_tokens' | 'deadline_ms' | 'deadline_at'>[]>`select max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at from run_budgets
       where run_id = ${input.scope}
         and max_calls = ${input.maxCalls}
@@ -114,7 +115,7 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
       throw new ProviderAttemptFinalizationConflict('Provider attempt metadata was already recorded differently');
     }
     await this.database.sql`update generation_attempts set output_mode = ${input.outputMode}, validation_attempts = ${input.validationAttempts},
-      validation_issues = ${this.database.sql.json(input.validationIssues)}::jsonb, warnings = ${this.database.sql.json(input.warnings)}::jsonb
+      validation_issues = ${JSON.stringify(input.validationIssues)}::jsonb, warnings = ${JSON.stringify(input.warnings)}::jsonb
       where id = ${input.attemptId} and output_mode is null`;
   }
 

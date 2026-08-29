@@ -53,3 +53,38 @@ pnpm vitest run tests/unit/policy.test.ts tests/integration/workflow.test.ts
 ```
 
 No formatter, lint, build, or project-wide test suite was run.
+
+## Round-1 review hardening
+
+Standards and security review identified authorization ordering, replay scope, full-command idempotency, distinct-person quorum, edited-snapshot grounding/policy revalidation, trusted model identity, retrieval budget accounting, recoverable BullMQ delivery, regeneration, and missing real-seam integration coverage.
+
+The hardened implementation now:
+
+- authorizes before start replay and approval-subject lookup, audits opaque denials, and binds replay to the complete canonical command;
+- takes provider/model identity only from trusted composition and verifies persisted identity in the worker;
+- reauthorizes the exact manifest scope before every model prompt;
+- records retrieval embeddings in the run's durable attempt/deadline/budget ledger;
+- rethrows recoverable workflow failures for BullMQ delivery and terminalizes only explicit fatal workflow errors;
+- requires distinct people for Deal Desk/Sales Leader quorum;
+- replaces edited approval subjects immutably, recomputes authoritative requirements, and requires fresh approval;
+- reconstructs exact manifest evidence for edited snapshots, runs the production claim-support validator over the exact payload, rejects any grounding mutation, and applies conservative deterministic semantic gates for liability, retention, restricted research, customer-specific security, and customer concessions;
+- exposes explicit versioned regeneration and rejects decisions against superseded subjects;
+- proves the authenticated HTTP → PostgreSQL outbox → BullMQ worker → approval wait → authenticated decision → deterministic finalization path with real production adapters and no parked run job.
+
+Focused failures during this round exposed production-only gaps before their fixes, including the absent `opportunities.stage` column, a reserved SQL alias in start authorization, the missing durable approval migration in the local test catalog, and array JSON metadata binding in the provider-attempt ledger.
+
+Final focused evidence:
+
+```text
+pnpm vitest run tests/unit/policy.test.ts tests/integration/workflow.test.ts tests/integration/workflow-production.test.ts tests/integration/migration-catalog-parity.test.ts
+# 4 files passed, 40 tests passed
+
+pnpm vitest run tests/integration/repositories.test.ts -t "configured production composition"
+# 1 test passed, 10 skipped
+
+pnpm typecheck
+# exit 0
+
+git diff --check
+# clean
+```

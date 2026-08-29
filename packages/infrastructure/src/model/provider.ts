@@ -12,6 +12,8 @@ export type ConfiguredModelGateways = Readonly<{
   embeddingProfile?: typeof MOCK_EMBEDDING_PROFILE;
   /** Verifies the workflow-created durable budget before returning a scoped gateway. */
   forRun(input: ProviderRunScope): Promise<RunScopedModelGateway>;
+  /** Run-scoped embedding path sharing the same durable deadline and attempt ledger. */
+  embeddingForRun(input: ProviderRunScope): Promise<EmbeddingGateway>;
 }>;
 
 export type ProviderRunScope = Readonly<{ runScope: string; invocationId?: string; logicalGenerationId?: string; budget: RunBudgetLimits }>;
@@ -33,6 +35,28 @@ export function createConfiguredModelGateways(
   environment: Env,
   options: MockCompositionOptions | OllamaCompositionOptions
 ): ConfiguredModelGateways {
+  const runScopedEmbedding = (gateway: EmbeddingGateway, attemptLedger: PostgresProviderAttemptLedger, provider: 'mock' | 'ollama', model: string) => async (input: ProviderRunScope): Promise<EmbeddingGateway> => {
+    if (input.budget.scope !== input.runScope) throw new Error('Run budget scope must match the gateway run scope');
+    await attemptLedger.assertRunBudget(input.budget);
+    return { async embed(values: readonly string[]) {
+      await attemptLedger.remainingDeadlineMs(input.runScope);
+      const inputTokens = Math.max(1, Math.ceil(values.reduce((total, value) => total + value.length, 0) / 4));
+      const reservation = await attemptLedger.beginAttempt({
+        runScope: input.runScope, ...(input.invocationId === undefined ? {} : { invocationId: input.invocationId }),
+        logicalGenerationId: input.logicalGenerationId ?? `embedding:${input.runScope}`, provider, model,
+        operation: 'retrieval-embedding', inputTokens, requestedOutputTokens: 1
+      });
+      try {
+        const output = await gateway.embed(values);
+        await attemptLedger.remainingDeadlineMs(input.runScope);
+        await attemptLedger.settleAttempt({ ...reservation, reservedInputTokens: inputTokens, actualInputTokens: inputTokens, actualOutputTokens: 1 });
+        return output;
+      } catch (error) {
+        await attemptLedger.releaseAttempt({ ...reservation, disposition: 'possibly_sent', category: 'embedding_failure', diagnosticCode: 'retrieval_embedding_failed' });
+        throw error;
+      }
+    } };
+  };
   const runScoped = (gateway: BudgetedModelGateway, attemptLedger: PostgresProviderAttemptLedger, provider: 'mock' | 'ollama', model: string) => async (input: ProviderRunScope): Promise<RunScopedModelGateway> => {
     if (input.budget.scope !== input.runScope) throw new Error('Run budget scope must match the gateway run scope');
     await attemptLedger.assertRunBudget(input.budget);
@@ -49,7 +73,9 @@ export function createConfiguredModelGateways(
     }
     const attemptLedger = options.attemptLedger;
     const mock = createMockModelGateways({ ...options.mock, attemptLedger });
-    return { provider: 'mock', embeddingGateway: mock.embeddingGateway, registry: mock.registry, embeddingProfile: mock.embeddingProfile, forRun: runScoped(mock.modelGateway, attemptLedger, 'mock', 'mock-specialist') };
+    return { provider: 'mock', embeddingGateway: mock.embeddingGateway, registry: mock.registry, embeddingProfile: mock.embeddingProfile,
+      forRun: runScoped(mock.modelGateway, attemptLedger, 'mock', mock.registry.resolve('brief').modelId),
+      embeddingForRun: runScopedEmbedding(mock.embeddingGateway, attemptLedger, 'mock', mock.registry.resolve('embedding').modelId) };
   }
   if ('mock' in options && options.mock !== undefined) throw new Error('Ollama composition does not accept a mock fixture resolver');
   const attemptLedger = options.attemptLedger;
@@ -60,5 +86,7 @@ export function createConfiguredModelGateways(
     embeddingModelId: environment.OLLAMA_EMBEDDING_MODEL,
     attemptLedger
   }, options.ollamaCapabilities ?? { nativeStructuredOutput: false });
-  return { provider: 'ollama', embeddingGateway: ollama.embeddingGateway, registry: ollama.registry, forRun: runScoped(ollama.modelGateway, attemptLedger, 'ollama', environment.OLLAMA_CHAT_MODEL) };
+  return { provider: 'ollama', embeddingGateway: ollama.embeddingGateway, registry: ollama.registry,
+    forRun: runScoped(ollama.modelGateway, attemptLedger, 'ollama', environment.OLLAMA_CHAT_MODEL),
+    embeddingForRun: runScopedEmbedding(ollama.embeddingGateway, attemptLedger, 'ollama', environment.OLLAMA_EMBEDDING_MODEL) };
 }

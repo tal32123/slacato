@@ -60,9 +60,10 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Composed opportunity')`;
     const database = createDatabaseClient(databaseUrl, 1);
     await new PostgresWorkflowStore(database).startRun({
-      id: runId as never, opportunityId: opportunityId as never, requestedBy: userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat',
+      id: runId as never, opportunityId: opportunityId as never, requestedBy: userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-brief',
+      idempotencyKey: `composed_${id}`, startRequestHash: 'a'.repeat(64),
       command: { id: `command_composed_${id}`, runId: runId as never, type: 'process-step', payload: { step: 'start' }, idempotencyKey: `composed_${id}` },
-      budget: { scope: runId as never, maxCalls: 1, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 }
+      budget: { scope: runId as never, maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 }
     });
     const environment = envSchema.parse({
       NODE_ENV: 'test', DATABASE_URL: databaseUrl, SESSION_SECRET: 'a-session-secret-that-is-at-least-32-characters'
@@ -73,12 +74,20 @@ describe('PostgreSQL repository contract', () => {
     const gateways = factory.create({ mockFixtureResolver: async () => ({ text: '{"items":[]}', usage: { inputTokens: 1, outputTokens: 2 } }) });
     expect('modelGateway' in gateways).toBe(false);
     await expect(gateways.forRun({ runScope: `missing_${id}`, budget: { scope: `missing_${id}`, maxCalls: 1, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 } })).rejects.toThrow('Run budget does not exist');
-    const run = await gateways.forRun({ runScope: runId, budget: { scope: runId, maxCalls: 1, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 } });
+    const run = await gateways.forRun({ runScope: runId, budget: { scope: runId, maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 } });
     await run.generateObject({
       schema: z.object({ items: z.array(z.string()) }).strict(), messages: [{ role: 'user', content: 'Return items.' }], operation: 'composed-specialist',
       limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 20 }
     });
-    expect(await sql<{ max_calls: number; status: string }[]>`select run_budgets.max_calls, generation_attempts.status from run_budgets join generation_attempts on generation_attempts.run_id = run_budgets.run_id where run_budgets.run_id = ${runId}`).toEqual([{ max_calls: 1, status: 'completed' }]);
+    const embeddings = await gateways.embeddingForRun({
+      runScope: runId, logicalGenerationId: `retrieval_${id}`,
+      budget: { scope: runId, maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 }
+    });
+    await embeddings.embed(['authorized retrieval query']);
+    expect(await sql<{ operation: string; status: string }[]>`select operation, status from generation_attempts where run_id = ${runId} order by operation`).toEqual([
+      { operation: 'composed-specialist', status: 'completed' },
+      { operation: 'retrieval-embedding', status: 'completed' }
+    ]);
     await app.close(); await database.close();
   });
 

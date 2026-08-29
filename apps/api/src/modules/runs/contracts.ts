@@ -1,11 +1,13 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import type { AppError, DecideApproval, StartDealBrief } from '@slacato/core';
+import type { AppError, DecideApproval, RegenerateDealBrief, StartDealBrief } from '@slacato/core';
 
 export const START_DEAL_BRIEF = Symbol('START_DEAL_BRIEF');
+export const REGENERATE_DEAL_BRIEF = Symbol('REGENERATE_DEAL_BRIEF');
 export const DECIDE_APPROVAL = Symbol('DECIDE_APPROVAL');
 
 export type WorkflowApiOptions = Readonly<{
   startDealBrief: StartDealBrief;
+  regenerateDealBrief: RegenerateDealBrief;
   decideApproval: DecideApproval;
 }>;
 

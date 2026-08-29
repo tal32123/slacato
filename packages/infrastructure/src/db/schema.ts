@@ -83,8 +83,10 @@ export const runEvidenceManifestEntries = pgTable('run_evidence_manifest_entries
   sourceLocator: text('source_locator').notNull(), sourceType: text('source_type').notNull(), sensitivity: text('sensitivity').notNull(), classificationReason: text('classification_reason').notNull(), policyHash: text('policy_hash').notNull(), lexicalRank: integer('lexical_rank'), semanticRank: integer('semantic_rank'), fusionScore: numeric('fusion_score').notNull(), reliabilityAdjustment: numeric('reliability_adjustment').notNull(), recencyAdjustment: numeric('recency_adjustment').notNull(), includedCharacters: integer('included_characters').notNull()
 }, (table) => [primaryKey({ columns: [table.manifestId, table.evidenceVersionId] }), uniqueIndex('run_evidence_manifest_entries_citation_uq').on(table.citationId)]);
 export const runs = pgTable('runs', {
-  id: text('id').primaryKey(), opportunityId: text('opportunity_id').notNull().references(() => opportunities.id), requestedBy: text('requested_by').notNull().references(() => personas.id), status: text('status').notNull(), generationProvider: text('generation_provider').notNull(), generationModel: text('generation_model').notNull(), idempotencyKey: text('idempotency_key'), version: integer('version').notNull().default(0), createdAt: now(), updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  id: text('id').primaryKey(), opportunityId: text('opportunity_id').notNull().references(() => opportunities.id), requestedBy: text('requested_by').notNull().references(() => personas.id), status: text('status').notNull(), generationProvider: text('generation_provider').notNull(), generationModel: text('generation_model').notNull(), idempotencyKey: text('idempotency_key'), startRequestHash: text('start_request_hash').notNull(), version: integer('version').notNull().default(0), createdAt: now(), updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 }, (table) => [
+  uniqueIndex('runs_idempotency_key_uq').on(table.idempotencyKey).where(sql`${table.idempotencyKey} is not null`),
+  uniqueIndex('runs_one_active_opportunity_uq').on(table.opportunityId).where(sql`${table.status} in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing')`),
   check('runs_status_check', sql`${table.status} in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing','completed','rejected','failed')`),
   check('runs_version_check', sql`${table.version} >= 0`)
 ]);
@@ -140,7 +142,7 @@ export const approvalSubjects = pgTable('approval_subjects', {
   subjectHash: text('subject_hash').notNull(), payload: json<Record<string, unknown>>('payload'), sectionIds: json<readonly string[]>('section_ids').notNull().default([]),
   recommendationIds: json<readonly string[]>('recommendation_ids').notNull().default([]), citationIds: json<readonly string[]>('citation_ids').notNull().default([]),
   policyTriggers: json<readonly string[]>('policy_triggers'), quorumVersion: text('quorum_version').notNull().default('deal-brief-approval-v1'),
-  decisionVersion: integer('decision_version').notNull().default(0), createdAt: now()
+  decisionVersion: integer('decision_version').notNull().default(0), supersededBySubjectId: text('superseded_by_subject_id'), createdAt: now()
 }, (table) => [
   uniqueIndex('approval_subjects_run_version_uq').on(table.runId, table.draftVersion), unique('approval_subjects_id_run_hash_uq').on(table.id, table.runId, table.subjectHash),
   unique('approval_subjects_id_run_uq').on(table.id, table.runId), check('approval_subjects_draft_version_check', sql`${table.draftVersion} >= 0`),
@@ -157,7 +159,7 @@ export const approvalRequirementEntries = pgTable('approval_requirement_entries'
 export const approvalDecisions = pgTable('approval_decisions', {
   id: text('id').primaryKey(), approvalSubjectId: text('approval_subject_id').notNull().references(() => approvalSubjects.id), entryId: text('entry_id').notNull(),
   action: text('action').notNull(), actorId: text('actor_id').notNull().references(() => personas.id), category: text('category').notNull(), authority: text('authority').notNull(),
-  idempotencyKey: text('idempotency_key').notNull(), rationale: text('rationale'), originalPayload: json<Record<string, unknown>>('original_payload').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(), requestHash: text('request_hash').notNull(), rationale: text('rationale'), originalPayload: json<Record<string, unknown>>('original_payload').notNull(),
   approvedPayload: json<Record<string, unknown>>('approved_payload').notNull(), editedPayload: json<Record<string, unknown>>('edited_payload'),
   originalSubjectHash: text('original_subject_hash').notNull(), approvedSubjectHash: text('approved_subject_hash').notNull(), diff: json<Record<string, unknown>>('diff'), createdAt: now()
 }, (table) => [

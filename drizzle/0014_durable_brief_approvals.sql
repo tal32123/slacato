@@ -1,4 +1,7 @@
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS idempotency_key text;
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS start_request_hash text;
+UPDATE runs SET start_request_hash = repeat('0', 64) WHERE start_request_hash IS NULL;
+ALTER TABLE runs ALTER COLUMN start_request_hash SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS runs_idempotency_key_uq ON runs(idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS runs_one_active_opportunity_uq ON runs(opportunity_id)
   WHERE status IN ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing');
@@ -78,6 +81,7 @@ ALTER TABLE approval_subjects ADD COLUMN IF NOT EXISTS recommendation_ids jsonb 
 ALTER TABLE approval_subjects ADD COLUMN IF NOT EXISTS citation_ids jsonb NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE approval_subjects ADD COLUMN IF NOT EXISTS quorum_version text NOT NULL DEFAULT 'deal-brief-approval-v1';
 ALTER TABLE approval_subjects ADD COLUMN IF NOT EXISTS decision_version integer NOT NULL DEFAULT 0;
+ALTER TABLE approval_subjects ADD COLUMN IF NOT EXISTS superseded_by_subject_id text REFERENCES approval_subjects(id);
 ALTER TABLE approval_subjects ADD CONSTRAINT approval_subjects_decision_version_ck CHECK (decision_version >= 0);
 ALTER TABLE approval_subjects ADD CONSTRAINT approval_subjects_id_run_uq UNIQUE (id, run_id);
 
@@ -100,6 +104,7 @@ ALTER TABLE approval_decisions ADD COLUMN IF NOT EXISTS entry_id text;
 ALTER TABLE approval_decisions ADD COLUMN IF NOT EXISTS category text;
 ALTER TABLE approval_decisions ADD COLUMN IF NOT EXISTS authority text;
 ALTER TABLE approval_decisions ADD COLUMN IF NOT EXISTS idempotency_key text;
+ALTER TABLE approval_decisions ADD COLUMN IF NOT EXISTS request_hash text;
 ALTER TABLE approval_decisions ADD COLUMN IF NOT EXISTS original_payload jsonb;
 ALTER TABLE approval_decisions ADD COLUMN IF NOT EXISTS approved_payload jsonb;
 ALTER TABLE approval_decisions ADD COLUMN IF NOT EXISTS original_subject_hash text;
@@ -113,12 +118,14 @@ UPDATE approval_decisions decision SET
   category = coalesce(decision.category, 'evidence_review'), authority = coalesce(decision.authority, 'account_owner'),
   idempotency_key = coalesce(decision.idempotency_key, 'legacy:' || decision.id),
   original_payload = coalesce(decision.original_payload, subject.payload), approved_payload = coalesce(decision.approved_payload, decision.edited_payload, subject.payload),
-  original_subject_hash = coalesce(decision.original_subject_hash, subject.subject_hash), approved_subject_hash = coalesce(decision.approved_subject_hash, subject.subject_hash)
+  original_subject_hash = coalesce(decision.original_subject_hash, subject.subject_hash), approved_subject_hash = coalesce(decision.approved_subject_hash, subject.subject_hash),
+  request_hash = coalesce(decision.request_hash, 'legacy:' || decision.id)
   FROM approval_subjects subject WHERE subject.id = decision.approval_subject_id;
 ALTER TABLE approval_decisions ALTER COLUMN entry_id SET NOT NULL;
 ALTER TABLE approval_decisions ALTER COLUMN category SET NOT NULL;
 ALTER TABLE approval_decisions ALTER COLUMN authority SET NOT NULL;
 ALTER TABLE approval_decisions ALTER COLUMN idempotency_key SET NOT NULL;
+ALTER TABLE approval_decisions ALTER COLUMN request_hash SET NOT NULL;
 ALTER TABLE approval_decisions ALTER COLUMN original_payload SET NOT NULL;
 ALTER TABLE approval_decisions ALTER COLUMN approved_payload SET NOT NULL;
 ALTER TABLE approval_decisions ALTER COLUMN original_subject_hash SET NOT NULL;
@@ -134,6 +141,18 @@ ALTER TABLE briefs ADD CONSTRAINT briefs_draft_version_ck CHECK (draft_version >
 ALTER TABLE briefs ADD CONSTRAINT briefs_run_version_uq UNIQUE (run_id, draft_version);
 ALTER TABLE briefs ADD CONSTRAINT briefs_approval_subject_run_fk FOREIGN KEY (approval_subject_id, run_id) REFERENCES approval_subjects(id, run_id);
 
-CREATE TRIGGER approval_subjects_immutable BEFORE UPDATE OR DELETE ON approval_subjects FOR EACH ROW EXECUTE FUNCTION reject_immutable_change();
+CREATE OR REPLACE FUNCTION protect_approval_subject_snapshot() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'immutable row cannot be deleted' USING ERRCODE = '55000'; END IF;
+  IF OLD.id IS DISTINCT FROM NEW.id OR OLD.run_id IS DISTINCT FROM NEW.run_id OR OLD.draft_version IS DISTINCT FROM NEW.draft_version
+    OR OLD.subject_hash IS DISTINCT FROM NEW.subject_hash OR OLD.payload IS DISTINCT FROM NEW.payload
+    OR OLD.section_ids IS DISTINCT FROM NEW.section_ids OR OLD.recommendation_ids IS DISTINCT FROM NEW.recommendation_ids
+    OR OLD.citation_ids IS DISTINCT FROM NEW.citation_ids OR OLD.policy_triggers IS DISTINCT FROM NEW.policy_triggers
+    OR OLD.quorum_version IS DISTINCT FROM NEW.quorum_version OR OLD.decision_version IS DISTINCT FROM NEW.decision_version
+    OR (OLD.superseded_by_subject_id IS NOT NULL AND OLD.superseded_by_subject_id IS DISTINCT FROM NEW.superseded_by_subject_id)
+  THEN RAISE EXCEPTION 'immutable approval subject snapshot cannot be changed' USING ERRCODE = '55000'; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER approval_subjects_immutable BEFORE UPDATE OR DELETE ON approval_subjects FOR EACH ROW EXECUTE FUNCTION protect_approval_subject_snapshot();
 CREATE TRIGGER approval_decisions_immutable BEFORE UPDATE OR DELETE ON approval_decisions FOR EACH ROW EXECUTE FUNCTION reject_immutable_change();
 CREATE TRIGGER approval_requirement_entries_immutable BEFORE UPDATE OR DELETE ON approval_requirement_entries FOR EACH ROW EXECUTE FUNCTION reject_immutable_change();
