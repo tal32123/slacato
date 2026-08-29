@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { ProviderAttemptFinalizationConflict, type ProviderAttemptLedger, type ProviderAttemptReservation, type RunBudgetLimits } from '@slacato/core';
 import type { TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../client.js';
+import { logger } from '../../logging/logger.js';
 
 type BudgetRow = Readonly<{ run_id: string; max_calls: number; max_input_tokens: number; max_output_tokens: number; deadline_ms: number | null; deadline_at: string | Date; used_calls: number; used_input_tokens: number; used_output_tokens: number; reserved_output_tokens: number }>;
 type ReservationRow = Readonly<{
@@ -9,6 +10,7 @@ type ReservationRow = Readonly<{
   status: 'reserved' | 'settled' | 'released' | 'possible_duplicate'; actual_input_tokens: number | null; actual_output_tokens: number | null;
   request_id: string | null; response_id: string | null; failure_category: string | null; failure_code: string | null;
 }>;
+type AttemptLogRow = Readonly<{ run_id: string; provider: string; model: string; ordinal: number; started_at: Date | string }>;
 type QuerySql = DatabaseClient['sql'] | TransactionSql;
 
 function same(left: string | number | null | undefined, right: string | number | null | undefined): boolean { return (left ?? null) === (right ?? null); }
@@ -45,7 +47,7 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
   }
 
   public async beginAttempt(input: Parameters<ProviderAttemptLedger['beginAttempt']>[0]): Promise<ProviderAttemptReservation> {
-    return this.database.sql.begin(async (sql) => {
+    const reservation = await this.database.sql.begin(async (sql) => {
       const logicalGenerationId = input.logicalGenerationId ?? `generation_${createHash('sha256').update(`${input.runScope}\u0000${input.operation}`).digest('hex')}`;
       const budget = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
       if (budget === undefined) throw new Error('Run budget does not exist');
@@ -73,35 +75,64 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
       await sql`update run_budgets set used_calls = used_calls + 1, used_input_tokens = used_input_tokens + ${input.inputTokens}, reserved_output_tokens = reserved_output_tokens + ${grant} where run_id = ${input.runScope}`;
       return { reservationId, attemptId, ordinal, grantedOutputTokens: grant };
     });
+    logger.info({
+      event: 'provider_attempt_started', correlationId: reservation.attemptId, runId: input.runScope,
+      attemptId: reservation.attemptId, status: 'started', provider: input.provider, model: input.model,
+      durationMs: 0, retryCount: reservation.ordinal - 1, inputTokens: input.inputTokens, outputTokens: 0
+    });
+    return reservation;
   }
 
   public async settleAttempt(input: Parameters<ProviderAttemptLedger['settleAttempt']>[0]): Promise<void> {
-    await this.database.sql.begin(async (sql) => {
+    const completed = await this.database.sql.begin(async (sql) => {
       const row = await this.lockReservation(sql, input);
       const actualInput = input.actualInputTokens ?? row.reserved_input_tokens;
       const actualOutput = input.actualOutputTokens ?? row.granted_output_tokens;
       if (row.status !== 'reserved') {
-        if (row.status === 'settled' && same(row.actual_input_tokens, actualInput) && same(row.actual_output_tokens, actualOutput) && same(row.request_id, input.requestId) && same(row.response_id, input.responseId)) return;
+        if (row.status === 'settled' && same(row.actual_input_tokens, actualInput) && same(row.actual_output_tokens, actualOutput) && same(row.request_id, input.requestId) && same(row.response_id, input.responseId)) return undefined;
         throw new ProviderAttemptFinalizationConflict();
       }
       await sql`update run_budgets set used_input_tokens = used_input_tokens + greatest(0, ${actualInput}::integer - ${row.reserved_input_tokens}::integer), used_output_tokens = used_output_tokens + ${actualOutput}, reserved_output_tokens = reserved_output_tokens - ${row.granted_output_tokens} where run_id = ${row.run_id}`;
       await sql`update run_budget_reservations set status = 'settled', actual_input_tokens = ${actualInput}, actual_output_tokens = ${actualOutput}, request_id = ${input.requestId ?? null}, response_id = ${input.responseId ?? null}, settled_at = now() where id = ${row.id}`;
-      await sql`update generation_attempts set status = 'completed', possible_duplicate = false, request_id = ${input.requestId ?? null}, response_id = ${input.responseId ?? null}, input_tokens = ${actualInput}, output_tokens = ${actualOutput}, completed_at = now() where id = ${row.attempt_id}`;
+      const attempt = (await sql<AttemptLogRow[]>`update generation_attempts set status = 'completed', possible_duplicate = false, request_id = ${input.requestId ?? null}, response_id = ${input.responseId ?? null}, input_tokens = ${actualInput}, output_tokens = ${actualOutput}, completed_at = now() where id = ${row.attempt_id}
+        returning run_id, provider, model, ordinal, started_at`)[0];
+      if (attempt === undefined) throw new ProviderAttemptFinalizationConflict('Unknown provider attempt');
+      return { attempt, actualInput, actualOutput };
+    });
+    if (completed === undefined) return;
+    logger.info({
+      event: 'provider_attempt_completed', correlationId: input.attemptId, runId: completed.attempt.run_id,
+      attemptId: input.attemptId, status: 'completed', provider: completed.attempt.provider, model: completed.attempt.model,
+      durationMs: Math.max(0, Date.now() - new Date(completed.attempt.started_at).getTime()),
+      retryCount: completed.attempt.ordinal - 1, inputTokens: completed.actualInput, outputTokens: completed.actualOutput
     });
   }
 
   public async releaseAttempt(input: Parameters<ProviderAttemptLedger['releaseAttempt']>[0]): Promise<void> {
-    await this.database.sql.begin(async (sql) => {
+    const failed = await this.database.sql.begin(async (sql) => {
       const row = await this.lockReservation(sql, input);
       const status = input.disposition === 'safe_not_sent' ? 'released' : 'possible_duplicate';
       const output = input.disposition === 'safe_not_sent' ? null : row.granted_output_tokens;
       if (row.status !== 'reserved') {
-        if (row.status === status && same(row.actual_output_tokens, output) && same(row.failure_category, input.category) && same(row.failure_code, input.diagnosticCode)) return;
+        if (row.status === status && same(row.actual_output_tokens, output) && same(row.failure_category, input.category) && same(row.failure_code, input.diagnosticCode)) return undefined;
         throw new ProviderAttemptFinalizationConflict();
       }
       await sql`update run_budgets set reserved_output_tokens = reserved_output_tokens - ${row.granted_output_tokens}, used_output_tokens = used_output_tokens + ${output ?? 0} where run_id = ${row.run_id}`;
       await sql`update run_budget_reservations set status = ${status}, actual_output_tokens = ${output}, failure_category = ${input.category ?? null}, failure_code = ${input.diagnosticCode ?? null}, settled_at = now() where id = ${row.id}`;
-      await sql`update generation_attempts set status = ${input.disposition === 'safe_not_sent' ? 'failed' : 'possible_duplicate'}, possible_duplicate = ${input.disposition === 'possibly_sent'}, output_tokens = ${output}, completed_at = now() where id = ${row.attempt_id}`;
+      const attempt = (await sql<AttemptLogRow[]>`update generation_attempts set status = ${input.disposition === 'safe_not_sent' ? 'failed' : 'possible_duplicate'}, possible_duplicate = ${input.disposition === 'possibly_sent'}, output_tokens = ${output}, completed_at = now() where id = ${row.attempt_id}
+        returning run_id, provider, model, ordinal, started_at`)[0];
+      if (attempt === undefined) throw new ProviderAttemptFinalizationConflict('Unknown provider attempt');
+      return { attempt, output, inputTokens: row.reserved_input_tokens };
+    });
+    if (failed === undefined) return;
+    const diagnosticCode = input.diagnosticCode?.toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 128);
+    logger.error({
+      event: 'provider_attempt_failed', correlationId: input.attemptId, runId: failed.attempt.run_id,
+      attemptId: input.attemptId, status: input.disposition === 'safe_not_sent' ? 'failed' : 'possible_duplicate',
+      provider: failed.attempt.provider, model: failed.attempt.model,
+      durationMs: Math.max(0, Date.now() - new Date(failed.attempt.started_at).getTime()),
+      retryCount: failed.attempt.ordinal - 1, inputTokens: failed.inputTokens, outputTokens: failed.output ?? 0,
+      errorCode: diagnosticCode === undefined || diagnosticCode.length === 0 ? 'PROVIDER_ATTEMPT_FAILED' : diagnosticCode
     });
   }
 

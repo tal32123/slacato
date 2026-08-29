@@ -9,6 +9,8 @@ import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module.js';
 import type { DiagnosticsModuleOptions } from './modules/diagnostics/contracts.js';
 import { DealsModule } from './modules/deals/deals.module.js';
 import type { DealsModuleOptions } from './modules/deals/contracts.js';
+import { ExportsModule } from './modules/exports/exports.module.js';
+import type { BriefExportService } from './modules/exports/exports.service.js';
 
 @Module({})
 export class AppModule {
@@ -16,7 +18,8 @@ export class AppModule {
     auth: AuthModuleOptions,
     workflow?: WorkflowApiOptions,
     diagnostics?: DiagnosticsModuleOptions,
-    deals?: DealsModuleOptions
+    deals?: DealsModuleOptions,
+    exports?: BriefExportService
   ): DynamicModule {
     return {
       module: AppModule,
@@ -25,7 +28,8 @@ export class AppModule {
         AuthModule.register(auth),
         ...(diagnostics === undefined ? [] : [DiagnosticsModule.register(diagnostics)]),
         ...(workflow === undefined ? [] : [RunsModule.register(workflow), ApprovalsModule.register(workflow.decideApproval, workflow.queries)]),
-        ...(deals === undefined ? [] : [DealsModule.register(deals)])
+        ...(deals === undefined ? [] : [DealsModule.register(deals)]),
+        ...(exports === undefined ? [] : [ExportsModule.register(exports)])
       ]
     };
   }

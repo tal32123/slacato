@@ -4,6 +4,7 @@ import { approvalDecisionRequestSchema, approvalDecisionResultSchema, type Appro
 import { ZodBody, ZodResponse } from '../../common/wire/zod.decorators.js';
 import { DECIDE_APPROVAL, toHttpError } from '../runs/contracts.js';
 import type { DecideApproval } from '@slacato/core';
+import { logger } from '@slacato/infrastructure';
 
 const decisionSchema = approvalDecisionRequestSchema;
 const resultSchema = approvalDecisionResultSchema;
@@ -18,9 +19,25 @@ export class ApprovalsController {
   public async execute(@ZodBody(decisionSchema) input: DecisionInput, @Req() request: AuthenticatedRequest) {
     const actorId = request.auth?.persona.userId;
     if (actorId === undefined) throw new Error('Authenticated request identity was not installed');
+    const correlationId = `approval_${crypto.randomUUID()}`;
+    const startedAt = Date.now();
     try {
-      return await this.decideApproval.execute({ ...input, actorId });
+      const result = await this.decideApproval.execute({ ...input, actorId });
+      logger.info({
+        event: 'approval_decision_completed', correlationId, runId: input.runId,
+        attemptId: input.approvalSubjectId, status: result.status, durationMs: Date.now() - startedAt,
+        retryCount: result.replayed ? 1 : 0, action: input.action
+      });
+      return result;
     } catch (error) {
+      const candidate = error as { code?: unknown };
+      const errorCode = typeof candidate.code === 'string' && /^[A-Z][A-Z0-9_]{0,127}$/.test(candidate.code)
+        ? candidate.code : 'APPROVAL_DECISION_FAILED';
+      logger.error({
+        event: 'approval_decision_failed', correlationId, runId: input.runId,
+        attemptId: input.approvalSubjectId, status: 'failed', durationMs: Date.now() - startedAt,
+        retryCount: 0, errorCode, err: error
+      });
       return toHttpError(error);
     }
   }

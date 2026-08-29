@@ -21,6 +21,7 @@ export * from './application/model/retry.js';
 export * from './application/model/provider-attempt-ledger.js';
 export * from './application/approvals/decide-approval.js';
 export * from './application/briefs/workflow.js';
+export * from './application/briefs/exports.js';
 export * from './application/workflow/command-queue.js';
 export * from './application/workflow/workflow-store.js';
 export * from './application/workflow/evidence-repository.js';

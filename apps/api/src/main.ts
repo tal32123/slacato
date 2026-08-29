@@ -19,6 +19,7 @@ import { PostgresSessionRegistry } from './modules/auth/postgres-session-registr
 import { AppModule } from './app.module.js';
 import { PostgresDealQueryRepository } from './modules/deals/deals.repository.js';
 import { PostgresRunApprovalQueryRepository } from './modules/runs/run-approval.repository.js';
+import { PostgresBriefExportService } from './modules/exports/exports.service.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
 
@@ -86,7 +87,7 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
     pinnedEmbeddingModel: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_EMBEDDING_MODEL : 'mock-embedding'
   }, {
     repository: dealQueries
-  }), { bodyParser: false });
+  }, new PostgresBriefExportService(database)), { bodyParser: false });
   configureApiApplication(app);
   return app;
 }

@@ -7,7 +7,7 @@ import {
   type PermissionGrant, type StrategyArtifacts, type WorkflowCommand, type WorkflowRun
 } from '@slacato/core';
 import {
-  PostgresDealBriefPolicyFacts, PostgresHybridEvidenceRetriever, WORKFLOW_QUEUE_NAME,
+  logger, PostgresDealBriefPolicyFacts, PostgresHybridEvidenceRetriever, WORKFLOW_QUEUE_NAME,
   type ConfiguredModelGateways, type DatabaseClient
 } from '@slacato/infrastructure';
 
@@ -146,7 +146,27 @@ export class DealBriefProcessor {
     if (!Number.isInteger(concurrency) || concurrency !== 1) throw new RangeError('Initial deal brief worker concurrency must be exactly one');
     if (!Number.isInteger(jobsPerSecond) || jobsPerSecond < 1) throw new RangeError('Worker rate limit must be positive');
     this.worker = new Worker<WorkflowCommand, void, 'workflow-command'>(WORKFLOW_QUEUE_NAME, async (job: Job<WorkflowCommand, void, 'workflow-command'>) => {
-      await processStep.execute({ command: job.data, workerId: options.workerId });
+      const startedAt = Date.now();
+      const correlationId = String(job.id ?? job.data.id);
+      const attempt = job.attemptsMade + 1;
+      logger.info({
+        event: 'workflow_command_started', correlationId, runId: job.data.runId, attemptId: job.data.id,
+        status: 'started', durationMs: 0, retryCount: job.attemptsMade
+      });
+      try {
+        await processStep.execute({ command: job.data, workerId: options.workerId });
+        logger.info({
+          event: 'workflow_command_completed', correlationId, runId: job.data.runId, attemptId: job.data.id,
+          status: 'completed', durationMs: Date.now() - startedAt, retryCount: attempt - 1
+        });
+      } catch (error) {
+        logger.error({
+          event: 'workflow_command_failed', correlationId, runId: job.data.runId, attemptId: job.data.id,
+          status: 'failed', durationMs: Date.now() - startedAt, retryCount: attempt - 1,
+          errorCode: 'WORKFLOW_COMMAND_FAILED', err: error
+        });
+        throw error;
+      }
     }, { connection: { url: options.redisUrl }, concurrency, limiter: { max: jobsPerSecond, duration: 1_000 }, lockDuration, lockRenewTime: Math.max(1_000, Math.floor(lockDuration / 3)), autorun: true });
   }
   public async close(): Promise<void> { await this.worker.pause(true); await this.worker.close(false); }

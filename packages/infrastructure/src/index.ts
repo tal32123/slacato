@@ -22,3 +22,5 @@ export { PostgresHybridEvidenceRetriever, PostgresCitationResolver } from './ret
 export { BullMqCommandQueue, WORKFLOW_DEAD_LETTER_QUEUE_NAME, WORKFLOW_QUEUE_NAME, type CommandInspection } from './queue/bullmq.js';
 export { OutboxDispatcher, OutboxDispatcherLoop } from './queue/outbox-dispatcher.js';
 export { PostgresCommandReconciler, ReconcilerLoop, type LiveCommandInspector } from './queue/reconciler.js';
+export { createSafeLogger, logger } from './logging/logger.js';
+export { redactLogPayload, type SafeLogPayload, type SafeLogPrimitive } from './logging/redaction.js';
