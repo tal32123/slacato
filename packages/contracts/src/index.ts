@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export * from './auth.js';
+export * from './events.js';
 
 export const liveHealthSchema = z.object({ status: z.literal('live') }).strict();
 export const readyHealthSchema = z.object({
@@ -16,11 +17,6 @@ export const notReadyHealthSchema = z.object({
 }).strict();
 export const readinessHealthSchema = z.union([readyHealthSchema, notReadyHealthSchema]);
 
-/** Generic server-event envelope; feature-specific payload schemas are introduced with their events. */
-export const sseEnvelopeSchema = z.object({
-  id: z.string().min(1), streamId: z.string().min(1), type: z.string().min(1), timestamp: z.string().datetime(), version: z.number().int().nonnegative(), payload: z.unknown()
-}).strict();
 
 export type LiveHealth = z.infer<typeof liveHealthSchema>;
 export type ReadinessHealth = z.infer<typeof readinessHealthSchema>;
-export type SseEnvelope = z.infer<typeof sseEnvelopeSchema>;

@@ -13,6 +13,7 @@ export * from './application/evidence/scope-binding.js';
 export * from './application/evidence/rrf.js';
 export * from './application/evidence/retriever.js';
 export * from './application/evidence/citations.js';
+export * from './application/events/run-events.js';
 export * from './application/model/contracts.js';
 export * from './application/model/gateway.js';
 export * from './application/model/registry.js';

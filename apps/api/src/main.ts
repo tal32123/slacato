@@ -6,7 +6,15 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import type { ErrorRequestHandler } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DecideApproval, RegenerateDealBrief, StartDealBrief } from '@slacato/core';
-import { createDatabaseClient, loadRuntimeEnv, PostgresCanonicalPersonaDirectory, PostgresDealBriefAccessControl, PostgresWorkflowStore } from '@slacato/infrastructure';
+import {
+  createDatabaseClient,
+  loadRuntimeEnv,
+  PostgresCanonicalPersonaDirectory,
+  PostgresDealBriefAccessControl,
+  PostgresEventStore,
+  PostgresRunEventQuery,
+  PostgresWorkflowStore
+} from '@slacato/infrastructure';
 import { AppModule } from './app.module.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
@@ -51,6 +59,7 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
   const personas = new PostgresCanonicalPersonaDirectory(database);
   const workflowStore = new PostgresWorkflowStore(database);
   const workflowAccess = new PostgresDealBriefAccessControl(database);
+  const runEvents = new PostgresEventStore(database);
   const app = await NestFactory.create<NestExpressApplication>(AppModule.register({
     sessionSecret: env.SESSION_SECRET,
     environment: env.NODE_ENV,
@@ -62,7 +71,8 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
       model: env.AI_PROVIDER === 'ollama' ? env.OLLAMA_CHAT_MODEL : 'mock-brief'
     }),
     regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
-    decideApproval: new DecideApproval(workflowStore, workflowAccess)
+    decideApproval: new DecideApproval(workflowStore, workflowAccess),
+    runEvents: { bus: runEvents, query: new PostgresRunEventQuery(database) }
   }), { bodyParser: false });
   configureApiApplication(app);
   return app;

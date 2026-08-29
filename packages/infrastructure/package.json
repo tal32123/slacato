@@ -11,6 +11,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@slacato/contracts": "workspace:*",
     "@slacato/core": "workspace:*",
     "ai": "7.0.83",
     "bullmq": "6.3.1",

@@ -175,6 +175,37 @@ export const briefs = pgTable('briefs', { id: text('id').primaryKey(), runId: te
   uniqueIndex('briefs_run_version_uq').on(table.runId, table.draftVersion), check('briefs_subject_hash_check', sql`length(${table.subjectHash}) > 0`), check('briefs_draft_version_ck', sql`${table.draftVersion} >= 0`),
   foreignKey({ columns: [table.approvalSubjectId, table.runId], foreignColumns: [approvalSubjects.id, approvalSubjects.runId], name: 'briefs_approval_subject_run_fk' })
 ]);
-export const traceSpans = pgTable('trace_spans', { id: text('id').primaryKey(), runId: text('run_id').notNull().references(() => runs.id), parentId: text('parent_id'), kind: text('kind').notNull(), status: text('status').notNull(), payload: json<Record<string, unknown>>('payload'), startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(), endedAt: timestamp('ended_at', { withTimezone: true }) });
-export const runEvents = pgTable('run_events', { id: text('id').primaryKey(), runId: text('run_id').notNull().references(() => runs.id), sequence: integer('sequence').notNull(), type: text('type').notNull(), payload: json<Record<string, unknown>>('payload'), createdAt: now() }, (table) => [uniqueIndex('run_events_run_sequence_uq').on(table.runId, table.sequence)]);
+export const traceSpans = pgTable('trace_spans', {
+  id: text('id').primaryKey(),
+  traceId: text('trace_id').notNull(),
+  spanId: text('span_id').notNull(),
+  runId: text('run_id').notNull(),
+  parentId: text('parent_id'),
+  step: text('step').notNull(),
+  attempt: integer('attempt').notNull(),
+  kind: text('kind').notNull(),
+  status: text('status').notNull(),
+  payload: json<Record<string, unknown>>('payload'),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp('ended_at', { withTimezone: true })
+}, (table) => [
+  uniqueIndex('trace_spans_run_span_uq').on(table.runId, table.spanId),
+  index('trace_spans_run_started_idx').on(table.runId, table.startedAt, table.spanId),
+  index('trace_spans_trace_idx').on(table.traceId, table.startedAt, table.spanId),
+  check('trace_spans_attempt_ck', sql`${table.attempt} > 0`),
+  foreignKey({ columns: [table.runId, table.parentId], foreignColumns: [table.runId, table.spanId], name: 'trace_spans_parent_fk' })
+]);
+export const runEvents = pgTable('run_events', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull().references(() => runs.id),
+  sequence: integer('sequence').notNull(),
+  type: text('type').notNull(),
+  version: integer('version').notNull().default(1),
+  payload: json<Record<string, unknown>>('payload'),
+  createdAt: now()
+}, (table) => [
+  uniqueIndex('run_events_run_sequence_uq').on(table.runId, table.sequence),
+  index('run_events_run_created_idx').on(table.runId, table.createdAt, table.sequence),
+  check('run_events_version_ck', sql`${table.version} > 0`)
+]);
 export const auditEvents = pgTable('audit_events', { id: text('id').primaryKey(), runId: text('run_id').references(() => runs.id), actorId: text('actor_id').references(() => personas.id), type: text('type').notNull(), payload: json<Record<string, unknown>>('payload'), createdAt: now() });

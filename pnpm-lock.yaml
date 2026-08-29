@@ -267,6 +267,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@slacato/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       ai:
         specifier: 7.0.83
         version: 7.0.83(zod@4.4.3)
@@ -283,6 +286,9 @@ importers:
 
   packages/infrastructure:
     dependencies:
+      '@slacato/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@slacato/core':
         specifier: workspace:*
         version: link:../core

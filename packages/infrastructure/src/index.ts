@@ -16,6 +16,7 @@ export { PostgresDealBriefAccessControl, PostgresDealBriefPolicyFacts } from './
 export { PostgresEvidenceRepository } from './db/repositories/evidence-repository.js';
 export { PostgresProviderAttemptLedger } from './db/repositories/provider-attempt-ledger.js';
 export { PostgresCanonicalPersonaDirectory, type IngestedPersona } from './db/repositories/persona-directory.js';
+export { PostgresEventStore, PostgresRunEventQuery } from './events/postgres-event-store.js';
 export { EmbeddingIndexer, type EmbeddingCorpusScope, type EmbeddingIndexResult } from './retrieval/embedding-indexer.js';
 export { PostgresHybridEvidenceRetriever, PostgresCitationResolver } from './retrieval/postgres-retriever.js';
 export { BullMqCommandQueue, WORKFLOW_DEAD_LETTER_QUEUE_NAME, WORKFLOW_QUEUE_NAME, type CommandInspection } from './queue/bullmq.js';

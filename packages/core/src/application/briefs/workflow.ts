@@ -64,8 +64,12 @@ export class StartDealBrief {
   ) {}
   public async execute(input: StartDealBriefCommand): Promise<RunId> {
     if (input.idempotencyKey.trim().length === 0) throw new DomainValidationError('Idempotency key is required');
+    const runId = stableId('run', input.requestedBy, input.opportunityId, input.idempotencyKey) as RunId;
     const authorization = await this.access.authorizeStart({ requestedBy: input.requestedBy, opportunityId: input.opportunityId });
-    if (!authorization.allowed) { await this.access.recordOpaqueDenial({ type: 'deal_brief_start_denied', actorId: input.requestedBy, reason: 'forbidden' }); throw new AuthorizationDeniedError('DealBrief start denied'); }
+    if (!authorization.allowed) {
+      await this.access.recordOpaqueDenial({ type: 'deal_brief_start_denied', actorId: input.requestedBy, runId, reason: 'forbidden' });
+      throw new AuthorizationDeniedError('DealBrief start denied');
+    }
     const requestHash = hashApprovalPayload({ opportunityId: input.opportunityId, requestedBy: input.requestedBy, idempotencyKey: input.idempotencyKey, budget: input.budget, generationProvider: this.model.provider, generationModel: this.model.model });
     const scope = { idempotencyKey: input.idempotencyKey, requestedBy: input.requestedBy as WorkflowRun['requestedBy'], opportunityId: input.opportunityId as WorkflowRun['opportunityId'] };
     const replay = await this.store.findRunByIdempotencyKey(scope);
@@ -74,7 +78,6 @@ export class StartDealBrief {
       return replay.id;
     }
     const active = await this.store.findActiveRun(scope); if (active !== undefined) return active.id;
-    const runId = stableId('run', input.requestedBy, input.opportunityId, input.idempotencyKey) as RunId;
     try {
       return (await this.store.startRun({ id: runId, opportunityId: scope.opportunityId, requestedBy: scope.requestedBy, status: 'created', generationProvider: this.model.provider, generationModel: this.model.model, startRequestHash: requestHash, idempotencyKey: input.idempotencyKey, command: workflowCommand(runId, 'start', 'v1'), budget: { scope: runId, ...input.budget } })).id;
     } catch (error) {

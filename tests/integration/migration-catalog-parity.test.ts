@@ -12,19 +12,19 @@ import { PostgresProviderAttemptLedger } from '@slacato/infrastructure/db/reposi
 import {
   approvalAuthorityGrants, approvalDecisions, approvalRequirementEntries, approvalSubjects, briefs, claims, documentVersions,
   evidenceVersions, generationAttempts, opportunityPolicyFacts, outboxCommands, runBudgetReservations, permissionGrants, runBudgets,
-  runEvidenceManifestEntries, runEvidenceManifests, runs, specialistArtifacts, stepInvocations, workflowCheckpoints
+  runEvidenceManifestEntries, runEvidenceManifests, runEvents, runs, specialistArtifacts, stepInvocations, traceSpans, workflowCheckpoints
 } from '@slacato/infrastructure/db/schema';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 16 }, (_, index) =>
+const migrationFiles = Array.from({ length: 17 }, (_, index) =>
   resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
     'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
     'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
     'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance',
     'persona_provenance', 'authorized_retrieval', 'manifest_replay', 'durable_brief_approvals',
-    'immutable_approval_replays'
+    'immutable_approval_replays', 'append_only_run_observability'
   ][index]}.sql`)
 );
 const temporaryDatabases: string[] = [];
@@ -316,6 +316,14 @@ describe('durable migration catalog', () => {
     expect(Object.keys(generationAttempts)).toEqual(expect.arrayContaining(['logicalGenerationId', 'outputMode', 'validationAttempts', 'validationIssues', 'warnings']));
     expect(Object.keys(workflowCheckpoints)).toEqual(expect.arrayContaining(['invocationId', 'logicalGenerationId']));
     expect(Object.keys(specialistArtifacts)).toEqual(expect.arrayContaining(['draftVersion', 'outcome', 'warnings', 'logicalGenerationId', 'generationMetadata']));
+    expect(Object.keys(traceSpans)).toEqual(expect.arrayContaining(['traceId', 'spanId', 'runId', 'parentId', 'step', 'attempt', 'kind', 'status', 'payload']));
+    expect(Object.keys(runEvents)).toEqual(expect.arrayContaining(['runId', 'sequence', 'type', 'version', 'payload', 'createdAt']));
+    expect(getTableConfig(traceSpans).indexes.map((entry) => entry.config.name)).toEqual(expect.arrayContaining([
+      'trace_spans_run_span_uq', 'trace_spans_run_started_idx', 'trace_spans_trace_idx'
+    ]));
+    expect(getTableConfig(runEvents).indexes.map((entry) => entry.config.name)).toEqual(expect.arrayContaining([
+      'run_events_run_sequence_uq', 'run_events_run_created_idx'
+    ]));
     expect(claims.confidence.getSQLType()).toBe('numeric');
   });
 });
