@@ -237,10 +237,12 @@ export function createBudgetedModelGateway(transport: ModelTransport, contextPol
           const validated = request.schema.safeParse(candidate);
           if (validated.success) {
             attempts.push({ outputMode, validationIssues: [] });
+            await attemptLedger.recordAttemptMetadata?.({ attemptId: durableReservation.attemptId, outputMode, validationAttempts: attempts.length, validationIssues: [], warnings });
             return { value: validated.data, attempts, outputMode, usage, warnings };
           }
           const issues = normalizedIssues(validated.error);
           attempts.push({ outputMode, validationIssues: issues });
+          await attemptLedger.recordAttemptMetadata?.({ attemptId: durableReservation.attemptId, outputMode, validationAttempts: attempts.length, validationIssues: issues, warnings });
           controller.recordSchemaRepair();
           prior = { text: invalidText, issues };
         } catch (error) {
@@ -249,6 +251,7 @@ export function createBudgetedModelGateway(transport: ModelTransport, contextPol
             message: error instanceof Error ? error.message : 'Model output could not be validated'
           }];
           attempts.push({ outputMode, validationIssues: issues });
+          await attemptLedger.recordAttemptMetadata?.({ attemptId: durableReservation.attemptId, outputMode, validationAttempts: attempts.length, validationIssues: issues, warnings });
           controller.recordSchemaRepair();
           prior = { text: invalidText, issues };
         }

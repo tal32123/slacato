@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import postgres from 'postgres';
-import { buildEvidenceDocuments, CANONICAL_FIXTURE_COMMIT, chunkDocument, deriveApprovalAuthority, parseFixtureSet } from '../packages/core/src/index.js';
+import { buildEvidenceDocuments, CANONICAL_FIXTURE_COMMIT, chunkDocument, DEMO_APPROVAL_IDENTITIES, deriveApprovalAuthorities, deriveApprovalAuthority, parseFixtureSet } from '../packages/core/src/index.js';
 
 const DEFAULT_DATABASE_URL = 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 type InsertCounts = Readonly<{ personas: number; grants: number; accounts: number; opportunities: number; contacts: number; documents: number; chunks: number }>;
@@ -26,6 +26,7 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
     return await sql.begin(async (transaction) => {
       const counts = { personas: 0, grants: 0, accounts: 0, opportunities: 0, contacts: 0, documents: 0, chunks: 0 };
       const canonicalGrantIds: string[] = [];
+      const authorityGrantIds: string[] = [];
       for (const account of fixtures.accounts) {
         const inserted = await transaction`insert into accounts (id, name) values (${account.accountId}, ${account.accountName})
           on conflict (id) do update set name = excluded.name where accounts.name is distinct from excluded.name returning id`;
@@ -36,6 +37,22 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
           on conflict (id) do update set account_id = excluded.account_id, name = excluded.name, restricted = excluded.restricted
           where (opportunities.account_id, opportunities.name, opportunities.restricted) is distinct from (excluded.account_id, excluded.name, excluded.restricted) returning id`;
         counts.opportunities += inserted.length;
+      }
+      for (const opportunity of fixtures.opportunities) {
+        const notes = fixtures.pricingNotes.filter((note) => note.opportunityId === opportunity.opportunityId);
+        const discountPercent = Math.max(0, ...notes.map((note) => note.requestedDiscount));
+        const renewalUpliftPercent = Math.min(0, ...notes.map((note) => note.renewalUplift));
+        const liabilityCapChanged = notes.some((note) => /liability language/i.test(note.pricingNotes));
+        const restrictedLanguage = opportunity.restrictedAccess;
+        await transaction`insert into opportunity_policy_facts
+          (opportunity_id, discount_percent, renewal_uplift_percent, liability_cap_changed, restricted_research_language,
+           customer_specific_security_language, customer_facing_concession_language, source_commit)
+          values (${opportunity.opportunityId}, ${discountPercent}, ${renewalUpliftPercent}, ${liabilityCapChanged}, ${restrictedLanguage},
+            ${restrictedLanguage}, ${restrictedLanguage && discountPercent > 10}, ${CANONICAL_FIXTURE_COMMIT})
+          on conflict (opportunity_id) do update set discount_percent = excluded.discount_percent, renewal_uplift_percent = excluded.renewal_uplift_percent,
+            liability_cap_changed = excluded.liability_cap_changed, restricted_research_language = excluded.restricted_research_language,
+            customer_specific_security_language = excluded.customer_specific_security_language,
+            customer_facing_concession_language = excluded.customer_facing_concession_language, source_commit = excluded.source_commit, updated_at = now()`;
       }
       for (const contact of fixtures.contacts) {
         const inserted = await transaction`insert into contacts (id, account_id, name, email) values (${contact.contactId}, ${contact.accountId}, ${contact.fullName}, ${contact.email})
@@ -63,6 +80,24 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
                 excluded.can_read_restricted, excluded.can_request_approval, excluded.can_approve, excluded.sensitive_pricing, excluded.source_commit) returning id`;
           counts.grants += insertedGrant.length;
         }
+        for (const accountId of permission.allowedAccountIds) for (const authority of deriveApprovalAuthorities(permission.role, fixtures.policy.content)) {
+          const authorityGrantId = `approval-authority:${permission.userId}:${accountId}:${authority}`;
+          authorityGrantIds.push(authorityGrantId);
+          await transaction`insert into approval_authority_grants (id, persona_id, account_id, authority, demo_only, source)
+            values (${authorityGrantId}, ${permission.userId}, ${accountId}, ${authority}, false, ${CANONICAL_FIXTURE_COMMIT})
+            on conflict (persona_id, account_id, authority) do update set demo_only = excluded.demo_only, source = excluded.source`;
+        }
+      }
+      for (const identity of DEMO_APPROVAL_IDENTITIES) {
+        await transaction`insert into personas (id, display_name, role) values (${identity.userId}, ${identity.displayName}, ${identity.role})
+          on conflict (id) do update set display_name = excluded.display_name, role = excluded.role`;
+        for (const authority of identity.authorities) {
+          const authorityGrantId = `approval-authority:${identity.userId}:${identity.accountId}:${authority}`;
+          authorityGrantIds.push(authorityGrantId);
+          await transaction`insert into approval_authority_grants (id, persona_id, account_id, authority, demo_only, source)
+            values (${authorityGrantId}, ${identity.userId}, ${identity.accountId}, ${authority}, true, 'candidate-created-task-9')
+            on conflict (persona_id, account_id, authority) do update set demo_only = excluded.demo_only, source = excluded.source`;
+        }
       }
       await transaction`delete from permission_grants
         where source_commit = ${CANONICAL_FIXTURE_COMMIT}
@@ -70,6 +105,9 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
             select 1 from jsonb_array_elements_text(${transaction.json(canonicalGrantIds)}::jsonb) expected(id)
             where expected.id = permission_grants.id
           )`;
+      await transaction`delete from approval_authority_grants where (source = ${CANONICAL_FIXTURE_COMMIT} or source = 'candidate-created-task-9')
+        and not exists (select 1 from jsonb_array_elements_text(${transaction.json(authorityGrantIds)}::jsonb) expected(id)
+          where expected.id = approval_authority_grants.id)`;
       for (const { document, chunks } of chunksByDocument) {
         const documentId = `document:${document.sourceType}:${document.externalId}:v1`;
         const contentHash = sha256(document.content);

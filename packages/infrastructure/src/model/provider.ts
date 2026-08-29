@@ -14,7 +14,7 @@ export type ConfiguredModelGateways = Readonly<{
   forRun(input: ProviderRunScope): Promise<RunScopedModelGateway>;
 }>;
 
-export type ProviderRunScope = Readonly<{ runScope: string; invocationId?: string; budget: RunBudgetLimits }>;
+export type ProviderRunScope = Readonly<{ runScope: string; invocationId?: string; logicalGenerationId?: string; budget: RunBudgetLimits }>;
 export type RunScopedModelGateway = Readonly<{
   generateObject<Value>(request: Omit<GenerateObjectRequest<Value>, 'durableAttempt'>): Promise<GenerationResult<Value>>;
 }>;
@@ -36,8 +36,11 @@ export function createConfiguredModelGateways(
   const runScoped = (gateway: BudgetedModelGateway, attemptLedger: PostgresProviderAttemptLedger, provider: 'mock' | 'ollama', model: string) => async (input: ProviderRunScope): Promise<RunScopedModelGateway> => {
     if (input.budget.scope !== input.runScope) throw new Error('Run budget scope must match the gateway run scope');
     await attemptLedger.assertRunBudget(input.budget);
-    return { generateObject<Value>(request: Omit<GenerateObjectRequest<Value>, 'durableAttempt'>) {
-      return gateway.generateObject({ ...request, durableAttempt: { runScope: input.runScope, ...(input.invocationId === undefined ? {} : { invocationId: input.invocationId }), provider, model } });
+    return { async generateObject<Value>(request: Omit<GenerateObjectRequest<Value>, 'durableAttempt'>) {
+      const remainingDeadlineMs = await attemptLedger.remainingDeadlineMs(input.runScope);
+      return gateway.generateObject({ ...request, limits: { ...request.limits, deadlineMs: Math.min(request.limits.deadlineMs, remainingDeadlineMs) },
+        durableAttempt: { runScope: input.runScope, ...(input.invocationId === undefined ? {} : { invocationId: input.invocationId }),
+          ...(input.logicalGenerationId === undefined ? {} : { logicalGenerationId: input.logicalGenerationId }), provider, model } });
     } };
   };
   if (environment.AI_PROVIDER === 'mock') {

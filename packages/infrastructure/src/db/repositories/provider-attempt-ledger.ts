@@ -1,8 +1,9 @@
+import { createHash } from 'node:crypto';
 import { ProviderAttemptFinalizationConflict, type ProviderAttemptLedger, type ProviderAttemptReservation, type RunBudgetLimits } from '@slacato/core';
 import type { TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../client.js';
 
-type BudgetRow = Readonly<{ run_id: string; max_calls: number; max_input_tokens: number; max_output_tokens: number; deadline_ms: number | null; used_calls: number; used_input_tokens: number; used_output_tokens: number; reserved_output_tokens: number }>;
+type BudgetRow = Readonly<{ run_id: string; max_calls: number; max_input_tokens: number; max_output_tokens: number; deadline_ms: number | null; deadline_at: string | Date; used_calls: number; used_input_tokens: number; used_output_tokens: number; reserved_output_tokens: number }>;
 type ReservationRow = Readonly<{
   id: string; attempt_id: string; run_id: string; granted_output_tokens: number; reserved_input_tokens: number;
   status: 'reserved' | 'settled' | 'released' | 'possible_duplicate'; actual_input_tokens: number | null; actual_output_tokens: number | null;
@@ -17,45 +18,57 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
 
   /** Verifies the atomically-created workflow budget before exposing a run gateway. */
   public async assertRunBudget(input: Pick<RunBudgetLimits, 'scope' | 'maxCalls' | 'maxInputTokens' | 'maxOutputTokens' | 'deadlineMs'>): Promise<void> {
-    const budget = (await this.database.sql<Pick<BudgetRow, 'max_calls' | 'max_input_tokens' | 'max_output_tokens' | 'deadline_ms'>[]>`update run_budgets
-      set deadline_ms = coalesce(deadline_ms, ${input.deadlineMs})
+    await this.database.sql`update run_budgets set deadline_ms = ${input.deadlineMs}
+      where run_id = ${input.scope} and deadline_ms is null`;
+    const budget = (await this.database.sql<Pick<BudgetRow, 'max_calls' | 'max_input_tokens' | 'max_output_tokens' | 'deadline_ms' | 'deadline_at'>[]>`select max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at from run_budgets
       where run_id = ${input.scope}
         and max_calls = ${input.maxCalls}
         and max_input_tokens = ${input.maxInputTokens}
         and max_output_tokens = ${input.maxOutputTokens}
-      returning max_calls, max_input_tokens, max_output_tokens, deadline_ms`)[0];
+        and deadline_ms = ${input.deadlineMs}`)[0];
     if (budget === undefined) {
       const exists = await this.database.sql<{ exists: boolean }[]>`select exists(select 1 from run_budgets where run_id = ${input.scope}) as exists`;
       if (exists[0]?.exists === true) throw new Error('Run budget does not match the requested run scope');
       throw new Error('Run budget does not exist');
     }
     if (budget.deadline_ms !== input.deadlineMs) throw new Error('Run budget does not match the requested run scope');
+    if (new Date(budget.deadline_at).getTime() <= Date.now()) throw new Error('Shared run deadline reached');
+  }
+
+  public async remainingDeadlineMs(runScope: string): Promise<number> {
+    const deadline = (await this.database.sql<{ deadline_at: Date | string }[]>`select deadline_at from run_budgets where run_id = ${runScope}`)[0]?.deadline_at;
+    if (deadline === undefined) throw new Error('Run budget does not exist');
+    const remaining = new Date(deadline).getTime() - Date.now();
+    if (remaining <= 0) throw new Error('Shared run deadline reached');
+    return remaining;
   }
 
   public async beginAttempt(input: Parameters<ProviderAttemptLedger['beginAttempt']>[0]): Promise<ProviderAttemptReservation> {
     return this.database.sql.begin(async (sql) => {
-      const budget = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
+      const logicalGenerationId = input.logicalGenerationId ?? `generation_${createHash('sha256').update(`${input.runScope}\u0000${input.operation}`).digest('hex')}`;
+      const budget = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
       if (budget === undefined) throw new Error('Run budget does not exist');
+      if (new Date(budget.deadline_at).getTime() <= Date.now()) throw new Error('Shared run deadline reached');
       const abandoned = await sql<ReservationRow[]>`select id, attempt_id, run_id, granted_output_tokens, reserved_input_tokens, status, actual_input_tokens, actual_output_tokens, request_id, response_id, failure_category, failure_code
-        from run_budget_reservations where run_id = ${input.runScope} and invocation_id is not distinct from ${input.invocationId ?? null} and operation = ${input.operation} and status = 'reserved' for update`;
+        from run_budget_reservations where run_id = ${input.runScope} and logical_generation_id = ${logicalGenerationId} and operation = ${input.operation} and status = 'reserved' for update`;
       for (const row of abandoned) await this.finalizePossibleDuplicate(sql, row);
 
       const ordinalRow = (await sql<{ ordinal: number }[]>`select coalesce(max(ordinal), 0)::integer + 1 as ordinal
         from run_budget_reservations
-        where run_id = ${input.runScope} and invocation_id is not distinct from ${input.invocationId ?? null} and operation = ${input.operation}`)[0];
+        where run_id = ${input.runScope} and logical_generation_id = ${logicalGenerationId} and operation = ${input.operation}`)[0];
       if (ordinalRow === undefined) throw new Error('Could not allocate provider attempt ordinal');
       const ordinal = ordinalRow.ordinal;
 
-      const refreshed = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
+      const refreshed = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
       if (refreshed === undefined || refreshed.used_calls >= refreshed.max_calls || refreshed.used_input_tokens + input.inputTokens > refreshed.max_input_tokens) throw new Error('Run budget is exhausted');
       const grant = Math.min(input.requestedOutputTokens, refreshed.max_output_tokens - refreshed.used_output_tokens - refreshed.reserved_output_tokens);
       if (grant <= 0) throw new Error('Run output budget is exhausted');
       const attemptId = crypto.randomUUID();
       const reservationId = crypto.randomUUID();
-      await sql`insert into generation_attempts (id, run_id, invocation_id, operation, ordinal, status, provider, model)
-        values (${attemptId}, ${input.runScope}, ${input.invocationId ?? null}, ${input.operation}, ${ordinal}, 'attempt_started', ${input.provider}, ${input.model})`;
-      await sql`insert into run_budget_reservations (id, attempt_id, run_id, invocation_id, operation, ordinal, reserved_output_tokens, granted_output_tokens, reserved_input_tokens, status)
-        values (${reservationId}, ${attemptId}, ${input.runScope}, ${input.invocationId ?? null}, ${input.operation}, ${ordinal}, ${grant}, ${grant}, ${input.inputTokens}, 'reserved')`;
+      await sql`insert into generation_attempts (id, run_id, invocation_id, logical_generation_id, operation, ordinal, status, provider, model)
+        values (${attemptId}, ${input.runScope}, ${input.invocationId ?? null}, ${logicalGenerationId}, ${input.operation}, ${ordinal}, 'attempt_started', ${input.provider}, ${input.model})`;
+      await sql`insert into run_budget_reservations (id, attempt_id, run_id, invocation_id, logical_generation_id, operation, ordinal, reserved_output_tokens, granted_output_tokens, reserved_input_tokens, status)
+        values (${reservationId}, ${attemptId}, ${input.runScope}, ${input.invocationId ?? null}, ${logicalGenerationId}, ${input.operation}, ${ordinal}, ${grant}, ${grant}, ${input.inputTokens}, 'reserved')`;
       await sql`update run_budgets set used_calls = used_calls + 1, used_input_tokens = used_input_tokens + ${input.inputTokens}, reserved_output_tokens = reserved_output_tokens + ${grant} where run_id = ${input.runScope}`;
       return { reservationId, attemptId, ordinal, grantedOutputTokens: grant };
     });
@@ -89,6 +102,20 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
       await sql`update run_budget_reservations set status = ${status}, actual_output_tokens = ${output}, failure_category = ${input.category ?? null}, failure_code = ${input.diagnosticCode ?? null}, settled_at = now() where id = ${row.id}`;
       await sql`update generation_attempts set status = ${input.disposition === 'safe_not_sent' ? 'failed' : 'possible_duplicate'}, possible_duplicate = ${input.disposition === 'possibly_sent'}, output_tokens = ${output}, completed_at = now() where id = ${row.attempt_id}`;
     });
+  }
+
+  public async recordAttemptMetadata(input: Parameters<NonNullable<ProviderAttemptLedger['recordAttemptMetadata']>>[0]): Promise<void> {
+    const rows = await this.database.sql<{ output_mode: string | null; validation_attempts: number; validation_issues: unknown; warnings: unknown }[]>`select output_mode, validation_attempts, validation_issues, warnings from generation_attempts where id = ${input.attemptId}`;
+    const existing = rows[0];
+    if (existing === undefined) throw new ProviderAttemptFinalizationConflict('Unknown provider attempt');
+    if (existing.output_mode !== null) {
+      if (existing.output_mode === input.outputMode && existing.validation_attempts === input.validationAttempts
+        && JSON.stringify(existing.validation_issues) === JSON.stringify(input.validationIssues) && JSON.stringify(existing.warnings) === JSON.stringify(input.warnings)) return;
+      throw new ProviderAttemptFinalizationConflict('Provider attempt metadata was already recorded differently');
+    }
+    await this.database.sql`update generation_attempts set output_mode = ${input.outputMode}, validation_attempts = ${input.validationAttempts},
+      validation_issues = ${this.database.sql.json(input.validationIssues)}::jsonb, warnings = ${this.database.sql.json(input.warnings)}::jsonb
+      where id = ${input.attemptId} and output_mode is null`;
   }
 
   private async lockReservation(sql: QuerySql, input: ProviderAttemptReservation): Promise<ReservationRow> {

@@ -1,6 +1,6 @@
 import postgres from 'postgres';
 import { afterAll, describe, expect, it } from 'vitest';
-import type { StartRunInput, WorkflowCommand } from '@slacato/core';
+import { hashApprovalPayload, type StartRunInput, type WorkflowCommand } from '@slacato/core';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresWorkflowStore } from '@slacato/infrastructure/db/repositories/workflow-store';
 import { OutboxDispatcherLoop } from '@slacato/infrastructure/queue/outbox-dispatcher';
@@ -76,7 +76,17 @@ describe('durable recovery regressions', () => {
     await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${next.id}`;
     const lease = await store.claimStep({ runId: run.runId as never, step: 'validate', invocationId: id('invocation'), causalCommandId: next.id, owner: 'worker', leaseMs: 10_000 });
     if (lease === undefined) throw new Error('Expected lease');
-    await store.awaitApproval({ runId: run.runId as never, expectedVersion: 0, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: next.id, approvalSubjectId: id('subject'), subjectHash: id('hash'), payload: {}, policyTriggers: [] });
+    const payload = {};
+    await store.awaitApproval({
+      runId: run.runId as never, expectedVersion: 0, invocationId: lease.invocationId, invocationOwner: lease.owner,
+      leaseToken: lease.leaseToken, causalCommandId: next.id,
+      subject: {
+        id: id('subject'), runId: run.runId as never, subjectHash: hashApprovalPayload(payload), payload,
+        sectionIds: [], recommendationIds: [], citationIds: [], policyTriggers: ['test'],
+        quorumVersion: 'deal-brief-approval-v1',
+        entries: [{ id: id('entry'), category: 'evidence_review', eligibleAuthorities: ['account_owner'], policyTriggers: ['test'], dependsOn: [] }]
+      }
+    });
     expect((await database.sql<{ status: string; consumed_at: string | null }[]>`select command.status, command.consumed_at from outbox_commands command where id = ${next.id}`)[0]?.consumed_at).not.toBeNull();
     expect((await database.sql<{ status: string }[]>`select status from step_invocations where id = ${lease.invocationId}`)[0]?.status).toBe('completed');
   });

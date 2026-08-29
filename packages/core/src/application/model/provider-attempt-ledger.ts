@@ -4,6 +4,8 @@
  */
 export type ProviderAttemptContext = Readonly<{
   runScope: string;
+  /** Stable workflow generation identity that survives lease takeover. */
+  logicalGenerationId?: string | undefined;
   invocationId?: string | undefined;
   provider: string;
   model: string;
@@ -46,4 +48,11 @@ export interface ProviderAttemptLedger {
   }>): Promise<ProviderAttemptReservation>;
   settleAttempt(input: ProviderAttemptReservation & ProviderAttemptUsage): Promise<void>;
   releaseAttempt(input: ProviderAttemptReservation & ProviderAttemptFailure): Promise<void>;
+  recordAttemptMetadata?(input: Readonly<{
+    attemptId: string;
+    outputMode: 'native_schema' | 'prompted_json';
+    validationAttempts: number;
+    validationIssues: readonly Readonly<{ path: string; code: string; message: string }>[];
+    warnings: readonly string[];
+  }>): Promise<void>;
 }

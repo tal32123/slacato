@@ -5,20 +5,23 @@ export const MAX_ID_LENGTH = 128;
 
 const opaqueIdSuffix = '[A-Za-z0-9][A-Za-z0-9_-]*';
 
-function prefixedIdSchema<Brand extends string>(prefix: string) {
+function prefixedIdSchema<Brand extends string>(prefix: string, canonicalPrefix?: string) {
+  const pattern = canonicalPrefix === undefined
+    ? `^${prefix}_${opaqueIdSuffix}$`
+    : `^(?:${prefix}_${opaqueIdSuffix}|${canonicalPrefix}-\\d+)$`;
   return z.string()
-    .min(prefix.length + 1)
+    .min(Math.min(prefix.length + 1, canonicalPrefix === undefined ? Number.POSITIVE_INFINITY : canonicalPrefix.length + 2))
     .max(MAX_ID_LENGTH)
-    .regex(new RegExp(`^${prefix}_${opaqueIdSuffix}$`), `Expected a ${prefix}_ prefixed opaque identifier`)
+    .regex(new RegExp(pattern), `Expected a ${prefix}_ opaque identifier or canonical ${canonicalPrefix ?? prefix} identifier`)
     .brand<Brand>();
 }
 
 /** Runtime-validated identifier for a user/persona. */
-export const userIdSchema = prefixedIdSchema<'UserId'>('user');
+export const userIdSchema = prefixedIdSchema<'UserId'>('user', 'USR');
 /** Runtime-validated identifier for a CRM account. */
-export const accountIdSchema = prefixedIdSchema<'AccountId'>('account');
+export const accountIdSchema = prefixedIdSchema<'AccountId'>('account', 'ACC');
 /** Runtime-validated identifier for a CRM opportunity. */
-export const opportunityIdSchema = prefixedIdSchema<'OpportunityId'>('opportunity');
+export const opportunityIdSchema = prefixedIdSchema<'OpportunityId'>('opportunity', 'OPP');
 /** Runtime-validated identifier for a persisted workflow run. */
 export const runIdSchema = prefixedIdSchema<'RunId'>('run');
 /** Runtime-validated identifier for an immutable evidence version. */

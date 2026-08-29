@@ -15,6 +15,7 @@
     { "idx": 10, "version": "7", "when": 1787950800000, "tag": "0010_evidence_provenance", "breakpoints": true },
     { "idx": 11, "version": "7", "when": 1787951700000, "tag": "0011_persona_provenance", "breakpoints": true },
     { "idx": 12, "version": "7", "when": 1787952600000, "tag": "0012_authorized_retrieval", "breakpoints": true },
-    { "idx": 13, "version": "7", "when": 1788039000000, "tag": "0013_manifest_replay", "breakpoints": true }
+    { "idx": 13, "version": "7", "when": 1788039000000, "tag": "0013_manifest_replay", "breakpoints": true },
+    { "idx": 14, "version": "7", "when": 1788125400000, "tag": "0014_durable_brief_approvals", "breakpoints": true }
   ]
 }

@@ -1,3 +1,4 @@
+import type { ApprovalAuthority } from '../briefs/policy.js';
 export const AUTHORIZED_SOURCE_TYPES = ['gong_summary', 'gong_transcript', 'policy', 'pricing', 'salesforce', 'slack'] as const;
 export type AuthorizedSourceType = typeof AUTHORIZED_SOURCE_TYPES[number];
 
@@ -56,9 +57,16 @@ export function authorizeOpportunity(
   };
 }
 
+/** Maps a persona role to explicit authorities; request permission is deliberately not an input. */
+export function deriveApprovalAuthorities(role: string, policyContent: string): readonly ApprovalAuthority[] {
+  if (role === 'Deal Desk Approver') return ['deal_desk'];
+  if (role === 'Legal Reviewer') return ['legal_reviewer'];
+  if (role === 'Account Owner' || role === 'Restricted Account Owner') return ['account_owner'];
+  if ((role === 'Sales Leader' || role === 'Restricted Sales Leader') && /sales leader approval/i.test(policyContent)) return ['sales_leader'];
+  return [];
+}
+
 /** Maps canonical roles to least-privilege decision authority without conflating request permission. */
 export function deriveApprovalAuthority(role: string, policyContent: string): boolean {
-  if (role === 'Deal Desk Approver') return true;
-  if (role !== 'Sales Leader') return false;
-  return /sales leader approval/i.test(policyContent);
+  return deriveApprovalAuthorities(role, policyContent).length > 0;
 }

@@ -12,6 +12,7 @@ export { createConfiguredModelGateways, type ConfiguredModelGateways } from './m
 export type { OllamaCapabilities, OllamaCapabilityProbe } from './model/capabilities.js';
 export { createDatabaseClient, type DatabaseClient } from './db/client.js';
 export { PostgresWorkflowStore } from './db/repositories/workflow-store.js';
+export { PostgresDealBriefAccessControl, PostgresDealBriefPolicyFacts } from './db/repositories/deal-brief-access.js';
 export { PostgresEvidenceRepository } from './db/repositories/evidence-repository.js';
 export { PostgresProviderAttemptLedger } from './db/repositories/provider-attempt-ledger.js';
 export { PostgresCanonicalPersonaDirectory, type IngestedPersona } from './db/repositories/persona-directory.js';

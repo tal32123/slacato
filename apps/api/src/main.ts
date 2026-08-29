@@ -5,7 +5,8 @@ import { HttpException, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import type { ErrorRequestHandler } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { createDatabaseClient, loadRuntimeEnv, PostgresCanonicalPersonaDirectory } from '@slacato/infrastructure';
+import { DecideApproval, StartDealBrief } from '@slacato/core';
+import { createDatabaseClient, loadRuntimeEnv, PostgresCanonicalPersonaDirectory, PostgresDealBriefAccessControl, PostgresWorkflowStore } from '@slacato/infrastructure';
 import { AppModule } from './app.module.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
@@ -48,11 +49,16 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
   const env = loadRuntimeEnv(options.environment ?? process.env);
   const database = createDatabaseClient(env.DATABASE_URL, 5);
   const personas = new PostgresCanonicalPersonaDirectory(database);
+  const workflowStore = new PostgresWorkflowStore(database);
+  const workflowAccess = new PostgresDealBriefAccessControl(database);
   const app = await NestFactory.create<NestExpressApplication>(AppModule.register({
     sessionSecret: env.SESSION_SECRET,
     environment: env.NODE_ENV,
     allowedOrigins: [env.WEB_ORIGIN],
     personaDirectory: personas
+  }, {
+    startDealBrief: new StartDealBrief(workflowStore, workflowAccess),
+    decideApproval: new DecideApproval(workflowStore, workflowAccess)
   }), { bodyParser: false });
   configureApiApplication(app);
   return app;

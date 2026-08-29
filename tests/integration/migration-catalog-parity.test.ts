@@ -8,19 +8,20 @@ import { getTableConfig } from '../../packages/infrastructure/node_modules/drizz
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresProviderAttemptLedger } from '@slacato/infrastructure/db/repositories/provider-attempt-ledger';
 import {
-  approvalSubjects, briefs, claims, documentVersions, evidenceVersions, outboxCommands, runBudgetReservations,
-  permissionGrants, runBudgets, runEvidenceManifestEntries, runEvidenceManifests, stepInvocations
+  approvalAuthorityGrants, approvalDecisions, approvalRequirementEntries, approvalSubjects, briefs, claims, documentVersions,
+  evidenceVersions, generationAttempts, opportunityPolicyFacts, outboxCommands, runBudgetReservations, permissionGrants, runBudgets,
+  runEvidenceManifestEntries, runEvidenceManifests, runs, specialistArtifacts, stepInvocations, workflowCheckpoints
 } from '@slacato/infrastructure/db/schema';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 14 }, (_, index) =>
+const migrationFiles = Array.from({ length: 15 }, (_, index) =>
   resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
     'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
     'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
     'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance',
-    'persona_provenance', 'authorized_retrieval', 'manifest_replay'
+    'persona_provenance', 'authorized_retrieval', 'manifest_replay', 'durable_brief_approvals'
   ][index]}.sql`)
 );
 const temporaryDatabases: string[] = [];
@@ -236,21 +237,28 @@ describe('durable migration catalog', () => {
     ]));
     expect(Object.keys(runEvidenceManifests)).toEqual(expect.arrayContaining(['runId', 'queryHash', 'embeddingProvider', 'embeddingModel', 'embeddingDimension', 'contextLimit', 'diagnostics']));
     expect(Object.keys(runEvidenceManifestEntries)).toEqual(expect.arrayContaining(['manifestId', 'evidenceVersionId', 'citationId', 'sourceLocator', 'classificationReason', 'queryRank', 'fusionScore', 'includedCharacters']));
-    expect(Object.keys(approvalSubjects)).toEqual(expect.arrayContaining(['policyTriggers', 'runId', 'subjectHash']));
+    expect(Object.keys(approvalSubjects)).toEqual(expect.arrayContaining(['policyTriggers', 'runId', 'subjectHash', 'sectionIds', 'recommendationIds', 'citationIds', 'quorumVersion']));
     expect(approvalSubjects.policyTriggers.getSQLType()).toBe('jsonb');
-    expect(Object.keys(briefs)).toEqual(expect.arrayContaining(['approvalSubjectId', 'runId', 'subjectHash']));
+    expect(Object.keys(approvalRequirementEntries)).toEqual(expect.arrayContaining(['approvalSubjectId', 'category', 'eligibleAuthorities', 'dependsOn', 'ordinal']));
+    expect(Object.keys(approvalDecisions)).toEqual(expect.arrayContaining(['entryId', 'category', 'authority', 'idempotencyKey', 'originalPayload', 'approvedPayload', 'approvedSubjectHash', 'diff']));
+    expect(Object.keys(approvalAuthorityGrants)).toEqual(expect.arrayContaining(['personaId', 'accountId', 'authority', 'demoOnly', 'source']));
+    expect(Object.keys(opportunityPolicyFacts)).toEqual(expect.arrayContaining(['opportunityId', 'discountPercent', 'renewalUpliftPercent', 'liabilityCapChanged']));
+    expect(Object.keys(briefs)).toEqual(expect.arrayContaining(['approvalSubjectId', 'runId', 'subjectHash', 'draftVersion']));
     expect(Object.keys(outboxCommands)).toEqual(expect.arrayContaining(['claimOwner', 'claimToken', 'claimExpiresAt', 'consumedAt']));
     const pendingIndex = getTableConfig(outboxCommands).indexes.find((entry) => entry.config.name === 'outbox_commands_pending_idx');
     expect(pendingIndex?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['status', 'available_at', 'id']);
     expect(Object.keys(stepInvocations)).toEqual(expect.arrayContaining(['causalCommandId', 'leaseToken']));
-    expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens', 'deadlineMs']));
-    const reservationConstraint = getTableConfig(runBudgetReservations).uniqueConstraints.find((entry) => entry.name === 'run_budget_reservations_invocation_operation_ordinal_uq');
-    expect(reservationConstraint?.nullsNotDistinct).toBe(true);
-    expect(reservationConstraint?.columns.map((column) => column.name)).toEqual(['run_id', 'invocation_id', 'operation', 'ordinal']);
+    expect(Object.keys(runs)).toEqual(expect.arrayContaining(['idempotencyKey']));
+    expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens', 'deadlineMs', 'deadlineAt']));
+    const reservationConstraint = getTableConfig(runBudgetReservations).uniqueConstraints.find((entry) => entry.name === 'run_budget_reservations_generation_operation_ordinal_uq');
+    expect(reservationConstraint?.columns.map((column) => column.name)).toEqual(['run_id', 'logical_generation_id', 'operation', 'ordinal']);
     expect(Object.keys(runBudgetReservations)).toEqual(expect.arrayContaining([
-      'attemptId', 'invocationId', 'operation', 'ordinal', 'grantedOutputTokens', 'reservedInputTokens',
+      'attemptId', 'invocationId', 'logicalGenerationId', 'operation', 'ordinal', 'grantedOutputTokens', 'reservedInputTokens',
       'actualInputTokens', 'actualOutputTokens', 'requestId', 'responseId', 'failureCategory', 'failureCode'
     ]));
+    expect(Object.keys(generationAttempts)).toEqual(expect.arrayContaining(['logicalGenerationId', 'outputMode', 'validationAttempts', 'validationIssues', 'warnings']));
+    expect(Object.keys(workflowCheckpoints)).toEqual(expect.arrayContaining(['invocationId', 'logicalGenerationId']));
+    expect(Object.keys(specialistArtifacts)).toEqual(expect.arrayContaining(['draftVersion', 'outcome', 'warnings', 'logicalGenerationId', 'generationMetadata']));
     expect(claims.confidence.getSQLType()).toBe('numeric');
   });
 });

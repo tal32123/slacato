@@ -1,12 +1,15 @@
 import 'reflect-metadata';
 import { pathToFileURL } from 'node:url';
 import { NestFactory } from '@nestjs/core';
-import { BullMqCommandQueue, createConfiguredModelGateways, createDatabaseClient, loadRuntimeEnv, OutboxDispatcher, OutboxDispatcherLoop, PostgresCommandReconciler, PostgresProviderAttemptLedger, ReconcilerLoop, WORKFLOW_DEAD_LETTER_QUEUE_NAME, type ConfiguredModelGateways, type DatabaseClient, type Env, type MockGenerationResolver, type OllamaCapabilities } from '@slacato/infrastructure';
+import { ProcessDealBriefStep } from '@slacato/core';
+import { BullMqCommandQueue, createConfiguredModelGateways, createDatabaseClient, loadRuntimeEnv, OutboxDispatcher, OutboxDispatcherLoop, PostgresCommandReconciler, PostgresProviderAttemptLedger, PostgresWorkflowStore, ReconcilerLoop, WORKFLOW_DEAD_LETTER_QUEUE_NAME, type ConfiguredModelGateways, type DatabaseClient, type Env, type MockGenerationResolver, type OllamaCapabilities } from '@slacato/infrastructure';
 import type { DynamicModule } from '@nestjs/common';
 import { WorkerModule } from './worker.module.js';
+import { DealBriefProcessor, PostgresDealBriefWorkflowServices } from './processors/deal-brief.processor.js';
 
 export interface WorkerApplicationOptions {
   environment?: NodeJS.ProcessEnv;
+  modelGateway?: WorkerModelGatewayOptions;
 }
 
 export type WorkerModelGatewayOptions = Readonly<{ mockFixtureResolver?: MockGenerationResolver; ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'> }>;
@@ -35,6 +38,12 @@ export async function createWorkerApplication(options: WorkerApplicationOptions 
   const environment = loadRuntimeEnv(options.environment ?? process.env);
   const database = createDatabaseClient(environment.DATABASE_URL, 10);
   const app = await NestFactory.createApplicationContext(createWorkerCompositionModule(environment, database));
+  const gateways = app.get(WorkerModelGatewayFactory).create(options.modelGateway);
+  const workflowStore = new PostgresWorkflowStore(database);
+  const processor = new DealBriefProcessor(
+    new ProcessDealBriefStep(workflowStore, new PostgresDealBriefWorkflowServices(database, gateways), { leaseMs: 120_000 }),
+    { redisUrl: environment.REDIS_URL, workerId: `${process.pid}:${crypto.randomUUID()}`, concurrency: 1, jobsPerSecond: 2, lockDurationMs: 180_000 }
+  );
   const commands = new BullMqCommandQueue(environment.REDIS_URL);
   const deadLetters = new BullMqCommandQueue(environment.REDIS_URL, WORKFLOW_DEAD_LETTER_QUEUE_NAME);
   const dispatcher = new OutboxDispatcher(database, commands, deadLetters);
@@ -42,7 +51,7 @@ export async function createWorkerApplication(options: WorkerApplicationOptions 
   const reconciler = new ReconcilerLoop(new PostgresCommandReconciler(database, commands, deadLetters), 5_000, 25);
   loop.start();
   reconciler.start();
-  const close = async () => { await reconciler.stop(); await loop.stop(); await commands.close(); await deadLetters.close(); await database.close(); };
+  const close = async () => { await reconciler.stop(); await loop.stop(); await processor.close(); await commands.close(); await deadLetters.close(); await database.close(); };
   process.once('SIGTERM', () => { void close(); });
   process.once('SIGINT', () => { void close(); });
   app.enableShutdownHooks();
