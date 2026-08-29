@@ -10,6 +10,7 @@ const RELIABILITY_ADJUSTMENTS: Readonly<Record<string, number>> = Object.freeze(
   conversation_summary: 0.008
 });
 
+/** Produces the versioned, provider-independent retrieval recipe hashed into each manifest. */
 export function buildEvidencePlan(input: Readonly<{ query: string; limit: number; maxContextCharacters?: number }>): EvidencePlan {
   const query = input.query.trim();
   if (query.length === 0) throw new Error('Retrieval query must not be empty');
@@ -28,12 +29,17 @@ export function buildEvidencePlan(input: Readonly<{ query: string; limit: number
       { section: 'next_actions', query: 'next action owner deadline commitment', sourceTypes: [...AUTHORIZED_SOURCE_TYPES] },
       { section: 'missing_information', query: 'missing unclear unresolved pending gap', sourceTypes: [...AUTHORIZED_SOURCE_TYPES] }
     ],
-    sourceLimits: Object.fromEntries(AUTHORIZED_SOURCE_TYPES.map((sourceType) => [sourceType, input.limit])) as Record<AuthorizedSourceType, number>,
+    sourceLimits: {
+      gong_summary: Math.min(input.limit, 2), gong_transcript: input.limit, policy: 1,
+      pricing: Math.min(input.limit, 2), salesforce: Math.min(input.limit, 3), slack: Math.min(input.limit, 2)
+    },
     mandatorySourceTypes: ['policy'],
+    policyReservation: { resultSlots: 1, contextCharacters: Math.max(1, Math.min(512, Math.ceil(maxContextCharacters * 0.25))) },
     maxContextCharacters
   };
 }
 
+/** Minimal ranking facts allowed to influence the bounded, post-RRF adjustment. */
 export type AdjustmentInput = Readonly<{
   fusionScore: number;
   sourceType: AuthorizedSourceType;

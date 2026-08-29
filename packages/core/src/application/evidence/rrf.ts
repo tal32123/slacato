@@ -1,3 +1,4 @@
+/** Stable fused identity and score, intentionally independent of evidence payloads. */
 export type RankedId = Readonly<{ id: string; score: number }>;
 
 /** Deterministic reciprocal-rank fusion. Duplicate IDs contribute once per input list. */

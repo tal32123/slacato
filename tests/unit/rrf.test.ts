@@ -33,7 +33,8 @@ describe('EvidencePlan', () => {
       'deal_snapshot', 'buyer_goals', 'stakeholders', 'negotiation_state', 'next_actions', 'missing_information'
     ]);
     expect(plan.mandatorySourceTypes).toEqual(['policy']);
-    expect(plan.sourceLimits.policy).toBeGreaterThan(0);
+    expect(plan.sourceLimits).toEqual({ gong_summary: 2, gong_transcript: 4, policy: 1, pricing: 2, salesforce: 3, slack: 2 });
+    expect(plan.policyReservation).toEqual({ resultSlots: 1, contextCharacters: 500 });
     expect(Object.values(plan.sourceLimits).every((limit) => limit > 0 && limit <= 4)).toBe(true);
     expect(plan.maxContextCharacters).toBe(2_000);
   });

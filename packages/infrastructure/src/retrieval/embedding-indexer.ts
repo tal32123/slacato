@@ -41,6 +41,14 @@ export class EmbeddingIndexer {
   }
 
   public async index(): Promise<EmbeddingIndexResult> {
+    if (this.corpus?.requireCompleteProvenance === true) {
+      const incomplete = await this.database.sql<{ count: number }[]>`
+        select count(*)::integer as count from evidence_versions evidence
+        join document_versions document on document.id = evidence.document_version_id
+        where ${this.corpusCandidatePredicate()} and not (${this.completeProvenancePredicate()})
+      `;
+      if ((incomplete[0]?.count ?? 0) > 0) throw new Error('Canonical embedding corpus provenance is incomplete');
+    }
     const existing = await this.database.sql<ProfileRow[]>`
       select distinct embedding_provider as provider, embedding_model as model, embedding_dimension as dimension,
         embedding_profile as profile, embedding_version as version, embedding_normalization as normalization
@@ -84,22 +92,40 @@ export class EmbeddingIndexer {
       });
       indexed += updated;
       batches += 1;
-      if (updated === 0) throw new Error('Embedding indexing made no progress because another profile won the write race');
+      if (updated === 0) {
+        const winnerProfiles = await this.database.sql<ProfileRow[]>`
+          select distinct embedding_provider as provider, embedding_model as model, embedding_dimension as dimension,
+            embedding_profile as profile, embedding_version as version, embedding_normalization as normalization
+          from evidence_versions where id = any(${chunks.map((chunk) => chunk.id)}::text[]) and embedding is not null
+        `;
+        if (winnerProfiles.length !== 1 || profileKey(winnerProfiles[0]!) !== profileKey(this.profile)) {
+          throw new Error('Refusing mixed embedding profiles; a different profile won the concurrent write');
+        }
+      }
     }
     return { indexed, skipped, batches };
   }
 
   private corpusPredicate() {
     if (this.corpus === undefined) return this.database.sql``;
-    const prefixes = this.corpus.sourceLocatorPrefixes.map((prefix) => `${prefix}%`);
-    const provenance = this.corpus.requireCompleteProvenance ? this.database.sql`
-      and evidence.reliability_class is not null and evidence.classification_reason is not null
-      and evidence.policy_hash ~ '^[0-9a-f]{64}$' and evidence.source_locator like any(${prefixes}::text[])
-      and document.reliability_class is not null and document.classification_reason is not null
-      and document.policy_hash = evidence.policy_hash and document.source_locator like any(${prefixes}::text[])
-      and document.source_type = evidence.source_type
-    ` : this.database.sql`and evidence.source_locator like any(${prefixes}::text[])`;
+    const provenance = this.corpus.requireCompleteProvenance
+      ? this.database.sql`and ${this.corpusCandidatePredicate()} and ${this.completeProvenancePredicate()}`
+      : this.database.sql`and ${this.corpusCandidatePredicate()}`;
     return provenance;
+  }
+
+  private corpusCandidatePredicate() {
+    if (this.corpus === undefined) return this.database.sql`true`;
+    const prefixes = this.corpus.sourceLocatorPrefixes.map((prefix) => `${prefix}%`);
+    return this.database.sql`(evidence.source_locator like any(${prefixes}::text[]) or document.source_locator like any(${prefixes}::text[]))`;
+  }
+
+  private completeProvenancePredicate() {
+    return this.database.sql`evidence.reliability_class is not null and evidence.classification_reason is not null
+      and evidence.policy_hash ~ '^[0-9a-f]{64}$' and evidence.source_locator is not null
+      and document.reliability_class is not null and document.classification_reason is not null
+      and document.policy_hash = evidence.policy_hash and document.source_locator is not null
+      and document.source_type = evidence.source_type`;
   }
 
   private assertEmbedding(embedding: readonly number[], evidenceId: string): void {

@@ -15,12 +15,12 @@ import {
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 13 }, (_, index) =>
+const migrationFiles = Array.from({ length: 14 }, (_, index) =>
   resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
     'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
     'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
     'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance',
-    'persona_provenance', 'authorized_retrieval'
+    'persona_provenance', 'authorized_retrieval', 'manifest_replay'
   ][index]}.sql`)
 );
 const temporaryDatabases: string[] = [];
@@ -156,6 +156,8 @@ describe('durable migration catalog', () => {
       expect(serialized).toContain('run_evidence_manifests_query_hash_ck');
       expect(serialized).toContain('run_evidence_manifest_entries_citation_uq');
       expect(serialized).toContain('embedding_content_hash = content_hash');
+      expect(serialized).toContain('run_evidence_manifests_context_limit_ck');
+      expect(serialized).toContain('run_evidence_manifest_entries_included_characters_ck');
       expect(serialized).toContain('"column_name":"can_request_approval"');
       expect(serialized).toContain('"column_name":"event_date"');
       expect(serialized).toContain('"column_name":"reliability_class"');
@@ -232,8 +234,8 @@ describe('durable migration catalog', () => {
     expect(Object.keys(permissionGrants)).toEqual(expect.arrayContaining([
       'personaId', 'accountId', 'canReadRestricted', 'canRequestApproval', 'canApprove', 'sourceCommit'
     ]));
-    expect(Object.keys(runEvidenceManifests)).toEqual(expect.arrayContaining(['runId', 'queryHash', 'embeddingProvider', 'embeddingModel', 'embeddingDimension']));
-    expect(Object.keys(runEvidenceManifestEntries)).toEqual(expect.arrayContaining(['manifestId', 'evidenceVersionId', 'citationId', 'sourceLocator', 'classificationReason', 'queryRank']));
+    expect(Object.keys(runEvidenceManifests)).toEqual(expect.arrayContaining(['runId', 'queryHash', 'embeddingProvider', 'embeddingModel', 'embeddingDimension', 'contextLimit', 'diagnostics']));
+    expect(Object.keys(runEvidenceManifestEntries)).toEqual(expect.arrayContaining(['manifestId', 'evidenceVersionId', 'citationId', 'sourceLocator', 'classificationReason', 'queryRank', 'fusionScore', 'includedCharacters']));
     expect(Object.keys(approvalSubjects)).toEqual(expect.arrayContaining(['policyTriggers', 'runId', 'subjectHash']));
     expect(approvalSubjects.policyTriggers.getSQLType()).toBe('jsonb');
     expect(Object.keys(briefs)).toEqual(expect.arrayContaining(['approvalSubjectId', 'runId', 'subjectHash']));

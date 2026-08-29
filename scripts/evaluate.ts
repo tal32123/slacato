@@ -19,27 +19,29 @@ const caseSchema = z.object({
 const goldenSchema = z.object({ version: z.literal(1), cases: z.array(caseSchema).min(1) }).strict();
 
 export type RetrievalEvaluationInput = Readonly<{
-  id: string; relevantEvidenceIds: readonly string[]; retrievedEvidenceIds: readonly string[]; denied: boolean;
+  id: string; k: number; relevantEvidenceIds: readonly string[]; retrievedEvidenceIds: readonly string[]; denied: boolean;
 }>;
 
 export function evaluateRetrievalResults(inputs: readonly RetrievalEvaluationInput[]) {
   const cases = inputs.map((input) => {
     const relevant = new Set(input.relevantEvidenceIds);
-    const hits = input.retrievedEvidenceIds.filter((id) => relevant.has(id)).length;
-    const precisionAtK = input.retrievedEvidenceIds.length === 0 ? 1 : hits / input.retrievedEvidenceIds.length;
+    const retrieved = [...new Set(input.retrievedEvidenceIds)].slice(0, input.k);
+    const hits = retrieved.filter((id) => relevant.has(id)).length;
+    const precisionAtK = relevant.size === 0 && retrieved.length === 0 ? 1 : hits / input.k;
     const recallAtK = relevant.size === 0 ? 1 : hits / relevant.size;
     return {
-      id: input.id, precisionAtK, recallAtK, leakedEvidence: input.denied ? input.retrievedEvidenceIds.length : 0,
-      retrieved: input.retrievedEvidenceIds.length,
-      relevantEvidenceIds: [...input.relevantEvidenceIds], retrievedEvidenceIds: [...input.retrievedEvidenceIds]
+      id: input.id, precisionAtK, recallAtK, leakedEvidence: input.denied ? retrieved.length : 0,
+      retrieved: retrieved.length,
+      relevantEvidenceIds: [...relevant], retrievedEvidenceIds: retrieved
     };
   });
-  const divisor = Math.max(1, cases.length);
+  const qualityCases = cases.filter((_, index) => !inputs[index]!.denied);
+  const divisor = Math.max(1, qualityCases.length);
   return {
     cases,
     summary: {
-      macroPrecisionAtK: cases.reduce((sum, entry) => sum + entry.precisionAtK, 0) / divisor,
-      macroRecallAtK: cases.reduce((sum, entry) => sum + entry.recallAtK, 0) / divisor,
+      macroPrecisionAtK: qualityCases.reduce((sum, entry) => sum + entry.precisionAtK, 0) / divisor,
+      macroRecallAtK: qualityCases.reduce((sum, entry) => sum + entry.recallAtK, 0) / divisor,
       permissionLeakage: cases.reduce((sum, entry) => sum + entry.leakedEvidence, 0)
     }
   };
@@ -74,18 +76,14 @@ async function runRetrievalEvaluation(): Promise<ReturnType<typeof evaluateRetri
         select source_type, can_read_restricted, sensitive_pricing, can_request_approval, can_approve from permission_grants
         where persona_id = ${testCase.userId} and account_id = ${testCase.accountId} and can_read = true order by source_type`;
       const denied = grants.length === 0 || (opportunity[0]?.restricted === true && !grants.some((grant) => grant.can_read_restricted));
-      if (denied) {
-        results.push({ id: testCase.id, relevantEvidenceIds: testCase.relevantEvidenceIds, retrievedEvidenceIds: [], denied: true });
-        continue;
-      }
-      const sourceTypes = [...new Set(grants.map((grant) => grant.source_type).filter((source): source is AuthorizedSourceType => AUTHORIZED_SOURCE_TYPES.includes(source as AuthorizedSourceType)))].sort();
+      const sourceTypes = denied ? [...AUTHORIZED_SOURCE_TYPES] : [...new Set(grants.map((grant) => grant.source_type).filter((source): source is AuthorizedSourceType => AUTHORIZED_SOURCE_TYPES.includes(source as AuthorizedSourceType)))].sort();
       const runId = `run_eval_${testCase.id.replaceAll(/[^A-Za-z0-9_-]/g, '_')}`;
       await database.sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model) values (${runId}, ${testCase.opportunityId}, ${testCase.userId}, 'retrieving', 'mock', 'mock-brief')`;
       const result = await retriever.search({
         query: testCase.query, accountId: testCase.accountId, opportunityId: testCase.opportunityId, runId, limit: testCase.limit, maxContextCharacters: 20_000,
         scope: { personaId: testCase.userId, allowed: true, accountIds: [testCase.accountId], sourceTypes, canViewSensitivePricing: grants.some((grant) => grant.sensitive_pricing), canRequestApproval: grants.some((grant) => grant.can_request_approval), canApprove: grants.some((grant) => grant.can_approve), canViewRestrictedAccounts: grants.some((grant) => grant.can_read_restricted) }
       });
-      results.push({ id: testCase.id, relevantEvidenceIds: testCase.relevantEvidenceIds, retrievedEvidenceIds: result.evidence.map((entry) => entry.evidenceId), denied: testCase.expectedDenied === true });
+      results.push({ id: testCase.id, k: testCase.limit, relevantEvidenceIds: testCase.relevantEvidenceIds, retrievedEvidenceIds: result.evidence.map((entry) => entry.evidenceId), denied: denied || testCase.expectedDenied === true });
     }
     return evaluateRetrievalResults(results);
   } finally {

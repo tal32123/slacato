@@ -1,8 +1,10 @@
 import type { AccessScope, AuthorizedSourceType } from '../../domain/permissions/authorize.js';
 import type { CitationId } from '../../domain/shared/ids.js';
 
+/** Claimed request bounds plus persona identity; adapters must still enforce persisted grants. */
 export type AuthorizedRetrievalScope = Extract<AccessScope, { allowed: true }> & Readonly<{ personaId: string }>;
 
+/** Immutable execution recipe used to make retrieval and its query hash reproducible. */
 export type EvidencePlan = Readonly<{
   query: string;
   fusionK: 60;
@@ -10,9 +12,11 @@ export type EvidencePlan = Readonly<{
   sectionQueries: readonly Readonly<{ section: string; query: string; sourceTypes: readonly AuthorizedSourceType[] }>[];
   sourceLimits: Readonly<Record<AuthorizedSourceType, number>>;
   mandatorySourceTypes: readonly ['policy'];
+  policyReservation: Readonly<{ resultSlots: 1; contextCharacters: number }>;
   maxContextCharacters: number;
 }>;
 
+/** Complete authorized retrieval request bound to an already-persisted workflow run. */
 export type RetrievalRequest = Readonly<{
   query: string;
   accountId: string;
@@ -23,6 +27,7 @@ export type RetrievalRequest = Readonly<{
   maxContextCharacters?: number;
 }>;
 
+/** Bounded evidence excerpt plus immutable provenance and transparent ranking details. */
 export type RetrievedEvidence = Readonly<{
   evidenceId: string;
   citationId: CitationId;
@@ -44,6 +49,7 @@ export type RetrievedEvidence = Readonly<{
   rank: number;
 }>;
 
+/** Stable identity of the immutable evidence snapshot consumed by a run. */
 export type RunEvidenceManifest = Readonly<{
   id: string;
   runId: string;
@@ -53,16 +59,33 @@ export type RunEvidenceManifest = Readonly<{
   indexProfile: string;
 }>;
 
+/** Authorized structured-row counts used to distinguish exact context from ranked excerpts. */
+export type ExactLookupDiagnostics = Readonly<{ account: number; opportunity: number; contacts: number }>;
+/** Explicit policy outcome prevents a mandatory source from disappearing behind a context limit. */
+export type MandatoryPolicyDiagnostic = 'included' | 'missing' | 'not_evaluated';
+
+/** Safe diagnostics contain authorized counts only and are empty for opaque denials. */
 export type RetrievalResult = Readonly<{
   evidence: readonly RetrievedEvidence[];
   manifest: RunEvidenceManifest;
-  diagnostics: Readonly<{ returned: number; contextCharacters: number; exactContextAvailable: number; missingSourceTypes: readonly AuthorizedSourceType[] }>;
+  diagnostics: Readonly<{
+    returned: number;
+    contextCharacters: number;
+    exactContextAvailable: number;
+    exactLookups: ExactLookupDiagnostics;
+    sectionMatches: Readonly<Record<string, number>>;
+    mandatoryPolicy: MandatoryPolicyDiagnostic;
+    truncatedEvidenceIds: readonly string[];
+    missingSourceTypes: readonly AuthorizedSourceType[];
+  }>;
 }>;
 
+/** Deep retrieval port; implementations must authorize inside every candidate query before ranking. */
 export interface EvidenceRetriever {
   search(request: RetrievalRequest): Promise<RetrievalResult>;
 }
 
+/** Reauthorized citation payload; source existence is never observable on denial. */
 export type AuthorizedCitation = Readonly<{
   citationId: CitationId;
   evidenceId: string;
@@ -71,12 +94,14 @@ export type AuthorizedCitation = Readonly<{
   sourceLocator: string;
 }>;
 
+/** Citation resolution request scoped to one immutable run manifest. */
 export type CitationResolutionRequest = Readonly<{
   manifestId: string;
   citationId: string;
   scope: AuthorizedRetrievalScope;
 }>;
 
+/** Defense-in-depth port resolving only current, authorized, in-manifest citations. */
 export interface CitationResolver {
   resolve(request: CitationResolutionRequest): Promise<AuthorizedCitation>;
 }
