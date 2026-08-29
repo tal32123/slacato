@@ -53,6 +53,9 @@ importers:
       drizzle-kit:
         specifier: 0.31.10
         version: 0.31.10
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(postgres@3.4.9)
       eslint:
         specifier: ^10.9.1
         version: 10.9.1(jiti@2.7.0)

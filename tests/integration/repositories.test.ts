@@ -172,8 +172,12 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
     await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content) values (${documentId}, ${documentId}, 1, 'crm', 'document-hash', 'immutable content')`;
     await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content) values (${evidenceId}, ${documentId}, ${accountId}, ${opportunityId}, 0, 'crm', 'internal', 'evidence-hash', 'immutable evidence')`;
-    await sql`insert into run_evidence_manifests (id, run_id, scope_hash, policy_hash, index_profile) values (${manifestId}, ${runId}, 'scope-hash', 'policy-hash', 'profile-hash')`;
-    await sql`insert into run_evidence_manifest_entries (manifest_id, evidence_version_id, rank, score, content_hash) values (${manifestId}, ${evidenceId}, 1, 1, 'evidence-hash')`;
+    await sql`insert into run_evidence_manifests
+      (id, run_id, scope_hash, policy_hash, query_hash, index_profile, embedding_provider, embedding_model, embedding_dimension, embedding_version, embedding_normalization)
+      values (${manifestId}, ${runId}, 'scope-hash', 'policy-hash', ${'0'.repeat(64)}, 'profile-hash', 'mock', 'mock-embedding', 2, 'v1', 'l2')`;
+    await sql`insert into run_evidence_manifest_entries
+      (manifest_id, evidence_version_id, citation_id, rank, query_rank, score, content_hash, source_locator, source_type, sensitivity, classification_reason, policy_hash, reliability_adjustment, recency_adjustment)
+      values (${manifestId}, ${evidenceId}, ${`citation_${id}`}, 1, 1, 1, 'evidence-hash', 'test#manifest', 'crm', 'internal', 'test', 'policy-hash', 0, 0)`;
     await expect(sql`update run_evidence_manifest_entries set rank = 2 where manifest_id = ${manifestId} and evidence_version_id = ${evidenceId}`).rejects.toThrow('immutable');
   });
 

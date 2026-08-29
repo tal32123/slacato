@@ -1,20 +1,39 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { ingestFixtureRecords } from '../../scripts/ingest.js';
 import { CANONICAL_FIXTURE_COMMIT } from '@slacato/core';
 
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
-const sql = postgres(databaseUrl, { max: 1 });
-afterAll(async () => sql.end({ timeout: 5 }));
+const adminUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const databaseName = `slacato_ingestion_${randomUUID().replaceAll('-', '')}`;
+const isolatedUrl = new URL(adminUrl);
+isolatedUrl.pathname = `/${databaseName}`;
+const admin = postgres(adminUrl, { max: 1 });
+let sql: ReturnType<typeof postgres>;
+
+beforeAll(async () => {
+  await admin.unsafe(`create database "${databaseName}"`);
+  sql = postgres(isolatedUrl.toString(), { max: 1 });
+  await migrate(drizzle(sql), { migrationsFolder: resolve('drizzle') });
+});
+
+afterAll(async () => {
+  await sql?.end({ timeout: 1 });
+  await admin.unsafe(`drop database if exists "${databaseName}" with (force)`);
+  await admin.end({ timeout: 1 });
+});
 
 describe('record-only canonical ingestion', () => {
   it('is idempotent, stores classification provenance, and never creates embeddings', async () => {
+    await ingestFixtureRecords({ root: 'fixtures/cato', databaseUrl: isolatedUrl.toString() });
     await sql`insert into permission_grants
       (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
       values ('grant:stale-canonical', 'USR-5001', 'ACC-2001', 'slack', true, false, true, true, false, ${CANONICAL_FIXTURE_COMMIT})
       on conflict (id) do nothing`;
-    await ingestFixtureRecords({ root: 'fixtures/cato', databaseUrl });
-    const second = await ingestFixtureRecords({ root: 'fixtures/cato', databaseUrl });
+    const second = await ingestFixtureRecords({ root: 'fixtures/cato', databaseUrl: isolatedUrl.toString() });
     const pricing = await sql<{
       sensitivity: string; classification_reason: string | null; policy_hash: string | null; embedding: unknown;
     }[]>`select sensitivity, classification_reason, policy_hash, embedding from evidence_versions where id = 'pricing:PN-4004:0'`;

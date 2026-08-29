@@ -15,12 +15,12 @@ import {
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 12 }, (_, index) =>
+const migrationFiles = Array.from({ length: 13 }, (_, index) =>
   resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
     'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
     'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
     'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance',
-    'persona_provenance'
+    'persona_provenance', 'authorized_retrieval'
   ][index]}.sql`)
 );
 const temporaryDatabases: string[] = [];
@@ -126,6 +126,10 @@ describe('durable migration catalog', () => {
       await upgrade`insert into accounts (id, name) values ('legacy-account', 'Legacy account')`;
       await upgrade`insert into opportunities (id, account_id, name) values ('legacy-opportunity', 'legacy-account', 'Legacy opportunity')`;
       await upgrade`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values ('legacy-run', 'legacy-opportunity', 'legacy-user', 'created', 'mock', 'mock-chat', 0)`;
+      await upgrade`insert into document_versions (id, external_id, version, source_type, content_hash, content) values ('legacy-document', 'legacy-document', 1, 'salesforce', 'legacy-document-hash', 'legacy content')`;
+      await upgrade`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content) values ('legacy-evidence', 'legacy-document', 'legacy-account', 'legacy-opportunity', 0, 'salesforce', 'standard', 'legacy-evidence-hash', 'legacy content')`;
+      await upgrade`insert into run_evidence_manifests (id, run_id, scope_hash, policy_hash, index_profile) values ('legacy-manifest', 'legacy-run', 'legacy-scope', 'legacy-policy', 'legacy-profile')`;
+      await upgrade`insert into run_evidence_manifest_entries (manifest_id, evidence_version_id, rank, score, content_hash) values ('legacy-manifest', 'legacy-evidence', 1, 1, 'legacy-evidence-hash')`;
       await upgrade`insert into run_budget_reservations (id, run_id, reserved_output_tokens, status) values ('legacy-reservation-a', 'legacy-run', 1, 'reserved'), ('legacy-reservation-b', 'legacy-run', 1, 'reserved')`;
       await applyMigrations(upgrade, migrationFiles.slice(8));
       expect(await upgrade<{ id: string; operation: string; ordinal: number }[]>`select id, operation, ordinal from run_budget_reservations where run_id = 'legacy-run' order by id`).toEqual([
@@ -149,6 +153,9 @@ describe('durable migration catalog', () => {
       expect(serialized).toContain('evidence_versions_provenance_idx');
       expect(serialized).toContain('permission_grants_source_commit_check');
       expect(serialized).toContain('permission_grants_source_commit_persona_idx');
+      expect(serialized).toContain('run_evidence_manifests_query_hash_ck');
+      expect(serialized).toContain('run_evidence_manifest_entries_citation_uq');
+      expect(serialized).toContain('embedding_content_hash = content_hash');
       expect(serialized).toContain('"column_name":"can_request_approval"');
       expect(serialized).toContain('"column_name":"event_date"');
       expect(serialized).toContain('"column_name":"reliability_class"');
@@ -212,7 +219,7 @@ describe('durable migration catalog', () => {
       'eventDate', 'reliabilityClass', 'sourceLocator', 'classificationReason', 'policyHash'
     ]));
     expect(Object.keys(evidenceVersions)).toEqual(expect.arrayContaining([
-      'eventDate', 'reliabilityClass', 'sourceLocator', 'classificationReason', 'policyHash'
+      'eventDate', 'reliabilityClass', 'sourceLocator', 'classificationReason', 'policyHash', 'embeddingContentHash'
     ]));
     const documentProvenanceCheck = getTableConfig(documentVersions).checks.find((entry) => entry.name === 'document_versions_provenance_ck');
     expect(documentProvenanceCheck).toBeDefined();
@@ -225,8 +232,8 @@ describe('durable migration catalog', () => {
     expect(Object.keys(permissionGrants)).toEqual(expect.arrayContaining([
       'personaId', 'accountId', 'canReadRestricted', 'canRequestApproval', 'canApprove', 'sourceCommit'
     ]));
-    expect(Object.keys(runEvidenceManifests)).toEqual(expect.arrayContaining(['runId']));
-    expect(Object.keys(runEvidenceManifestEntries)).toEqual(expect.arrayContaining(['manifestId', 'evidenceVersionId']));
+    expect(Object.keys(runEvidenceManifests)).toEqual(expect.arrayContaining(['runId', 'queryHash', 'embeddingProvider', 'embeddingModel', 'embeddingDimension']));
+    expect(Object.keys(runEvidenceManifestEntries)).toEqual(expect.arrayContaining(['manifestId', 'evidenceVersionId', 'citationId', 'sourceLocator', 'classificationReason', 'queryRank']));
     expect(Object.keys(approvalSubjects)).toEqual(expect.arrayContaining(['policyTriggers', 'runId', 'subjectHash']));
     expect(approvalSubjects.policyTriggers.getSQLType()).toBe('jsonb');
     expect(Object.keys(briefs)).toEqual(expect.arrayContaining(['approvalSubjectId', 'runId', 'subjectHash']));
