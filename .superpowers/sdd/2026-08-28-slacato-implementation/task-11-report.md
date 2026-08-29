@@ -196,7 +196,7 @@ The first failures demonstrated that the desktop secondary navigation landmark w
 ### Review fixes
 
 - Diagnostics now accepts a protected response only when both its `sessionVersion` and captured connection generation remain current. A mismatch hides protected content, tears down scoped state, fetches the authoritative session, and retries through the shared query option before rendering.
-- Persona and logout mutations reconcile the authoritative signed cookie after any ambiguous parse/validation failure, with transition pending state and cross-tab persona/logout broadcasts preventing the prior identity from remaining rendered.
+- Persona and logout mutations reconcile the authoritative signed cookie after any ambiguous parse/validation failure. Confirmed mutations use persona/logout broadcasts; ambiguous failures first use neutral invalidation so sibling tabs re-fetch the authoritative cookie before choosing a destination.
 - Protected navigation foreground-refetches the signed session. Typed API 401 errors preserve a safe `returnTo`; 403 errors route to the opaque forbidden surface.
 - Runtime health now distinguishes `unconfigured` from an observed dependency failure in both the strict contracts and Diagnostics UI.
 - Desktop Diagnostics is an exact secondary destination. Desktop Settings is not marked current while Diagnostics is active; mobile Settings uses `aria-current="location"`.
@@ -221,3 +221,36 @@ passed with no diagnostics
 ```
 
 The live Vite/Nest surface was reviewed again in Chromium. At 1024×900 the collapsed rail measured 72px, Diagnostics used the exact secondary current destination, the document measured `scrollWidth === clientWidth === 1024`, and the wider 1370px matrix remained inside an 886px keyboard-accessible scroller. At 390×844 the document measured `scrollWidth === clientWidth === 390`, the mobile Settings destination used `aria-current="location"`, and the complete stacked permission records remained readable. The final desktop/mobile axe path passed with zero violations.
+
+## Review-fix round 2
+
+### RED evidence
+
+Two production-boundary multi-tab/API tests reproduced the remaining lifecycle failures:
+
+```text
+pnpm exec playwright test tests/e2e/settings.spec.ts --workers=1 --grep "one diagnostics reconciliation|rejected persona and logout"
+1 failed, 1 did not run
+
+pnpm exec playwright test tests/e2e/settings.spec.ts --workers=1 --grep "rejected persona and logout"
+1 failed
+```
+
+Repeated mismatched Diagnostics responses never settled on `/diagnostics`, and a sibling tab lost its authenticated Settings surface after a rejected stale-CSRF logout even though the signed cookie remained unchanged.
+
+### Fixes and GREEN evidence
+
+- Ambiguous persona/logout failures now broadcast only neutral `invalidate` before the authoritative session fetch. Receiving tabs hide protected content, fetch the shared signed cookie, then reload when authenticated or route to login when anonymous. Confirmed mutation responses retain the direct persona/logout broadcasts.
+- Diagnostics query options disable the generic query retry. The loader owns exactly one explicit reconciliation retry; a second session/generation mismatch finishes the protected transition and throws a stable 409 route error with the existing Try again recovery control instead of redirecting to `/diagnostics`.
+- The bounded-retry E2E mutates the real `/api/diagnostics` response boundary, observes exactly two requests, and proves the request count stays stable after the route error renders. The multi-tab mutation E2E uses real browser tabs and rejected persona/logout HTTP responses without runtime injection.
+
+```text
+pnpm exec playwright test tests/e2e/settings.spec.ts --workers=1
+9 passed (11.8s)
+
+pnpm exec playwright test tests/e2e/responsive-shell.spec.ts tests/e2e/settings.spec.ts --workers=1
+18 passed (17.7s)
+
+pnpm typecheck
+passed with no diagnostics
+```

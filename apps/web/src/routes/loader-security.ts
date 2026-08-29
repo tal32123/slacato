@@ -9,12 +9,15 @@ import {
 } from '@/api/session';
 
 export function throwProtectedLoaderError(error: unknown, request: Request): never {
+  if (error instanceof SessionInvalidatedError) {
+    sessionRuntime.finishTransition();
+    throw new Response('Protected data changed repeatedly while loading.', {
+      status: 409,
+      statusText: 'Protected data changed'
+    });
+  }
   const url = new URL(request.url);
   const returnTo = safeDestination(`${url.pathname}${url.search}`);
-
-  if (error instanceof SessionInvalidatedError) {
-    throw redirect(returnTo);
-  }
   if (error instanceof ApiError && error.status === 401) {
     sessionRuntime.prepareTransition();
     queryClient.removeQueries({ queryKey: queryKeys.session });

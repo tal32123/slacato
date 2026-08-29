@@ -51,6 +51,7 @@ export const diagnosticsQueryOptions = (version: string) => {
   const generation = sessionRuntime.generation;
   return queryOptions({
     queryKey: queryKeys.scoped(version, 'diagnostics'),
+    retry: false,
     queryFn: async ({ signal }) => {
       const diagnostics = await fetchDiagnostics(signal);
       if (diagnostics.sessionVersion !== version || !sessionRuntime.accepts(generation)) {
@@ -86,8 +87,7 @@ class SessionRuntime {
       if (!isSessionBroadcast(event.data) || event.data.source === this.source) return;
       this.prepareTransition();
       queryClient.removeQueries({ queryKey: queryKeys.session });
-      if (event.data.kind === 'logout') window.location.replace('/login');
-      else window.location.reload();
+      void this.resolveBroadcast(event.data.kind);
     });
   }
 
@@ -139,15 +139,30 @@ class SessionRuntime {
     this.notifyTransition();
   }
 
-  public async reconcileAuthoritativeSession(
-    preserveQueryKey?: readonly unknown[],
-    broadcastKind: SessionBroadcast['kind'] = 'invalidate'
-  ): Promise<AuthSessionResponse> {
+  public async reconcileAuthoritativeSession(preserveQueryKey?: readonly unknown[]): Promise<AuthSessionResponse> {
     this.prepareTransition(preserveQueryKey);
     queryClient.removeQueries({ queryKey: queryKeys.session });
-    this.broadcast(broadcastKind);
+    this.broadcast('invalidate');
     return queryClient.fetchQuery(sessionQueryOptions());
   }
+  private async resolveBroadcast(kind: SessionBroadcast['kind']): Promise<void> {
+    if (kind === 'logout') {
+      window.location.replace('/login');
+      return;
+    }
+    if (kind === 'persona') {
+      window.location.reload();
+      return;
+    }
+    try {
+      const session = await queryClient.fetchQuery(sessionQueryOptions());
+      if (session.authenticated) window.location.reload();
+      else window.location.replace('/login');
+    } catch {
+      window.location.reload();
+    }
+  }
+
 
   private notifyTransition(): void {
     for (const listener of this.transitionListeners) listener();
@@ -169,7 +184,7 @@ export async function selectPersonaSession(userId: string, csrfToken: string): P
     sessionRuntime.broadcast('persona', payload.session.version);
     return payload.session;
   } catch (error) {
-    return reconcileAmbiguousMutation(error, 'persona');
+    return reconcileAmbiguousMutation(error);
   }
 }
 
@@ -181,7 +196,7 @@ export async function logoutSession(csrfToken: string): Promise<void> {
     queryClient.removeQueries({ predicate: ({ queryKey }) => queryKey[0] === 'csrf' });
     sessionRuntime.broadcast('logout');
   } catch (error) {
-    return reconcileAmbiguousMutation(error, 'logout');
+    return reconcileAmbiguousMutation(error);
   }
 }
 
@@ -189,9 +204,9 @@ export function safeDestination(value: string | null, fallback = '/deals'): stri
   return value?.startsWith('/') && !value.startsWith('//') ? value : fallback;
 }
 
-async function reconcileAmbiguousMutation(error: unknown, kind: 'persona' | 'logout'): Promise<never> {
+async function reconcileAmbiguousMutation(error: unknown): Promise<never> {
   try {
-    const session = await sessionRuntime.reconcileAuthoritativeSession(undefined, kind);
+    const session = await sessionRuntime.reconcileAuthoritativeSession();
     if (!session.authenticated) {
       const returnTo = safeDestination(`${window.location.pathname}${window.location.search}`);
       window.location.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`);

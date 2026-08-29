@@ -111,6 +111,30 @@ test('rejects diagnostics from a different session version and refetches before 
   expect(attempts).toBeGreaterThanOrEqual(2);
 });
 
+test('stops after one diagnostics reconciliation retry and surfaces stable recovery', async ({ page }) => {
+  await loginAs(page);
+  let attempts = 0;
+  await page.route('**/api/diagnostics', async (route) => {
+    attempts += 1;
+    const response = await route.fetch({
+      headers: { ...route.request().headers(), origin: new URL(page.url()).origin, 'sec-fetch-site': 'same-origin' }
+    });
+    const payload = await response.json() as Record<string, unknown>;
+    await route.fulfill({
+      response,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...payload, sessionVersion: '00000000-0000-4000-8000-000000000000' })
+    });
+  });
+
+  await page.getByLabel('Session controls').getByRole('link', { name: 'Demo Diagnostics' }).click();
+  await expect(page).toHaveURL('/diagnostics');
+  await expect(page.getByRole('heading', { name: 'This view could not be loaded' })).toBeVisible();
+  expect(attempts).toBe(2);
+  await page.waitForTimeout(250);
+  expect(attempts).toBe(2);
+});
+
 test('rejects diagnostics completed by a stale connection generation', async ({ page }) => {
   await loginAs(page);
   let attempts = 0;
@@ -163,6 +187,41 @@ test('reconciles authoritative persona and logout cookies after invalid mutation
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL(/\/login/);
   await expect(observingTab).toHaveURL(/\/login/);
+  await observingTab.close();
+});
+
+test('keeps sibling tabs authenticated when rejected persona and logout mutations leave the cookie unchanged', async ({ page, context }) => {
+  await loginAs(page);
+  const observingTab = await context.newPage();
+  await observingTab.goto('/settings');
+
+  await page.route('**/api/auth/persona', async (route) => {
+    await route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'INVALID_CSRF', message: 'Request could not be authorized' })
+    });
+  });
+  await page.getByRole('radio', { name: /Owen Patel/ }).check();
+  await page.getByRole('button', { name: 'Use selected persona' }).click();
+  await expect(page).toHaveURL('/settings');
+  await expect(observingTab).toHaveURL('/settings');
+  await expect(page.getByRole('radio', { name: /Maya Levin/ })).toBeChecked();
+  await expect(observingTab.getByRole('radio', { name: /Maya Levin/ })).toBeChecked();
+
+  await page.unroute('**/api/auth/persona');
+  await page.route('**/api/auth/logout', async (route) => {
+    await route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'INVALID_CSRF', message: 'Request could not be authorized' })
+    });
+  });
+  await page.getByRole('button', { name: 'Log out' }).click();
+  await expect(page).toHaveURL('/settings');
+  await expect(observingTab).toHaveURL('/settings');
+  await expect(page.getByRole('radio', { name: /Maya Levin/ })).toBeChecked();
+  await expect(observingTab.getByRole('radio', { name: /Maya Levin/ })).toBeChecked();
   await observingTab.close();
 });
 
