@@ -1,5 +1,6 @@
 import type { AccessScope, AuthorizedSourceType } from '../../domain/permissions/authorize.js';
 import type { CitationId } from '../../domain/shared/ids.js';
+import type { EvidenceScopeBinding } from './scope-binding.js';
 
 /** Claimed request bounds plus persona identity; adapters must still enforce persisted grants. */
 export type AuthorizedRetrievalScope = Extract<AccessScope, { allowed: true }> & Readonly<{ personaId: string }>;
@@ -57,6 +58,7 @@ export type RunEvidenceManifest = Readonly<{
   scopeHash: string;
   policyHash: string;
   indexProfile: string;
+  binding: EvidenceScopeBinding;
 }>;
 
 /** Authorized structured-row counts used to distinguish exact context from ranked excerpts. */

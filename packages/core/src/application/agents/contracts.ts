@@ -16,7 +16,7 @@ export type {
   StrategyArtifact
 } from '../../domain/briefs/schema.js';
 
-import type { RunEvidenceManifest, RetrievedEvidence } from '../evidence/contracts.js';
+import type { AuthorizedRetrievalScope, RunEvidenceManifest, RetrievedEvidence } from '../evidence/contracts.js';
 import type { RetryLimits, SharedRunBudget } from '../model/contracts.js';
 import type { ProviderAttemptContext } from '../model/provider-attempt-ledger.js';
 
@@ -33,6 +33,9 @@ export type AgentManifestEntry = Readonly<Pick<AgentEvidenceRecord,
     includedCharacters: number;
     excerptHash: string;
     eventDate?: string | undefined;
+    accountId: string;
+    opportunityId: string;
+    scopeHash: string;
   }>;
 
 /** Provider-neutral generation controls supplied by the durable workflow composition root. */
@@ -51,6 +54,8 @@ export type AgentContext = Readonly<{
   account: Readonly<{ id: string; name: string }>;
   opportunity: Readonly<{ id: string; name: string; stage: string }>;
   manifest: RunEvidenceManifest;
+  /** Recomputed current scope; narrowed access cannot reuse an older manifest. */
+  currentScope: AuthorizedRetrievalScope;
   manifestEntries: readonly AgentManifestEntry[];
   evidence: readonly AgentEvidenceRecord[];
   generation: AgentGenerationContext;

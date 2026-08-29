@@ -6,8 +6,11 @@ import { serializedByteLength } from '../../domain/shared/serialized-size.js';
 export const MAX_AGENT_EVIDENCE_CHARACTERS = 22_000;
 const MAX_SINGLE_EVIDENCE_CHARACTERS = 6_000;
 export const MAX_SPECIALIST_ARTIFACT_BYTES = 6_000;
-const MAX_REQUIRED_ENVELOPE_CHARACTERS = 32_000;
+/** Smallest configured required-evidence section among supported generation profiles. */
+export const MIN_AGENT_REQUIRED_EVIDENCE_TOKENS = 6_000;
 const MAX_EVIDENCE_RECORDS = 20;
+const MIN_SELECTED_EVIDENCE_CHARACTERS = 256;
+const CHARS_PER_TOKEN = 4;
 
 const TRUSTED_POLICY = [
   'You are a bounded deal-intelligence specialist.',
@@ -42,17 +45,27 @@ function evidenceEnvelope(record: AgentEvidenceRecord): string {
   return `BEGIN_UNTRUSTED_EVIDENCE_RECORDS\n${inertJson(evidenceData(record))}\nEND_UNTRUSTED_EVIDENCE_RECORDS`;
 }
 
-function fitEvidenceEnvelope(record: AgentEvidenceRecord, characterBudget: number): Readonly<{ record: AgentEvidenceRecord; envelope: string }> | undefined {
-  if (evidenceEnvelope({ ...record, content: '' }).length > characterBudget) return undefined;
-  let lower = 0;
+function estimatedTokens(value: string): number { return Math.ceil(value.length / CHARS_PER_TOKEN); }
+
+function requiredSectionTokens(id: string, content: string): number {
+  return estimatedTokens(`[evidence id=${id}]\n`) + estimatedTokens(content);
+}
+
+function evidenceWithCharacters(record: AgentEvidenceRecord, characters: number): AgentEvidenceRecord {
+  return { ...record, content: record.content.slice(0, characters) };
+}
+
+function largestFittingExcerpt(record: AgentEvidenceRecord, currentCharacters: number, additionalTokenBudget: number): number {
+  const baseline = estimatedTokens(evidenceEnvelope(evidenceWithCharacters(record, currentCharacters)));
+  let lower = currentCharacters;
   let upper = record.content.length;
   while (lower < upper) {
     const candidate = Math.ceil((lower + upper) / 2);
-    if (evidenceEnvelope({ ...record, content: record.content.slice(0, candidate) }).length <= characterBudget) lower = candidate;
+    const incremental = estimatedTokens(evidenceEnvelope(evidenceWithCharacters(record, candidate))) - baseline;
+    if (incremental <= additionalTokenBudget) lower = candidate;
     else upper = candidate - 1;
   }
-  const bounded = { ...record, content: record.content.slice(0, lower) };
-  return { record: bounded, envelope: evidenceEnvelope(bounded) };
+  return lower;
 }
 
 /** Fixed, injection-resistant prompt envelope with independently budgeted sections. */
@@ -77,18 +90,42 @@ export function buildAgentPrompt(input: Readonly<{
       return `BEGIN_UNTRUSTED_SPECIALIST_ARTIFACTS\n${serialized}\nEND_UNTRUSTED_SPECIALIST_ARTIFACTS`;
     })()
   }));
-  const artifactCharacters = artifactSections.reduce((sum, section) => sum + section.content.length, 0);
-  if (artifactCharacters > MAX_REQUIRED_ENVELOPE_CHARACTERS) throw new ContextBudgetError('Specialist artifact fan-in exceeds the required-context budget');
-  let remaining = MAX_REQUIRED_ENVELOPE_CHARACTERS - artifactCharacters;
+  const artifactTokens = artifactSections.reduce((sum, section) => sum + requiredSectionTokens(section.id, section.content), 0);
+  if (artifactTokens > MIN_AGENT_REQUIRED_EVIDENCE_TOKENS) throw new ContextBudgetError('Specialist artifact fan-in exceeds the required-context budget');
+
+  let remainingTokens = MIN_AGENT_REQUIRED_EVIDENCE_TOKENS - artifactTokens;
+  const selected: AgentEvidenceRecord[] = [];
+  for (const record of input.evidence.slice(0, MAX_EVIDENCE_RECORDS)) {
+    const empty = evidenceWithCharacters(record, 0);
+    const required = requiredSectionTokens(record.evidenceId, evidenceEnvelope(empty));
+    if (required > remainingTokens) break;
+    selected.push(empty);
+    remainingTokens -= required;
+  }
+
+  const allocate = (targetCharacters: (record: AgentEvidenceRecord, original: AgentEvidenceRecord) => number): void => {
+    for (const [index, bounded] of selected.entries()) {
+      if (remainingTokens <= 0) break;
+      const original = input.evidence[index];
+      if (original === undefined) break;
+      const target = Math.min(original.content.length, targetCharacters(bounded, original));
+      const candidate = largestFittingExcerpt(original, bounded.content.length, remainingTokens);
+      const characters = Math.min(candidate, target);
+      const next = evidenceWithCharacters(original, characters);
+      const spent = estimatedTokens(evidenceEnvelope(next)) - estimatedTokens(evidenceEnvelope(bounded));
+      selected[index] = next;
+      remainingTokens -= spent;
+    }
+  };
+  // Reserve a useful excerpt for each retained ID before rank-ordered expansion.
+  allocate((_bounded, original) => Math.min(MIN_SELECTED_EVIDENCE_CHARACTERS, original.content.length));
+  allocate((_bounded, original) => original.content.length);
+
   const evidenceSections: ContextSection[] = [];
   const evidenceRecords: AgentEvidenceRecord[] = [];
-  for (const record of input.evidence.slice(0, MAX_EVIDENCE_RECORDS)) {
-    const fitted = fitEvidenceEnvelope(record, remaining);
-    if (fitted === undefined) break;
-    evidenceSections.push({ id: record.evidenceId, content: fitted.envelope });
-    evidenceRecords.push(fitted.record);
-    remaining -= fitted.envelope.length;
-    if (fitted.record.content.length < record.content.length) break;
+  for (const record of selected) {
+    evidenceSections.push({ id: record.evidenceId, content: evidenceEnvelope(record) });
+    evidenceRecords.push(record);
   }
   const trustedTask = `${input.task}\nTrusted bounded deal context:\n${JSON.stringify(input.trustedContext)}`;
   const evidencePayload = evidenceSections.map((section) => section.content).join('\n');
@@ -119,9 +156,22 @@ export function pruneAgentEvidence(
   allowedSourceTypes: ReadonlySet<AgentEvidenceRecord['sourceType']>,
   citedIds: ReadonlySet<string> = new Set<string>()
 ): readonly AgentEvidenceRecord[] {
-  const candidates = records
-    .filter((record) => allowedSourceTypes.has(record.sourceType))
-    .sort((left, right) => evidencePriority(left, citedIds) - evidencePriority(right, citedIds) || left.rank - right.rank || left.evidenceId.localeCompare(right.evidenceId));
+  const ranked = records.filter((record) => allowedSourceTypes.has(record.sourceType))
+    .sort((left, right) => left.rank - right.rank || left.evidenceId.localeCompare(right.evidenceId));
+  const mandatoryPolicy = ranked.find((record) => record.sourceType === 'policy');
+  const canonicalCrm = ranked.find((record) => record.sourceType === 'salesforce');
+  const citedContradictions = ranked.filter((record) => record.evidenceId !== mandatoryPolicy?.evidenceId
+    && record.evidenceId !== canonicalCrm?.evidenceId && citedIds.has(record.evidenceId)
+    && /contradict|disput|den(?:y|ied)|not agreed|declin/i.test(record.content));
+  const criticalIds = new Set([mandatoryPolicy?.evidenceId, canonicalCrm?.evidenceId, ...citedContradictions.map((record) => record.evidenceId)]
+    .filter((id): id is string => id !== undefined));
+  const candidates = [
+    ...(mandatoryPolicy === undefined ? [] : [mandatoryPolicy]),
+    ...(canonicalCrm === undefined ? [] : [canonicalCrm]),
+    ...citedContradictions,
+    ...ranked.filter((record) => !criticalIds.has(record.evidenceId))
+      .sort((left, right) => evidencePriority(left, citedIds) - evidencePriority(right, citedIds) || left.rank - right.rank || left.evidenceId.localeCompare(right.evidenceId))
+  ];
   const selected: AgentEvidenceRecord[] = [];
   let remaining = MAX_AGENT_EVIDENCE_CHARACTERS;
   for (const record of candidates) {

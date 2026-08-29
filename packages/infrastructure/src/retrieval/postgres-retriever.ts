@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
-  applyEvidenceAdjustments, AuthorizationDeniedError, buildEvidencePlan, DomainConflictError, opaqueCitationDenial,
+  applyEvidenceAdjustments, AuthorizationDeniedError, buildEvidencePlan, createEvidenceScopeBinding, DomainConflictError, hashEvidenceScopeBinding, opaqueCitationDenial,
   reciprocalRankFusion, type AuthorizedCitation, type AuthorizedSourceType, type CitationResolutionRequest,
   type CitationResolver, type EmbeddingGateway, type EmbeddingProfile, type EvidenceRetriever, type RetrievedEvidence,
   type RetrievalRequest, type RetrievalResult
@@ -13,7 +13,7 @@ type Health = Readonly<{ total: number; matching: number; source_types: Authoriz
 type Header = Readonly<{ id: string; run_id: string; scope_hash: string; policy_hash: string; query_hash: string; index_profile: string; embedding_provider: string; embedding_model: string; embedding_dimension: number; embedding_version: string; embedding_normalization: string; context_limit: number; diagnostics: unknown }>;
 type Entry = SearchRow & Readonly<{ citation_id: string; rank: number; score: string; lexical_rank: number | null; semantic_rank: number | null; fusion_score: string; reliability_adjustment: string; recency_adjustment: string; included_characters: number }>;
 type QueryScope = Readonly<{ personaId: string; accountId: string; opportunityId: string; sourceTypes: readonly AuthorizedSourceType[]; allowSensitive: boolean; allowRestricted: boolean; sourceLimits: Readonly<Record<AuthorizedSourceType, number>>; candidateLimit: number }>;
-type Identity = Readonly<{ manifestId: string; queryHash: string; scopeHash: string; indexProfile: string }>;
+type Identity = Readonly<{ manifestId: string; queryHash: string; scopeHash: string; indexProfile: string; binding: ReturnType<typeof createEvidenceScopeBinding> }>;
 
 function sha256(value: string): string { return createHash('sha256').update(value).digest('hex'); }
 function stableJson(value: unknown): string {
@@ -32,8 +32,9 @@ export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
     const plan = buildEvidencePlan(request);
     await this.assertRunBinding(request);
     const queryHash = sha256(stableJson({ algorithmVersion: 'authorized-hybrid-v1', plan }));
-    const scopeHash = sha256(stableJson({ target: { accountId: request.accountId, opportunityId: request.opportunityId }, personaId: request.scope.personaId, accountIds: [...request.scope.accountIds].sort(), sourceTypes: [...request.scope.sourceTypes].sort(), canViewSensitivePricing: request.scope.canViewSensitivePricing, canViewRestrictedAccounts: request.scope.canViewRestrictedAccounts, canRequestApproval: request.scope.canRequestApproval, canApprove: request.scope.canApprove }));
-    const identity: Identity = { queryHash, scopeHash, indexProfile: sha256(stableJson(this.profile)), manifestId: `manifest_${sha256(`${request.runId}\u001f${queryHash}\u001f${scopeHash}`).slice(0, 40)}` };
+    const binding = createEvidenceScopeBinding({ accountId: request.accountId, opportunityId: request.opportunityId }, request.scope);
+    const scopeHash = hashEvidenceScopeBinding(binding);
+    const identity: Identity = { queryHash, scopeHash, binding, indexProfile: sha256(stableJson(this.profile)), manifestId: `manifest_${sha256(`${request.runId}\u001f${queryHash}\u001f${scopeHash}`).slice(0, 40)}` };
     const common: QueryScope = { personaId: request.scope.personaId, accountId: request.accountId, opportunityId: request.opportunityId, sourceTypes: [...request.scope.sourceTypes], allowSensitive: request.scope.canViewSensitivePricing, allowRestricted: request.scope.canViewRestrictedAccounts, sourceLimits: plan.sourceLimits, candidateLimit: Math.max(request.limit * plan.sectionQueries.length * 2, request.limit * request.scope.sourceTypes.length) };
     const replay = await this.loadReplay(request, identity, undefined, common);
     if (replay !== undefined) return replay;
@@ -125,13 +126,13 @@ export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
       || !Number.isFinite(Number(entry.score)) || !Number.isFinite(Number(entry.fusion_score)));
     if (invalidEntry || diagnostics.returned !== entries.length || diagnostics.contextCharacters !== entries.reduce((sum, entry) => sum + entry.included_characters, 0)) throw new DomainConflictError('Stored evidence manifest invariants are invalid');
     const evidence = entries.map((entry): RetrievedEvidence => ({ evidenceId: entry.id, citationId: entry.citation_id as RetrievedEvidence['citationId'], content: entry.content.slice(0, entry.included_characters), contentHash: entry.content_hash, sourceType: entry.source_type, sensitivity: entry.sensitivity, sourceLocator: entry.source_locator, classificationReason: entry.classification_reason, policyHash: entry.policy_hash, ...(entry.event_date === null ? {} : { eventDate: entry.event_date }), reliabilityClass: entry.reliability_class, ...(entry.lexical_rank === null ? {} : { lexicalRank: entry.lexical_rank }), ...(entry.semantic_rank === null ? {} : { semanticRank: entry.semantic_rank }), fusionScore: Number(entry.fusion_score), reliabilityAdjustment: Number(entry.reliability_adjustment), recencyAdjustment: Number(entry.recency_adjustment), score: Number(entry.score), rank: entry.rank }));
-    return { evidence, manifest: { id: header.id, runId: header.run_id, queryHash: header.query_hash, scopeHash: header.scope_hash, policyHash: header.policy_hash, indexProfile: header.index_profile }, diagnostics: header.diagnostics as RetrievalResult['diagnostics'] };
+    return { evidence, manifest: { id: header.id, runId: header.run_id, queryHash: header.query_hash, scopeHash: header.scope_hash, policyHash: header.policy_hash, indexProfile: header.index_profile, binding: identity.binding }, diagnostics: header.diagnostics as RetrievalResult['diagnostics'] };
   }
   private async persistOrReplay(request: RetrievalRequest, identity: Identity, policyHash: string, evidence: readonly RetrievedEvidence[], diagnostics: RetrievalResult['diagnostics'], input?: QueryScope): Promise<RetrievalResult> {
     let inserted = false;
     await this.database.sql.begin(async (transaction) => { const rows = await transaction<{ id: string }[]>`insert into run_evidence_manifests (id, run_id, scope_hash, policy_hash, query_hash, index_profile, embedding_provider, embedding_model, embedding_dimension, embedding_version, embedding_normalization, context_limit, diagnostics) values (${identity.manifestId}, ${request.runId}, ${identity.scopeHash}, ${policyHash}, ${identity.queryHash}, ${identity.indexProfile}, ${this.profile.provider}, ${this.profile.model}, ${this.profile.dimension}, ${this.profile.version}, ${this.profile.normalization}, ${buildEvidencePlan(request).maxContextCharacters}, ${JSON.stringify(diagnostics)}::jsonb) on conflict do nothing returning id`; inserted = rows.length === 1; if (!inserted) return; for (const entry of evidence) await transaction`insert into run_evidence_manifest_entries (manifest_id, evidence_version_id, citation_id, rank, query_rank, score, content_hash, source_locator, source_type, sensitivity, classification_reason, policy_hash, lexical_rank, semantic_rank, fusion_score, reliability_adjustment, recency_adjustment, included_characters) values (${identity.manifestId}, ${entry.evidenceId}, ${entry.citationId}, ${entry.rank}, ${entry.rank}, ${entry.score}, ${entry.contentHash}, ${entry.sourceLocator}, ${entry.sourceType}, ${entry.sensitivity}, ${entry.classificationReason}, ${entry.policyHash}, ${entry.lexicalRank ?? null}, ${entry.semanticRank ?? null}, ${entry.fusionScore}, ${entry.reliabilityAdjustment}, ${entry.recencyAdjustment}, ${entry.content.length})`; });
     if (!inserted) { const replay = await this.loadReplay(request, identity, policyHash, input); if (replay === undefined) throw new DomainConflictError('Run evidence manifest could not be replayed'); return replay; }
-    return { evidence, manifest: { id: identity.manifestId, runId: request.runId, queryHash: identity.queryHash, scopeHash: identity.scopeHash, policyHash, indexProfile: identity.indexProfile }, diagnostics };
+    return { evidence, manifest: { id: identity.manifestId, runId: request.runId, queryHash: identity.queryHash, scopeHash: identity.scopeHash, policyHash, indexProfile: identity.indexProfile, binding: identity.binding }, diagnostics };
   }
 }
 

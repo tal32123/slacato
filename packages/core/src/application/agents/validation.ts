@@ -8,12 +8,17 @@ import {
 } from '../../domain/briefs/schema.js';
 import { DomainValidationError } from '../../domain/shared/errors.js';
 import { accountIdSchema, opportunityIdSchema, runIdSchema } from '../../domain/shared/ids.js';
+import { createEvidenceScopeBinding, hashEvidenceScopeBinding } from '../evidence/scope-binding.js';
 import type { AgentContext, AgentEvidenceRecord } from './contracts.js';
 
 export type ClaimSupport = 'supported' | 'contradicted' | 'insufficient';
 export type ClaimSupportAssessment = Readonly<{ claimId: string; support: ClaimSupport; reason: string }>;
 
 function normalize(value: string): string { return value.normalize('NFKC').toLocaleLowerCase('en-US'); }
+
+function safeGeneratedProse(value: string): boolean {
+  return !/(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|role\s*:/i.test(value);
+}
 
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
@@ -23,11 +28,13 @@ function containsBounded(haystack: string, needle: string): boolean {
 
 function materialAnchors(statement: string): readonly string[] {
   const patterns = [
+    /\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z)?\b/gu,
     /(?:[$€£]\s*)?\b\d[\d,.]*(?:\s*%)?/gu,
     /\b[A-Z]{3}\b/gu,
-    /["“”']([^"“”']{3,120})["“”']/gu,
+    /["“]([^"“”]{3,120})["”]/gu,
     /\b(?:liability|indemnity|termination|renewal|governing law|data processing|service level|discount|competitor)\b/giu,
-    /\b(?:competitor|stakeholder|buyer|approver)\s+(?:is\s+)?([A-Z][\p{L}\p{N}.-]*(?:\s+[A-Z][\p{L}\p{N}.-]*){0,3})/gu
+    /\b(?:competitor|stakeholder|buyer|approver)\s+(?:is\s+)?([A-Z][\p{L}\p{N}.-]*(?:\s+[A-Z][\p{L}\p{N}.-]*){0,3})/gu,
+    /\b([A-Z][\p{L}\p{N}.-]+(?:\s+[A-Z][\p{L}\p{N}.-]+){1,3})\b/gu
   ];
   const anchors = new Set<string>();
   for (const pattern of patterns) {
@@ -37,6 +44,56 @@ function materialAnchors(statement: string): readonly string[] {
     }
   }
   return [...anchors];
+}
+
+const SUPPORT_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'before', 'by', 'for', 'from', 'has', 'have', 'in', 'is', 'it',
+  'of', 'on', 'or', 'that', 'the', 'their', 'this', 'to', 'was', 'were', 'will', 'with'
+]);
+
+function stem(value: string): string {
+  if (value.length > 5 && value.endsWith('ing')) return value.slice(0, -3);
+  if (value.length > 4 && value.endsWith('ied')) return `${value.slice(0, -3)}y`;
+  if (value.length > 4 && value.endsWith('ed')) return value.slice(0, -2);
+  if (value.length > 4 && value.endsWith('es')) return value.slice(0, -2);
+  if (value.length > 3 && value.endsWith('s')) return value.slice(0, -1);
+  return value;
+}
+
+function supportTerms(value: string): ReadonlySet<string> {
+  return new Set(normalize(value).match(/[\p{L}\p{N}]+/gu)?.filter((term) => term.length > 2 && !SUPPORT_STOP_WORDS.has(term)).map(stem) ?? []);
+}
+
+const MATERIAL_PREDICATES = [
+  { assertion: /\beconomic buyer\b/i, evidence: /\b(?:economic buyer|controls? (?:the )?budget|final (?:purchasing )?decision)\b/i },
+  { assertion: /\bhigh influence\b/i, evidence: /\b(?:high influence|controls? (?:the )?budget|final (?:purchasing )?decision)\b/i },
+  { assertion: /\bpositive relationship\b/i, evidence: /\b(?:positive relationship|supportive|advocates?|champion)\b/i },
+  { assertion: /\blegal review\b/i, evidence: /\b(?:legal review|legal approval)\b/i },
+  { assertion: /\brequired\b/i, evidence: /\b(?:required|must)\b/i },
+  { assertion: /\bapproved\b/i, evidence: /\b(?:approved|authorized)\b/i },
+  { assertion: /\baccepted\b/i, evidence: /\b(?:accepted|agreed)\b/i },
+  { assertion: /\brejected\b/i, evidence: /\b(?:rejected|declined)\b/i },
+  { assertion: /\bunlimited\b/i, evidence: /\bunlimited\b/i },
+  { assertion: /\bcapped\b/i, evidence: /\b(?:capped|limited)\b/i }
+] as const;
+
+/** Conservative, deterministic atom matching: no model judge and no whole-sentence copy requirement. */
+function textAtomsSupported(assertion: string, support: string): boolean {
+  if (!safeGeneratedProse(assertion)) return false;
+  const normalizedSupport = normalize(support);
+  const anchors = materialAnchors(assertion);
+  if (anchors.some((anchor) => !containsBounded(normalizedSupport, anchor))) return false;
+  const matchedPredicates = MATERIAL_PREDICATES.filter((predicate) => predicate.assertion.test(assertion));
+  if (matchedPredicates.some((predicate) => !predicate.evidence.test(support))) return false;
+  const lexicalAssertion = MATERIAL_PREDICATES.reduce((value, predicate) => value.replace(predicate.assertion, ' '), assertion);
+  const assertionTerms = supportTerms(lexicalAssertion);
+  if (assertionTerms.size === 0) return anchors.length > 0 && matchedPredicates.length > 0;
+  const evidenceTerms = supportTerms(support);
+  const overlap = [...assertionTerms].filter((term) => evidenceTerms.has(term)).length;
+  const minimumOverlap = assertionTerms.size === 1 && anchors.length > 0 && matchedPredicates.length > 0
+    ? 1
+    : Math.max(2, Math.ceil(assertionTerms.size * 0.45));
+  return overlap >= minimumOverlap;
 }
 
 function explicitlyNegates(content: string, anchor: string): boolean {
@@ -78,17 +135,18 @@ function findEvidence(claim: Claim, evidenceById: ReadonlyMap<string, AgentEvide
 
 /** Deterministically validates material anchors against the exact prompt-visible evidence. */
 export function assessClaimSupport(claim: Claim, evidenceById: ReadonlyMap<string, AgentEvidenceRecord>): ClaimSupportAssessment {
+  if (!safeGeneratedProse(claim.statement)) return { claimId: claim.id, support: 'insufficient', reason: 'Claim contains unsafe instruction-like prose.' };
   const citedEvidence = findEvidence(claim, evidenceById);
   if (citedEvidence.length === 0) return { claimId: claim.id, support: 'insufficient', reason: 'Claim has no authorized citations.' };
   const anchors = materialAnchors(claim.statement);
   const combined = normalize(citedEvidence.map((record) => record.content).join('\n'));
-  const missing = anchors.filter((anchor) => !containsBounded(combined, anchor));
-  if (missing.length > 0) return { claimId: claim.id, support: 'insufficient', reason: `Material anchors are absent: ${missing.join(', ')}` };
   if (hasPredicateContradiction(claim.statement, combined)
     || anchors.some((anchor) => citedEvidence.some((record) => explicitlyNegates(record.content, anchor)))) {
     return { claimId: claim.id, support: 'contradicted', reason: 'Cited evidence explicitly negates a material anchor.' };
   }
-  if (!combined.includes(normalize(claim.statement))) return { claimId: claim.id, support: 'insufficient', reason: 'The complete assertion is absent from cited evidence.' };
+  const missing = anchors.filter((anchor) => !containsBounded(combined, anchor));
+  if (missing.length > 0) return { claimId: claim.id, support: 'insufficient', reason: `Material anchors are absent: ${missing.join(', ')}` };
+  if (!textAtomsSupported(claim.statement, combined)) return { claimId: claim.id, support: 'insufficient', reason: 'The cited evidence does not support enough material assertion atoms.' };
   return { claimId: claim.id, support: 'supported', reason: 'All material anchors occur in authorized cited evidence.' };
 }
 
@@ -106,7 +164,10 @@ function pruneClaims(claims: readonly Claim[], evidenceById: ReadonlyMap<string,
   for (const claim of claims) {
     const assessment = assessClaimSupport(claim, evidenceById);
     if (assessment.support === 'contradicted') throw new DomainValidationError('Contradicted claim in generated artifact', { claimId: claim.id });
-    if (assessment.support === 'supported') kept.push(claim);
+    if (assessment.support === 'supported') kept.push({
+      ...claim,
+      citations: claim.citations.map((citation) => ({ id: citation.id, evidenceId: citation.evidenceId, locator: citation.locator }))
+    });
     else insufficient.push(claim);
   }
   return { kept, insufficient };
@@ -126,13 +187,12 @@ function evidenceMap(evidence: readonly AgentEvidenceRecord[]): ReadonlyMap<stri
 }
 
 function assertionSupported(assertion: string, claims: readonly Claim[]): boolean {
-  const normalized = normalize(assertion);
-  return normalized.length > 0 && claims.some((claim) => normalize(claim.statement).includes(normalized));
+  return claims.some((claim) => textAtomsSupported(assertion, claim.statement));
 }
 
 function fieldSupported(value: string | number, claims: readonly Claim[]): boolean {
   const normalized = normalize(String(value));
-  return claims.some((claim) => containsBounded(normalize(claim.statement), normalized));
+  return safeGeneratedProse(String(value)) && claims.some((claim) => containsBounded(normalize(claim.statement), normalized));
 }
 
 function tupleSupported(values: readonly (string | number)[], claims: readonly Claim[]): boolean {
@@ -140,7 +200,7 @@ function tupleSupported(values: readonly (string | number)[], claims: readonly C
 }
 
 function isExplicitUncertainty(value: string): boolean {
-  return /\b(?:insufficient|unknown|unverified|not (?:available|known|verified)|requires? (?:review|verification)|hypothesis)\b/i.test(value);
+  return /\b(?:insufficient|unknown|unverified|no verified|not (?:available|known|verified)|requires? (?:review|verification)|hypothesis)\b/i.test(value);
 }
 
 function withoutInsufficient<Value extends Readonly<{ insufficient: readonly Claim[] }>>(value: Value): Omit<Value, 'insufficient'> {
@@ -165,11 +225,10 @@ export function validateConversationArtifact(value: unknown, manifestId: string,
     objections: parsed.objections.filter((assertion) => assertionSupported(assertion, result.kept)),
     claims: result.kept,
     missingContext: [
-      ...parsed.missingContext,
-      ...result.insufficient.map((claim) => `Verify before use: ${claim.statement}`),
-      ...unsupportedAssertions.map((assertion) => `Verify before use: ${assertion}`)
+      ...result.insufficient.map((claim) => `Verify evidence for claim ${claim.id}.`),
+      ...(unsupportedAssertions.length === 0 ? [] : ['Verify unsupported conversation details.'])
     ],
-    reviewWarnings: warning === undefined ? parsed.reviewWarnings : [...parsed.reviewWarnings, warning]
+    reviewWarnings: warning === undefined ? [] : [warning]
   });
 }
 
@@ -185,7 +244,8 @@ export function validateStakeholderArtifact(value: unknown, manifestId: string, 
   });
   const supportedStakeholders = stakeholders.flatMap((stakeholder) => {
     const role = stakeholder.role.replaceAll('_', ' ');
-    const identity = [stakeholder.name, stakeholder.influence, stakeholder.relationship,
+    const identity = [stakeholder.name, stakeholder.influence,
+      ...(stakeholder.relationship === 'unknown' ? [] : [stakeholder.relationship]),
       ...(stakeholder.role === 'unknown' ? [] : [role]),
       ...(stakeholder.title === undefined ? [] : [stakeholder.title]),
       ...(stakeholder.organization === undefined ? [] : [stakeholder.organization])];
@@ -205,11 +265,10 @@ export function validateStakeholderArtifact(value: unknown, manifestId: string, 
     claims: top.kept,
     stakeholders: supportedStakeholders.map(withoutInsufficient),
     coverageGaps: [
-      ...parsed.coverageGaps,
-      ...insufficient.map((claim) => `Verify before use: ${claim.statement}`),
-      ...unsupportedStakeholders.map((stakeholder) => `Verify before use: stakeholder ${stakeholder.name} (${stakeholder.role})`)
+      ...insufficient.map((claim) => `Verify evidence for claim ${claim.id}.`),
+      ...(unsupportedStakeholders.length === 0 ? [] : ['Verify unsupported stakeholder records.'])
     ],
-    reviewWarnings: warning === undefined ? parsed.reviewWarnings : [...parsed.reviewWarnings, warning]
+    reviewWarnings: warning === undefined ? [] : [warning]
   });
 }
 
@@ -233,7 +292,7 @@ export function validateCommercialArtifact(value: unknown, manifestId: string, e
     claims: top.kept,
     commercialTerms: supportedTerms.map(withoutInsufficient),
     policyTriggers: parsed.policyTriggers.filter((trigger) => assertionSupported(trigger, allSupportedClaims)),
-    reviewWarnings: warning === undefined ? parsed.reviewWarnings : [...parsed.reviewWarnings, warning]
+    reviewWarnings: warning === undefined ? [] : [warning]
   });
 }
 
@@ -273,7 +332,8 @@ export function validateDealBrief(value: unknown, evidence: readonly AgentEviden
   const supportedStakeholders = parsed.stakeholderMap.stakeholders.flatMap((stakeholder) => {
     const claims = process(stakeholder.claims) ?? [];
     const role = stakeholder.role.replaceAll('_', ' ');
-    const identity = [stakeholder.name, stakeholder.influence, stakeholder.relationship,
+    const identity = [stakeholder.name, stakeholder.influence,
+      ...(stakeholder.relationship === 'unknown' ? [] : [stakeholder.relationship]),
       ...(stakeholder.role === 'unknown' ? [] : [role]),
       ...(stakeholder.title === undefined ? [] : [stakeholder.title]),
       ...(stakeholder.organization === undefined ? [] : [stakeholder.organization])];
@@ -344,7 +404,7 @@ export function validateDealBrief(value: unknown, evidence: readonly AgentEviden
     },
     stakeholderMap: {
       stakeholders: supportedStakeholders,
-      ...(parsed.stakeholderMap.coverageGaps === undefined ? {} : { coverageGaps: parsed.stakeholderMap.coverageGaps }),
+      ...(supportedStakeholders.length === parsed.stakeholderMap.stakeholders.length ? {} : { coverageGaps: ['Verify unsupported stakeholder records.'] }),
       ...(stakeholderSectionClaims.length === 0 ? {} : { claims: stakeholderSectionClaims })
     },
     negotiationState: {
@@ -359,17 +419,23 @@ export function validateDealBrief(value: unknown, evidence: readonly AgentEviden
     },
     recommendedNextActions: { actions },
     missingInformation: {
-      items: [...parsed.missingInformation.items, ...[...insufficient.map((claim) => claim.statement), ...nakedAssertions].map((statement) => ({
-        question: `Verify before use: ${statement}`,
+      items: [
+        ...insufficient.map((claim) => ({
+          question: `Verify evidence for claim ${claim.id}.`,
+          whyItMatters: 'The generated claim did not satisfy deterministic evidence support checks.'
+        })),
+        ...(nakedAssertions.length === 0 ? [] : [{
+          question: 'Verify unsupported generated assertions before use.',
         whyItMatters: 'The generated assertion lacks support in the authorized evidence manifest.'
-      }))]
+        }])
+      ]
     },
     sourceEvidence: {
       evidence: supportedEvidenceSummaries
     },
     confidenceAndReviewWarnings: {
       ...parsed.confidenceAndReviewWarnings,
-      warnings: warning === undefined ? parsed.confidenceAndReviewWarnings.warnings : [...parsed.confidenceAndReviewWarnings.warnings, warning]
+      warnings: warning === undefined ? [] : [warning]
     }
   });
 }
@@ -386,6 +452,14 @@ export function assertAgentContextBindings(context: AgentContext): void {
   }
   if (context.generation.durableAttempt.runScope !== context.runId) throw new DomainValidationError('Durable model-attempt scope does not match the agent run');
   if (context.manifest.runId !== context.runId) throw new DomainValidationError('Evidence manifest run binding does not match');
+  const expectedBinding = createEvidenceScopeBinding({ accountId: context.account.id, opportunityId: context.opportunity.id }, context.currentScope);
+  const expectedScopeHash = hashEvidenceScopeBinding(expectedBinding);
+  if (context.manifest.binding.target.accountId !== context.account.id
+    || context.manifest.binding.target.opportunityId !== context.opportunity.id
+    || JSON.stringify(context.manifest.binding) !== JSON.stringify(expectedBinding)
+    || context.manifest.scopeHash !== expectedScopeHash) {
+    throw new DomainValidationError('Evidence manifest target or current authorization scope does not match');
+  }
   const evidenceIds = new Set<string>();
   const citationIds = new Set<string>();
   const manifestEntries = new Map(context.manifestEntries.map((entry) => [entry.evidenceId, entry]));
@@ -399,7 +473,9 @@ export function assertAgentContextBindings(context: AgentContext): void {
     evidenceIds.add(record.evidenceId);
     citationIds.add(record.citationId);
     const entry = manifestEntries.get(record.evidenceId);
-    if (entry === undefined || entry.manifestId !== context.manifest.id || entry.citationId !== record.citationId || entry.contentHash !== record.contentHash
+    if (entry === undefined || entry.manifestId !== context.manifest.id || entry.accountId !== context.account.id
+      || entry.opportunityId !== context.opportunity.id || entry.scopeHash !== context.manifest.scopeHash
+      || entry.citationId !== record.citationId || entry.contentHash !== record.contentHash
       || entry.sourceLocator !== record.sourceLocator || entry.sourceType !== record.sourceType
       || entry.sensitivity !== record.sensitivity || entry.policyHash !== record.policyHash || entry.eventDate !== record.eventDate) {
       throw new DomainValidationError('Evidence record does not match its immutable manifest entry');

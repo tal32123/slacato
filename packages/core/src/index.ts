@@ -8,6 +8,7 @@ export * from './application/context/context-window-policy.js';
 export * from './application/evidence/fixture-schemas.js';
 export * from './application/evidence/chunk.js';
 export * from './application/evidence/contracts.js';
+export * from './application/evidence/scope-binding.js';
 export * from './application/evidence/rrf.js';
 export * from './application/evidence/retriever.js';
 export * from './application/evidence/citations.js';
