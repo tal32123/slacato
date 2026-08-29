@@ -37,6 +37,7 @@ export type EvidenceScope = Readonly<{
   personaId: string;
   opportunityId: string;
   accountId: string;
+  restrictedOpportunity: boolean;
 }>;
 
 export interface DealQueryRepository {

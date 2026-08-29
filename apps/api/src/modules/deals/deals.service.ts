@@ -60,7 +60,8 @@ export class DealsService {
     const scope: EvidenceScope = {
       personaId: session.persona.userId,
       opportunityId: target.opportunity_id,
-      accountId: target.account_id
+      accountId: target.account_id,
+      restrictedOpportunity: target.restricted
     };
 
     const [latestRun, opportunityRows, stakeholderRows, supplementalRows] = await Promise.all([

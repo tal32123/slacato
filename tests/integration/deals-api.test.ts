@@ -45,6 +45,9 @@ describe('authorized deal API projection', () => {
       (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
       values
       ('grant:USR-91201:ACC-2001:gong_summary', 'USR-91201', 'ACC-2001', 'gong_summary', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
+      ('stale:USR-91201:ACC-2001:salesforce', 'USR-91201', 'ACC-2001', 'salesforce', true, true, false, false, false, null),
+      ('stale:USR-91201:ACC-2001:slack', 'USR-91201', 'ACC-2001', 'slack', true, true, false, false, false, ${'0'.repeat(40)}),
+      ('stale:USR-91201:ACC-2001:pricing', 'USR-91201', 'ACC-2001', 'pricing', true, true, false, false, true, ${'0'.repeat(40)}),
       ('grant:USR-91202:ACC-2003:salesforce', 'USR-91202', 'ACC-2003', 'salesforce', true, true, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
       ('grant:USR-91202:ACC-2003:slack', 'USR-91202', 'ACC-2003', 'slack', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
       ('grant:USR-91203:ACC-2001:salesforce', 'USR-91203', 'ACC-2001', 'salesforce', true, true, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
@@ -153,13 +156,32 @@ describe('authorized deal API projection', () => {
       opportunityId: 'OPP-1001', stage: 'Stage unavailable', owner: null,
       closeDate: null, amount: null, probability: null, riskLevel: 'unknown'
     })]);
+    const staleWorkspace = await gongOnly.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
+    expect(staleWorkspace.body.evidence.every((item: { sourceType: string }) => item.sourceType === 'gong_summary')).toBe(true);
+    expect(JSON.stringify(staleWorkspace.body)).not.toMatch(/account_team_updates|pricing_notes|salesforce\/opportunities/);
 
+    await seedDatabase`insert into document_versions
+      (id, external_id, version, source_type, content_hash, content)
+      values ('task12-doc-standard-slack-restricted-deal', 'task12-doc-standard-slack-restricted-deal', 1, 'slack',
+        'task12-doc-standard-slack-restricted-deal', 'standard Slack on restricted deal')
+      on conflict do nothing`;
+    await seedDatabase`insert into evidence_versions
+      (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content,
+        source_locator, reliability_class, classification_reason, policy_hash)
+      values ('task12:standard-slack-restricted-deal:0', 'task12-doc-standard-slack-restricted-deal', 'ACC-2003', 'OPP-1003', 0,
+        'slack', 'standard', 'task12-standard-slack-restricted-deal',
+        'updateId: SLK-TASK12-STANDARD-RESTRICTED-DEAL\nupdateText: PRIVATE STANDARD SLACK ON RESTRICTED DEAL',
+        'slack/account_team_updates.tsv#SLK-TASK12-STANDARD-RESTRICTED-DEAL#chunk-0', 'direct_conversation',
+        'task12_test', ${'c'.repeat(64)})
+      on conflict do nothing`;
     const mixed = await authenticate(app, 'USR-91202');
     const workspace = await mixed.get('/api/deals/OPP-1003').set(browserHeaders).expect(200);
     expect(workspace.body.evidence).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceType: 'slack' })
     ]));
     expect(JSON.stringify(workspace.body)).not.toContain('account_team_updates.tsv');
+    expect(JSON.stringify(workspace.body)).not.toContain('PRIVATE STANDARD SLACK ON RESTRICTED DEAL');
+    expect(JSON.stringify(workspace.body)).not.toContain('SLK-TASK12-STANDARD-RESTRICTED-DEAL');
   });
 
   it('authorizes restricted evidence against the matching source grant and requires real provenance', async () => {

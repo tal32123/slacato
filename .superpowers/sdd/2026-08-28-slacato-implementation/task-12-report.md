@@ -246,3 +246,18 @@ Final Chromium inspection after the fixes confirmed:
 - 640×320 modal: the Sheet was 440×320, independently scrollable with `overflow-y: auto`, body scroll was locked, and the inert shell covered header, main, and mobile navigation; document width remained 640.
 - Real database-backed empty list: no hidden deal identity appeared and `Review persona access` targeted the active persona control.
 - Real database-backed empty workspace: all nine headings remained, no citation controls rendered, and explicit stakeholder/action empty states were visible.
+
+## Authorization review fix round 2
+
+Two further production-boundary authorization regressions were added and closed:
+
+- Restricted opportunities now carry their restricted state into the evidence query. Every selected evidence row requires its own matching source grant to have `can_read_restricted`, even when that row's sensitivity is `standard`; opening authority from restricted Salesforce cannot unlock ordinary Slack.
+- Both Salesforce list projection and workspace evidence `permission_grants` predicates require `source_commit = CANONICAL_FIXTURE_COMMIT`, reusing the same active provenance boundary as `PostgresCanonicalPersonaDirectory`. Null- or differently-stamped stale Salesforce, Slack, and pricing grants cannot authorize fields, locators, content, or derived facts.
+
+The integration fixture proves both boundaries with a restricted OPP-1003 standard Slack row and with permissive stale grants coexisting beside a Gong-only canonical session. Final round-2 verification:
+
+```text
+Focused API/unit: 3 files, 12 tests passed
+Task 12 + no-leak Chromium: 9 tests passed serially
+Typecheck: passed with no diagnostics
+```

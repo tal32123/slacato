@@ -1,3 +1,4 @@
+import { CANONICAL_FIXTURE_COMMIT } from '@slacato/core';
 import type { DatabaseClient } from '@slacato/infrastructure';
 import type {
   AuthorizedDealRow,
@@ -33,6 +34,7 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
             select 1 from permission_grants source_grant
             where source_grant.persona_id = ${personaId}
               and source_grant.account_id = opportunity.account_id
+              and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
               and source_grant.source_type = 'salesforce'
               and source_grant.can_read = true
               and (evidence.sensitivity <> 'restricted' or source_grant.can_read_restricted = true)
@@ -95,6 +97,8 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
             and source_grant.account_id = evidence.account_id
             and source_grant.source_type = evidence.source_type
             and source_grant.can_read = true
+            and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+            and (${scope.restrictedOpportunity} = false or source_grant.can_read_restricted = true)
             and (
               evidence.sensitivity <> 'restricted'
               or (evidence.source_type = 'pricing' and source_grant.sensitive_pricing = true)
