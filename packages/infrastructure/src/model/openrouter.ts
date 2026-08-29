@@ -112,7 +112,6 @@ class OpenRouterTransport implements ModelTransport {
             if (!NoOutputGeneratedError.isInstance(error)) throw error;
             return {
               text: result.text,
-              output: undefined,
               usage: result.usage,
               warnings: (result.warnings ?? []).map(warningText)
             };
@@ -121,9 +120,8 @@ class OpenRouterTransport implements ModelTransport {
           if (!NoObjectGeneratedError.isInstance(error)) throw error;
           return {
             text: error.text ?? '',
-            output: undefined,
-            usage: error.usage,
-            requestId: error.response?.id,
+            ...(error.usage === undefined ? {} : { usage: error.usage }),
+            ...(error.response?.id === undefined ? {} : { requestId: error.response.id }),
             warnings: []
           };
         }
