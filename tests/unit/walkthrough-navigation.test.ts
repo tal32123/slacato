@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { primaryDestinations } from '../../apps/web/src/components/mobile-nav';
 
-describe('walkthrough navigation', () => {
-  it('keeps the assignment walkthrough available from primary navigation', () => {
-    expect(primaryDestinations).toContainEqual(expect.objectContaining({ label: 'Walkthrough', to: '/walkthrough' }));
+describe('primary navigation', () => {
+  it('keeps only the four protected workspace destinations', () => {
+    expect(primaryDestinations.map(({ label, to }) => ({ label, to }))).toEqual([
+      { label: 'Deals', to: '/deals' },
+      { label: 'Runs', to: '/runs' },
+      { label: 'Approvals', to: '/approvals' },
+      { label: 'Settings', to: '/settings' }
+    ]);
+    expect(primaryDestinations).not.toContainEqual(expect.objectContaining({ to: '/walkthrough' }));
   });
 });

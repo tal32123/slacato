@@ -20,6 +20,6 @@ export class StakeholderAgent {
       schema: agentArtifactSchema, allowedSourceTypes: SOURCES,
       validate: (value, evidence) => validateStakeholderArtifact(value, context.manifest.id, evidence)
     });
-    return agentArtifactSchema.parse(validateStakeholderArtifact(result.value, context.manifest.id, result.evidence));
+    return agentArtifactSchema.parse(result.value);
   }
 }

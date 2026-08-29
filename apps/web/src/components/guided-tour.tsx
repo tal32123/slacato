@@ -12,13 +12,16 @@ type TourStep = Readonly<{
   route?: string;
   title: string;
   body: string;
+  requiresInteraction?: boolean;
 }>;
 
 const tourSteps: readonly TourStep[] = [
   {
-    target: 'persona',
-    title: 'Choose the active persona',
-    body: 'Permissions shape every result. This menu shows who you are acting as and lets you switch roles deliberately.'
+    target: 'login-personas',
+    route: '/login',
+    title: 'Choose a demo persona',
+    body: 'Select a persona to see how server-authorized permissions shape every result. Your choice continues the tour in the Deals workspace.',
+    requiresInteraction: true
   },
   {
     target: 'nav-deals',
@@ -86,18 +89,21 @@ export function GuidedTour(): React.JSX.Element {
     window.requestAnimationFrame(() => launcherRef.current?.focus());
   }, [stepIndex]);
 
-  const open = (): void => {
+  const open = useCallback((): void => {
+    setStepIndex(0);
     setActive(true);
-    persistTourState({ active: true, stepIndex });
-  };
+    persistTourState({ active: true, stepIndex: 0 });
+    void navigate('/login');
+  }, [navigate]);
 
-  const move = (nextIndex: number): void => {
+  const move = useCallback((nextIndex: number): void => {
+    if (step.requiresInteraction === true && nextIndex > stepIndex) return;
     const bounded = Math.max(0, Math.min(tourSteps.length - 1, nextIndex));
     const nextStep = tourSteps[bounded]!;
     setStepIndex(bounded);
     persistTourState({ active: true, stepIndex: bounded });
-    if (nextStep.route !== undefined && location.pathname !== nextStep.route) navigate(nextStep.route);
-  };
+    if (nextStep.route !== undefined && location.pathname !== nextStep.route) void navigate(nextStep.route);
+  }, [location.pathname, navigate, step.requiresInteraction, stepIndex]);
 
   const finish = (): void => {
     setStepIndex(0);
@@ -109,7 +115,7 @@ export function GuidedTour(): React.JSX.Element {
     if (!active) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') close();
-      if (event.key === 'Tab') {
+      if (event.key === 'Tab' && step.requiresInteraction !== true) {
         const controls = [...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])') ?? [])];
         const first = controls[0];
         const last = controls.at(-1);
@@ -121,22 +127,23 @@ export function GuidedTour(): React.JSX.Element {
           last.focus();
         }
       }
-      if (event.key === 'ArrowRight' && !event.metaKey && !event.ctrlKey) move(Math.min(stepIndex + 1, tourSteps.length - 1));
+      if (event.key === 'ArrowRight' && step.requiresInteraction !== true && !event.metaKey && !event.ctrlKey) move(Math.min(stepIndex + 1, tourSteps.length - 1));
       if (event.key === 'ArrowLeft' && stepIndex > 0 && !event.metaKey && !event.ctrlKey) move(stepIndex - 1);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [active, close, stepIndex]);
+  }, [active, close, move, step.requiresInteraction, stepIndex]);
 
   useEffect(() => {
     const start = (): void => open();
     window.addEventListener('slacato:start-guided-tour', start);
     return () => window.removeEventListener('slacato:start-guided-tour', start);
-  });
+  }, [open]);
 
   useLayoutEffect(() => {
     if (!active) return;
     let missingTimer: number | undefined;
+    let targetFocusPlaced = false;
     const updateTarget = (): void => {
       if (missingTimer !== undefined) {
         window.clearTimeout(missingTimer);
@@ -157,6 +164,13 @@ export function GuidedTour(): React.JSX.Element {
       }
       if (target.getAttribute('data-tour-active') !== 'true') target.setAttribute('data-tour-active', 'true');
       target.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      if (step.requiresInteraction === true && !targetFocusPlaced) {
+        const interactive = target.matches('button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])')
+          ? target
+          : target.querySelector<HTMLElement>('button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])');
+        interactive?.focus();
+        targetFocusPlaced = interactive !== null;
+      }
       const rect = target.getBoundingClientRect();
       setTargetBox({
         top: Math.max(4, rect.top - TARGET_PADDING),
@@ -180,11 +194,11 @@ export function GuidedTour(): React.JSX.Element {
       window.removeEventListener('scroll', updateTarget, true);
       document.querySelectorAll('[data-tour-active="true"]').forEach((element) => element.removeAttribute('data-tour-active'));
     };
-  }, [active, location.pathname, step.target]);
+  }, [active, location.pathname, step.requiresInteraction, step.target]);
 
   useEffect(() => {
-    if (active) nextRef.current?.focus();
-  }, [active, location.pathname, stepIndex]);
+    if (active && step.requiresInteraction !== true) nextRef.current?.focus();
+  }, [active, location.pathname, step.requiresInteraction, stepIndex]);
 
   return (
     <>
@@ -194,26 +208,27 @@ export function GuidedTour(): React.JSX.Element {
         variant="secondary"
         className="fixed bottom-20 right-4 z-40 min-h-11 gap-2 rounded-full border border-primary/30 bg-card px-4 shadow-lg lg:bottom-5"
         onClick={open}
-        aria-label={stepIndex > 0 ? 'Resume guided tour' : 'Start guided tour'}
+        aria-label="Start guided tour"
         data-tour="tour-launcher"
       >
         <Compass aria-hidden="true" />
-        <span className="hidden sm:inline">{stepIndex > 0 ? 'Resume tour' : 'Guided tour'}</span>
+        <span className="hidden sm:inline">Guided tour</span>
       </Button>
 
       {active && (
-        <div className="fixed inset-0 z-[70]" aria-live="polite">
+        <div className="pointer-events-none fixed inset-0 z-[70]" aria-live="polite">
           {targetBox === undefined ? (
-            <div className="absolute inset-0 bg-brand-forest/75 backdrop-blur-[1px]" />
+            <div className="pointer-events-auto absolute inset-0 bg-brand-forest/75 backdrop-blur-[1px]" />
           ) : (
             <Spotlight box={targetBox} />
           )}
           <div
             ref={dialogRef}
             role="dialog"
-            aria-modal="true"
+            aria-modal={step.requiresInteraction === true ? undefined : true}
             aria-labelledby="guided-tour-title"
-            className="fixed bottom-4 left-1/2 z-[72] w-[min(92vw,25rem)] -translate-x-1/2 rounded-2xl border border-primary/25 bg-card p-5 text-card-foreground shadow-2xl sm:p-6"
+            aria-describedby="guided-tour-description"
+            className={`pointer-events-auto fixed left-1/2 z-[72] w-[min(92vw,25rem)] -translate-x-1/2 rounded-2xl border border-primary/25 bg-card p-5 text-card-foreground shadow-2xl sm:p-6 ${step.requiresInteraction === true ? 'top-4' : 'bottom-4'}`}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -223,18 +238,28 @@ export function GuidedTour(): React.JSX.Element {
               <Button type="button" size="icon" variant="ghost" aria-label="Close guided tour" onClick={close}><X aria-hidden="true" /></Button>
             </div>
             <Progress className="mt-4 h-1.5" value={((stepIndex + 1) / tourSteps.length) * 100} aria-label={`Tour step ${stepIndex + 1} of ${tourSteps.length}`} />
-            <p className="mt-4 text-sm leading-6 text-muted-foreground">{step.body}</p>
-            {targetMissing && <p role="status" className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground">This item is not available in the current view. You can continue safely.</p>}
+            <p id="guided-tour-description" className="mt-4 text-sm leading-6 text-muted-foreground">{step.body}</p>
+            {targetMissing && (
+              <p role="status" className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground">
+                {step.requiresInteraction === true
+                  ? 'The persona choices are not available yet. Wait for them to finish loading.'
+                  : 'This item is not available in the current view. You can continue safely.'}
+              </p>
+            )}
             <div className="mt-5 flex items-center justify-between gap-3">
               <Button type="button" variant="ghost" onClick={close}>Skip tour</Button>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" disabled={stepIndex === 0} onClick={() => move(stepIndex - 1)}><ArrowLeft aria-hidden="true" />Back</Button>
-                {stepIndex === tourSteps.length - 1 ? (
-                  <Button ref={nextRef} type="button" onClick={finish}>Finish</Button>
-                ) : (
-                  <Button ref={nextRef} type="button" onClick={() => move(stepIndex + 1)}>Next<ArrowRight aria-hidden="true" /></Button>
-                )}
-              </div>
+              {step.requiresInteraction === true ? (
+                <p className="text-right text-sm font-medium text-primary">Select a persona to continue</p>
+              ) : (
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" disabled={stepIndex === 0} onClick={() => move(stepIndex - 1)}><ArrowLeft aria-hidden="true" />Back</Button>
+                  {stepIndex === tourSteps.length - 1 ? (
+                    <Button ref={nextRef} type="button" onClick={finish}>Finish</Button>
+                  ) : (
+                    <Button ref={nextRef} type="button" onClick={() => move(stepIndex + 1)}>Next<ArrowRight aria-hidden="true" /></Button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -244,7 +269,7 @@ export function GuidedTour(): React.JSX.Element {
 }
 
 function Spotlight({ box }: Readonly<{ box: TargetBox }>): React.JSX.Element {
-  const shadow = 'bg-brand-forest/75 backdrop-blur-[1px]';
+  const shadow = 'pointer-events-auto bg-brand-forest/75 backdrop-blur-[1px]';
   return (
     <>
       <div className={`fixed left-0 right-0 top-0 ${shadow}`} style={{ height: box.top }} />
@@ -254,6 +279,13 @@ function Spotlight({ box }: Readonly<{ box: TargetBox }>): React.JSX.Element {
       <div className="pointer-events-none fixed z-[71] rounded-xl ring-4 ring-primary ring-offset-4 ring-offset-background/80 shadow-[0_0_0_9999px_transparent]" style={box} />
     </>
   );
+}
+
+export function advanceGuidedTourFromLogin(): boolean {
+  const state = readTourState();
+  if (!state.active || state.stepIndex !== 0) return false;
+  persistTourState({ active: true, stepIndex: 1 });
+  return true;
 }
 
 function readTourState(): PersistedTour {

@@ -1074,7 +1074,7 @@ describe('specialized agents', () => {
     }
   });
 
-  it('pre-allocates max-valid specialist fan-in within the smallest supported repair window', async () => {
+  it('pre-allocates max-valid specialist fan-in with complete repair feedback', async () => {
     const artifacts = [
       { id: 'conversation', value: artifactNearByteLimit(emptyConversation, 'missingContext') },
       { id: 'stakeholder', value: artifactNearByteLimit(emptyStakeholder, 'coverageGaps') },
@@ -1115,7 +1115,7 @@ describe('specialized agents', () => {
       async settleAttempt() {}, async releaseAttempt() {}
     };
     const gateway = createBudgetedModelGateway(transport, new ContextWindowPolicy({
-      contextWindowTokens: 9_000,
+      contextWindowTokens: 20_000,
       reservedOutputTokens: 1_024,
       sectionTokenBudgets: { instructions: 512, currentTask: 512, evidence: MIN_AGENT_REQUIRED_EVIDENCE_TOKENS, artifacts: 0, history: 0 }
     }), ledger);

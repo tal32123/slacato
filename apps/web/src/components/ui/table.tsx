@@ -2,15 +2,90 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+const MIN_COLUMN_WIDTH = 80
+const COLUMN_RESIZE_STEP = 16
+
+type ColumnResizeSession = {
+  cell: HTMLTableCellElement
+  table: HTMLTableElement
+  pointerId: number
+  startX: number
+  startWidth: number
+  minimumWidth: number
+  startTableWidth: number
+}
+
+function prepareColumnResize(cell: HTMLTableCellElement) {
+  const table = cell.closest("table")
+  const row = cell.parentElement
+
+  if (!table || !(row instanceof HTMLTableRowElement)) {
+    return null
+  }
+
+  const cells = Array.from(row.cells)
+  const widths = cells.map(
+    (headerCell) => headerCell.getBoundingClientRect().width
+  )
+  const cssMinimumWidth = Number.parseFloat(
+    window.getComputedStyle(cell).minWidth
+  )
+  const minimumWidth = Number.isFinite(cssMinimumWidth)
+    ? Math.max(MIN_COLUMN_WIDTH, cssMinimumWidth)
+    : MIN_COLUMN_WIDTH
+
+  cells.forEach((headerCell, index) => {
+    headerCell.style.width = `${widths[index]}px`
+  })
+
+  return {
+    table,
+    startWidth: widths[cell.cellIndex] ?? cell.getBoundingClientRect().width,
+    minimumWidth,
+    startTableWidth: table.getBoundingClientRect().width,
+  }
+}
+
+function setColumnWidth(
+  session: Pick<
+    ColumnResizeSession,
+    "cell" | "table" | "startWidth" | "startTableWidth" | "minimumWidth"
+  >,
+  requestedWidth: number
+) {
+  const width = Math.max(session.minimumWidth, Math.round(requestedWidth))
+  const tableWidth = Math.round(
+    session.startTableWidth + width - session.startWidth
+  )
+
+  session.cell.style.width = `${width}px`
+  session.table.style.width = `${tableWidth}px`
+}
+
+function getResizeHandleLabel(
+  children: React.ReactNode,
+  headerLabel: React.AriaAttributes["aria-label"]
+) {
+  const columnName =
+    typeof children === "string" || typeof children === "number"
+      ? String(children).trim()
+      : headerLabel
+
+  return columnName ? `Resize ${columnName} column` : "Resize column"
+}
+
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className="relative min-w-0 w-full overflow-x-auto"
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn(
+          "w-full table-fixed caption-bottom text-sm",
+          className
+        )}
         {...props}
       />
     </div>
@@ -63,16 +138,136 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
-function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+function TableHead({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<"th">) {
+  const resizeSession = React.useRef<ColumnResizeSession | null>(null)
+  const resizeHandleLabel = getResizeHandleLabel(
+    children,
+    props["aria-label"]
+  )
+
+  function handlePointerDown(event: React.PointerEvent<HTMLButtonElement>) {
+    const cell = event.currentTarget.parentElement
+
+    if (!(cell instanceof HTMLTableCellElement)) {
+      return
+    }
+
+    const prepared = prepareColumnResize(cell)
+
+    if (!prepared) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    resizeSession.current = {
+      ...prepared,
+      cell,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+    }
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLButtonElement>) {
+    const session = resizeSession.current
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return
+    }
+
+    event.preventDefault()
+    setColumnWidth(session, session.startWidth + event.clientX - session.startX)
+  }
+
+  function handlePointerEnd(event: React.PointerEvent<HTMLButtonElement>) {
+    const session = resizeSession.current
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return
+    }
+
+    setColumnWidth(session, session.startWidth + event.clientX - session.startX)
+    resizeSession.current = null
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  function handlePointerCancel(event: React.PointerEvent<HTMLButtonElement>) {
+    const session = resizeSession.current
+
+    if (!session || session.pointerId !== event.pointerId) {
+      return
+    }
+
+    resizeSession.current = null
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      return
+    }
+
+    const cell = event.currentTarget.parentElement
+
+    if (!(cell instanceof HTMLTableCellElement)) {
+      return
+    }
+
+    const prepared = prepareColumnResize(cell)
+
+    if (!prepared) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    setColumnWidth(
+      { ...prepared, cell },
+      prepared.startWidth +
+        (event.key === "ArrowRight"
+          ? COLUMN_RESIZE_STEP
+          : -COLUMN_RESIZE_STEP)
+    )
+  }
+
   return (
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "relative h-10 overflow-hidden text-ellipsis whitespace-nowrap px-2 pr-5 text-left align-middle font-medium text-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
-    />
+    >
+      {children}
+      <button
+        type="button"
+        data-slot="table-column-resize-handle"
+        aria-label={resizeHandleLabel}
+        title={resizeHandleLabel}
+        className="absolute inset-y-1 right-0 z-10 w-3 touch-none cursor-col-resize select-none rounded-sm bg-transparent p-0 outline-none after:absolute after:inset-y-1 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border hover:after:bg-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={handleKeyDown}
+        onPointerCancel={handlePointerCancel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onLostPointerCapture={() => {
+          resizeSession.current = null
+        }}
+      />
+    </th>
   )
 }
 
@@ -81,7 +276,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "overflow-hidden text-ellipsis whitespace-nowrap p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}

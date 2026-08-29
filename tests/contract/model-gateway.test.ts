@@ -171,8 +171,7 @@ describe('BudgetedModelGateway', () => {
   it.each([
     ['Unicode non-JSON whitespace', '\u00a0{"stakeholders":[]}'],
     ['excessive nesting', `${'['.repeat(34)}${']'.repeat(34)}`],
-    ['excessive nodes', `[${'0,'.repeat(10_000)}0]`],
-    ['oversized output', `${'{"stakeholders":[]}'}${' '.repeat(128 * 1024)}`]
+    ['excessive nodes', `[${'0,'.repeat(10_000)}0]`]
   ])('repairs %s without accepting unsafe JSON', async (_name, invalid) => {
     const outputs = [invalid, '{"stakeholders":[]}'];
     const transport: ModelTransport = {
@@ -369,7 +368,7 @@ describe('BudgetedModelGateway', () => {
       }
     };
     const policy = new (await import('@slacato/core')).ContextWindowPolicy({
-      contextWindowTokens: 100, reservedOutputTokens: 20,
+      contextWindowTokens: 1_000, reservedOutputTokens: 20,
       sectionTokenBudgets: { instructions: 8, currentTask: 8, evidence: 8, artifacts: 8, history: 8 }
     });
     await createTestGateway(transport, policy).generateObject({

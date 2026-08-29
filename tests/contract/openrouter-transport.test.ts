@@ -72,18 +72,24 @@ describe('OpenRouter transport', () => {
     });
   });
 
-  it('classifies a reasoning-only length response instead of hiding it as unknown', async () => {
-    const fakeFetch: typeof fetch = async () => Response.json({
-      id: 'generation-length', object: 'chat.completion', created: 1,
-      model: 'dots-studio/dots-3-note-preview:free',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content: null, reasoning: 'still reasoning' },
-        finish_reason: 'length',
-        logprobs: null
-      }],
-      usage: { prompt_tokens: 20, completion_tokens: 64, total_tokens: 84 }
-    });
+  it('repairs a reasoning-only length response instead of hiding it as unknown', async () => {
+    let calls = 0;
+    const fakeFetch: typeof fetch = async () => {
+      calls += 1;
+      return Response.json({
+        id: `generation-${calls}`, object: 'chat.completion', created: calls,
+        model: 'dots-studio/dots-3-note-preview:free',
+        choices: [{
+          index: 0,
+          message: calls === 1
+            ? { role: 'assistant', content: null, reasoning: 'still reasoning' }
+            : { role: 'assistant', content: '{"ready":true}' },
+          finish_reason: calls === 1 ? 'length' : 'stop',
+          logprobs: null
+        }],
+        usage: { prompt_tokens: 20, completion_tokens: 64, total_tokens: 84 }
+      });
+    };
     const gateways = createOpenRouterModelGateways({
       apiKey: 'secret', generationModelId: 'dots-studio/dots-3-note-preview:free',
       embeddingModelId: 'openai/text-embedding-3-small', attemptLedger: ledger, fetch: fakeFetch
@@ -93,10 +99,9 @@ describe('OpenRouter transport', () => {
       schema: z.object({ ready: z.boolean() }).strict(),
       messages: [{ role: 'user', content: 'Report readiness.' }], operation: 'length-probe',
       durableAttempt: { runScope: 'length-probe', provider: 'openrouter', model: 'dots-studio/dots-3-note-preview:free' },
-      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 1_000, maxOutputTokens: 64 }
-    })).rejects.toMatchObject({
-      normalized: { category: 'deterministic_validation', diagnosticCode: 'openrouter_no_output' }
-    });
+      limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 10_000, maxOutputTokens: 128 }
+    })).resolves.toMatchObject({ value: { ready: true } });
+    expect(calls).toBe(2);
   });
 
   it('preserves invalid native output so the gateway can send an informed repair', async () => {

@@ -4,6 +4,7 @@ import type { Persona } from '@slacato/contracts';
 import { ArrowRight, Check, Database, LoaderCircle, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
 import { fetchCsrf, fetchPersonas } from '@/api/client';
 import { safeDestination, selectPersonaSession, sessionRuntime } from '@/api/session';
+import { advanceGuidedTourFromLogin, GuidedTour } from '@/components/guided-tour';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -53,7 +54,9 @@ export function LoginRoute(): React.JSX.Element {
     setSubmitting(persona.userId);
     try {
       await selectPersonaSession(persona.userId, state.csrfToken);
-      await navigate(safeDestination(new URLSearchParams(location.search).get('returnTo')), { replace: true });
+      const continueGuidedTour = advanceGuidedTourFromLogin();
+      const destination = continueGuidedTour ? '/deals' : safeDestination(new URLSearchParams(location.search).get('returnTo'));
+      await navigate(destination, { replace: true });
     } catch {
       setSubmitting(undefined);
       setState({ status: 'error' });
@@ -61,7 +64,7 @@ export function LoginRoute(): React.JSX.Element {
   };
 
   return (
-    <main className="min-h-screen bg-background lg:grid lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.28fr)]">
+    <main id="main-content" className="min-h-screen bg-background lg:grid lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.28fr)]">
       <aside className="relative overflow-hidden bg-brand-forest px-6 py-8 text-brand-pale sm:px-10 lg:flex lg:min-h-screen lg:flex-col lg:justify-between lg:px-12 lg:py-12">
         <div className="relative">
           <div className="mb-14 flex items-center gap-3">
@@ -99,7 +102,7 @@ export function LoginRoute(): React.JSX.Element {
           </Alert>
         )}
         {state.status === 'ready' && (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div data-tour="login-personas" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {state.personas.map((persona) => (
               <Card key={persona.userId} className="gap-4 border-border/90 py-5 transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-md">
                 <CardHeader className="px-5">
@@ -127,6 +130,7 @@ export function LoginRoute(): React.JSX.Element {
         )}
         <p className="mt-7 flex items-center gap-2 text-xs text-muted-foreground"><Check className="size-4 text-primary" /> Sessions expire automatically after eight hours.</p>
       </section>
+      <GuidedTour />
     </main>
   );
 }

@@ -1,10 +1,9 @@
-import { BookOpenCheck, BriefcaseBusiness, CircleCheckBig, ListTodo, Settings } from 'lucide-react';
+import { BriefcaseBusiness, CircleCheckBig, ListTodo, Settings } from 'lucide-react';
 import { Link, useLocation } from 'react-router';
 import { cn } from '@/lib/utils';
 
 export const primaryDestinations = [
   { label: 'Deals', to: '/deals', icon: BriefcaseBusiness },
-  { label: 'Walkthrough', to: '/walkthrough', icon: BookOpenCheck },
   { label: 'Runs', to: '/runs', icon: ListTodo },
   { label: 'Approvals', to: '/approvals', icon: CircleCheckBig },
   { label: 'Settings', to: '/settings', icon: Settings }
@@ -18,7 +17,7 @@ export function MobileNav(): React.JSX.Element {
       data-layout="mobile"
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
-      <ul className="grid grid-cols-5 px-1 py-1">
+      <ul className="grid grid-cols-4 px-1 py-1">
         {primaryDestinations.map(({ label, to, icon: Icon }) => {
           const current = location.pathname === to || location.pathname.startsWith(`${to}/`)
             ? 'page'

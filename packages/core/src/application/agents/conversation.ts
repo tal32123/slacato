@@ -20,6 +20,6 @@ export class ConversationAgent {
       schema: agentArtifactSchema, allowedSourceTypes: SOURCES,
       validate: (value, evidence) => validateConversationArtifact(value, context.manifest.id, evidence)
     });
-    return agentArtifactSchema.parse(validateConversationArtifact(result.value, context.manifest.id, result.evidence));
+    return agentArtifactSchema.parse(result.value);
   }
 }

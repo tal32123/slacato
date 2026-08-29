@@ -43,7 +43,6 @@ export class StrategyAgent {
       ],
       validate: (value, evidence) => validateDealBrief(value, evidence, context)
     });
-    const citedEvidence = result.evidence.filter((record) => citedIds.has(record.evidenceId));
-    return validateDealBrief(result.value, citedEvidence, context);
+    return dealBriefSchema.parse(result.value);
   }
 }
