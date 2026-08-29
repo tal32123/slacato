@@ -242,6 +242,44 @@ describe('authorized hybrid retrieval and citations', () => {
     expect(result.evidence.reduce((sum, entry) => sum + entry.content.length, 0)).toBeLessThanOrEqual(500);
   });
 
+  it('reserves constrained context for both ranked and exact CRM grounding evidence', async () => {
+    const seeded = await seed();
+    const exact = await addExactCrmEvidence(seeded);
+    await new EmbeddingIndexer(database, mock.embeddingGateway, profile, { corpus: { sourceLocatorPrefixes: [...seededFixtureCorpus.sourceLocatorPrefixes, exact.prefix], requireCompleteProvenance: true } }).index();
+    const result = await new PostgresHybridEvidenceRetriever(database, mock.embeddingGateway, profile).search({
+      query: 'termination', accountId: seeded.accountId, opportunityId: seeded.opportunityId, runId: seeded.runId,
+      limit: 2, maxContextCharacters: 48, scope: authorizedScope(seeded)
+    });
+    expect(result.evidence.filter((entry) => exact.ids.includes(entry.evidenceId))).toHaveLength(3);
+    expect(result.evidence.some((entry) => entry.sourceType !== 'policy' && !exact.ids.includes(entry.evidenceId))).toBe(true);
+    expect(result.evidence.reduce((sum, entry) => sum + entry.content.length, 0)).toBeLessThanOrEqual(48);
+  });
+
+  it('preserves every ranked top-k item before exact CRM additions under a tight budget', async () => {
+    const seeded = await seed();
+    const exact = await addExactCrmEvidence(seeded);
+    const suffix = randomUUID().replaceAll('-', '');
+    const rankedPrefix = `round2/ranked/${suffix}/`;
+    for (const [sourceType, key] of [['gong_summary', 'summary'], ['gong_transcript', 'transcript']] as const) {
+      const documentId = `document_ranked_${key}_${suffix}`; const evidenceId = `evidence_ranked_${key}_${suffix}`;
+      await sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read) values (${`grant_ranked_${key}_${suffix}`}, ${seeded.userId}, ${seeded.accountId}, ${sourceType}, true)`;
+      await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+        values (${documentId}, ${documentId}, 1, ${sourceType}, ${`doc-ranked-${key}`}, 'termination ranked evidence', '2026-08-20', 'direct_conversation', ${`${rankedPrefix}${key}`}, 'ranked_test', ${'a'.repeat(64)})`;
+      await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
+        values (${evidenceId}, ${documentId}, ${seeded.accountId}, ${seeded.opportunityId}, 0, ${sourceType}, 'standard', ${`chunk-ranked-${key}`}, 'termination ranked evidence', '2026-08-20', 'direct_conversation', ${`${rankedPrefix}${key}:0`}, 'ranked_test', ${'a'.repeat(64)})`;
+    }
+    await new EmbeddingIndexer(database, mock.embeddingGateway, profile, { corpus: { sourceLocatorPrefixes: [...seededFixtureCorpus.sourceLocatorPrefixes, exact.prefix, rankedPrefix], requireCompleteProvenance: true } }).index();
+    const result = await new PostgresHybridEvidenceRetriever(database, mock.embeddingGateway, profile).search({
+      query: 'termination', accountId: seeded.accountId, opportunityId: seeded.opportunityId, runId: seeded.runId,
+      limit: 4, maxContextCharacters: 64,
+      scope: { ...authorizedScope(seeded), sourceTypes: ['gong_summary', 'gong_transcript', 'policy', 'pricing', 'salesforce', 'slack'] }
+    });
+    expect(result.evidence.slice(0, 4)).toHaveLength(4);
+    expect(result.evidence.slice(0, 4).every((entry) => entry.content.length >= 8)).toBe(true);
+    expect(result.evidence.filter((entry) => exact.ids.includes(entry.evidenceId))).toHaveLength(3);
+    expect(result.evidence.reduce((sum, entry) => sum + entry.content.length, 0)).toBeLessThanOrEqual(64);
+  });
+
   it('binds the persisted run to the requested opportunity and persona before retrieval or manifest persistence', async () => {
     const opportunityMismatch = await seed();
     const retriever = new PostgresHybridEvidenceRetriever(database, mock.embeddingGateway, profile);
@@ -343,8 +381,9 @@ describe('authorized hybrid retrieval and citations', () => {
     await new EmbeddingIndexer(database, mock.embeddingGateway, profile, { corpus: seededFixtureCorpus }).index();
     const retriever = new PostgresHybridEvidenceRetriever(database, mock.embeddingGateway, profile, () => new Date('2026-08-28T00:00:00.000Z'));
     const request = { query: 'termination', accountId: seeded.accountId, opportunityId: seeded.opportunityId, runId: seeded.runId, limit: 3, maxContextCharacters: 500, scope: authorizedScope(seeded) };
-    const [first, concurrentReplay] = await Promise.all([retriever.search(request), retriever.search(request)]);
-    expect(concurrentReplay).toEqual(first);
+    const concurrent = await Promise.all(Array.from({ length: 3 }, () => retriever.search(request)));
+    const first = concurrent[0]!;
+    for (const result of concurrent) expect(result).toEqual(first);
     const replay = await retriever.search(request);
     expect(replay).toEqual(first);
     await expect(sql`select id from run_evidence_manifests where run_id = ${seeded.runId}`).resolves.toHaveLength(1);
