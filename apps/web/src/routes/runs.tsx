@@ -31,7 +31,7 @@ export async function runsLoader({ request }: LoaderFunctionArgs): Promise<RunLi
 export function RunsRoute(): React.JSX.Element {
   const response = useLoaderData() as RunListResponse;
   return (
-    <section aria-labelledby="runs-title">
+    <section data-tour="run-progress" aria-labelledby="runs-title">
       <header className="max-w-4xl">
         <p className="text-sm font-medium text-primary">Persona-scoped workflow history</p>
         <h1 id="runs-title" className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Runs</h1>
@@ -47,7 +47,7 @@ export function RunsRoute(): React.JSX.Element {
       ) : (
         <ul className="mt-8 grid gap-3" aria-label="Authorized runs">
           {response.runs.map((run) => {
-            const terminal = ['completed', 'rejected', 'failed'].includes(run.status);
+            const terminal = ['completed', 'rejected', 'failed', 'cancelled'].includes(run.status);
             return (
               <li key={run.runId} className="grid min-w-0 gap-4 rounded-xl border bg-card p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                 <div className="min-w-0">
@@ -75,14 +75,14 @@ export function statusLabel(status: RunStatus): string {
   const labels: Record<RunStatus, string> = {
     created: 'Queued', retrieving: 'Retrieving evidence', specialists_running: 'Specialists running',
     synthesizing: 'Synthesizing', validating: 'Validating', awaiting_approval: 'Awaiting approval',
-    finalizing: 'Finalizing', completed: 'Completed', rejected: 'Rejected', failed: 'Failed'
+    finalizing: 'Finalizing', completed: 'Completed', rejected: 'Rejected', failed: 'Failed', cancelled: 'Cancelled'
   };
   return labels[status];
 }
 
 function badgeStatus(status: RunStatus): ProductStatus {
   if (status === 'completed') return 'ready';
-  if (status === 'awaiting_approval' || status === 'rejected' || status === 'failed') return 'attention';
+  if (status === 'awaiting_approval' || status === 'rejected' || status === 'failed' || status === 'cancelled') return 'attention';
   return 'readonly';
 }
 

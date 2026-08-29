@@ -546,7 +546,7 @@ export function assertAgentContextBindings(context: AgentContext): void {
   const expectedScopeHash = hashEvidenceScopeBinding(expectedBinding);
   if (context.manifest.binding.target.accountId !== context.account.id
     || context.manifest.binding.target.opportunityId !== context.opportunity.id
-    || JSON.stringify(context.manifest.binding) !== JSON.stringify(expectedBinding)
+    || hashEvidenceScopeBinding(context.manifest.binding) !== expectedScopeHash
     || context.manifest.scopeHash !== expectedScopeHash) {
     throw new DomainValidationError('Evidence manifest target or current authorization scope does not match');
   }

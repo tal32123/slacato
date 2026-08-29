@@ -74,7 +74,7 @@ function CitationControls({ citationIds, evidence, selectedEvidenceId, onEvidenc
 }>): React.JSX.Element | null {
   const citations = citationIds.map((id) => evidence.get(id)).filter((item): item is DealWorkspaceView['evidence'][number] => item !== undefined);
   if (citations.length === 0) return null;
-  return <ul className="mt-5 flex flex-wrap gap-2" aria-label="Section citations">{citations.map((citation) => (
+  return <ul data-tour="citations" className="mt-5 flex flex-wrap gap-2" aria-label="Section citations">{citations.map((citation) => (
     <li key={citation.id} className="max-w-full"><Button type="button" variant={selectedEvidenceId === citation.id ? 'secondary' : 'outline'} className="h-auto min-h-11 max-w-full justify-start whitespace-normal break-words text-left text-xs" aria-label={`Open evidence: ${citation.citationLabel}`} aria-pressed={selectedEvidenceId === citation.id} onClick={(event) => onEvidence(citation.id, event.currentTarget)}>{citation.citationLabel}</Button></li>
   ))}</ul>;
 }

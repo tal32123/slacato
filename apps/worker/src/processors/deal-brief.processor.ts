@@ -15,6 +15,7 @@ type DurableContext = Omit<AgentContext, 'generation'>;
 type OpportunityRow = Readonly<{ account_id: string; account_name: string; opportunity_name: string; restricted: boolean }>;
 type GrantRow = Readonly<{ accountId: string; source_type: PermissionGrant['sourceType']; canRead: boolean; canReadRestricted: boolean; canRequestApproval: boolean; canApprove: boolean; sensitivePricing: boolean }>;
 type BudgetRow = Readonly<{ max_calls: number; max_input_tokens: number; max_output_tokens: number; deadline_ms: number }>;
+const MAX_GENERATION_OUTPUT_TOKENS = 4_096;
 
 /** Production workflow services reconstruct live authorization and a run-scoped gateway before every provider call. */
 export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServices {
@@ -96,7 +97,7 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
     await this.reauthorizeContext(run, durable);
     const budget = await this.budgetFor(run.id);
     const logicalGenerationId = this.generationId(run.id, operation);
-    const limits = { maxCalls: 3, maxSchemaRepairs: 1, maxTransportRetries: 1, deadlineMs: budget.deadlineMs, maxInputTokens: budget.maxInputTokens, maxOutputTokens: budget.maxOutputTokens };
+    const limits = { maxCalls: 3, maxSchemaRepairs: 1, maxTransportRetries: 1, deadlineMs: budget.deadlineMs, maxInputTokens: budget.maxInputTokens, maxOutputTokens: Math.min(budget.maxOutputTokens, MAX_GENERATION_OUTPUT_TOKENS) };
     const durableAttempt = { runScope: run.id, invocationId, logicalGenerationId, provider: run.generationProvider, model: run.generationModel };
     const gateway = await this.gateways.forRun({ runScope: run.id, invocationId, logicalGenerationId, budget });
     const agentContext: AgentContext = { ...durable, generation: { durableAttempt, limits } };

@@ -8,7 +8,7 @@ import { formatDealAmount } from './deal-format';
 
 export function DealList({ deals }: Readonly<{ deals: readonly DealListItem[] }>): React.JSX.Element {
   if (deals.length === 0) return (
-    <section className="rounded-xl border border-dashed px-6 py-12 text-center" aria-labelledby="empty-deals-title">
+    <section data-tour="deal-list" className="rounded-xl border border-dashed px-6 py-12 text-center" aria-labelledby="empty-deals-title">
       <BriefcaseBusiness aria-hidden="true" className="mx-auto size-9 text-muted-foreground" />
       <h2 id="empty-deals-title" className="mt-4 text-lg font-semibold">No authorized deals</h2>
       <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">This signed persona has no readable opportunities. The list does not reveal hidden deal names or counts.</p>
@@ -17,7 +17,7 @@ export function DealList({ deals }: Readonly<{ deals: readonly DealListItem[] }>
   );
 
   return (
-    <section aria-labelledby="deal-list-title">
+    <section data-tour="deal-list" aria-labelledby="deal-list-title">
       <h2 id="deal-list-title" className="sr-only">Authorized deal records</h2>
       <div className="hidden md:block">
         <Table aria-label="Authorized deals">

@@ -4,6 +4,7 @@ import { RunsController } from './runs.controller.js';
 import { RunsQueryController } from './runs-query.controller.js';
 import { RUN_APPROVAL_QUERIES } from './run-approval.repository.js';
 import {
+  CANCEL_DEAL_BRIEF,
   REGENERATE_DEAL_BRIEF,
   RUN_EVENT_BUS,
   RUN_EVENT_HEARTBEAT_MS,
@@ -25,6 +26,7 @@ export class RunsModule {
       providers: [
         { provide: START_DEAL_BRIEF, useValue: options.startDealBrief },
         { provide: REGENERATE_DEAL_BRIEF, useValue: options.regenerateDealBrief },
+        { provide: CANCEL_DEAL_BRIEF, useValue: options.cancelDealBrief },
         ...(options.queries === undefined ? [] : [{ provide: RUN_APPROVAL_QUERIES, useValue: options.queries }]),
         ...(options.runEvents === undefined ? [] : [
           { provide: RUN_EVENT_BUS, useValue: options.runEvents.bus },

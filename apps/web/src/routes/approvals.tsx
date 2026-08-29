@@ -31,7 +31,7 @@ export async function approvalsLoader({ request }: LoaderFunctionArgs): Promise<
 export function ApprovalsRoute(): React.JSX.Element {
   const response = useLoaderData() as ApprovalInboxResponse;
   return (
-    <section aria-labelledby="approvals-title">
+    <section data-tour="approvals" aria-labelledby="approvals-title">
       <header className="max-w-4xl">
         <p className="text-sm font-medium text-primary">Authority-scoped decisions</p>
         <h1 id="approvals-title" className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Approval inbox</h1>

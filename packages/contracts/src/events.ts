@@ -6,7 +6,7 @@ const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const timestampSchema = z.string().datetime();
 const runStatusSchema = z.enum([
   'created', 'retrieving', 'specialists_running', 'synthesizing', 'validating',
-  'awaiting_approval', 'finalizing', 'completed', 'rejected', 'failed', 'running'
+  'awaiting_approval', 'finalizing', 'completed', 'rejected', 'failed', 'cancelled', 'running'
 ]);
 const failureReasonSchema = z.enum([
   'conversation_unavailable', 'stakeholder_unavailable', 'commercial_unavailable', 'strategy_unavailable',
@@ -46,6 +46,9 @@ const completePayloadSchema = z.object({
 const failPayloadSchema = z.object({
   version: z.number().int().nonnegative(), reasonCode: failureReasonSchema, terminal: z.literal(true)
 }).strict();
+const cancelPayloadSchema = z.object({
+  version: z.number().int().nonnegative(), cancelledBy: opaqueIdSchema, terminal: z.literal(true)
+}).strict();
 
 export const safeEventPayloadSchema = z.union([
   progressPayloadSchema,
@@ -58,7 +61,8 @@ export const safeEventPayloadSchema = z.union([
   replacedPayloadSchema,
   regenerationPayloadSchema,
   completePayloadSchema,
-  failPayloadSchema
+  failPayloadSchema,
+  cancelPayloadSchema
 ]);
 
 const eventBase = {
@@ -89,7 +93,8 @@ const eventDefinitions = [
   ['approval_subject_replaced', replacedPayloadSchema],
   ['regeneration_requested', regenerationPayloadSchema],
   ['complete', completePayloadSchema],
-  ['fail', failPayloadSchema]
+  ['fail', failPayloadSchema],
+  ['cancel', cancelPayloadSchema]
 ] as const;
 
 export const runEventToPublishSchema = z.discriminatedUnion('type', [

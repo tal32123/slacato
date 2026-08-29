@@ -260,6 +260,41 @@ describe('specialized agents', () => {
     expect(gateway.requests).toHaveLength(0);
   });
 
+  it('accepts an equivalent manifest binding after JSONB reorders its object keys', async () => {
+    const gateway = new RecordingGateway([emptyCommercial]);
+    const authorized = context([evidence('evidence_jsonb', 'policy', 'Policy remains active.')]);
+    const binding = authorized.manifest.binding;
+    const jsonbOrderedBinding = {
+      target: binding.target,
+      personaId: binding.personaId,
+      accountIds: binding.accountIds,
+      canApprove: binding.canApprove,
+      sourceTypes: binding.sourceTypes,
+      canRequestApproval: binding.canRequestApproval,
+      canViewSensitivePricing: binding.canViewSensitivePricing,
+      canViewRestrictedAccounts: binding.canViewRestrictedAccounts
+    };
+    const restored = { ...authorized, manifest: { ...authorized.manifest, binding: jsonbOrderedBinding } };
+
+    await expect(new CommercialAgent(gateway).run(restored)).resolves.toEqual(emptyCommercial);
+    expect(gateway.requests).toHaveLength(1);
+  });
+
+  it('rejects a mutated persisted manifest binding even when its recorded scope hash is unchanged', async () => {
+    const gateway = new RecordingGateway([emptyCommercial]);
+    const authorized = context([evidence('evidence_mutated_binding', 'policy', 'Policy remains active.')]);
+    const mutated = {
+      ...authorized,
+      manifest: {
+        ...authorized.manifest,
+        binding: { ...authorized.manifest.binding, canApprove: !authorized.manifest.binding.canApprove }
+      }
+    };
+
+    await expect(new CommercialAgent(gateway).run(mutated)).rejects.toThrow(/scope/i);
+    expect(gateway.requests).toHaveLength(0);
+  });
+
   it('rejects duplicate claim IDs even when they occur at different nesting levels', async () => {
     const cited = evidence('evidence_buyer', 'gong_summary', 'Alice is the economic buyer.');
     const citation = {

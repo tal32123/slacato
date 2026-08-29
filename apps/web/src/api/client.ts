@@ -12,6 +12,7 @@ import {
   approvalDecisionResultSchema,
   approvalDetailResponseSchema,
   approvalInboxResponseSchema,
+  cancelRunResponseSchema,
   runDetailResponseSchema,
   runListResponseSchema,
   startBriefRequestSchema,
@@ -25,6 +26,7 @@ import {
   type ApprovalDecisionResult,
   type ApprovalDetailResponse,
   type ApprovalInboxResponse,
+  type CancelRunResponse,
   type RunDetailResponse,
   type RunListResponse,
   type StartBriefRequest,
@@ -107,6 +109,14 @@ export function startBrief(input: StartBriefRequest, csrfToken: string): Promise
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: JSON.stringify(startBriefRequestSchema.parse(input))
+  });
+}
+
+export function cancelRun(runId: string, csrfToken: string): Promise<CancelRunResponse> {
+  return requestJson(cancelRunResponseSchema, `/api/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: '{}'
   });
 }
 

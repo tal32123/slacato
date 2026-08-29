@@ -310,7 +310,7 @@ async function appendPolicyAndRecommendations(
 
 async function appendEvent(sql: SqlExecutor, runId: string, type: string, payload: Record<string, unknown>): Promise<void> {
   await sql`select pg_advisory_xact_lock(hashtext(${`run-events:${runId}`}))`;
-  const terminalPayload = ['complete', 'fail', 'approval_rejected'].includes(type) ? { ...payload, terminal: true } : payload;
+  const terminalPayload = ['complete', 'fail', 'approval_rejected', 'cancel'].includes(type) ? { ...payload, terminal: true } : payload;
   const event = runEventToPublishSchema.parse({
     id: `event_${crypto.randomUUID()}`,
     streamId: runId,
@@ -411,6 +411,29 @@ export class PostgresWorkflowStore implements WorkflowStore {
     return rows[0] === undefined ? undefined : asRun(rows[0]);
   }
   public async getRun(runId: WorkflowRun['id']): Promise<WorkflowRun | undefined> { const row = await runById(this.database.sql, runId); return row === undefined ? undefined : asRun(row); }
+
+  public async cancelRun(input: Parameters<WorkflowStore['cancelRun']>[0]): Promise<WorkflowRun> {
+    return this.database.sql.begin(async (sql) => {
+      const current = await runById(sql, input.runId, true);
+      if (current === undefined) throw new DomainNotFoundError('run');
+      if (current.version !== input.expectedVersion) throw new DomainConflictError('Run version is stale');
+      const nextStatus = transitionRun(current.status, 'cancel');
+      await sql`update step_invocations set status = 'abandoned', completed_at = now()
+        where run_id = ${input.runId} and status = 'leased'`;
+      await sql`update outbox_commands set consumed_at = now()
+        where run_id = ${input.runId} and status = 'published' and consumed_at is null`;
+      await sql`update outbox_commands set status = 'dead_letter', consumed_at = now(), claimed_at = null, claim_owner = null, claim_token = null, claim_expires_at = null
+        where run_id = ${input.runId} and status in ('pending', 'claimed')`;
+      const row = (await sql<RunRow[]>`update runs set status = ${nextStatus}, version = version + 1, updated_at = now()
+        where id = ${input.runId} and version = ${input.expectedVersion}
+        returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash`)[0];
+      if (row === undefined) throw new DomainConflictError('Run version is stale');
+      await appendEvent(sql, input.runId, 'cancel', { version: row.version, cancelledBy: input.cancelledBy });
+      await sql`insert into audit_events (id, run_id, actor_id, type, payload) values
+        (${`audit_${crypto.randomUUID()}`}, ${input.runId}, ${input.cancelledBy}, 'deal_brief_cancelled', ${jsonText({ priorStatus: current.status, version: row.version })}::jsonb)`;
+      return asRun(row);
+    });
+  }
 
   public async startRun(input: StartRunInput): Promise<WorkflowRun> {
     if (input.command.runId !== input.id || input.budget.scope !== input.id) throw new DomainConflictError('Run, command, and budget scopes do not match');

@@ -4,6 +4,7 @@ import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
 import { Link, Outlet, useLocation, useNavigation, useNavigationType } from 'react-router';
 import { MobileNav, primaryDestinations } from '@/components/mobile-nav';
 import { PersonaMenu } from '@/components/persona-menu';
+import { GuidedTour } from '@/components/guided-tour';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ export function AppShell({ session, onLogout }: Readonly<{
     const section = location.pathname.split('/').filter(Boolean)[0] ?? 'deals';
     const title = section === 'approvals' ? 'Approvals'
       : section === 'runs' ? 'Runs'
+        : section === 'walkthrough' ? 'Walkthrough'
         : section === 'settings' ? 'Settings'
           : section === 'diagnostics' ? 'Diagnostics'
             : 'Deals';
@@ -70,6 +72,7 @@ export function AppShell({ session, onLogout }: Readonly<{
               return (
                 <li key={to}>
                   <Link
+                    data-tour={label === 'Deals' ? 'nav-deals' : undefined}
                     aria-current={current ? 'page' : undefined}
                     className={cn(
                       'flex min-h-11 min-w-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-brand-pale/75 transition-colors hover:bg-brand-medium hover:text-brand-pale',
@@ -119,7 +122,7 @@ export function AppShell({ session, onLogout }: Readonly<{
               <Link to="/deals" className="inline-flex min-h-11 min-w-11 items-center text-base font-semibold tracking-tight lg:hidden">SlaCato</Link>
               <p className="hidden text-sm text-muted-foreground sm:block lg:block">Negotiation preparation, grounded in authorized evidence</p>
             </div>
-            <div id="active-persona-control" className="flex shrink-0 items-center gap-2">
+            <div id="active-persona-control" data-tour="persona" className="flex shrink-0 items-center gap-2">
               <span className="hidden sm:inline-flex"><StatusBadge status="ready" label="Signed session" /></span>
               <PersonaMenu session={session} onLogout={onLogout} />
             </div>
@@ -137,6 +140,7 @@ export function AppShell({ session, onLogout }: Readonly<{
         </main>
       </div>
       <MobileNav />
+      <GuidedTour />
     </div>
   );
 }

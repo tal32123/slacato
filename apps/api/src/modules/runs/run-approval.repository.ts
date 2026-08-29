@@ -52,7 +52,7 @@ const sectionNames = [
   'Recommended Next Actions', 'Missing Information', 'Source Evidence', 'Confidence and Review Warnings'
 ] as const;
 const specialistNames = ['conversation', 'stakeholder', 'commercial'] as const;
-const terminalStatuses: readonly RunStatus[] = ['completed', 'rejected', 'failed'];
+const terminalStatuses: readonly RunStatus[] = ['completed', 'rejected', 'failed', 'cancelled'];
 
 export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepository {
   public constructor(private readonly database: DatabaseClient) {}
@@ -367,7 +367,7 @@ function phaseForEvent(event: EventRow, fallback: RunStatus): RunStatus {
     run_created: 'created', start: 'retrieving', retrieval_completed: 'specialists_running', specialists_completed: 'synthesizing',
     synthesis_completed: 'validating', validation_requires_approval: 'awaiting_approval', awaiting_approval: 'awaiting_approval',
     approval_entry_recorded: 'awaiting_approval', approval_granted: 'finalizing', approval_rejected: 'rejected',
-    approval_subject_replaced: 'awaiting_approval', regeneration_requested: 'synthesizing', complete: 'completed', fail: 'failed'
+    approval_subject_replaced: 'awaiting_approval', regeneration_requested: 'synthesizing', complete: 'completed', fail: 'failed', cancel: 'cancelled'
   };
   return mapped[event.type] ?? fallback;
 }
@@ -378,7 +378,7 @@ function labelForEvent(type: string): string {
     validation_requires_approval: 'Approval required', validation_completed: 'Brief validation completed', awaiting_approval: 'Awaiting approval',
     approval_entry_recorded: 'Approval recorded; quorum remains', approval_granted: 'Approval quorum satisfied', approval_rejected: 'Approval rejected',
     approval_subject_replaced: 'Edited brief submitted for approval', regeneration_requested: 'Brief regeneration requested',
-    complete: 'Brief completed', fail: 'Run failed', progress: 'Run progress updated'
+    complete: 'Brief completed', fail: 'Run failed', cancel: 'Run cancelled', progress: 'Run progress updated'
   };
   return labels[type] ?? 'Run updated';
 }

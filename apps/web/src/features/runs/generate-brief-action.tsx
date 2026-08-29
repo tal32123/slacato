@@ -30,7 +30,7 @@ export function GenerateBriefAction({ opportunityId, sessionVersion }: Readonly<
   });
 
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
+    <div data-tour="generate-brief" className="flex flex-col items-start gap-2 sm:items-end">
       <Button type="button" size="lg" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
         <Sparkles aria-hidden="true" />
         {mutation.isPending ? 'Starting brief…' : 'Generate Brief'}

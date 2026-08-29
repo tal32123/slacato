@@ -286,7 +286,7 @@ export class PostgresRunEventQuery implements RunEventQuery {
       status: row.status,
       version: row.version,
       watermark: row.watermark,
-      terminal: ['completed', 'failed', 'rejected'].includes(row.status)
+      terminal: ['completed', 'failed', 'rejected', 'cancelled'].includes(row.status)
     });
   }
 }

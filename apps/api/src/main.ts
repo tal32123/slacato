@@ -4,7 +4,7 @@ import { HttpException, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import type { ErrorRequestHandler } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { DecideApproval, RegenerateDealBrief, StartDealBrief } from '@slacato/core';
+import { CancelDealBrief, DecideApproval, RegenerateDealBrief, StartDealBrief } from '@slacato/core';
 import {
   createDatabaseClient,
   loadRuntimeEnv,
@@ -89,6 +89,7 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
       model: models.generation
     }),
     regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
+    cancelDealBrief: new CancelDealBrief(workflowStore, workflowAccess),
     decideApproval: new DecideApproval(workflowStore, workflowAccess),
     queries: runApprovalQueries,
     runEvents: { bus: runEvents, query: new PostgresRunEventQuery(database) }

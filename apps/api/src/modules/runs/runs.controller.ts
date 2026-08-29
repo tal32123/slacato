@@ -1,10 +1,10 @@
 import { Controller, Inject, Post, Req } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/guard.js';
 import { z } from 'zod';
-import { startBriefRequestSchema, startBriefResponseSchema, type StartBriefRequest } from '@slacato/contracts';
+import { cancelRunResponseSchema, startBriefRequestSchema, startBriefResponseSchema, type StartBriefRequest } from '@slacato/contracts';
 import { ZodBody, ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
-import { REGENERATE_DEAL_BRIEF, START_DEAL_BRIEF, toHttpError } from './contracts.js';
-import type { RegenerateDealBrief, StartDealBrief } from '@slacato/core';
+import { CANCEL_DEAL_BRIEF, REGENERATE_DEAL_BRIEF, START_DEAL_BRIEF, toHttpError } from './contracts.js';
+import type { CancelDealBrief, RegenerateDealBrief, StartDealBrief } from '@slacato/core';
 
 const startSchema = startBriefRequestSchema;
 const runResponseSchema = startBriefResponseSchema;
@@ -18,7 +18,8 @@ type RegenerateInput = z.infer<typeof regenerateSchema>;
 export class RunsController {
   public constructor(
     @Inject(START_DEAL_BRIEF) private readonly startDealBrief: StartDealBrief,
-    @Inject(REGENERATE_DEAL_BRIEF) private readonly regenerateDealBrief: RegenerateDealBrief
+    @Inject(REGENERATE_DEAL_BRIEF) private readonly regenerateDealBrief: RegenerateDealBrief,
+    @Inject(CANCEL_DEAL_BRIEF) private readonly cancelDealBrief: CancelDealBrief
   ) {}
 
   @Post('deal-brief')
@@ -29,6 +30,19 @@ export class RunsController {
     try {
       const runId = await this.startDealBrief.execute({ ...input, requestedBy: actorId });
       return { runId };
+    } catch (error) {
+      return toHttpError(error);
+    }
+  }
+
+  @Post(':runId/cancel')
+  @ZodResponse(cancelRunResponseSchema)
+  public async cancel(@ZodParam(regenerateParamsSchema) params: RegenerateParams, @Req() request: AuthenticatedRequest) {
+    const actorId = request.auth?.persona.userId;
+    if (actorId === undefined) throw new Error('Authenticated request identity was not installed');
+    try {
+      const run = await this.cancelDealBrief.execute({ runId: params.runId, requestedBy: actorId });
+      return { runId: run.id, status: 'cancelled' as const, version: run.version };
     } catch (error) {
       return toHttpError(error);
     }

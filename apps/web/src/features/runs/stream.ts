@@ -12,7 +12,7 @@ const eventTypes = [
   'progress', 'run_created', 'checkpoint_committed', 'start', 'retrieval_completed', 'specialists_completed',
   'synthesis_completed', 'validation_completed', 'validation_requires_approval', 'awaiting_approval',
   'approval_entry_recorded', 'approval_granted', 'approval_rejected', 'approval_subject_replaced',
-  'regeneration_requested', 'complete', 'fail'
+  'regeneration_requested', 'complete', 'fail', 'cancel'
 ] as const;
 
 export interface RunStreamSource {
@@ -43,7 +43,7 @@ export function applyRunEvent(
     version,
     watermark: event.id,
     watermarkSequence: event.sequence,
-    terminal: event.type === 'complete' || event.type === 'fail' || event.type === 'approval_rejected'
+    terminal: event.type === 'complete' || event.type === 'fail' || event.type === 'approval_rejected' || event.type === 'cancel'
       || ('terminal' in event.payload && event.payload.terminal === true),
     updatedAt: event.timestamp,
     progress: {

@@ -72,6 +72,7 @@ function workflowOptions(store: PostgresEventStore, heartbeatMs = 25): WorkflowA
   return {
     startDealBrief: { execute: async () => 'unused' } as never,
     regenerateDealBrief: { execute: async () => 'unused' } as never,
+    cancelDealBrief: { execute: async () => ({}) } as never,
     decideApproval: { execute: async () => ({}) } as never,
     runEvents: { bus: store, query: new PostgresRunEventQuery(database), heartbeatMs }
   };

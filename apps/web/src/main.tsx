@@ -20,6 +20,7 @@ import { RouteErrorBoundary } from './routes/route-error';
 import { RoutePending } from './routes/route-pending';
 import { SettingsRoute, settingsLoader } from './routes/settings';
 import { UnauthorizedRoute } from './routes/unauthorized';
+import { WalkthroughRoute } from './routes/walkthrough';
 import './styles/globals.css';
 
 const router = createBrowserRouter([
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
       { path: 'approvals/:subjectId', loader: approvalLoader, element: <ApprovalRoute />, errorElement: <RouteErrorBoundary /> },
       { path: 'settings', loader: settingsLoader, element: <SettingsRoute />, errorElement: <RouteErrorBoundary /> },
       { path: 'diagnostics', loader: diagnosticsLoader, element: <DiagnosticsRoute />, errorElement: <RouteErrorBoundary /> },
+      { path: 'walkthrough', element: <WalkthroughRoute />, errorElement: <RouteErrorBoundary /> },
       { path: '*', element: <NotFoundRoute /> }
     ]
   }

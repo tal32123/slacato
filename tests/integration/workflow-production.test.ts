@@ -6,7 +6,7 @@ import postgres from 'postgres';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
-  CANONICAL_FIXTURE_COMMIT, DecideApproval, DomainConflictError, DomainValidationError, ProcessDealBriefStep,
+  CANONICAL_FIXTURE_COMMIT, CancelDealBrief, DecideApproval, DomainConflictError, DomainValidationError, ProcessDealBriefStep,
   RegenerateDealBrief, StartDealBrief, dealBriefSchema, hashApprovalPayload, type DealBriefWorkflowServices
 } from '@slacato/core';
 import {
@@ -131,6 +131,7 @@ describe('production DealBrief seams', () => {
     app = await NestFactory.create<NestExpressApplication>(AppModule.register({ sessionSecret: 'task-9-production-test-secret-which-is-long', environment: 'test', allowedOrigins: [origin], personaDirectory: directory }, {
       startDealBrief: new StartDealBrief(store, access, { provider: 'mock', model: 'mock-brief' }),
       regenerateDealBrief: new RegenerateDealBrief(store, access),
+      cancelDealBrief: new CancelDealBrief(store, access),
       decideApproval: new DecideApproval(store, access)
     }), { bodyParser: false, logger: false });
     configureApiApplication(app); await app.init();

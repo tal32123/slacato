@@ -2,23 +2,138 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-    { "idx": 0, "version": "7", "when": 1787941800000, "tag": "0000_initial", "breakpoints": true },
-    { "idx": 1, "version": "7", "when": 1787942700000, "tag": "0001_delivery_claim_leases", "breakpoints": true },
-    { "idx": 2, "version": "7", "when": 1787943600000, "tag": "0002_causal_command_consumption", "breakpoints": true },
-    { "idx": 3, "version": "7", "when": 1787944500000, "tag": "0003_approval_snapshot_linkage", "breakpoints": true },
-    { "idx": 4, "version": "7", "when": 1787945400000, "tag": "0004_persisted_run_budgets", "breakpoints": true },
-    { "idx": 5, "version": "7", "when": 1787946300000, "tag": "0005_active_causal_command", "breakpoints": true },
-    { "idx": 6, "version": "7", "when": 1787947200000, "tag": "0006_restricted_opportunity_grants", "breakpoints": true },
-    { "idx": 7, "version": "7", "when": 1787948100000, "tag": "0007_dead_letter_claim_recovery", "breakpoints": true },
-    { "idx": 8, "version": "7", "when": 1787949000000, "tag": "0008_provider_attempt_ledger", "breakpoints": true },
-    { "idx": 9, "version": "7", "when": 1787949900000, "tag": "0009_run_budget_deadline", "breakpoints": true },
-    { "idx": 10, "version": "7", "when": 1787950800000, "tag": "0010_evidence_provenance", "breakpoints": true },
-    { "idx": 11, "version": "7", "when": 1787951700000, "tag": "0011_persona_provenance", "breakpoints": true },
-    { "idx": 12, "version": "7", "when": 1787952600000, "tag": "0012_authorized_retrieval", "breakpoints": true },
-    { "idx": 13, "version": "7", "when": 1788039000000, "tag": "0013_manifest_replay", "breakpoints": true },
-    { "idx": 14, "version": "7", "when": 1788125400000, "tag": "0014_durable_brief_approvals", "breakpoints": true },
-    { "idx": 15, "version": "7", "when": 1788211800000, "tag": "0015_immutable_approval_replays", "breakpoints": true },
-    { "idx": 16, "version": "7", "when": 1788298200000, "tag": "0016_append_only_run_observability", "breakpoints": true },
-    { "idx": 17, "version": "7", "when": 1788384600000, "tag": "0017_canonical_grants_sessions", "breakpoints": true }
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1787941800000,
+      "tag": "0000_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787942700000,
+      "tag": "0001_delivery_claim_leases",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787943600000,
+      "tag": "0002_causal_command_consumption",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787944500000,
+      "tag": "0003_approval_snapshot_linkage",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787945400000,
+      "tag": "0004_persisted_run_budgets",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787946300000,
+      "tag": "0005_active_causal_command",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787947200000,
+      "tag": "0006_restricted_opportunity_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787948100000,
+      "tag": "0007_dead_letter_claim_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787949000000,
+      "tag": "0008_provider_attempt_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787949900000,
+      "tag": "0009_run_budget_deadline",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787950800000,
+      "tag": "0010_evidence_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787951700000,
+      "tag": "0011_persona_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787952600000,
+      "tag": "0012_authorized_retrieval",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788039000000,
+      "tag": "0013_manifest_replay",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788125400000,
+      "tag": "0014_durable_brief_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1788211800000,
+      "tag": "0015_immutable_approval_replays",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788298200000,
+      "tag": "0016_append_only_run_observability",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788384600000,
+      "tag": "0017_canonical_grants_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788471000000,
+      "tag": "0018_run_cancellation",
+      "breakpoints": true
+    }
   ]
 }

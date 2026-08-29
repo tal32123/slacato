@@ -97,7 +97,7 @@ export const runs = pgTable('runs', {
 }, (table) => [
   uniqueIndex('runs_idempotency_key_uq').on(table.idempotencyKey).where(sql`${table.idempotencyKey} is not null`),
   uniqueIndex('runs_one_active_opportunity_uq').on(table.opportunityId).where(sql`${table.status} in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing')`),
-  check('runs_status_check', sql`${table.status} in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing','completed','rejected','failed')`),
+  check('runs_status_check', sql`${table.status} in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing','completed','rejected','failed','cancelled')`),
   check('runs_version_check', sql`${table.version} >= 0`)
 ]);
 export const runBudgets = pgTable('run_budgets', { runId: text('run_id').primaryKey().references(() => runs.id), maxCalls: integer('max_calls').notNull(), maxInputTokens: integer('max_input_tokens').notNull(), maxOutputTokens: integer('max_output_tokens').notNull(), deadlineMs: integer('deadline_ms'), deadlineAt: timestamp('deadline_at', { withTimezone: true }).notNull().default(sql`now() + interval '1 hour'`), usedCalls: integer('used_calls').notNull().default(0), usedInputTokens: integer('used_input_tokens').notNull().default(0), usedOutputTokens: integer('used_output_tokens').notNull().default(0), reservedOutputTokens: integer('reserved_output_tokens').notNull().default(0) }, (table) => [

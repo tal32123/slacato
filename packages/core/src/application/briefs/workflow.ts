@@ -157,7 +157,7 @@ export class ProcessDealBriefStep {
         throw error;
       }
       const latest = await this.store.getRun(run.id);
-      if (latest !== undefined && !['completed', 'rejected', 'failed', 'awaiting_approval'].includes(latest.status)) {
+      if (latest !== undefined && !['completed', 'rejected', 'failed', 'cancelled', 'awaiting_approval'].includes(latest.status)) {
         await this.store.failRun({ runId: latest.id, expectedVersion: latest.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: input.command.id, reason: error.reason });
       }
     } finally { clearInterval(heartbeat); }

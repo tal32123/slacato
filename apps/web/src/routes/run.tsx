@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type { DemoSession, RunDetailResponse, RunStatus } from '@slacato/contracts';
 import { runEventEnvelopeSchema } from '@slacato/contracts';
 import type { LoaderFunctionArgs } from 'react-router';
-import { AlertTriangle, ArrowLeft, CheckCircle2, CircleDashed, Clock3, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Ban, CheckCircle2, CircleDashed, Clock3, RotateCcw } from 'lucide-react';
 import { Link, useLoaderData, useRouteLoaderData } from 'react-router';
 import { queryClient, queryKeys, sessionQueryOptions, sessionRuntime, SessionInvalidatedError } from '@/api/session';
 import { StatusBadge } from '@/components/status-badge';
@@ -13,6 +13,7 @@ import { applyRunEvent, openRunEventStream, type RunStreamSource } from '@/featu
 import { runDetailQueryOptions } from '@/features/runs/queries';
 import { statusLabel } from './runs';
 import { throwProtectedLoaderError } from './loader-security';
+import { cancelRun, fetchCsrf } from '@/api/client';
 
 export async function runLoader({ request, params }: LoaderFunctionArgs): Promise<RunDetailResponse | null> {
   const runId = params.runId;
@@ -44,6 +45,17 @@ export function RunRoute(): React.JSX.Element {
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'reconnecting' | 'offline'>('connecting');
   const [, rerenderStalled] = useState(0);
   const [streamEpoch, restartStream] = useState(0);
+  const cancellation = useMutation({
+    mutationFn: async () => cancelRun(detail.runId, await fetchCsrf()),
+    onSuccess: async () => {
+      await Promise.all([
+        query.refetch(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, 'runs') }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, `deal:${detail.opportunityId}`) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, 'deals') })
+      ]);
+    }
+  });
 
   useEffect(() => {
     const onOffline = (): void => setConnection('offline');
@@ -128,7 +140,21 @@ export function RunRoute(): React.JSX.Element {
         <p className="mt-4 text-sm font-medium text-primary">{detail.opportunityId}</p>
         <h1 id="run-title" className="mt-1 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{detail.opportunityName}</h1>
         <p className="mt-3 text-muted-foreground">{detail.accountName} · Initiated by {detail.initiatedBy}</p>
-        <p className="mt-2 text-xs text-muted-foreground">Last updated <time dateTime={detail.updatedAt}>{formatTime(detail.updatedAt)}</time></p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <p className="text-xs text-muted-foreground">Last updated <time dateTime={detail.updatedAt}>{formatTime(detail.updatedAt)}</time></p>
+          {!detail.terminal && <div className="flex flex-col items-start gap-2 sm:items-end">
+            <p className="text-xs text-muted-foreground">This run is active. Cancel it before starting another run.</p>
+            <Button
+              data-tour="run-primary-action"
+              variant="destructive"
+              disabled={cancellation.isPending}
+              onClick={() => {
+                if (window.confirm('Cancel this run? Persisted progress and history will be retained, but processing will stop.')) cancellation.mutate();
+              }}
+            ><Ban aria-hidden="true" />{cancellation.isPending ? 'Cancelling…' : 'Cancel run'}</Button>
+          </div>}
+        </div>
+        {cancellation.isError && <p role="alert" className="mt-3 text-sm text-destructive">The run could not be cancelled. Refresh to check its latest state and try again.</p>}
       </header>
 
       <RunStateNotice detail={detail} stalled={stalled} />
@@ -175,26 +201,27 @@ function ConnectionBadge({ connection, stalled }: Readonly<{ connection: string;
 function RunStateNotice({ detail, stalled }: Readonly<{ detail: RunDetailResponse; stalled: boolean }>): React.JSX.Element | null {
   if (detail.status === 'awaiting_approval') return <Notice icon={Clock3} title="Awaiting approval" text="The validated brief is persisted. An authorized approver must satisfy every required entry before finalization." action="Open approval inbox" href="/approvals" />;
   if (detail.status === 'completed') return <Notice icon={CheckCircle2} title="Brief completed" text="The validated brief is available in the authorized deal workspace." action="View deal" href={`/deals/${encodeURIComponent(detail.opportunityId)}`} />;
-  if (detail.status === 'rejected') return <Notice icon={AlertTriangle} title="Approval rejected" text="This run is terminal. Review the approval history before generating another brief from the deal." action="Review approvals" href="/approvals" />;
-  if (detail.status === 'failed') return <Notice icon={RotateCcw} title="Run failed safely" text="No unvalidated output was published. Return to the deal to retry with a new operation." action="Return to deal" href={`/deals/${encodeURIComponent(detail.opportunityId)}`} />;
+  if (detail.status === 'rejected') return <Notice icon={AlertTriangle} title="Approval rejected" text="This run is terminal, so there is nothing left to cancel. The approval decision and audit history remain available; start a new run from the deal when ready." action="Return to deal and run again" href={`/deals/${encodeURIComponent(detail.opportunityId)}`} />;
+  if (detail.status === 'failed') return <Notice icon={RotateCcw} title="Run failed safely" text="This run is terminal, so there is nothing left to cancel. No unvalidated output was published, and its audit history is retained. Start a new run from the deal when ready." action="Return to deal and run again" href={`/deals/${encodeURIComponent(detail.opportunityId)}`} />;
+  if (detail.status === 'cancelled') return <Notice icon={Ban} title="Run cancelled" text="Processing has stopped, so there is nothing left to cancel. Persisted checkpoints, artifacts, and audit history are retained. Start a new run from the deal when ready." action="Return to deal and run again" href={`/deals/${encodeURIComponent(detail.opportunityId)}`} />;
   if (stalled) return <Notice icon={Clock3} title="Progress is taking longer than expected" text="The persisted state remains safe. This page will reconnect automatically; refreshing rejoins the same run." />;
   return null;
 }
 
 function Notice({ icon: Icon, title, text, action, href }: Readonly<{ icon: typeof Clock3; title: string; text: string; action?: string; href?: string }>): React.JSX.Element {
-  return <aside className="mt-6 flex flex-col gap-4 rounded-xl border border-attention bg-attention/10 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Icon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-attention-foreground" /><div><h2 className="font-semibold">{title}</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{text}</p></div></div>{action && href && <Button asChild variant="outline"><Link to={href}>{action}</Link></Button>}</aside>;
+  return <aside className="mt-6 flex flex-col gap-4 rounded-xl border border-attention bg-attention/10 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Icon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-attention-foreground" /><div><h2 className="font-semibold">{title}</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{text}</p></div></div>{action && href && <Button asChild variant="outline"><Link data-tour="run-primary-action" to={href}>{action}</Link></Button>}</aside>;
 }
 function Fact({ label, value }: Readonly<{ label: string; value: string }>): React.JSX.Element { return <div className="rounded-lg border bg-card p-4"><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt><dd className="mt-1 text-lg font-semibold">{value}</dd></div>; }
 function formatTime(value: string): string { return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }
 function progressPercent(status: RunStatus): number {
-  const values: Record<RunStatus, number> = { created: 5, retrieving: 20, specialists_running: 40, synthesizing: 60, validating: 75, awaiting_approval: 82, finalizing: 92, completed: 100, rejected: 82, failed: 75 };
+  const values: Record<RunStatus, number> = { created: 5, retrieving: 20, specialists_running: 40, synthesizing: 60, validating: 75, awaiting_approval: 82, finalizing: 92, completed: 100, rejected: 82, failed: 75, cancelled: 0 };
   return values[status];
 }
 function progressView(detail: RunDetailResponse): { value: number; label: string; valueText: string } {
   if (detail.status === 'completed') return { value: 100, label: '100% workflow complete', valueText: 'Workflow complete' };
-  const terminal = detail.status === 'failed' || detail.status === 'rejected';
+  const terminal = detail.status === 'failed' || detail.status === 'rejected' || detail.status === 'cancelled';
   const previous = terminal
-    ? [...detail.progress.timeline].reverse().map((item) => item.phase).find((phase) => phase !== 'failed' && phase !== 'rejected') ?? 'created'
+    ? [...detail.progress.timeline].reverse().map((item) => item.phase).find((phase) => phase !== 'failed' && phase !== 'rejected' && phase !== 'cancelled') ?? 'created'
     : detail.status;
   const value = progressPercent(previous);
   const phase = statusLabel(previous);

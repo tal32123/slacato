@@ -51,6 +51,14 @@ For every item, record:
 
 ## P1 — SOLID boundaries and provider portability
 
+- [ ] Audit run-level concurrency, locking, queue/database consistency, and cancellation recovery.
+  - Prove that one active run per opportunity is enforced consistently across PostgreSQL, BullMQ/Redis, API idempotency, and worker leases.
+  - Reproduce and eliminate the observed specialist-timeout deadlock in `completeLease`, where BullMQ considered a job completed while PostgreSQL retained an unconsumed command and leased invocation.
+  - Review lock acquisition order for run rows, step invocations, outbox commands, checkpoints, trace spans, and run-event advisory locks.
+  - Verify concurrent specialist completion or failure cannot race terminalization, enqueue duplicate work, or leave a run stuck in an active state.
+  - Add recovery tests for duplicate delivery, stale leases, worker restart, cancellation during inference, database deadlocks, and Redis/PostgreSQL disagreement.
+  - Deliver a lock-order specification, idempotency matrix, failure/reconciliation state diagram, and concurrency regression suite.
+
 - [ ] Perform a whole-system responsibility and cohesion audit, starting with `DealService`, `DiagnosticsService`, and `DealBriefProcessor`.
   - Find generic parsing helpers such as `numberOrNull` and `isoDateOrNull` embedded in domain services.
   - Find classes mixing fetching, orchestration, business rules, validation, persistence, and presentation.

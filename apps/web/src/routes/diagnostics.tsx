@@ -54,7 +54,7 @@ export function DiagnosticsRoute(): React.JSX.Element {
         <Button asChild variant="link" className="mt-3 min-h-11 px-0"><Link to="/settings"><ArrowLeft aria-hidden="true" />Back to Persona &amp; session</Link></Button>
       </header>
 
-      <section aria-labelledby="runtime-title">
+      <section data-tour="diagnostics" aria-labelledby="runtime-title">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="runtime-title" className="text-xl font-semibold">Runtime configuration</h2>
