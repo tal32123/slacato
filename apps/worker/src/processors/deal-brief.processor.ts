@@ -108,7 +108,7 @@ export class DealBriefProcessor {
     const lockDuration = options.lockDurationMs ?? 120_000;
     if (!Number.isInteger(concurrency) || concurrency !== 1) throw new RangeError('Initial deal brief worker concurrency must be exactly one');
     if (!Number.isInteger(jobsPerSecond) || jobsPerSecond < 1) throw new RangeError('Worker rate limit must be positive');
-    this.worker = new Worker(WORKFLOW_QUEUE_NAME, async (job: Job<WorkflowCommand>) => {
+    this.worker = new Worker<WorkflowCommand, void, 'workflow-command'>(WORKFLOW_QUEUE_NAME, async (job: Job<WorkflowCommand, void, 'workflow-command'>) => {
       await processStep.execute({ command: job.data, workerId: options.workerId });
     }, {
       connection: { url: options.redisUrl }, concurrency, limiter: { max: jobsPerSecond, duration: 1_000 },

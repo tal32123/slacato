@@ -38,4 +38,18 @@ git diff --check
 # clean
 ```
 
-Per the task constraint, no formatter, lint, build, project-wide test suite, or full typecheck was run. Project-wide validation is reserved for the integration owner after Task 9 lands.
+The initial Task 9 pass intentionally deferred project-wide verification to the integration owner. After integration-owner feedback, the BullMQ worker's generic job name/result types were made explicit and the requested full strict typecheck was run.
+
+## Integration-owner typecheck follow-up
+
+Passed after the compile fix:
+
+```text
+pnpm typecheck
+# exit 0
+
+pnpm vitest run tests/unit/policy.test.ts tests/integration/workflow.test.ts
+# 2 files passed, 27 tests passed
+```
+
+No formatter, lint, build, or project-wide test suite was run.
