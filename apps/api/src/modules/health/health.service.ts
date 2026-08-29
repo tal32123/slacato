@@ -43,17 +43,24 @@ export class HealthService {
   /** Summarizes dependency readiness for the application's health endpoint. */
   public async readiness(): Promise<ReadinessHealth> {
     const entries = await Promise.all(
-      (Object.entries(this.dependencies) as Array<[ReadinessCheckName, ReadinessCheck]>).map(async ([name, check]) => {
-        try {
-          const result = await check.isReady();
-          return [name, result === 'unconfigured' ? 'unconfigured' : result ? 'ready' : 'unavailable'] as const;
-        } catch {
-          return [name, 'unavailable'] as const;
+      (Object.entries(this.dependencies) as Array<[ReadinessCheckName, ReadinessCheck]>).map(
+        async ([name, check]) => {
+          try {
+            const result = await check.isReady();
+            return [
+              name,
+              result === 'unconfigured' ? 'unconfigured' : result ? 'ready' : 'unavailable'
+            ] as const;
+          } catch {
+            return [name, 'unavailable'] as const;
+          }
         }
-      })
+      )
     );
     const checks = Object.fromEntries(entries) as Record<ReadinessCheckName, ReadinessCheckStatus>;
-    const unavailable = (Object.entries(checks) as Array<[ReadinessCheckName, ReadinessCheckStatus]>).find(([, status]) => status === 'unavailable');
+    const unavailable = (
+      Object.entries(checks) as Array<[ReadinessCheckName, ReadinessCheckStatus]>
+    ).find(([, status]) => status === 'unavailable');
     if (unavailable === undefined) {
       const unconfigured = Object.values(checks).some((status) => status === 'unconfigured');
       if (unconfigured) {

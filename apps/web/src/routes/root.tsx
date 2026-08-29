@@ -1,14 +1,23 @@
+import type { DemoSession } from '@slacato/contracts';
 import { useSyncExternalStore } from 'react';
 import type { LoaderFunctionArgs } from 'react-router';
-import type { DemoSession } from '@slacato/contracts';
 import { redirect, useLoaderData, useNavigate } from 'react-router';
-import { queryClient, csrfQueryOptions, logoutSession, safeDestination, sessionQueryOptions, sessionRuntime } from '@/api/session';
+import {
+  csrfQueryOptions,
+  logoutSession,
+  queryClient,
+  safeDestination,
+  sessionQueryOptions,
+  sessionRuntime
+} from '@/api/session';
 import { AppShell } from '@/components/app-shell';
 import { throwProtectedLoaderError } from './loader-security';
 import { RoutePending } from './route-pending';
 
 /** Establishes an authenticated session before protected pages are allowed to render. */
-export async function protectedRootLoader({ request }: LoaderFunctionArgs): Promise<DemoSession | Response> {
+export async function protectedRootLoader({
+  request
+}: LoaderFunctionArgs): Promise<DemoSession | Response> {
   try {
     const session = await queryClient.fetchQuery(sessionQueryOptions());
     if (!session.authenticated) {
@@ -43,4 +52,3 @@ export function RootRoute(): React.JSX.Element {
   if (transitioning) return <RoutePending />;
   return <AppShell session={session} onLogout={logOut} />;
 }
-

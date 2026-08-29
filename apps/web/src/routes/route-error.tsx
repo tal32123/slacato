@@ -1,14 +1,17 @@
-import { useEffect, useRef } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { isRouteErrorResponse, useRevalidator, useRouteError } from 'react-router';
 import { Button } from '@/components/ui/button';
 
 /** Turns route failures into recoverable, permission-aware guidance for the user. */
-export function RouteErrorBoundary({ root = false }: Readonly<{ root?: boolean }>): React.JSX.Element {
+export function RouteErrorBoundary({
+  root = false
+}: Readonly<{ root?: boolean }>): React.JSX.Element {
   const error = useRouteError();
   const revalidator = useRevalidator();
   const denied = isRouteErrorResponse(error) && error.status === 403;
   const errorRef = useRef<HTMLElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Route error changes must refocus the recovery surface.
   useEffect(() => {
     let inner: number | undefined;
     const outer = window.requestAnimationFrame(() => {
@@ -23,9 +26,15 @@ export function RouteErrorBoundary({ root = false }: Readonly<{ root?: boolean }
     };
   }, [error]);
 
-
   const content = (
-    <section ref={errorRef} tabIndex={-1} role="alert" aria-atomic="true" className="mx-auto max-w-2xl rounded-xl border bg-card p-6 sm:p-8" aria-labelledby="route-error-title">
+    <section
+      ref={errorRef}
+      tabIndex={-1}
+      role="alert"
+      aria-atomic="true"
+      className="mx-auto max-w-2xl rounded-xl border bg-card p-6 sm:p-8"
+      aria-labelledby="route-error-title"
+    >
       <span className="grid size-11 place-items-center rounded-full bg-secondary text-secondary-foreground">
         <AlertTriangle aria-hidden="true" />
       </span>
@@ -38,13 +47,20 @@ export function RouteErrorBoundary({ root = false }: Readonly<{ root?: boolean }
           : 'The service did not return a valid view. Try the request again.'}
       </p>
       {!denied && (
-        <Button className="mt-5 min-h-11" variant="outline" onClick={() => revalidator.revalidate()}>
+        <Button
+          className="mt-5 min-h-11"
+          variant="outline"
+          onClick={() => revalidator.revalidate()}
+        >
           Try again
         </Button>
       )}
     </section>
   );
 
-  if (root) return <main className="grid min-h-dvh place-items-center bg-background px-5 py-12">{content}</main>;
+  if (root)
+    return (
+      <main className="grid min-h-dvh place-items-center bg-background px-5 py-12">{content}</main>
+    );
   return content;
 }

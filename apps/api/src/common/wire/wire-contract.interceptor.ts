@@ -1,8 +1,20 @@
-import { BadRequestException, Injectable, InternalServerErrorException, type CallHandler, type ExecutionContext, type NestInterceptor } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import {
+  BadRequestException,
+  type CallHandler,
+  type ExecutionContext,
+  Injectable,
+  InternalServerErrorException,
+  type NestInterceptor
+} from '@nestjs/common';
 import { SSE_METADATA } from '@nestjs/common/constants';
+import { Reflector } from '@nestjs/core';
 import { map, type Observable } from 'rxjs';
-import { WIRE_CONTRACT_METADATA, type RequestContract, type RequestPart, type WireContract } from './wire-contract.metadata.js';
+import {
+  type RequestContract,
+  type RequestPart,
+  WIRE_CONTRACT_METADATA,
+  type WireContract
+} from './wire-contract.metadata.js';
 
 interface HttpRequestData {
   body?: unknown;
@@ -21,41 +33,67 @@ export class WireContractInterceptor implements NestInterceptor<unknown, unknown
     const contract = this.reflector.get<WireContract>(WIRE_CONTRACT_METADATA, context.getHandler());
     const request = context.switchToHttp().getRequest<HttpRequestData>();
 
-    for (const part of ['body', 'query', 'params'] as const) this.validateRequestPart(part, request[part], contract?.request[part]);
+    for (const part of ['body', 'query', 'params'] as const)
+      this.validateRequestPart(part, request[part], contract?.request[part]);
 
     if (this.reflector.get<boolean>(SSE_METADATA, context.getHandler())) {
-      if (!contract?.sse) {
-        throw new InternalServerErrorException({ code: 'WIRE_SCHEMA_REQUIRED', message: 'SSE envelope schema is required' });
+      const schema = contract?.sse;
+      if (!schema) {
+        throw new InternalServerErrorException({
+          code: 'WIRE_SCHEMA_REQUIRED',
+          message: 'SSE envelope schema is required'
+        });
       }
-      return next.handle().pipe(map((emitted) => this.validateSseEnvelope(emitted, contract.sse!)));
+      return next.handle().pipe(map((emitted) => this.validateSseEnvelope(emitted, schema)));
     }
 
-    return next.handle().pipe(map((payload) => {
-      if (!contract?.response) {
-        throw new InternalServerErrorException({ code: 'WIRE_SCHEMA_REQUIRED', message: 'Controller response schema is required' });
-      }
-      const result = contract.response.safeParse(payload);
-      if (result.success) return result.data;
-      throw new InternalServerErrorException({ code: 'INVALID_RESPONSE', message: 'Response validation failed' });
-    }));
+    return next.handle().pipe(
+      map((payload) => {
+        if (!contract?.response) {
+          throw new InternalServerErrorException({
+            code: 'WIRE_SCHEMA_REQUIRED',
+            message: 'Controller response schema is required'
+          });
+        }
+        const result = contract.response.safeParse(payload);
+        if (result.success) return result.data;
+        throw new InternalServerErrorException({
+          code: 'INVALID_RESPONSE',
+          message: 'Response validation failed'
+        });
+      })
+    );
   }
 
   /** Validates an emitted SSE message while preserving any surrounding transport fields. */
-  private validateSseEnvelope(emitted: unknown, schema: Exclude<WireContract['sse'], undefined>): unknown {
+  private validateSseEnvelope(
+    emitted: unknown,
+    schema: Exclude<WireContract['sse'], undefined>
+  ): unknown {
     const message = asRecord(emitted);
     const envelope = message?.data ?? emitted;
     const result = schema.safeParse(envelope);
     if (!result.success) {
-      throw new InternalServerErrorException({ code: 'INVALID_SSE_ENVELOPE', message: 'SSE envelope validation failed' });
+      throw new InternalServerErrorException({
+        code: 'INVALID_SSE_ENVELOPE',
+        message: 'SSE envelope validation failed'
+      });
     }
     return message ? { ...message, data: result.data } : result.data;
   }
 
   /** Enforces the declared contract for one populated request part. */
-  private validateRequestPart(part: RequestPart, value: unknown, declaration: RequestContract | undefined): void {
+  private validateRequestPart(
+    part: RequestPart,
+    value: unknown,
+    declaration: RequestContract | undefined
+  ): void {
     if (!hasValues(value)) return;
     if (!declaration) {
-      throw new BadRequestException({ code: 'WIRE_SCHEMA_REQUIRED', message: `Controller ${part} schema is required` });
+      throw new BadRequestException({
+        code: 'WIRE_SCHEMA_REQUIRED',
+        message: `Controller ${part} schema is required`
+      });
     }
     if (declaration === 'class-dto') return;
     const result = declaration.safeParse(value);
@@ -77,5 +115,7 @@ function hasValues(value: unknown): boolean {
 
 /** Returns an object value as a record when it can carry an SSE data field. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }

@@ -1,18 +1,24 @@
 import {
-  dealListItemSchema,
-  isoDateSchema,
   type BriefSectionView,
   type DealBriefView,
   type DealListItem,
+  dealListItemSchema,
   type EvidenceDetail,
   type GeneratedDealOutputView,
+  isoDateSchema,
   type RecommendedActionView,
   type ReviewWarningView,
   type SourceSnapshotView,
   type StakeholderView
 } from '@slacato/contracts';
 import type { Claim, DealBrief, ReviewWarning } from '@slacato/core';
-import type { AuthorizedDeal, DealEvidence, DealRunSummary, GeneratedDealOutput, LatestDealRun } from './contracts.js';
+import type {
+  AuthorizedDeal,
+  DealEvidence,
+  DealRunSummary,
+  GeneratedDealOutput,
+  LatestDealRun
+} from './contracts.js';
 
 const sectionTitles = {
   dealSnapshot: 'Deal Snapshot',
@@ -69,9 +75,10 @@ export function mapAuthorizedDealToListItem(
     riskLevel: normalizeRiskLevel(fields.riskLevel),
     restricted: deal.restricted,
     createdAt: serializeDateTime(deal.createdAt),
-    latestRun: latestRun === null
-      ? null
-      : { status: latestRun.status, updatedAt: serializeDateTime(latestRun.updatedAt) }
+    latestRun:
+      latestRun === null
+        ? null
+        : { status: latestRun.status, updatedAt: serializeDateTime(latestRun.updatedAt) }
   });
 }
 
@@ -93,7 +100,8 @@ export function mapAuthorizedEvidenceToDetail(evidence: DealEvidence): EvidenceD
     stableId: stableIdentity.id,
     citationLabel: `source=${sourcePath}, ${stableIdentity.key}=${stableIdentity.id}`,
     chunkId: evidence.id,
-    capturedAt: eventDate === null ? serializeDateTime(evidence.createdAt) : `${eventDate}T00:00:00.000Z`,
+    capturedAt:
+      eventDate === null ? serializeDateTime(evidence.createdAt) : `${eventDate}T00:00:00.000Z`,
     content: evidence.content
   };
 }
@@ -104,9 +112,15 @@ export function projectAuthorizedWorkspaceEvidence(
   stakeholderRows: readonly DealEvidence[],
   supplementalRows: readonly DealEvidence[]
 ): AuthorizedWorkspaceEvidence {
-  const opportunityEvidence = opportunityRows.map(mapAuthorizedEvidenceToDetail).filter((item): item is EvidenceDetail => item !== undefined);
-  const stakeholderEvidenceDetails = stakeholderRows.map(mapAuthorizedEvidenceToDetail).filter((item): item is EvidenceDetail => item !== undefined);
-  const supplementalEvidence = supplementalRows.map(mapAuthorizedEvidenceToDetail).filter((item): item is EvidenceDetail => item !== undefined);
+  const opportunityEvidence = opportunityRows
+    .map(mapAuthorizedEvidenceToDetail)
+    .filter((item): item is EvidenceDetail => item !== undefined);
+  const stakeholderEvidenceDetails = stakeholderRows
+    .map(mapAuthorizedEvidenceToDetail)
+    .filter((item): item is EvidenceDetail => item !== undefined);
+  const supplementalEvidence = supplementalRows
+    .map(mapAuthorizedEvidenceToDetail)
+    .filter((item): item is EvidenceDetail => item !== undefined);
   const evidence = [...opportunityEvidence, ...stakeholderEvidenceDetails, ...supplementalEvidence];
   const includedEvidenceIds = new Set(evidence.map((item) => item.id));
   return {
@@ -131,7 +145,9 @@ export function renderSourceSnapshot(input: SourceSnapshotRenderingInput): Sourc
 }
 
 /** Renders a generated draft or finalized artifact only with the run that produced it. */
-export function renderGeneratedOutput(input: GeneratedOutputRenderingInput): GeneratedDealOutputView | null {
+export function renderGeneratedOutput(
+  input: GeneratedOutputRenderingInput
+): GeneratedDealOutputView | null {
   if (input.generatedOutput === null || input.producingRun === undefined) return null;
   return {
     type: 'generated_output',
@@ -154,7 +170,10 @@ export function legacyBriefForWorkspace(
 }
 
 /** Renders all nine canonical generated sections after proving every referenced evidence ID is authorized. */
-function renderFinalizedDealBrief(brief: DealBrief, evidence: readonly EvidenceDetail[]): GeneratedBriefView {
+function renderFinalizedDealBrief(
+  brief: DealBrief,
+  evidence: readonly EvidenceDetail[]
+): GeneratedBriefView {
   const evidenceById = new Map(evidence.map((item) => [item.id, item]));
   const claims = collectCanonicalBriefClaims(brief);
   const claimsById = indexCanonicalClaimsById(claims);
@@ -197,7 +216,9 @@ function renderFinalizedDealBrief(brief: DealBrief, evidence: readonly EvidenceD
 
   const dealSnapshotCitationIds = collectClaimEvidenceIds(brief.dealSnapshot.claims ?? []);
   const executiveSummaryCitationIds = collectClaimEvidenceIds(brief.executiveSummary.claims ?? []);
-  const buyerGoalsCitationIds = collectClaimEvidenceIds(brief.buyerGoalsAndBusinessDrivers.claims ?? []);
+  const buyerGoalsCitationIds = collectClaimEvidenceIds(
+    brief.buyerGoalsAndBusinessDrivers.claims ?? []
+  );
   const stakeholderCitationIds = uniqueEvidenceIds([
     ...collectClaimEvidenceIds(brief.stakeholderMap.claims ?? []),
     ...stakeholders.flatMap((stakeholder) => stakeholder.citationIds)
@@ -211,22 +232,93 @@ function renderFinalizedDealBrief(brief: DealBrief, evidence: readonly EvidenceD
   const warningCitationIds = uniqueEvidenceIds(warnings.flatMap((warning) => warning.citationIds));
 
   const sections = {
-    dealSnapshot: createBriefSectionView('dealSnapshot', [`${brief.dealSnapshot.accountName} — ${brief.dealSnapshot.opportunityName}`], [
-      `Stage: ${brief.dealSnapshot.stage}`,
-      ...(brief.dealSnapshot.closeDate === undefined ? [] : [`Close date: ${brief.dealSnapshot.closeDate}`]),
-      ...(brief.dealSnapshot.amount === undefined ? [] : [`Amount: ${brief.dealSnapshot.amount}${brief.dealSnapshot.currency === undefined ? '' : ` ${brief.dealSnapshot.currency}`}`]),
-      ...(brief.dealSnapshot.owner === undefined ? [] : [`Owner: ${brief.dealSnapshot.owner}`])
-    ], dealSnapshotCitationIds, referencesAccountTeamEvidence(dealSnapshotCitationIds, evidenceById)),
-    executiveSummary: createBriefSectionView('executiveSummary', [brief.executiveSummary.narrative], [], executiveSummaryCitationIds, referencesAccountTeamEvidence(executiveSummaryCitationIds, evidenceById)),
-    buyerGoalsAndBusinessDrivers: createBriefSectionView('buyerGoalsAndBusinessDrivers', [...brief.buyerGoalsAndBusinessDrivers.businessDrivers], [...brief.buyerGoalsAndBusinessDrivers.goals], buyerGoalsCitationIds, referencesAccountTeamEvidence(buyerGoalsCitationIds, evidenceById)),
-    stakeholderMap: createBriefSectionView('stakeholderMap', [...(brief.stakeholderMap.coverageGaps ?? [])], stakeholders.map((stakeholder) => `${stakeholder.name} — ${stakeholder.role}`), stakeholderCitationIds, referencesAccountTeamEvidence(stakeholderCitationIds, evidenceById)),
-    negotiationState: createBriefSectionView('negotiationState', [brief.negotiationState.currentState], [...(brief.negotiationState.leverage ?? []), ...brief.negotiationState.risks], negotiationCitationIds, referencesAccountTeamEvidence(negotiationCitationIds, evidenceById)),
-    recommendedNextActions: createBriefSectionView('recommendedNextActions', actions.map((action) => action.rationale), actions.map((action) => action.action), actionCitationIds, actions.some((action) => action.accountTeamUpdateImpact)),
-    missingInformation: createBriefSectionView('missingInformation', brief.missingInformation.items.map((item) => item.whyItMatters), brief.missingInformation.items.map((item) => item.question), [], false),
-    sourceEvidence: createBriefSectionView('sourceEvidence', [`${brief.sourceEvidence.evidence.length} authorized evidence records are summarized by the generated output.`], brief.sourceEvidence.evidence.map((item) => item.summary), sourceEvidenceCitationIds, referencesAccountTeamEvidence(sourceEvidenceCitationIds, evidenceById)),
-    confidenceAndReviewWarnings: createBriefSectionView('confidenceAndReviewWarnings', [`Overall generated confidence is ${Math.round(brief.confidenceAndReviewWarnings.overallConfidence * 100)}%.`], warnings.map((warning) => warning.message), warningCitationIds, warnings.some((warning) => warning.accountTeamUpdateImpact))
+    dealSnapshot: createBriefSectionView(
+      'dealSnapshot',
+      [`${brief.dealSnapshot.accountName} — ${brief.dealSnapshot.opportunityName}`],
+      [
+        `Stage: ${brief.dealSnapshot.stage}`,
+        ...(brief.dealSnapshot.closeDate === undefined
+          ? []
+          : [`Close date: ${brief.dealSnapshot.closeDate}`]),
+        ...(brief.dealSnapshot.amount === undefined
+          ? []
+          : [
+              `Amount: ${brief.dealSnapshot.amount}${brief.dealSnapshot.currency === undefined ? '' : ` ${brief.dealSnapshot.currency}`}`
+            ]),
+        ...(brief.dealSnapshot.owner === undefined ? [] : [`Owner: ${brief.dealSnapshot.owner}`])
+      ],
+      dealSnapshotCitationIds,
+      referencesAccountTeamEvidence(dealSnapshotCitationIds, evidenceById)
+    ),
+    executiveSummary: createBriefSectionView(
+      'executiveSummary',
+      [brief.executiveSummary.narrative],
+      [],
+      executiveSummaryCitationIds,
+      referencesAccountTeamEvidence(executiveSummaryCitationIds, evidenceById)
+    ),
+    buyerGoalsAndBusinessDrivers: createBriefSectionView(
+      'buyerGoalsAndBusinessDrivers',
+      [...brief.buyerGoalsAndBusinessDrivers.businessDrivers],
+      [...brief.buyerGoalsAndBusinessDrivers.goals],
+      buyerGoalsCitationIds,
+      referencesAccountTeamEvidence(buyerGoalsCitationIds, evidenceById)
+    ),
+    stakeholderMap: createBriefSectionView(
+      'stakeholderMap',
+      [...(brief.stakeholderMap.coverageGaps ?? [])],
+      stakeholders.map((stakeholder) => `${stakeholder.name} — ${stakeholder.role}`),
+      stakeholderCitationIds,
+      referencesAccountTeamEvidence(stakeholderCitationIds, evidenceById)
+    ),
+    negotiationState: createBriefSectionView(
+      'negotiationState',
+      [brief.negotiationState.currentState],
+      [...(brief.negotiationState.leverage ?? []), ...brief.negotiationState.risks],
+      negotiationCitationIds,
+      referencesAccountTeamEvidence(negotiationCitationIds, evidenceById)
+    ),
+    recommendedNextActions: createBriefSectionView(
+      'recommendedNextActions',
+      actions.map((action) => action.rationale),
+      actions.map((action) => action.action),
+      actionCitationIds,
+      actions.some((action) => action.accountTeamUpdateImpact)
+    ),
+    missingInformation: createBriefSectionView(
+      'missingInformation',
+      brief.missingInformation.items.map((item) => item.whyItMatters),
+      brief.missingInformation.items.map((item) => item.question),
+      [],
+      false
+    ),
+    sourceEvidence: createBriefSectionView(
+      'sourceEvidence',
+      [
+        `${brief.sourceEvidence.evidence.length} authorized evidence records are summarized by the generated output.`
+      ],
+      brief.sourceEvidence.evidence.map((item) => item.summary),
+      sourceEvidenceCitationIds,
+      referencesAccountTeamEvidence(sourceEvidenceCitationIds, evidenceById)
+    ),
+    confidenceAndReviewWarnings: createBriefSectionView(
+      'confidenceAndReviewWarnings',
+      [
+        `Overall generated confidence is ${Math.round(brief.confidenceAndReviewWarnings.overallConfidence * 100)}%.`
+      ],
+      warnings.map((warning) => warning.message),
+      warningCitationIds,
+      warnings.some((warning) => warning.accountTeamUpdateImpact)
+    )
   };
-  return { status: 'generated', overallConfidence: brief.confidenceAndReviewWarnings.overallConfidence, sections, stakeholders, actions, warnings };
+  return {
+    status: 'generated',
+    overallConfidence: brief.confidenceAndReviewWarnings.overallConfidence,
+    sections,
+    stakeholders,
+    actions,
+    warnings
+  };
 }
 
 /** Collects every canonical claim that can contribute citations to a rendered view. */
@@ -247,7 +339,8 @@ function collectCanonicalBriefClaims(brief: DealBrief): readonly Claim[] {
 function indexCanonicalClaimsById(claims: readonly Claim[]): ReadonlyMap<string, Claim> {
   const claimsById = new Map<string, Claim>();
   for (const claim of claims) {
-    if (claimsById.has(claim.id)) throw new Error(`Finalized brief contains duplicate claim ${claim.id}`);
+    if (claimsById.has(claim.id))
+      throw new Error(`Finalized brief contains duplicate claim ${claim.id}`);
     claimsById.set(claim.id, claim);
   }
   return claimsById;
@@ -265,7 +358,9 @@ function assertCanonicalEvidenceIsAuthorized(
   ]);
   for (const evidenceId of referencedEvidenceIds) {
     if (!evidenceById.has(evidenceId)) {
-      throw new Error(`Finalized brief references evidence ${evidenceId} outside the authorized workspace`);
+      throw new Error(
+        `Finalized brief references evidence ${evidenceId} outside the authorized workspace`
+      );
     }
   }
 }
@@ -277,7 +372,8 @@ function collectWarningEvidenceIds(
 ): string[] {
   const claims = warning.claimIds.map((claimId) => {
     const claim = claimsById.get(claimId);
-    if (claim === undefined) throw new Error(`Finalized brief warning references unknown claim ${claimId}`);
+    if (claim === undefined)
+      throw new Error(`Finalized brief warning references unknown claim ${claimId}`);
     return claim;
   });
   return collectClaimEvidenceIds(claims);
@@ -285,7 +381,9 @@ function collectWarningEvidenceIds(
 
 /** Projects canonical claim citations onto their immutable evidence IDs. */
 function collectClaimEvidenceIds(claims: readonly Claim[]): string[] {
-  return uniqueEvidenceIds(claims.flatMap((claim) => claim.citations.map((citation) => citation.evidenceId)));
+  return uniqueEvidenceIds(
+    claims.flatMap((claim) => claim.citations.map((citation) => citation.evidenceId))
+  );
 }
 
 /** Deduplicates evidence IDs without changing their deterministic first-seen order. */
@@ -315,12 +413,25 @@ function renderSourceBackedDealBrief(
     .sort((left, right) => right.capturedAt.localeCompare(left.capturedAt))[0];
   const accountTeamUpdates = evidence.filter((item) => item.sourceType === 'slack');
   const unresolvedUpdate = accountTeamUpdates.find(isUnresolvedAccountTeamUpdate);
-  const alignmentUpdate = accountTeamUpdates.find((item) => item.id !== unresolvedUpdate?.id) ?? accountTeamUpdates[0];
+  const alignmentUpdate =
+    accountTeamUpdates.find((item) => item.id !== unresolvedUpdate?.id) ?? accountTeamUpdates[0];
   const conversationFields = parseColonDelimitedRecord(latestConversation?.content ?? '');
   const unresolvedUpdateFields = parseColonDelimitedRecord(unresolvedUpdate?.content ?? '');
   const stakeholders = stakeholderEvidence.map(mapSourceBackedStakeholder);
-  const actions = buildSourceBackedActions(deal, fields, opportunity, latestConversation, unresolvedUpdate, unresolvedUpdateFields);
-  const warnings = buildSourceBackedWarnings(deal, opportunity, unresolvedUpdate, unresolvedUpdateFields);
+  const actions = buildSourceBackedActions(
+    deal,
+    fields,
+    opportunity,
+    latestConversation,
+    unresolvedUpdate,
+    unresolvedUpdateFields
+  );
+  const warnings = buildSourceBackedWarnings(
+    deal,
+    opportunity,
+    unresolvedUpdate,
+    unresolvedUpdateFields
+  );
   const opportunityEvidenceIds = evidenceIdsForItem(opportunity);
   const conversationEvidenceIds = evidenceIdsForItem(latestConversation);
   const unresolvedUpdateEvidenceIds = evidenceIdsForItem(unresolvedUpdate);
@@ -328,27 +439,47 @@ function renderSourceBackedDealBrief(
   const representativeEvidence = evidence.slice(0, 12);
 
   const sections = {
-    dealSnapshot: createBriefSectionView('dealSnapshot', [
-      `${deal.accountName} is at ${deal.stage} with ${deal.probability === null ? 'an unrecorded' : `${deal.probability}%`} probability.`,
-      deal.closeDate === null ? 'No close date is recorded.' : `The recorded close date is ${deal.closeDate}.`
-    ], [fields.type, fields.forecastCategory].filter(isNonEmptyString), opportunityEvidenceIds),
-    executiveSummary: createBriefSectionView('executiveSummary', [
-      conversationFields.summary ?? `The authorized source record places this opportunity at ${deal.stage}.`,
-      alignmentUpdate === undefined
-        ? 'No authorized account-team update is available.'
-        : parseColonDelimitedRecord(alignmentUpdate.content).updateText ?? alignmentUpdate.content
-    ], [], [...conversationEvidenceIds, ...evidenceIdsForItem(alignmentUpdate)], alignmentUpdate !== undefined),
+    dealSnapshot: createBriefSectionView(
+      'dealSnapshot',
+      [
+        `${deal.accountName} is at ${deal.stage} with ${deal.probability === null ? 'an unrecorded' : `${deal.probability}%`} probability.`,
+        deal.closeDate === null
+          ? 'No close date is recorded.'
+          : `The recorded close date is ${deal.closeDate}.`
+      ],
+      [fields.type, fields.forecastCategory].filter(isNonEmptyString),
+      opportunityEvidenceIds
+    ),
+    executiveSummary: createBriefSectionView(
+      'executiveSummary',
+      [
+        conversationFields.summary ??
+          `The authorized source record places this opportunity at ${deal.stage}.`,
+        alignmentUpdate === undefined
+          ? 'No authorized account-team update is available.'
+          : (parseColonDelimitedRecord(alignmentUpdate.content).updateText ??
+            alignmentUpdate.content)
+      ],
+      [],
+      [...conversationEvidenceIds, ...evidenceIdsForItem(alignmentUpdate)],
+      alignmentUpdate !== undefined
+    ),
     buyerGoalsAndBusinessDrivers: createBriefSectionView(
       'buyerGoalsAndBusinessDrivers',
-      [conversationFields.summary ?? 'Buyer goals require confirmation from authorized conversation evidence.'],
+      [
+        conversationFields.summary ??
+          'Buyer goals require confirmation from authorized conversation evidence.'
+      ],
       splitCommaSeparatedValues(conversationFields.keyPoints),
       conversationEvidenceIds
     ),
     stakeholderMap: createBriefSectionView(
       'stakeholderMap',
-      [stakeholders.length === 0
-        ? 'No authorized stakeholder records are available.'
-        : `${stakeholders.length} authorized stakeholder records are available for review.`],
+      [
+        stakeholders.length === 0
+          ? 'No authorized stakeholder records are available.'
+          : `${stakeholders.length} authorized stakeholder records are available for review.`
+      ],
       stakeholders.map((stakeholder) => `${stakeholder.name} — ${stakeholder.role}`),
       stakeholderEvidenceIds
     ),
@@ -371,20 +502,27 @@ function renderSourceBackedDealBrief(
     ),
     missingInformation: createBriefSectionView(
       'missingInformation',
-      [unresolvedUpdateFields.updateText ?? 'No explicit authorized account-team information gap is recorded.'],
+      [
+        unresolvedUpdateFields.updateText ??
+          'No explicit authorized account-team information gap is recorded.'
+      ],
       unresolvedUpdate === undefined ? [] : ['Confirm this account-team gap with the named owner.'],
       unresolvedUpdateEvidenceIds,
       unresolvedUpdate !== undefined
     ),
     sourceEvidence: createBriefSectionView(
       'sourceEvidence',
-      [`${evidence.length} authorized source records support this workspace. Citation controls open representative immutable record identifiers.`],
+      [
+        `${evidence.length} authorized source records support this workspace. Citation controls open representative immutable record identifiers.`
+      ],
       [],
       representativeEvidence.map((item) => item.id)
     ),
     confidenceAndReviewWarnings: createBriefSectionView(
       'confidenceAndReviewWarnings',
-      [`The deterministic source-cue confidence indicator is ${Math.round(sourceBackedConfidenceForRisk(deal.riskLevel) * 100)}%.`],
+      [
+        `The deterministic source-cue confidence indicator is ${Math.round(sourceBackedConfidenceForRisk(deal.riskLevel) * 100)}%.`
+      ],
       warnings.map((warning) => warning.message),
       warnings.flatMap((warning) => warning.citationIds),
       warnings.some((warning) => warning.accountTeamUpdateImpact)
@@ -392,7 +530,8 @@ function renderSourceBackedDealBrief(
   };
 
   for (const citationId of Object.values(sections).flatMap((section) => section.citationIds)) {
-    if (!evidenceById.has(citationId)) throw new Error(`Brief citation ${citationId} is not authorized for this workspace`);
+    if (!evidenceById.has(citationId))
+      throw new Error(`Brief citation ${citationId} is not authorized for this workspace`);
   }
   return {
     status: 'source_backed',
@@ -446,28 +585,31 @@ function buildSourceBackedActions(
   unresolvedUpdateFields: Readonly<Record<string, string>>
 ): RecommendedActionView[] {
   const actions: RecommendedActionView[] = [];
-  if (fields.nextStep !== undefined) actions.push({
-    action: fields.nextStep,
-    owner: deal.owner,
-    priority: deal.riskLevel === 'high' ? 'critical' : 'high',
-    dueDate: extractIsoDate(fields.nextStep),
-    rationale: 'This is the next step recorded in the authorized opportunity source.',
-    citationIds: evidenceIdsForItem(opportunity),
-    accountTeamUpdateImpact: false
-  });
-  if (unresolvedUpdate !== undefined) actions.push({
-    action: 'Confirm the latest account-team information gap before finalizing the packet.',
-    owner: deal.owner,
-    priority: 'high',
-    dueDate: deal.closeDate,
-    rationale: unresolvedUpdateFields.updateText ?? unresolvedUpdate.content,
-    citationIds: [unresolvedUpdate.id],
-    accountTeamUpdateImpact: true
-  });
+  if (fields.nextStep !== undefined)
+    actions.push({
+      action: fields.nextStep,
+      owner: deal.owner,
+      priority: deal.riskLevel === 'high' ? 'critical' : 'high',
+      dueDate: extractIsoDate(fields.nextStep),
+      rationale: 'This is the next step recorded in the authorized opportunity source.',
+      citationIds: evidenceIdsForItem(opportunity),
+      accountTeamUpdateImpact: false
+    });
+  if (unresolvedUpdate !== undefined)
+    actions.push({
+      action: 'Confirm the latest account-team information gap before finalizing the packet.',
+      owner: deal.owner,
+      priority: 'high',
+      dueDate: deal.closeDate,
+      rationale: unresolvedUpdateFields.updateText ?? unresolvedUpdate.content,
+      citationIds: [unresolvedUpdate.id],
+      accountTeamUpdateImpact: true
+    });
   else if (conversation !== undefined) {
     const conversationFields = parseColonDelimitedRecord(conversation.content);
     actions.push({
-      action: conversationFields.nextSteps ?? 'Confirm the next negotiation step with the account team.',
+      action:
+        conversationFields.nextSteps ?? 'Confirm the next negotiation step with the account team.',
       owner: deal.owner,
       priority: 'medium',
       dueDate: extractIsoDate(conversationFields.nextSteps),
@@ -486,18 +628,22 @@ function buildSourceBackedWarnings(
   unresolvedUpdate: EvidenceDetail | undefined,
   unresolvedUpdateFields: Readonly<Record<string, string>>
 ): ReviewWarningView[] {
-  const warnings: ReviewWarningView[] = [{
-    severity: deal.riskLevel === 'high' ? 'critical' : deal.riskLevel === 'medium' ? 'warning' : 'info',
-    message: `${deal.riskLevel[0]?.toUpperCase()}${deal.riskLevel.slice(1)} opportunity risk is recorded; seller review remains required.`,
-    citationIds: evidenceIdsForItem(opportunity),
-    accountTeamUpdateImpact: false
-  }];
-  if (unresolvedUpdate !== undefined) warnings.push({
-    severity: 'warning',
-    message: unresolvedUpdateFields.updateText ?? unresolvedUpdate.content,
-    citationIds: [unresolvedUpdate.id],
-    accountTeamUpdateImpact: true
-  });
+  const warnings: ReviewWarningView[] = [
+    {
+      severity:
+        deal.riskLevel === 'high' ? 'critical' : deal.riskLevel === 'medium' ? 'warning' : 'info',
+      message: `${deal.riskLevel[0]?.toUpperCase()}${deal.riskLevel.slice(1)} opportunity risk is recorded; seller review remains required.`,
+      citationIds: evidenceIdsForItem(opportunity),
+      accountTeamUpdateImpact: false
+    }
+  ];
+  if (unresolvedUpdate !== undefined)
+    warnings.push({
+      severity: 'warning',
+      message: unresolvedUpdateFields.updateText ?? unresolvedUpdate.content,
+      citationIds: [unresolvedUpdate.id],
+      accountTeamUpdateImpact: true
+    });
   return warnings;
 }
 
@@ -520,20 +666,44 @@ function resolveStableEvidenceIdentity(
   fields: Readonly<Record<string, string>>,
   locator: string
 ): Readonly<{ key: string; id: string }> | undefined {
-  if (sourcePath.endsWith('/opportunities.tsv')) return createEvidenceIdentity('opportunity_id', fields.opportunityId ?? extractLocatorRecordId(locator));
-  if (sourcePath.endsWith('/accounts.tsv')) return createEvidenceIdentity('account_id', fields.accountId ?? extractLocatorRecordId(locator));
-  if (sourcePath.endsWith('/contacts.tsv')) return createEvidenceIdentity('contact_id', fields.contactId ?? extractLocatorRecordId(locator));
+  if (sourcePath.endsWith('/opportunities.tsv'))
+    return createEvidenceIdentity(
+      'opportunity_id',
+      fields.opportunityId ?? extractLocatorRecordId(locator)
+    );
+  if (sourcePath.endsWith('/accounts.tsv'))
+    return createEvidenceIdentity(
+      'account_id',
+      fields.accountId ?? extractLocatorRecordId(locator)
+    );
+  if (sourcePath.endsWith('/contacts.tsv'))
+    return createEvidenceIdentity(
+      'contact_id',
+      fields.contactId ?? extractLocatorRecordId(locator)
+    );
   if (sourcePath.includes('/gong_call_summaries.tsv') || sourcePath.includes('/transcripts/')) {
-    return createEvidenceIdentity('call_id', fields.callId ?? extractCallIdFromSourcePath(sourcePath) ?? extractLocatorRecordId(locator));
+    return createEvidenceIdentity(
+      'call_id',
+      fields.callId ?? extractCallIdFromSourcePath(sourcePath) ?? extractLocatorRecordId(locator)
+    );
   }
-  if (sourcePath.endsWith('/pricing_notes.tsv')) return createEvidenceIdentity('pricing_note_id', fields.pricingNoteId ?? extractLocatorRecordId(locator));
-  if (sourcePath.endsWith('/account_team_updates.tsv')) return createEvidenceIdentity('update_id', fields.updateId ?? extractLocatorRecordId(locator));
-  if (sourcePath.endsWith('/deal_desk_policy.md')) return { key: 'policy_id', id: 'deal-desk-policy' };
+  if (sourcePath.endsWith('/pricing_notes.tsv'))
+    return createEvidenceIdentity(
+      'pricing_note_id',
+      fields.pricingNoteId ?? extractLocatorRecordId(locator)
+    );
+  if (sourcePath.endsWith('/account_team_updates.tsv'))
+    return createEvidenceIdentity('update_id', fields.updateId ?? extractLocatorRecordId(locator));
+  if (sourcePath.endsWith('/deal_desk_policy.md'))
+    return { key: 'policy_id', id: 'deal-desk-policy' };
   return createEvidenceIdentity('record_id', extractLocatorRecordId(locator));
 }
 
 /** Creates a normalized evidence identity when the source supplies a non-empty identifier. */
-function createEvidenceIdentity(key: string, id: string | undefined): Readonly<{ key: string; id: string }> | undefined {
+function createEvidenceIdentity(
+  key: string,
+  id: string | undefined
+): Readonly<{ key: string; id: string }> | undefined {
   return id === undefined || id.trim().length === 0 ? undefined : { key, id: id.trim() };
 }
 
@@ -549,7 +719,12 @@ function isNonEmptyString(value: string | undefined): value is string {
 
 /** Splits a comma-delimited fixture field into normalized non-empty values. */
 function splitCommaSeparatedValues(value: string | undefined): string[] {
-  return value?.split(',').map((item) => item.trim()).filter(Boolean) ?? [];
+  return (
+    value
+      ?.split(',')
+      .map((item) => item.trim())
+      .filter(Boolean) ?? []
+  );
 }
 
 /** Parses a finite numeric fixture field or returns null when absent or invalid. */
@@ -578,9 +753,15 @@ function normalizeCurrencyCode(value: string | undefined): string | null {
 /** Detects an explicit unresolved account-team update without reviving resolved prose. */
 function isUnresolvedAccountTeamUpdate(item: EvidenceDetail): boolean {
   const fields = parseColonDelimitedRecord(item.content);
-  if (fields.updateStatus !== undefined) return fields.updateStatus.trim().toLowerCase() === 'unresolved';
+  if (fields.updateStatus !== undefined)
+    return fields.updateStatus.trim().toLowerCase() === 'unresolved';
   const text = fields.updateText ?? '';
-  if (/\b(?:is now|has now been|has been)\b[^.]*\b(?:confirmed|resolved|completed|approved|provided)\b/i.test(text)) return false;
+  if (
+    /\b(?:is now|has now been|has been)\b[^.]*\b(?:confirmed|resolved|completed|approved|provided)\b/i.test(
+      text
+    )
+  )
+    return false;
   return [
     /\bhas not yet been confirmed\b/i,
     /\bno confirmed\b[^.]*\b(?:yet|incomplete)\b/i,

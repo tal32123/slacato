@@ -1,8 +1,8 @@
 import {
-  createBudgetedModelGateway,
-  ModelRegistry,
   type BudgetedModelGateway,
+  createBudgetedModelGateway,
   type EmbeddingGateway,
+  ModelRegistry,
   type ModelTransport,
   type ModelTransportRequest,
   type ProviderAttemptLedger,
@@ -14,17 +14,25 @@ export const MOCK_EMBEDDING_DIMENSION = 64;
 
 /** Identifies vectors so persistence can reject mixed profiles before comparison. */
 export const MOCK_EMBEDDING_PROFILE = Object.freeze({
-  providerId: 'mock', modelId: 'mock-embedding', dimension: MOCK_EMBEDDING_DIMENSION, unitNormalized: true
+  providerId: 'mock',
+  modelId: 'mock-embedding',
+  dimension: MOCK_EMBEDDING_DIMENSION,
+  unitNormalized: true
 });
 
 /**
  * Injects deterministic generic responses without teaching infrastructure about
  * agent schemas. Responses still traverse the public budgeted gateway.
  */
-export type MockGenerationResolver = <Value>(request: ModelTransportRequest<Value>) => Promise<TransportGeneration<Value>> | TransportGeneration<Value>;
+export type MockGenerationResolver = <Value>(
+  request: ModelTransportRequest<Value>
+) => Promise<TransportGeneration<Value>> | TransportGeneration<Value>;
 
 /** Construction options for the deterministic development/demo provider. */
-export type MockModelGatewayOptions = Readonly<{ resolve: MockGenerationResolver; attemptLedger: ProviderAttemptLedger }>;
+export type MockModelGatewayOptions = Readonly<{
+  resolve: MockGenerationResolver;
+  attemptLedger: ProviderAttemptLedger;
+}>;
 
 /** Supplies deterministic model responses for development and demonstration workflows. */
 class MockTransport implements ModelTransport {
@@ -34,7 +42,9 @@ class MockTransport implements ModelTransport {
   public constructor(private readonly resolve: MockGenerationResolver) {}
 
   /** Produces the scripted response and marks it as mock-provider output. */
-  public async generate<Value>(request: ModelTransportRequest<Value>): Promise<TransportGeneration<Value>> {
+  public async generate<Value>(
+    request: ModelTransportRequest<Value>
+  ): Promise<TransportGeneration<Value>> {
     const response = await this.resolve(request);
     return { ...response, warnings: [...(response.warnings ?? []), 'mock_provider'] };
   }
@@ -53,10 +63,15 @@ function tokenHash(token: string): number {
 /** Produces a deterministic normalized embedding for development and demonstrations. */
 function embeddingFor(value: string): number[] {
   const vector = Array<number>(MOCK_EMBEDDING_DIMENSION).fill(0);
-  const tokens = value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [];
+  const tokens =
+    value
+      .normalize('NFKC')
+      .toLowerCase()
+      .match(/[\p{L}\p{N}_]+/gu) ?? [];
   for (const token of tokens) {
     const hash = tokenHash(token);
-    vector[hash % MOCK_EMBEDDING_DIMENSION]! += 1;
+    const index = hash % MOCK_EMBEDDING_DIMENSION;
+    vector[index] = (vector[index] ?? 0) + 1;
   }
   const magnitude = Math.sqrt(vector.reduce((sum, entry) => sum + entry * entry, 0));
   return magnitude === 0 ? vector : vector.map((entry) => entry / magnitude);
@@ -69,15 +84,36 @@ export function createMockModelGateways(options: MockModelGatewayOptions): Reado
   registry: ModelRegistry;
   embeddingProfile: typeof MOCK_EMBEDDING_PROFILE;
 }> {
-  if (typeof options?.resolve !== 'function') throw new Error('Mock model gateways require a fixture resolver');
+  if (typeof options?.resolve !== 'function')
+    throw new Error('Mock model gateways require a fixture resolver');
   const registry = new ModelRegistry();
-  registry.register('brief', { providerId: 'mock', modelId: 'mock-brief', nativeStructuredOutput: false });
-  registry.register('specialist', { providerId: 'mock', modelId: 'mock-specialist', nativeStructuredOutput: false });
-  registry.register('compaction', { providerId: 'mock', modelId: 'mock-compaction', nativeStructuredOutput: false });
+  registry.register('brief', {
+    providerId: 'mock',
+    modelId: 'mock-brief',
+    nativeStructuredOutput: false
+  });
+  registry.register('specialist', {
+    providerId: 'mock',
+    modelId: 'mock-specialist',
+    nativeStructuredOutput: false
+  });
+  registry.register('compaction', {
+    providerId: 'mock',
+    modelId: 'mock-compaction',
+    nativeStructuredOutput: false
+  });
   registry.register('embedding', { providerId: 'mock', modelId: MOCK_EMBEDDING_PROFILE.modelId });
   return {
-    modelGateway: createBudgetedModelGateway(new MockTransport(options.resolve), undefined, options.attemptLedger),
-    embeddingGateway: { async embed(values: readonly string[]): Promise<number[][]> { return values.map(embeddingFor); } },
+    modelGateway: createBudgetedModelGateway(
+      new MockTransport(options.resolve),
+      undefined,
+      options.attemptLedger
+    ),
+    embeddingGateway: {
+      async embed(values: readonly string[]): Promise<number[][]> {
+        return values.map(embeddingFor);
+      }
+    },
     registry,
     embeddingProfile: MOCK_EMBEDDING_PROFILE
   };

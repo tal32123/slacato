@@ -1,5 +1,5 @@
+import { type DealBrief, dealBriefSchema } from '../../domain/briefs/schema.js';
 import type { BudgetedModelGateway } from '../model/contracts.js';
-import { dealBriefSchema, type DealBrief } from '../../domain/briefs/schema.js';
 import type { AgentContext, AgentEvidenceRecord, StrategyArtifacts } from './contracts.js';
 import { runAgent } from './runtime.js';
 import {
@@ -10,8 +10,16 @@ import {
   validateStakeholderArtifact
 } from './validation.js';
 
-const ALL_SOURCES = new Set<AgentEvidenceRecord['sourceType']>(['gong_summary', 'gong_transcript', 'policy', 'pricing', 'salesforce', 'slack']);
-const TASK = 'Synthesize the three validated specialist artifacts into the canonical nine-section deal brief. Use only citations already present in the validated artifacts. Prioritize negotiation state, concrete next actions, missing information, confidence, and review warnings. Return only the strict DealBrief.';
+const ALL_SOURCES = new Set<AgentEvidenceRecord['sourceType']>([
+  'gong_summary',
+  'gong_transcript',
+  'policy',
+  'pricing',
+  'salesforce',
+  'slack'
+]);
+const TASK =
+  'Synthesize the three validated specialist artifacts into the canonical nine-section deal brief. Use only citations already present in the validated artifacts. Prioritize negotiation state, concrete next actions, missing information, confidence, and review warnings. Return only the strict DealBrief.';
 
 /** Combines validated specialist findings into the deal team’s negotiation brief. */
 export class StrategyAgent {
@@ -20,9 +28,21 @@ export class StrategyAgent {
 
   /** Produces a support-checked deal brief from validated specialist assessments. */
   public async run(context: AgentContext, artifacts: StrategyArtifacts): Promise<DealBrief> {
-    const conversation = validateConversationArtifact(artifacts.conversation, context.manifest.id, context.evidence);
-    const stakeholder = validateStakeholderArtifact(artifacts.stakeholder, context.manifest.id, context.evidence);
-    const commercial = validateCommercialArtifact(artifacts.commercial, context.manifest.id, context.evidence);
+    const conversation = validateConversationArtifact(
+      artifacts.conversation,
+      context.manifest.id,
+      context.evidence
+    );
+    const stakeholder = validateStakeholderArtifact(
+      artifacts.stakeholder,
+      context.manifest.id,
+      context.evidence
+    );
+    const commercial = validateCommercialArtifact(
+      artifacts.commercial,
+      context.manifest.id,
+      context.evidence
+    );
     const validatedArtifacts: StrategyArtifacts = { conversation, stakeholder, commercial };
     const citedIds = collectArtifactCitationEvidenceIds(validatedArtifacts);
     const citedContext: AgentContext = {

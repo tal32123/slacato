@@ -10,10 +10,24 @@ type TransitionRow = Readonly<Partial<Record<RunEvent, RunStatus>>>;
 const transitions: Readonly<Record<RunStatus, TransitionRow>> = {
   created: { start: 'retrieving', fail: 'failed', cancel: 'cancelled' },
   retrieving: { retrieval_completed: 'specialists_running', fail: 'failed', cancel: 'cancelled' },
-  specialists_running: { specialists_completed: 'synthesizing', fail: 'failed', cancel: 'cancelled' },
+  specialists_running: {
+    specialists_completed: 'synthesizing',
+    fail: 'failed',
+    cancel: 'cancelled'
+  },
   synthesizing: { synthesis_completed: 'validating', fail: 'failed', cancel: 'cancelled' },
-  validating: { validation_requires_approval: 'awaiting_approval', validation_completed: 'finalizing', fail: 'failed', cancel: 'cancelled' },
-  awaiting_approval: { approval_granted: 'finalizing', approval_rejected: 'rejected', fail: 'failed', cancel: 'cancelled' },
+  validating: {
+    validation_requires_approval: 'awaiting_approval',
+    validation_completed: 'finalizing',
+    fail: 'failed',
+    cancel: 'cancelled'
+  },
+  awaiting_approval: {
+    approval_granted: 'finalizing',
+    approval_rejected: 'rejected',
+    fail: 'failed',
+    cancel: 'cancelled'
+  },
   finalizing: { complete: 'completed', fail: 'failed', cancel: 'cancelled' },
   completed: {},
   rejected: {},

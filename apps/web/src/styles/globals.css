@@ -59,13 +59,34 @@
   --radius: 0.5rem;
 }
 
-* { border-color: var(--border); }
-html { background: var(--background); }
-body { min-width: 0; margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
-button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
-*:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+* {
+  border-color: var(--border);
+}
+html {
+  background: var(--background);
+}
+body {
+  min-width: 0;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
@@ -73,6 +94,11 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   }
 }
 @media (forced-colors: active) {
-  *:focus { outline: 2px solid CanvasText; outline-offset: 2px; }
-  [aria-current="page"] { border: 1px solid CanvasText; }
+  *:focus {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
+  }
+  [aria-current="page"] {
+    border: 1px solid CanvasText;
+  }
 }

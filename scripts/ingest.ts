@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import {
   buildEvidenceDocuments,
@@ -35,7 +35,9 @@ export type IngestionOptions = Readonly<{
 }>;
 
 /** Produces a stable fingerprint for canonical evidence content. */
-function sha256(value: string): string { return createHash('sha256').update(value).digest('hex'); }
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
 /** Maps fixture source categories to the permission categories stored for retrieval. */
 function permissionSources(sourceType: string): readonly string[] {
   if (sourceType === 'gong') return ['gong_summary', 'gong_transcript'];
@@ -43,35 +45,51 @@ function permissionSources(sourceType: string): readonly string[] {
   return [sourceType];
 }
 
-/** Idempotently records normalized fixtures. Embedding concerns are intentionally absent from this boundary. */
+/** Persists normalized fixture records idempotently. */
 export async function ingestFixtureRecords(options: IngestionOptions): Promise<IngestionResult> {
   const fixtures = parseFixtureSet(options.root);
   const documents = buildEvidenceDocuments(fixtures);
-  const chunksByDocument = documents.map((document) => ({ document, chunks: chunkDocument(document) }));
+  const chunksByDocument = documents.map((document) => ({
+    document,
+    chunks: chunkDocument(document)
+  }));
   const sql = postgres(options.databaseUrl, { max: 2, idle_timeout: 5, connect_timeout: 5 });
   try {
     return await sql.begin(async (transaction) => {
-      const counts = { personas: 0, grants: 0, accounts: 0, opportunities: 0, contacts: 0, documents: 0, chunks: 0 };
+      const counts = {
+        personas: 0,
+        grants: 0,
+        accounts: 0,
+        opportunities: 0,
+        contacts: 0,
+        documents: 0,
+        chunks: 0
+      };
       const canonicalGrantIds: string[] = [];
       const authorityGrantIds: string[] = [];
       for (const account of fixtures.accounts) {
-        const inserted = await transaction`insert into accounts (id, name) values (${account.accountId}, ${account.accountName})
+        const inserted =
+          await transaction`insert into accounts (id, name) values (${account.accountId}, ${account.accountName})
           on conflict (id) do update set name = excluded.name where accounts.name is distinct from excluded.name returning id`;
         counts.accounts += inserted.length;
       }
       for (const opportunity of fixtures.opportunities) {
-        const inserted = await transaction`insert into opportunities (id, account_id, name, restricted) values (${opportunity.opportunityId}, ${opportunity.accountId}, ${opportunity.opportunityName}, ${opportunity.restrictedAccess})
+        const inserted =
+          await transaction`insert into opportunities (id, account_id, name, restricted) values (${opportunity.opportunityId}, ${opportunity.accountId}, ${opportunity.opportunityName}, ${opportunity.restrictedAccess})
           on conflict (id) do update set account_id = excluded.account_id, name = excluded.name, restricted = excluded.restricted
           where (opportunities.account_id, opportunities.name, opportunities.restricted) is distinct from (excluded.account_id, excluded.name, excluded.restricted) returning id`;
         counts.opportunities += inserted.length;
       }
       for (const opportunity of fixtures.opportunities) {
-        const notes = fixtures.pricingNotes.filter((note) => note.opportunityId === opportunity.opportunityId);
+        const notes = fixtures.pricingNotes.filter(
+          (note) => note.opportunityId === opportunity.opportunityId
+        );
         const discountPercent = Math.max(0, ...notes.map((note) => note.requestedDiscount));
-        const renewalUpliftPercent = notes.length === 0
-          ? 0
-          : Math.min(...notes.map((note) => note.renewalUplift));
-        const liabilityCapChanged = notes.some((note) => /liability language/i.test(note.pricingNotes));
+        const renewalUpliftPercent =
+          notes.length === 0 ? 0 : Math.min(...notes.map((note) => note.renewalUplift));
+        const liabilityCapChanged = notes.some((note) =>
+          /liability language/i.test(note.pricingNotes)
+        );
         const restrictedLanguage = opportunity.restrictedAccess;
         await transaction`insert into opportunity_policy_facts
           (opportunity_id, discount_percent, renewal_uplift_percent, liability_cap_changed, restricted_research_language,
@@ -84,21 +102,26 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
             customer_facing_concession_language = excluded.customer_facing_concession_language, source_commit = excluded.source_commit, updated_at = now()`;
       }
       for (const contact of fixtures.contacts) {
-        const inserted = await transaction`insert into contacts (id, account_id, name, email) values (${contact.contactId}, ${contact.accountId}, ${contact.fullName}, ${contact.email})
+        const inserted =
+          await transaction`insert into contacts (id, account_id, name, email) values (${contact.contactId}, ${contact.accountId}, ${contact.fullName}, ${contact.email})
           on conflict (id) do update set account_id = excluded.account_id, name = excluded.name, email = excluded.email
           where (contacts.account_id, contacts.name, contacts.email) is distinct from (excluded.account_id, excluded.name, excluded.email) returning id`;
         counts.contacts += inserted.length;
       }
       for (const permission of fixtures.permissions) {
-        const insertedPersona = await transaction`insert into personas (id, display_name, role, source_commit) values (${permission.userId}, ${permission.userName}, ${permission.role}, ${CANONICAL_FIXTURE_COMMIT})
+        const insertedPersona =
+          await transaction`insert into personas (id, display_name, role, source_commit) values (${permission.userId}, ${permission.userName}, ${permission.role}, ${CANONICAL_FIXTURE_COMMIT})
           on conflict (id) do update set display_name = excluded.display_name, role = excluded.role, source_commit = excluded.source_commit
           where (personas.display_name, personas.role, personas.source_commit) is distinct from (excluded.display_name, excluded.role, excluded.source_commit) returning id`;
         counts.personas += insertedPersona.length;
         const canApprove = deriveApprovalAuthority(permission.role, fixtures.policy.content);
-        for (const accountId of permission.allowedAccountIds) for (const fixtureSource of permission.allowedSourceTypes) for (const sourceType of permissionSources(fixtureSource)) {
-          const grantId = `grant:${permission.userId}:${accountId}:${sourceType}`;
-          canonicalGrantIds.push(grantId);
-          const insertedGrant = await transaction`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
+        for (const accountId of permission.allowedAccountIds)
+          for (const fixtureSource of permission.allowedSourceTypes)
+            for (const sourceType of permissionSources(fixtureSource)) {
+              const grantId = `grant:${permission.userId}:${accountId}:${sourceType}`;
+              canonicalGrantIds.push(grantId);
+              const insertedGrant =
+                await transaction`insert into permission_grants (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
             values (${grantId}, ${permission.userId}, ${accountId}, ${sourceType}, true, ${permission.canViewRestrictedAccount}, ${permission.canRequestApproval}, ${canApprove}, ${permission.canViewSensitivePricing}, ${CANONICAL_FIXTURE_COMMIT})
             on conflict (id) do update set persona_id = excluded.persona_id, account_id = excluded.account_id, source_type = excluded.source_type,
               can_read = excluded.can_read, can_read_restricted = excluded.can_read_restricted, can_request_approval = excluded.can_request_approval,
@@ -107,16 +130,20 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
               permission_grants.can_read_restricted, permission_grants.can_request_approval, permission_grants.can_approve, permission_grants.sensitive_pricing, permission_grants.source_commit)
               is distinct from (excluded.persona_id, excluded.account_id, excluded.source_type, excluded.can_read,
                 excluded.can_read_restricted, excluded.can_request_approval, excluded.can_approve, excluded.sensitive_pricing, excluded.source_commit) returning id`;
-          counts.grants += insertedGrant.length;
-        }
-        for (const accountId of permission.allowedAccountIds) for (const authority of deriveApprovalAuthorities(permission.role, fixtures.policy.content)) {
-          const authorityGrantId = `approval-authority:${permission.userId}:${accountId}:${authority}`;
-          authorityGrantIds.push(authorityGrantId);
-          await transaction`insert into approval_authority_grants (id, persona_id, account_id, authority, demo_only, source, source_commit)
+              counts.grants += insertedGrant.length;
+            }
+        for (const accountId of permission.allowedAccountIds)
+          for (const authority of deriveApprovalAuthorities(
+            permission.role,
+            fixtures.policy.content
+          )) {
+            const authorityGrantId = `approval-authority:${permission.userId}:${accountId}:${authority}`;
+            authorityGrantIds.push(authorityGrantId);
+            await transaction`insert into approval_authority_grants (id, persona_id, account_id, authority, demo_only, source, source_commit)
             values (${authorityGrantId}, ${permission.userId}, ${accountId}, ${authority}, false, ${CANONICAL_FIXTURE_COMMIT}, ${CANONICAL_FIXTURE_COMMIT})
             on conflict (persona_id, account_id, authority) do update
               set demo_only = excluded.demo_only, source = excluded.source, source_commit = excluded.source_commit`;
-        }
+          }
       }
       for (const identity of DEMO_APPROVAL_IDENTITIES) {
         const insertedPersona = await transaction`
@@ -158,11 +185,34 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
           values (${documentId}, ${document.externalId}, 1, ${document.sourceType}, ${contentHash}, ${document.content}, ${document.eventDate ?? null}, ${document.reliability}, ${document.sourceLocator}, ${document.classificationReason}, ${document.policyHash})
           on conflict (external_id, version) do nothing returning id`;
         counts.documents += insertedDocument.length;
-        const persisted = await transaction<{ id: string; source_type: string; content_hash: string; event_date: string | null; reliability_class: string | null; source_locator: string | null; classification_reason: string | null; policy_hash: string | null }[]>`
+        const persisted = await transaction<
+          {
+            id: string;
+            source_type: string;
+            content_hash: string;
+            event_date: string | null;
+            reliability_class: string | null;
+            source_locator: string | null;
+            classification_reason: string | null;
+            policy_hash: string | null;
+          }[]
+        >`
           select id, source_type, content_hash, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from document_versions where external_id = ${document.externalId} and version = 1`;
         const existing = persisted[0];
-        if (existing === undefined || existing.id !== documentId || existing.source_type !== document.sourceType || existing.content_hash !== contentHash || existing.event_date !== (document.eventDate ?? null) || existing.reliability_class !== document.reliability || existing.source_locator !== document.sourceLocator || existing.classification_reason !== document.classificationReason || existing.policy_hash !== document.policyHash) {
-          throw new Error(`Canonical document conflict requires a new immutable version: ${document.externalId}`);
+        if (
+          existing === undefined ||
+          existing.id !== documentId ||
+          existing.source_type !== document.sourceType ||
+          existing.content_hash !== contentHash ||
+          existing.event_date !== (document.eventDate ?? null) ||
+          existing.reliability_class !== document.reliability ||
+          existing.source_locator !== document.sourceLocator ||
+          existing.classification_reason !== document.classificationReason ||
+          existing.policy_hash !== document.policyHash
+        ) {
+          throw new Error(
+            `Canonical document conflict requires a new immutable version: ${document.externalId}`
+          );
         }
         for (const chunk of chunks) {
           const chunkHash = sha256(chunk.content);
@@ -171,16 +221,47 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
             values (${chunk.id}, ${documentId}, ${chunk.accountId}, ${chunk.opportunityId ?? null}, ${chunk.chunkIndex}, ${chunk.sourceType}, ${chunk.accessLevel}, ${chunkHash}, ${chunk.content}, ${chunk.eventDate ?? null}, ${chunk.reliability}, ${chunk.sourceLocator}, ${chunk.classificationReason}, ${chunk.policyHash})
             on conflict (document_version_id, chunk_index) do nothing returning id`;
           counts.chunks += insertedChunk.length;
-          const persistedChunk = await transaction<{ id: string; account_id: string; opportunity_id: string | null; source_type: string; sensitivity: string; content_hash: string; event_date: string | null; reliability_class: string | null; source_locator: string | null; classification_reason: string | null; policy_hash: string | null }[]>`
+          const persistedChunk = await transaction<
+            {
+              id: string;
+              account_id: string;
+              opportunity_id: string | null;
+              source_type: string;
+              sensitivity: string;
+              content_hash: string;
+              event_date: string | null;
+              reliability_class: string | null;
+              source_locator: string | null;
+              classification_reason: string | null;
+              policy_hash: string | null;
+            }[]
+          >`
             select id, account_id, opportunity_id, source_type, sensitivity, content_hash, event_date::text, reliability_class, source_locator, classification_reason, policy_hash
             from evidence_versions where document_version_id = ${documentId} and chunk_index = ${chunk.chunkIndex}`;
           const existingChunk = persistedChunk[0];
-          if (existingChunk === undefined || existingChunk.id !== chunk.id || existingChunk.account_id !== chunk.accountId || existingChunk.opportunity_id !== (chunk.opportunityId ?? null) || existingChunk.source_type !== chunk.sourceType || existingChunk.sensitivity !== chunk.accessLevel || existingChunk.content_hash !== chunkHash || existingChunk.event_date !== (chunk.eventDate ?? null) || existingChunk.reliability_class !== chunk.reliability || existingChunk.source_locator !== chunk.sourceLocator || existingChunk.classification_reason !== chunk.classificationReason || existingChunk.policy_hash !== chunk.policyHash) {
+          if (
+            existingChunk === undefined ||
+            existingChunk.id !== chunk.id ||
+            existingChunk.account_id !== chunk.accountId ||
+            existingChunk.opportunity_id !== (chunk.opportunityId ?? null) ||
+            existingChunk.source_type !== chunk.sourceType ||
+            existingChunk.sensitivity !== chunk.accessLevel ||
+            existingChunk.content_hash !== chunkHash ||
+            existingChunk.event_date !== (chunk.eventDate ?? null) ||
+            existingChunk.reliability_class !== chunk.reliability ||
+            existingChunk.source_locator !== chunk.sourceLocator ||
+            existingChunk.classification_reason !== chunk.classificationReason ||
+            existingChunk.policy_hash !== chunk.policyHash
+          ) {
             throw new Error(`Canonical evidence conflict: ${chunk.id}`);
           }
         }
       }
-      return { inserted: counts, totalDocuments: documents.length, totalChunks: chunksByDocument.reduce((total, entry) => total + entry.chunks.length, 0) };
+      return {
+        inserted: counts,
+        totalDocuments: documents.length,
+        totalChunks: chunksByDocument.reduce((total, entry) => total + entry.chunks.length, 0)
+      };
     });
   } finally {
     await sql.end({ timeout: 5 });
@@ -196,4 +277,5 @@ async function main(): Promise<void> {
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  await main();

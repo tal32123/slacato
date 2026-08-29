@@ -10,9 +10,10 @@ export function reciprocalRankFusion(lists: readonly (readonly string[])[], k = 
     list.forEach((id, index) => {
       if (seen.has(id)) return;
       seen.add(id);
-      scores.set(id, (scores.get(id) ?? 0) + (1 / (k + index + 1)));
+      scores.set(id, (scores.get(id) ?? 0) + 1 / (k + index + 1));
     });
   }
-  return [...scores].map(([id, score]) => ({ id, score }))
+  return [...scores]
+    .map(([id, score]) => ({ id, score }))
     .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id));
 }

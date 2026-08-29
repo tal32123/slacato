@@ -5,7 +5,11 @@ import * as schema from './schema.js';
 export type SlacatoDatabase = PostgresJsDatabase<typeof schema>;
 
 /** Owns a bounded PostgreSQL connection pool and its Drizzle query facade. */
-export type DatabaseClient = Readonly<{ sql: Sql; db: SlacatoDatabase; close: () => Promise<void> }>;
+export type DatabaseClient = Readonly<{
+  sql: Sql;
+  db: SlacatoDatabase;
+  close: () => Promise<void>;
+}>;
 
 /** Creates the shared PostgreSQL client and its Drizzle-backed database facade. */
 export function createDatabaseClient(databaseUrl: string, maxConnections = 10): DatabaseClient {

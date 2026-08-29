@@ -1,5 +1,5 @@
-import { QueryClient, queryOptions } from '@tanstack/react-query';
 import type { AuthSessionResponse } from '@slacato/contracts';
+import { QueryClient, queryOptions } from '@tanstack/react-query';
 import {
   ApiError,
   changePersona,
@@ -25,25 +25,28 @@ export const queryKeys = {
 };
 
 /** Defines how the interface loads and refreshes the current signed session. */
-export const sessionQueryOptions = () => queryOptions({
-  queryKey: queryKeys.session,
-  queryFn: ({ signal }) => fetchSession(signal),
-  staleTime: 0
-});
+export const sessionQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.session,
+    queryFn: ({ signal }) => fetchSession(signal),
+    staleTime: 0
+  });
 
 /** Defines how the interface loads the personas available to the current user. */
-export const personasQueryOptions = () => queryOptions({
-  queryKey: queryKeys.personas,
-  queryFn: ({ signal }) => fetchPersonas(signal),
-  staleTime: 5 * 60_000
-});
+export const personasQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.personas,
+    queryFn: ({ signal }) => fetchPersonas(signal),
+    staleTime: 5 * 60_000
+  });
 
 /** Defines how the interface loads a CSRF token for a specific session version. */
-export const csrfQueryOptions = (version: string) => queryOptions({
-  queryKey: queryKeys.csrf(version),
-  queryFn: ({ signal }) => fetchCsrf(signal),
-  staleTime: 0
-});
+export const csrfQueryOptions = (version: string) =>
+  queryOptions({
+    queryKey: queryKeys.csrf(version),
+    queryFn: ({ signal }) => fetchCsrf(signal),
+    staleTime: 0
+  });
 
 /** Signals that protected data became stale because the signed session changed during loading. */
 export class SessionInvalidatedError extends Error {
@@ -62,7 +65,9 @@ export const diagnosticsQueryOptions = (version: string) => {
     queryFn: async ({ signal }) => {
       const diagnostics = await fetchDiagnostics(signal);
       if (diagnostics.sessionVersion !== version || !sessionRuntime.accepts(generation)) {
-        await sessionRuntime.reconcileAuthoritativeSession(queryKeys.scoped(version, 'diagnostics'));
+        await sessionRuntime.reconcileAuthoritativeSession(
+          queryKeys.scoped(version, 'diagnostics')
+        );
         throw new SessionInvalidatedError();
       }
       return diagnostics;
@@ -85,7 +90,8 @@ class SessionRuntime {
   private readonly source = crypto.randomUUID();
   private readonly streams = new Set<ClosableStream>();
   private readonly overlayClosers = new Set<() => void>();
-  private readonly channel = typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel('slacato-session');
+  private readonly channel =
+    typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel('slacato-session');
   private connectionGeneration = 0;
   private transitionInProgress = false;
   private readonly transitionListeners = new Set<() => void>();
@@ -157,7 +163,9 @@ class SessionRuntime {
   }
 
   /** Reconciles local state with the authoritative server session after protected data becomes stale. */
-  public async reconcileAuthoritativeSession(preserveQueryKey?: readonly unknown[]): Promise<AuthSessionResponse> {
+  public async reconcileAuthoritativeSession(
+    preserveQueryKey?: readonly unknown[]
+  ): Promise<AuthSessionResponse> {
     this.prepareTransition(preserveQueryKey);
     queryClient.removeQueries({ queryKey: queryKeys.session });
     this.broadcast('invalidate');
@@ -182,7 +190,6 @@ class SessionRuntime {
     }
   }
 
-
   /** Notifies subscribers that the session-transition state changed. */
   private notifyTransition(): void {
     for (const listener of this.transitionListeners) listener();
@@ -197,7 +204,10 @@ class SessionRuntime {
 export const sessionRuntime = new SessionRuntime();
 
 /** Switches personas while keeping session and CSRF caches aligned with the server result. */
-export async function selectPersonaSession(userId: string, csrfToken: string): Promise<Extract<AuthSessionResponse, { authenticated: true }>> {
+export async function selectPersonaSession(
+  userId: string,
+  csrfToken: string
+): Promise<Extract<AuthSessionResponse, { authenticated: true }>> {
   sessionRuntime.prepareTransition();
   try {
     const payload = await changePersona(userId, csrfToken);
@@ -250,13 +260,17 @@ async function reconcileAmbiguousMutation(error: unknown): Promise<never> {
 
 /** Determines whether two query keys identify the same cached resource. */
 function sameQueryKey(left: readonly unknown[], right: readonly unknown[]): boolean {
-  return left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+  return (
+    left.length === right.length && left.every((value, index) => Object.is(value, right[index]))
+  );
 }
 
 /** Validates that a cross-tab message contains a supported session transition. */
 function isSessionBroadcast(value: unknown): value is SessionBroadcast {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Partial<SessionBroadcast>;
-  return typeof candidate.source === 'string'
-    && (candidate.kind === 'persona' || candidate.kind === 'logout' || candidate.kind === 'invalidate');
+  return (
+    typeof candidate.source === 'string' &&
+    (candidate.kind === 'persona' || candidate.kind === 'logout' || candidate.kind === 'invalidate')
+  );
 }

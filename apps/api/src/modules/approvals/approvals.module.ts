@@ -1,24 +1,32 @@
-import { DynamicModule, Module } from '@nestjs/common';
+import { type DynamicModule, Module } from '@nestjs/common';
 import type { DecideApproval } from '@slacato/core';
-import { ApprovalsController } from './approvals.controller.js';
-import { ApprovalsQueryController } from './approvals-query.controller.js';
 import {
   APPROVAL_QUERIES,
-  DECIDE_APPROVAL,
-  type ApprovalQueryRepository
+  type ApprovalQueryRepository,
+  DECIDE_APPROVAL
 } from '../runs/contracts.js';
+import { ApprovalsController } from './approvals.controller.js';
+import { ApprovalsQueryController } from './approvals-query.controller.js';
 
-/** Configures the API endpoints and dependencies for approval decisions and queries. */
+/** Exposes approval decisions and optional approval queries through the API. */
 @Module({})
 export class ApprovalsModule {
-  /** Creates an approvals module bound to the supplied decision service and optional query repository. */
-  public static register(decideApproval: DecideApproval, approvalQueries?: ApprovalQueryRepository): DynamicModule {
+  /** Creates the approvals module with its decision handler and optional query repository. */
+  public static register(
+    decideApproval: DecideApproval,
+    approvalQueryRepository?: ApprovalQueryRepository
+  ): DynamicModule {
     return {
       module: ApprovalsModule,
-      controllers: [ApprovalsController, ...(approvalQueries === undefined ? [] : [ApprovalsQueryController])],
+      controllers: [
+        ApprovalsController,
+        ...(approvalQueryRepository === undefined ? [] : [ApprovalsQueryController])
+      ],
       providers: [
         { provide: DECIDE_APPROVAL, useValue: decideApproval },
-        ...(approvalQueries === undefined ? [] : [{ provide: APPROVAL_QUERIES, useValue: approvalQueries }])
+        ...(approvalQueryRepository === undefined
+          ? []
+          : [{ provide: APPROVAL_QUERIES, useValue: approvalQueryRepository }])
       ]
     };
   }

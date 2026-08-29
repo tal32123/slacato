@@ -43,18 +43,23 @@ export class ProviderAttemptFinalizationConflict extends Error {
 }
 
 export interface ProviderAttemptLedger {
-  beginAttempt(input: ProviderAttemptContext & Readonly<{
-    operation: string;
-    inputTokens: number;
-    requestedOutputTokens: number;
-  }>): Promise<ProviderAttemptReservation>;
+  beginAttempt(
+    input: ProviderAttemptContext &
+      Readonly<{
+        operation: string;
+        inputTokens: number;
+        requestedOutputTokens: number;
+      }>
+  ): Promise<ProviderAttemptReservation>;
   settleAttempt(input: ProviderAttemptReservation & ProviderAttemptUsage): Promise<void>;
   releaseAttempt(input: ProviderAttemptReservation & ProviderAttemptFailure): Promise<void>;
-  recordAttemptMetadata?(input: Readonly<{
-    attemptId: string;
-    outputMode: 'native_schema' | 'prompted_json';
-    validationAttempts: number;
-    validationIssues: readonly Readonly<{ path: string; code: string; message: string }>[];
-    warnings: readonly string[];
-  }>): Promise<void>;
+  recordAttemptMetadata?(
+    input: Readonly<{
+      attemptId: string;
+      outputMode: 'native_schema' | 'prompted_json';
+      validationAttempts: number;
+      validationIssues: readonly Readonly<{ path: string; code: string; message: string }>[];
+      warnings: readonly string[];
+    }>
+  ): Promise<void>;
 }

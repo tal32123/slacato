@@ -27,34 +27,43 @@ test('shows truthful read-only permission and runtime diagnostics with seller-as
   await expect(page.getByText(/sellers own judgment/i)).toBeVisible();
   await expect(page.getByText(/no control autonomously sends customer-facing content/i)).toBeVisible();
 
-  const matrix = page.getByRole('table', { name: 'Permission and decision authority matrix' });
-  await expect(matrix).toBeVisible();
-  for (const heading of [
+  const sourceMatrix = page.getByRole('table', { name: 'Source permission matrix' });
+  await expect(sourceMatrix).toBeVisible();
+  await expect(sourceMatrix.getByRole('columnheader')).toHaveText([
+    'Account',
+    'Source',
     'Read permission',
     'Can access restricted opportunities',
     'Can view sensitive pricing',
-    'Request permission',
+    'Request permission'
+  ]);
+  const authorityMatrix = page.getByRole('table', { name: 'Account approval authority matrix' });
+  await expect(authorityMatrix).toBeVisible();
+  await expect(authorityMatrix.getByRole('columnheader')).toHaveText([
+    'Account',
     'Account Owner',
     'Sales Leader',
     'Deal Desk',
     'Legal Reviewer'
-  ]) {
-    await expect(matrix.getByRole('columnheader', { name: heading })).toBeVisible();
-  }
+  ]);
   await expect(page.getByText('Output mode')).toBeVisible();
   await expect(page.getByText('Pinned generation model')).toBeVisible();
   await expect(page.getByText('Pinned embedding model')).toBeVisible();
   await expect(page.getByText('Index health')).toBeVisible();
   await expect(page.getByText('Runtime readiness')).toBeVisible();
   await expect(page.getByText('Runtime not configured')).toBeVisible();
-  const representativeRow = matrix.getByRole('row', { name: /ACC-2001 Gong summary/ });
-  await expect(representativeRow.getByRole('cell')).toHaveText([
+  const representativeSourceRow = sourceMatrix.getByRole('row', { name: /ACC-2001 Gong summary/ });
+  await expect(representativeSourceRow.getByRole('cell')).toHaveText([
     'ACC-2001',
     'Gong summary',
     'Yes',
     'No',
     'No',
-    'Yes',
+    'Yes'
+  ]);
+  const representativeAuthorityRow = authorityMatrix.getByRole('row', { name: /ACC-2001/ });
+  await expect(representativeAuthorityRow.getByRole('cell')).toHaveText([
+    'ACC-2001',
     'Yes',
     'No',
     'No',
@@ -64,10 +73,10 @@ test('shows truthful read-only permission and runtime diagnostics with seller-as
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const mobileMatrix = page.getByRole('list', { name: 'Permission and decision authority matrix' });
-  await expect(mobileMatrix).toBeVisible();
-  const mobileRecord = mobileMatrix.getByRole('listitem').filter({ hasText: 'Gong summary' });
-  await expect(mobileRecord.locator('dt, dd')).toHaveText([
+  const mobileSourceMatrix = page.getByRole('list', { name: 'Source permission matrix' });
+  await expect(mobileSourceMatrix).toBeVisible();
+  const mobileSourceRecord = mobileSourceMatrix.getByRole('listitem').filter({ hasText: 'Gong summary' });
+  await expect(mobileSourceRecord.locator('dt, dd')).toHaveText([
     'Read permission',
     'Yes',
     'Can access restricted opportunities',
@@ -75,7 +84,12 @@ test('shows truthful read-only permission and runtime diagnostics with seller-as
     'Can view sensitive pricing',
     'No',
     'Request permission',
-    'Yes',
+    'Yes'
+  ]);
+  const mobileAuthorityMatrix = page.getByRole('list', { name: 'Account approval authority matrix' });
+  await expect(mobileAuthorityMatrix).toBeVisible();
+  const mobileAuthorityRecord = mobileAuthorityMatrix.getByRole('listitem').filter({ hasText: 'ACC-2001' });
+  await expect(mobileAuthorityRecord.locator('dt, dd')).toHaveText([
     'Account Owner authority',
     'Yes',
     'Sales Leader authority',

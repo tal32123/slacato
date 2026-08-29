@@ -3,14 +3,19 @@ import type { CitationId } from '../../domain/shared/ids.js';
 import type { EvidenceScopeBinding } from './scope-binding.js';
 
 /** Claimed request bounds plus persona identity; adapters must still enforce persisted grants. */
-export type AuthorizedRetrievalScope = Extract<AccessScope, { allowed: true }> & Readonly<{ personaId: string }>;
+export type AuthorizedRetrievalScope = Extract<AccessScope, { allowed: true }> &
+  Readonly<{ personaId: string }>;
 
 /** Immutable execution recipe used to make retrieval and its query hash reproducible. */
 export type EvidencePlan = Readonly<{
   query: string;
   fusionK: 60;
   exactLookups: readonly ['account', 'opportunity', 'contacts'];
-  sectionQueries: readonly Readonly<{ section: string; query: string; sourceTypes: readonly AuthorizedSourceType[] }>[];
+  sectionQueries: readonly Readonly<{
+    section: string;
+    query: string;
+    sourceTypes: readonly AuthorizedSourceType[];
+  }>[];
   sourceLimits: Readonly<Record<AuthorizedSourceType, number>>;
   mandatorySourceTypes: readonly ['policy'];
   policyReservation: Readonly<{ resultSlots: 1; contextCharacters: number }>;
@@ -62,7 +67,11 @@ export type RunEvidenceManifest = Readonly<{
 }>;
 
 /** Authorized structured-row counts used to distinguish exact context from ranked excerpts. */
-export type ExactLookupDiagnostics = Readonly<{ account: number; opportunity: number; contacts: number }>;
+export type ExactLookupDiagnostics = Readonly<{
+  account: number;
+  opportunity: number;
+  contacts: number;
+}>;
 /** Explicit policy outcome prevents a mandatory source from disappearing behind a context limit. */
 export type MandatoryPolicyDiagnostic = 'included' | 'missing' | 'not_evaluated';
 

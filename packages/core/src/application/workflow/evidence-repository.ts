@@ -26,8 +26,10 @@ export interface EvidenceRepository {
 
 /** Rejects embeddings that cannot participate safely in exact cosine comparison. */
 export function assertEmbeddingComparison(input: ExactEvidenceQuery): void {
-  if (!Number.isInteger(input.profile.dimension) || input.profile.dimension <= 0) throw new Error('Embedding profile dimension must be positive');
-  if (input.embedding.length !== input.profile.dimension) throw new Error('Embedding dimension does not match the requested profile');
+  if (!Number.isInteger(input.profile.dimension) || input.profile.dimension <= 0)
+    throw new Error('Embedding profile dimension must be positive');
+  if (input.embedding.length !== input.profile.dimension)
+    throw new Error('Embedding dimension does not match the requested profile');
   let squaredNorm = 0;
   for (const value of input.embedding) {
     if (!Number.isFinite(value)) throw new Error('Embedding contains a non-finite value');

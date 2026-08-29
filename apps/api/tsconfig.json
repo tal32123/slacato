@@ -10,5 +10,8 @@
     "moduleResolution": "NodeNext"
   },
   "include": ["src"],
-  "references": [{ "path": "../../packages/contracts" }, { "path": "../../packages/infrastructure" }]
+  "references": [
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/infrastructure" }
+  ]
 }

@@ -1,4 +1,8 @@
-import type { AccountApprovalAuthorityView, ApprovalAuthority, PermissionGrantView } from '@slacato/contracts';
+import type {
+  AccountApprovalAuthorityView,
+  ApprovalAuthority,
+  PermissionGrantView
+} from '@slacato/contracts';
 import { Check, Minus } from 'lucide-react';
 import {
   Table,
@@ -67,10 +71,18 @@ export function PermissionMatrix({
                   <TableRow key={`${grant.accountId}:${grant.sourceType}`}>
                     <TableCell className="font-medium">{grant.accountId}</TableCell>
                     <TableCell>{sourceLabels[grant.sourceType] ?? grant.sourceType}</TableCell>
-                    <TableCell><BooleanValue value={grant.canRead} /></TableCell>
-                    <TableCell><BooleanValue value={grant.restrictedOpportunityAccess} /></TableCell>
-                    <TableCell><BooleanValue value={grant.sensitivePricing} /></TableCell>
-                    <TableCell><BooleanValue value={grant.canRequestApproval} /></TableCell>
+                    <TableCell>
+                      <BooleanValue value={grant.canRead} />
+                    </TableCell>
+                    <TableCell>
+                      <BooleanValue value={grant.restrictedOpportunityAccess} />
+                    </TableCell>
+                    <TableCell>
+                      <BooleanValue value={grant.sensitivePricing} />
+                    </TableCell>
+                    <TableCell>
+                      <BooleanValue value={grant.canRequestApproval} />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -82,11 +94,19 @@ export function PermissionMatrix({
               <li key={`${grant.accountId}:${grant.sourceType}`}>
                 <section className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{grant.accountId}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{sourceLabels[grant.sourceType] ?? grant.sourceType}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {sourceLabels[grant.sourceType] ?? grant.sourceType}
+                  </p>
                   <dl className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
                     <MatrixValue label="Read permission" value={grant.canRead} />
-                    <MatrixValue label="Can access restricted opportunities" value={grant.restrictedOpportunityAccess} />
-                    <MatrixValue label="Can view sensitive pricing" value={grant.sensitivePricing} />
+                    <MatrixValue
+                      label="Can access restricted opportunities"
+                      value={grant.restrictedOpportunityAccess}
+                    />
+                    <MatrixValue
+                      label="Can view sensitive pricing"
+                      value={grant.sensitivePricing}
+                    />
                     <MatrixValue label="Request permission" value={grant.canRequestApproval} />
                   </dl>
                 </section>
@@ -97,9 +117,12 @@ export function PermissionMatrix({
       )}
 
       <section className="mt-6" aria-labelledby="approval-authority-title">
-        <h3 id="approval-authority-title" className="text-sm font-semibold">Account approval authority</h3>
+        <h3 id="approval-authority-title" className="text-sm font-semibold">
+          Account approval authority
+        </h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          These account-scoped grants come from the approval decision authority table, independently of source access.
+          These account-scoped grants come from the approval decision authority table, independently
+          of source access.
         </p>
         {approvalAuthorities.length === 0 ? (
           <div className="mt-3 rounded-lg border border-dashed px-5 py-6 text-sm text-muted-foreground">
@@ -113,7 +136,11 @@ export function PermissionMatrix({
                 <TableHeader>
                   <TableRow>
                     <TableHead scope="col">Account</TableHead>
-                    {authorityColumns.map(({ label }) => <TableHead scope="col" key={label}>{label}</TableHead>)}
+                    {authorityColumns.map(({ label }) => (
+                      <TableHead scope="col" key={label}>
+                        {label}
+                      </TableHead>
+                    ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -121,7 +148,9 @@ export function PermissionMatrix({
                     <TableRow key={grant.accountId}>
                       <TableCell className="font-medium">{grant.accountId}</TableCell>
                       {authorityColumns.map(({ label, key }) => (
-                        <TableCell key={label}><BooleanValue value={grant.authorities.includes(key)} /></TableCell>
+                        <TableCell key={label}>
+                          <BooleanValue value={grant.authorities.includes(key)} />
+                        </TableCell>
                       ))}
                     </TableRow>
                   ))}
@@ -129,14 +158,21 @@ export function PermissionMatrix({
               </Table>
             </div>
 
-            <ul aria-label="Account approval authority matrix" className="mt-3 grid gap-3 lg:hidden">
+            <ul
+              aria-label="Account approval authority matrix"
+              className="mt-3 grid gap-3 lg:hidden"
+            >
               {approvalAuthorities.map((grant) => (
                 <li key={grant.accountId}>
                   <section className="rounded-lg border bg-card p-4">
                     <h4 className="font-medium">{grant.accountId}</h4>
                     <dl className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
                       {authorityColumns.map(({ label, key }) => (
-                        <MatrixValue key={label} label={`${label} authority`} value={grant.authorities.includes(key)} />
+                        <MatrixValue
+                          key={label}
+                          label={`${label} authority`}
+                          value={grant.authorities.includes(key)}
+                        />
                       ))}
                     </dl>
                   </section>
@@ -154,13 +190,27 @@ export function PermissionMatrix({
 function BooleanValue({ value }: Readonly<{ value: boolean }>): React.JSX.Element {
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">
-      {value ? <Check aria-hidden="true" className="size-4 text-primary" /> : <Minus aria-hidden="true" className="size-4 text-muted-foreground" />}
+      {value ? (
+        <Check aria-hidden="true" className="size-4 text-primary" />
+      ) : (
+        <Minus aria-hidden="true" className="size-4 text-muted-foreground" />
+      )}
       {value ? 'Yes' : 'No'}
     </span>
   );
 }
 
 /** Renders a labeled boolean definition-list entry. */
-function MatrixValue({ label, value }: Readonly<{ label: string; value: boolean }>): React.JSX.Element {
-  return <><dt className="text-muted-foreground">{label}</dt><dd><BooleanValue value={value} /></dd></>;
+function MatrixValue({
+  label,
+  value
+}: Readonly<{ label: string; value: boolean }>): React.JSX.Element {
+  return (
+    <>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd>
+        <BooleanValue value={value} />
+      </dd>
+    </>
+  );
 }

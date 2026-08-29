@@ -1,9 +1,13 @@
+import type {
+  ApprovalAuthority,
+  ApprovalCategory,
+  ApprovalRequirementEntry
+} from '../../domain/briefs/policy.js';
 import type { DealBrief } from '../../domain/briefs/schema.js';
-import type { ApprovalAuthority, ApprovalCategory, ApprovalRequirementEntry } from '../../domain/briefs/policy.js';
 import type { RunEvent, RunStatus } from '../../domain/runs/contracts.js';
 import type { OpportunityId, RunId, UserId } from '../../domain/shared/ids.js';
-import type { WorkflowCommand } from './command-queue.js';
 import type { RunBudgetLimits } from '../model/contracts.js';
+import type { WorkflowCommand } from './command-queue.js';
 
 export type WorkflowRun = Readonly<{
   id: RunId;
@@ -67,12 +71,14 @@ export type ApprovalSubject = Readonly<{
   supersededBySubjectId?: string | undefined;
 }>;
 
-export type StartRunInput = Readonly<Omit<WorkflowRun, 'version'> & {
-  command: WorkflowCommand;
-  budget: RunBudgetLimits;
-  idempotencyKey: string;
-  startRequestHash: string;
-}>;
+export type StartRunInput = Readonly<
+  Omit<WorkflowRun, 'version'> & {
+    command: WorkflowCommand;
+    budget: RunBudgetLimits;
+    idempotencyKey: string;
+    startRequestHash: string;
+  }
+>;
 
 export type SaveCheckpointInput = Readonly<{
   runId: RunId;
@@ -186,24 +192,70 @@ export type FinalizeRunInput = Readonly<{
 
 /** Atomic workflow transition seam. Implementations persist state, events and commands in one transaction. */
 export interface WorkflowStore {
-  findRunByIdempotencyKey(input: Readonly<{ idempotencyKey: string; requestedBy: UserId; opportunityId: OpportunityId }>): Promise<WorkflowRun | undefined>;
-  findActiveRun(input: Readonly<{ opportunityId: OpportunityId; requestedBy: UserId }>): Promise<WorkflowRun | undefined>;
+  findRunByIdempotencyKey(
+    input: Readonly<{ idempotencyKey: string; requestedBy: UserId; opportunityId: OpportunityId }>
+  ): Promise<WorkflowRun | undefined>;
+  findActiveRun(
+    input: Readonly<{ opportunityId: OpportunityId; requestedBy: UserId }>
+  ): Promise<WorkflowRun | undefined>;
   getRun(runId: RunId): Promise<WorkflowRun | undefined>;
   startRun(input: StartRunInput): Promise<WorkflowRun>;
-  claimStep(input: Readonly<{ runId: RunId; step: string; invocationId: string; causalCommandId: string; owner: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
-  heartbeatStep(input: Readonly<{ invocationId: string; owner: string; leaseToken: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
+  claimStep(
+    input: Readonly<{
+      runId: RunId;
+      step: string;
+      invocationId: string;
+      causalCommandId: string;
+      owner: string;
+      leaseMs: number;
+      now?: Date;
+    }>
+  ): Promise<StepLease | undefined>;
+  heartbeatStep(
+    input: Readonly<{
+      invocationId: string;
+      owner: string;
+      leaseToken: string;
+      leaseMs: number;
+      now?: Date;
+    }>
+  ): Promise<StepLease | undefined>;
   abandonStep(input: AbandonStepInput): Promise<void>;
-  getCheckpoint(input: Readonly<{ runId: RunId; step: string }>): Promise<Readonly<Record<string, unknown>> | undefined>;
+  getCheckpoint(
+    input: Readonly<{ runId: RunId; step: string }>
+  ): Promise<Readonly<Record<string, unknown>> | undefined>;
   saveCheckpoint(input: SaveCheckpointInput): Promise<Readonly<Record<string, unknown>>>;
   commitStepAndEnqueueNext(input: CommitStepInput): Promise<WorkflowRun>;
   awaitApproval(input: AwaitApprovalInput): Promise<WorkflowRun>;
-  getApprovalSubject(input: Readonly<{ runId: RunId; approvalSubjectId?: string | undefined }>): Promise<ApprovalSubject | undefined>;
-  findDecisionByIdempotencyKey(input: Readonly<{ idempotencyKey: string; requestHash: string }>): Promise<ApprovalDecisionReplay | undefined>;
-  recordDecisionAndEnqueueFinalization(input: ApprovalDecisionInput): Promise<ApprovalDecisionStoreResult>;
-  replaceApprovalSubject(input: ReplaceApprovalSubjectInput): Promise<Readonly<{ run: WorkflowRun; subject: ApprovalSubject; replayed: boolean }>>;
+  getApprovalSubject(
+    input: Readonly<{ runId: RunId; approvalSubjectId?: string | undefined }>
+  ): Promise<ApprovalSubject | undefined>;
+  findDecisionByIdempotencyKey(
+    input: Readonly<{ idempotencyKey: string; requestHash: string }>
+  ): Promise<ApprovalDecisionReplay | undefined>;
+  recordDecisionAndEnqueueFinalization(
+    input: ApprovalDecisionInput
+  ): Promise<ApprovalDecisionStoreResult>;
+  replaceApprovalSubject(
+    input: ReplaceApprovalSubjectInput
+  ): Promise<Readonly<{ run: WorkflowRun; subject: ApprovalSubject; replayed: boolean }>>;
   regenerateRun(input: RegenerateRunInput): Promise<WorkflowRun>;
-  findRegenerationByIdempotencyKey(input: RegenerationReplayInput): Promise<WorkflowRun | undefined>;
+  findRegenerationByIdempotencyKey(
+    input: RegenerationReplayInput
+  ): Promise<WorkflowRun | undefined>;
   finalizeRun(input: FinalizeRunInput): Promise<WorkflowRun>;
-  failRun(input: Readonly<{ runId: RunId; expectedVersion: number; invocationId: string; invocationOwner: string; leaseToken: string; causalCommandId: string; reason: string }>): Promise<WorkflowRun>;
-  cancelRun(input: Readonly<{ runId: RunId; expectedVersion: number; cancelledBy: UserId }>): Promise<WorkflowRun>;
+  failRun(
+    input: Readonly<{
+      runId: RunId;
+      expectedVersion: number;
+      invocationId: string;
+      invocationOwner: string;
+      leaseToken: string;
+      causalCommandId: string;
+      reason: string;
+    }>
+  ): Promise<WorkflowRun>;
+  cancelRun(
+    input: Readonly<{ runId: RunId; expectedVersion: number; cancelledBy: UserId }>
+  ): Promise<WorkflowRun>;
 }

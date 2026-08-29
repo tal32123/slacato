@@ -1,13 +1,17 @@
-import { Controller, Get, Options, Post, Req, Res, Inject, HttpCode } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import { Controller, Get, HttpCode, Inject, Options, Post, Req, Res } from '@nestjs/common';
 import {
-  authSessionResponseSchema, authenticatedMutationResponseSchema, csrfResponseSchema,
-  logoutResponseSchema, personaListResponseSchema, selectPersonaRequestSchema,
-  type SelectPersonaRequest
+  authenticatedMutationResponseSchema,
+  authSessionResponseSchema,
+  csrfResponseSchema,
+  logoutResponseSchema,
+  personaListResponseSchema,
+  type SelectPersonaRequest,
+  selectPersonaRequestSchema
 } from '@slacato/contracts';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { ZodBody, ZodResponse } from '../../common/wire/zod.decorators.js';
 import { BrowserPublic } from '../../common/security/access.metadata.js';
+import { ZodBody, ZodResponse } from '../../common/wire/zod.decorators.js';
 import { AuthService } from './auth.service.js';
 import { AUTH_OPTIONS, type AuthModuleOptions } from './contracts.js';
 import { applyCorsHeaders } from './guard.js';
@@ -25,13 +29,17 @@ export class AuthController {
   @Get('personas')
   @BrowserPublic()
   @ZodResponse(personaListResponseSchema)
-  public listPersonas() { return this.auth.listPersonas(); }
+  public listPersonas() {
+    return this.auth.listPersonas();
+  }
 
   /** Returns the current browser authentication session. */
   @Get('session')
   @BrowserPublic()
   @ZodResponse(authSessionResponseSchema)
-  public getSession(@Req() request: Request) { return this.auth.getSession(request); }
+  public getSession(@Req() request: Request) {
+    return this.auth.getSession(request);
+  }
 
   /** Bootstraps CSRF protection for the current browser session. */
   @Get('csrf')
@@ -56,10 +64,7 @@ export class AuthController {
   /** Ends the current authenticated browser session. */
   @Post('logout')
   @ZodResponse(logoutResponseSchema)
-  public logout(
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response
-  ) {
+  public logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     return this.auth.logout(request, response);
   }
 
@@ -68,7 +73,10 @@ export class AuthController {
   @BrowserPublic()
   @HttpCode(204)
   @ZodResponse(z.undefined())
-  public preflight(@Req() request: Request, @Res({ passthrough: true }) response: Response): undefined {
+  public preflight(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response
+  ): undefined {
     applyCorsHeaders(request, response, this.options.allowedOrigins);
     return undefined;
   }

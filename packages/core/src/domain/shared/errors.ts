@@ -62,7 +62,12 @@ export class AuthorizationDeniedError extends AppError {
 export class DomainNotFoundError extends AppError {
   /** Creates an absence failure for a resource within the authorized scope. */
   public constructor(resource: string, details: AppErrorDetails = {}) {
-    super('NOT_FOUND', `${resource} was not found`, 'The requested resource was not found.', details);
+    super(
+      'NOT_FOUND',
+      `${resource} was not found`,
+      'The requested resource was not found.',
+      details
+    );
   }
 }
 

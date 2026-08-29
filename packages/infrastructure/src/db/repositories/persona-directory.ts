@@ -1,4 +1,9 @@
-import { AUTHORIZED_SOURCE_TYPES, CANONICAL_FIXTURE_COMMIT, type AuthorizedSourceType, type PermissionGrant } from '@slacato/core';
+import {
+  AUTHORIZED_SOURCE_TYPES,
+  type AuthorizedSourceType,
+  CANONICAL_FIXTURE_COMMIT,
+  type PermissionGrant
+} from '@slacato/core';
 import type { DatabaseClient } from '../client.js';
 
 type PersonaRow = Readonly<{ id: string; display_name: string; role: string }>;
@@ -60,7 +65,11 @@ export class PostgresCanonicalPersonaDirectory {
       order by account_id, source_type, id
     `;
     const grants = rows.map((row): PermissionGrant => {
-      if (row.account_id === null || row.source_type === null || !knownSources.has(row.source_type)) {
+      if (
+        row.account_id === null ||
+        row.source_type === null ||
+        !knownSources.has(row.source_type)
+      ) {
         throw new Error(`Invalid canonical grant for persona ${persona.id}`);
       }
       return {

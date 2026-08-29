@@ -1,5 +1,5 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from './ui/button';
 
 type AppErrorBoundaryProps = Readonly<{ children: ReactNode }>;
@@ -29,11 +29,17 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
           <span className="grid size-11 place-items-center rounded-full bg-secondary text-secondary-foreground">
             <AlertTriangle aria-hidden="true" />
           </span>
-          <h1 className="mt-5 text-2xl font-semibold tracking-tight">The application could not be loaded</h1>
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight">
+            The application could not be loaded
+          </h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             An unexpected interface error occurred. Reload the application to try again.
           </p>
-          <Button className="mt-5 min-h-11" variant="outline" onClick={() => window.location.reload()}>
+          <Button
+            className="mt-5 min-h-11"
+            variant="outline"
+            onClick={() => window.location.reload()}
+          >
             Reload application
           </Button>
         </section>

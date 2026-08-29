@@ -2,11 +2,13 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { z } from 'zod';
 
 export const DEMO_SESSION_TTL_MS = 8 * 60 * 60 * 1_000;
-const signedSessionSchema = z.object({
-  userId: z.string().regex(/^USR-\d+$/),
-  issuedAt: z.number().int().nonnegative(),
-  version: z.string().uuid()
-}).strict();
+const signedSessionSchema = z
+  .object({
+    userId: z.string().regex(/^USR-\d+$/),
+    issuedAt: z.number().int().nonnegative(),
+    version: z.string().uuid()
+  })
+  .strict();
 
 export type SignedDemoSession = z.infer<typeof signedSessionSchema>;
 export type BrowserRequestMetadata = Readonly<{
@@ -92,7 +94,11 @@ export class SessionCsrf {
   }
 
   /** Confirms that a CSRF token matches its browser seed and session generation. */
-  public verify(token: string | undefined, seed: string | undefined, sessionVersion: string | undefined): boolean {
+  public verify(
+    token: string | undefined,
+    seed: string | undefined,
+    sessionVersion: string | undefined
+  ): boolean {
     if (!token || !seed) return false;
     let supplied: Buffer;
     try {
@@ -100,7 +106,10 @@ export class SessionCsrf {
     } catch {
       return false;
     }
-    return constantTimeEqual(supplied, hmac(this.secret, `${seed}.${sessionVersion ?? 'anonymous'}`));
+    return constantTimeEqual(
+      supplied,
+      hmac(this.secret, `${seed}.${sessionVersion ?? 'anonymous'}`)
+    );
   }
 }
 
@@ -114,15 +123,19 @@ export class BrowserRequestPolicy {
   }
 
   /** Decides whether browser request metadata satisfies the authentication policy. */
-  public evaluate(request: BrowserRequestMetadata):
+  public evaluate(
+    request: BrowserRequestMetadata
+  ):
     | Readonly<{ allowed: true; origin?: string }>
     | Readonly<{ allowed: false; reason: 'forbidden' }> {
     const method = request.method.toUpperCase();
     const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(method);
     const requiresOrigin = mutation || method === 'OPTIONS';
-    if (!['same-origin', 'same-site', 'cross-site'].includes(request.secFetchSite ?? '')) return { allowed: false, reason: 'forbidden' };
+    if (!['same-origin', 'same-site', 'cross-site'].includes(request.secFetchSite ?? ''))
+      return { allowed: false, reason: 'forbidden' };
     if (request.origin === undefined) {
-      if (requiresOrigin || request.secFetchSite !== 'same-origin') return { allowed: false, reason: 'forbidden' };
+      if (requiresOrigin || request.secFetchSite !== 'same-origin')
+        return { allowed: false, reason: 'forbidden' };
       return { allowed: true };
     }
     if (!this.allowedOrigins.has(request.origin)) return { allowed: false, reason: 'forbidden' };

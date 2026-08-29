@@ -1,12 +1,15 @@
-import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import { ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { AuthSessionResponse, Persona, SelectPersonaRequest } from '@slacato/contracts';
+import type { Request, Response } from 'express';
 import {
-  AUTH_OPTIONS, PERSONA_DIRECTORY, SESSION_REGISTRY,
-  type AuthModuleOptions, type CanonicalPersonaDirectory, type SessionRegistry
+  AUTH_OPTIONS,
+  type AuthModuleOptions,
+  type CanonicalPersonaDirectory,
+  PERSONA_DIRECTORY,
+  SESSION_REGISTRY,
+  type SessionRegistry
 } from './contracts.js';
 import { DEMO_SESSION_TTL_MS, DemoSessionCodec, SessionCsrf } from './session.js';
-import { Inject } from '@nestjs/common';
 
 const SESSION_COOKIE_DEV = 'slacato_session';
 const CSRF_COOKIE_DEV = 'slacato_csrf_seed';
@@ -27,6 +30,7 @@ export class AuthService {
   private readonly sessionCodec: DemoSessionCodec;
   private readonly csrf: SessionCsrf;
 
+  /** Initializes session and CSRF codecs from the configured secret. */
   public constructor(
     @Inject(AUTH_OPTIONS) private readonly options: AuthModuleOptions,
     @Inject(PERSONA_DIRECTORY) private readonly personas: CanonicalPersonaDirectory,
@@ -39,25 +43,32 @@ export class AuthService {
   /** Lists selectable personas without exposing directory-only fields. */
   public async listPersonas(): Promise<Readonly<{ personas: readonly Persona[] }>> {
     const personas = await this.personas.list();
-    return { personas: personas.map(({ userId, displayName, role }) => ({ userId, displayName, role })) };
+    return {
+      personas: personas.map(({ userId, displayName, role }) => ({ userId, displayName, role }))
+    };
   }
 
   /** Resolves the request's active signed session into the public authentication response. */
   public async getSession(request: Request): Promise<AuthSessionResponse> {
     const resolved = await this.resolveSession(request);
-    return resolved === undefined ? { authenticated: false } : {
-      authenticated: true,
-      persona: {
-        userId: resolved.persona.userId,
-        displayName: resolved.persona.displayName,
-        role: resolved.persona.role
-      },
-      version: resolved.claims.version
-    };
+    return resolved === undefined
+      ? { authenticated: false }
+      : {
+          authenticated: true,
+          persona: {
+            userId: resolved.persona.userId,
+            displayName: resolved.persona.displayName,
+            role: resolved.persona.role
+          },
+          version: resolved.claims.version
+        };
   }
 
   /** Issues a CSRF token bound to the request's current anonymous or authenticated session. */
-  public async bootstrapCsrf(request: Request, response: Response): Promise<Readonly<{ csrfToken: string }>> {
+  public async bootstrapCsrf(
+    request: Request,
+    response: Response
+  ): Promise<Readonly<{ csrfToken: string }>> {
     const session = await this.resolveSession(request);
     const seed = this.readCookie(request, this.csrfCookieName) ?? this.csrf.createSeed();
     this.writeCookie(response, this.csrfCookieName, seed);
@@ -69,7 +80,9 @@ export class AuthService {
     input: SelectPersonaRequest,
     request: Request,
     response: Response
-  ): Promise<Readonly<{ session: Extract<AuthSessionResponse, { authenticated: true }>; csrfToken: string }>> {
+  ): Promise<
+    Readonly<{ session: Extract<AuthSessionResponse, { authenticated: true }>; csrfToken: string }>
+  > {
     const persona = await this.personas.findById(input.userId);
     if (persona === undefined) this.forbidden();
     await this.revokeRequestSession(request);
@@ -108,20 +121,33 @@ export class AuthService {
   }
 
   /** Returns the active session or throws an unauthorized response. */
-  public async requireSession(request: Request): Promise<NonNullable<Awaited<ReturnType<AuthService['resolveSession']>>>> {
+  public async requireSession(
+    request: Request
+  ): Promise<NonNullable<Awaited<ReturnType<AuthService['resolveSession']>>>> {
     const session = await this.resolveSession(request);
-    if (session === undefined) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Authentication is required' });
+    if (session === undefined)
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication is required'
+      });
     return session;
   }
 
   /** Requires a valid CSRF token bound to the request's current session state. */
-  public async assertPublicMutationCsrf(request: Request, token: string | undefined): Promise<void> {
+  public async assertPublicMutationCsrf(
+    request: Request,
+    token: string | undefined
+  ): Promise<void> {
     const session = await this.resolveSession(request);
     this.assertCsrf(token, request, session?.claims.version);
   }
 
   /** Requires a valid CSRF token bound to the supplied authenticated session generation. */
-  public assertAuthenticatedMutationCsrf(request: Request, token: string | undefined, sessionVersion: string): void {
+  public assertAuthenticatedMutationCsrf(
+    request: Request,
+    token: string | undefined,
+    sessionVersion: string
+  ): void {
     this.assertCsrf(token, request, sessionVersion);
   }
 
@@ -130,46 +156,65 @@ export class AuthService {
     return this.sessions.isActive(version, userId);
   }
 
-
+  /** Resolves an active signed request session and its canonical persona. */
   private async resolveSession(request: Request) {
     const claims = this.sessionCodec.verify(this.readCookie(request, this.sessionCookieName));
     if (claims === undefined) return undefined;
-    if (!await this.sessions.isActive(claims.version, claims.userId)) return undefined;
+    if (!(await this.sessions.isActive(claims.version, claims.userId))) return undefined;
     const persona = await this.personas.findById(claims.userId);
     return persona === undefined ? undefined : { claims, persona };
   }
+  /** Revokes the signed session presented by the request when present. */
   private async revokeRequestSession(request: Request): Promise<void> {
     const claims = this.sessionCodec.verify(this.readCookie(request, this.sessionCookieName));
     if (claims !== undefined) await this.sessions.revoke(claims.version);
   }
 
-
-  private assertCsrf(token: string | undefined, request: Request, version: string | undefined): void {
+  /** Verifies a CSRF token against the request seed and session generation. */
+  private assertCsrf(
+    token: string | undefined,
+    request: Request,
+    version: string | undefined
+  ): void {
     if (!this.csrf.verify(token, this.readCookie(request, this.csrfCookieName), version)) {
-      throw new ForbiddenException({ code: 'INVALID_CSRF', message: 'Request could not be authorized' });
+      throw new ForbiddenException({
+        code: 'INVALID_CSRF',
+        message: 'Request could not be authorized'
+      });
     }
   }
 
+  /** Throws the service's standard forbidden response. */
   private forbidden(): never {
     throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Request could not be authorized' });
   }
 
+  /** Selects the environment-appropriate session cookie name. */
   private get sessionCookieName(): string {
     return this.options.environment === 'production' ? SESSION_COOKIE_PROD : SESSION_COOKIE_DEV;
   }
 
+  /** Selects the environment-appropriate CSRF cookie name. */
   private get csrfCookieName(): string {
     return this.options.environment === 'production' ? CSRF_COOKIE_PROD : CSRF_COOKIE_DEV;
   }
 
+  /** Builds the shared security options for authentication cookies. */
   private get baseCookieOptions(): Omit<CookieOptions, 'maxAge'> {
-    return { httpOnly: true, sameSite: 'lax', secure: this.options.environment === 'production', path: '/' };
+    return {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: this.options.environment === 'production',
+      path: '/'
+    };
   }
 
+  /** Writes a secure authentication cookie with the demo session lifetime. */
   private writeCookie(response: Response, name: string, value: string): void {
     response.cookie(name, value, { ...this.baseCookieOptions, maxAge: DEMO_SESSION_TTL_MS });
   }
 
+  /** Reads and decodes a named cookie from the request header. */
   private readCookie(request: Request, name: string): string | undefined {
     const header = request.headers.cookie;
     if (!header) return undefined;
@@ -178,7 +223,11 @@ export class AuthService {
       if (separator < 0) continue;
       const key = segment.slice(0, separator).trim();
       if (key !== name) continue;
-      try { return decodeURIComponent(segment.slice(separator + 1)); } catch { return undefined; }
+      try {
+        return decodeURIComponent(segment.slice(separator + 1));
+      } catch {
+        return undefined;
+      }
     }
     return undefined;
   }

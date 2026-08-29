@@ -1,15 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { DemoDiagnosticsResponse, PermissionGrantView } from '@slacato/contracts';
 import type { PermissionGrant } from '@slacato/core';
-import { HealthService } from '../health/health.service.js';
 import type { AuthenticatedPrincipal } from '../auth/contracts.js';
+import { HealthService } from '../health/health.service.js';
 import {
   APPROVAL_AUTHORITY_QUERY,
-  PROVIDER_RUNTIME_DESCRIPTOR,
   type ApprovalAuthorityQuery,
+  PROVIDER_RUNTIME_DESCRIPTOR,
   type ProviderRuntimeDescriptor
 } from './contracts.js';
-
 
 /** Builds a read-only diagnostics view from injected runtime and authorization facts. */
 @Injectable()
@@ -30,7 +29,10 @@ export class DiagnosticsService {
     return {
       sessionVersion: session.claims.version,
       permissions: session.persona.grants.map(permissionView),
-      approvalAuthorities,
+      approvalAuthorities: approvalAuthorities.map((entry) => ({
+        accountId: entry.accountId,
+        authorities: [...entry.authorities]
+      })),
       providerHealth: {
         ...this.runtime,
         indexHealth: readiness.checks.index,

@@ -1,17 +1,26 @@
 import type { DealBrief, PermissionGrant, RunStatus } from '@slacato/core';
 
+/** Injection token for the deal query module options. */
 export const DEALS_OPTIONS = Symbol('DEALS_OPTIONS');
 
+/** Authenticated session context used to authorize deal queries. */
 export type DealQuerySession = Readonly<{
   claims: Readonly<{ version: string }>;
-  persona: Readonly<{ userId: string; displayName: string; role: string; grants: readonly PermissionGrant[] }>;
+  persona: Readonly<{
+    userId: string;
+    displayName: string;
+    role: string;
+    grants: readonly PermissionGrant[];
+  }>;
 }>;
 
+/** Summarizes the current status and update time of a deal run. */
 export type DealRunSummary = Readonly<{
   status: RunStatus;
   updatedAt: Date | string;
 }>;
 
+/** Represents a deal workspace visible to the requesting persona. */
 export type AuthorizedDeal = Readonly<{
   opportunityId: string;
   opportunityName: string;
@@ -23,16 +32,20 @@ export type AuthorizedDeal = Readonly<{
   latestRun: DealRunSummary | null;
 }>;
 
+/** Carries a generated deal brief and its draft or finalized lifecycle. */
 export type GeneratedDealOutput = Readonly<{
   lifecycle: 'draft' | 'finalized';
   brief: DealBrief;
 }>;
 
-export type LatestDealRun = DealRunSummary & Readonly<{
-  runId: string;
-  generatedOutput: GeneratedDealOutput | null;
-}>;
+/** Describes the latest authorized run and any generated output. */
+export type LatestDealRun = DealRunSummary &
+  Readonly<{
+    runId: string;
+    generatedOutput: GeneratedDealOutput | null;
+  }>;
 
+/** Represents one authorized evidence record displayed in a deal workspace. */
 export type DealEvidence = Readonly<{
   id: string;
   sourceType: string;
@@ -43,8 +56,10 @@ export type DealEvidence = Readonly<{
   createdAt: Date | string;
 }>;
 
+/** Identifies the deal workspace section used to group evidence. */
 export type EvidenceCategory = 'opportunity' | 'stakeholders' | 'supplemental';
 
+/** Defines the persona and Salesforce records used to authorize evidence access. */
 export type EvidenceScope = Readonly<{
   personaId: string;
   opportunityId: string;
@@ -52,6 +67,7 @@ export type EvidenceScope = Readonly<{
   restrictedOpportunity: boolean;
 }>;
 
+/** Supplies persona-authorized deal workspaces, runs, and evidence to query handlers. */
 export interface DealQueryRepository {
   /** Lists deals authorized by a live Salesforce source grant for the persona. */
   listAuthorizedDeals(personaId: string): Promise<readonly AuthorizedDeal[]>;
@@ -63,4 +79,5 @@ export interface DealQueryRepository {
   listEvidence(scope: EvidenceScope, category: EvidenceCategory): Promise<readonly DealEvidence[]>;
 }
 
+/** Configures the deals module with its query repository. */
 export type DealsModuleOptions = Readonly<{ repository: DealQueryRepository }>;

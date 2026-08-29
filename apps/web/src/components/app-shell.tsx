@@ -1,16 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
 import type { DemoSession } from '@slacato/contracts';
 import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigation, useNavigationType } from 'react-router';
+import { GuidedTour } from '@/components/guided-tour';
 import { MobileNav, primaryDestinations } from '@/components/mobile-nav';
 import { PersonaMenu } from '@/components/persona-menu';
-import { GuidedTour } from '@/components/guided-tour';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /** Frames protected pages with navigation, session controls, guided help, and accessible focus handling. */
-export function AppShell({ session, onLogout }: Readonly<{
+export function AppShell({
+  session,
+  onLogout
+}: Readonly<{
   session: DemoSession;
   onLogout: () => Promise<void>;
 }>): React.JSX.Element {
@@ -29,12 +32,18 @@ export function AppShell({ session, onLogout }: Readonly<{
   }, []);
   useEffect(() => {
     const section = location.pathname.split('/').filter(Boolean)[0] ?? 'deals';
-    const title = section === 'approvals' ? 'Approvals'
-      : section === 'runs' ? 'Runs'
-        : section === 'walkthrough' ? 'Walkthrough'
-        : section === 'settings' ? 'Settings'
-          : section === 'diagnostics' ? 'Diagnostics'
-            : 'Deals';
+    const title =
+      section === 'approvals'
+        ? 'Approvals'
+        : section === 'runs'
+          ? 'Runs'
+          : section === 'walkthrough'
+            ? 'Walkthrough'
+            : section === 'settings'
+              ? 'Settings'
+              : section === 'diagnostics'
+                ? 'Diagnostics'
+                : 'Deals';
     document.title = `${title} | SlaCato`;
     const focusOwner = (location.state as { focusOwner?: unknown } | null)?.focusOwner;
     if (navigationType !== 'POP' && focusOwner !== 'approval-status') {
@@ -42,9 +51,11 @@ export function AppShell({ session, onLogout }: Readonly<{
     }
   }, [location.pathname, location.state, navigationType]);
 
-
   return (
-    <div data-protected-app-shell className="min-h-dvh bg-background lg:grid lg:grid-cols-[auto_minmax(0,1fr)]">
+    <div
+      data-protected-app-shell
+      className="min-h-dvh bg-background lg:grid lg:grid-cols-[auto_minmax(0,1fr)]"
+    >
       <a
         href="#main-content"
         className="fixed left-4 top-4 z-50 -translate-y-24 rounded-md bg-primary px-4 py-3 font-medium text-primary-foreground transition-transform focus:translate-y-0"
@@ -63,7 +74,9 @@ export function AppShell({ session, onLogout }: Readonly<{
           <span className="grid size-10 shrink-0 place-items-center rounded-md bg-brand-mint text-brand-forest">
             <ShieldCheck aria-hidden="true" className="size-6" />
           </span>
-          <span className={cn('text-lg font-semibold tracking-tight', !expanded && 'sr-only')}>SlaCato</span>
+          <span className={cn('text-lg font-semibold tracking-tight', !expanded && 'sr-only')}>
+            SlaCato
+          </span>
         </div>
 
         <nav aria-label="Primary" data-layout="desktop" className="flex-1 px-2 py-5">
@@ -110,7 +123,11 @@ export function AppShell({ session, onLogout }: Readonly<{
             className="mt-1 min-h-11 w-full justify-start px-3 text-brand-pale/75 hover:bg-brand-medium hover:text-brand-pale"
             onClick={() => setExpanded((value) => !value)}
           >
-            {expanded ? <PanelLeftClose aria-hidden="true" /> : <PanelLeftOpen aria-hidden="true" />}
+            {expanded ? (
+              <PanelLeftClose aria-hidden="true" />
+            ) : (
+              <PanelLeftOpen aria-hidden="true" />
+            )}
             <span className={cn(!expanded && 'sr-only')}>{expanded ? 'Collapse' : 'Expand'}</span>
           </Button>
         </div>
@@ -120,23 +137,45 @@ export function AppShell({ session, onLogout }: Readonly<{
         <header className="sticky top-0 z-30 border-b bg-background/95">
           <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="min-w-0">
-              <Link to="/deals" className="inline-flex min-h-11 min-w-11 items-center text-base font-semibold tracking-tight lg:hidden">SlaCato</Link>
-              <p className="hidden text-sm text-muted-foreground sm:block lg:block">Negotiation preparation, grounded in authorized evidence</p>
+              <Link
+                to="/deals"
+                className="inline-flex min-h-11 min-w-11 items-center text-base font-semibold tracking-tight lg:hidden"
+              >
+                SlaCato
+              </Link>
+              <p className="hidden text-sm text-muted-foreground sm:block lg:block">
+                Negotiation preparation, grounded in authorized evidence
+              </p>
             </div>
-            <div id="active-persona-control" data-tour="persona" className="flex shrink-0 items-center gap-2">
-              <span className="hidden sm:inline-flex"><StatusBadge status="ready" label="Signed session" /></span>
+            <div
+              id="active-persona-control"
+              data-tour="persona"
+              className="flex shrink-0 items-center gap-2"
+            >
+              <span className="hidden sm:inline-flex">
+                <StatusBadge status="ready" label="Signed session" />
+              </span>
               <PersonaMenu session={session} onLogout={onLogout} />
             </div>
           </div>
         </header>
 
         {navigation.state !== 'idle' && (
-          <div role="status" aria-label="Loading destination" className="border-b bg-secondary px-4 py-2 text-center text-sm text-secondary-foreground">
+          <div
+            role="status"
+            aria-label="Loading destination"
+            className="border-b bg-secondary px-4 py-2 text-center text-sm text-secondary-foreground"
+          >
             Loading destination…
           </div>
         )}
 
-        <main ref={mainRef} id="main-content" tabIndex={-1} className="mx-auto w-full max-w-7xl px-4 py-7 pb-24 sm:px-6 sm:py-9 lg:px-8 lg:pb-10">
+        <main
+          ref={mainRef}
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-7xl px-4 py-7 pb-24 sm:px-6 sm:py-9 lg:px-8 lg:pb-10"
+        >
           <Outlet />
         </main>
       </div>

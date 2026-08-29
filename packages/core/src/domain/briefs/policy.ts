@@ -2,7 +2,11 @@ import type { DealBrief } from './schema.js';
 export const APPROVAL_QUORUM_VERSION = 'deal-brief-approval-v1' as const;
 
 export type ApprovalAuthority = 'deal_desk' | 'sales_leader' | 'legal_reviewer' | 'account_owner';
-export type ApprovalCategory = 'commercial_discount' | 'legal_terms' | 'evidence_review' | 'customer_concession';
+export type ApprovalCategory =
+  | 'commercial_discount'
+  | 'legal_terms'
+  | 'evidence_review'
+  | 'customer_concession';
 
 export type ApprovalRequirementEntry = Readonly<{
   id: string;
@@ -31,20 +35,37 @@ export type ApprovalRequirementInput = Readonly<{
   missingMaterialEvidence: boolean;
 }>;
 
-export type EditedPolicySignals = Readonly<Pick<ApprovalRequirementInput,
-  'liabilityCapChanged' | 'dataRetentionLanguage' | 'restrictedResearchLanguage'
-  | 'customerSpecificSecurityLanguage' | 'customerFacingConcessionLanguage'>>;
+export type EditedPolicySignals = Readonly<
+  Pick<
+    ApprovalRequirementInput,
+    | 'liabilityCapChanged'
+    | 'dataRetentionLanguage'
+    | 'restrictedResearchLanguage'
+    | 'customerSpecificSecurityLanguage'
+    | 'customerFacingConcessionLanguage'
+  >
+>;
 
 /** Normalizes all brief prose for deterministic policy concept matching. */
 function semanticText(payload: DealBrief): string {
   const values: string[] = [];
   const visit = (value: unknown): void => {
-    if (typeof value === 'string') { values.push(value); return; }
-    if (Array.isArray(value)) { value.forEach(visit); return; }
+    if (typeof value === 'string') {
+      values.push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
     if (value !== null && typeof value === 'object') Object.values(value).forEach(visit);
   };
   visit(payload);
-  return values.join(' ').normalize('NFKC').toLocaleLowerCase('en-US').replaceAll(/[^a-z0-9]+/g, ' ');
+  return values
+    .join(' ')
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replaceAll(/[^a-z0-9]+/g, ' ');
 }
 
 /** Reports whether normalized brief prose contains any configured policy concept. */
@@ -55,16 +76,101 @@ function containsConcept(text: string, concepts: readonly string[]): boolean {
 /** Classifies approval-sensitive concepts in edited brief prose using conservative deterministic rules. */
 export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySignals {
   const text = ` ${semanticText(payload)} `;
-  const liabilitySubject = containsConcept(text, ['liability', 'liabilities', 'indemnity', 'indemnification', 'exposure', 'damages', 'risk allocation']);
-  const liabilityChange = containsConcept(text, ['broader', 'increase', 'increased', 'expand', 'expanded', 'uncapped', 'unlimited', 'accept', 'accepted', 'change', 'changed', 'revise', 'revised']);
-  const commitment = containsConcept(text, ['offer', 'offered', 'accept', 'accepted', 'agree', 'agreed', 'promise', 'promised', 'commit', 'committed', 'provide', 'provided', 'grant', 'granted', 'concede', 'conceded', 'waive', 'waived']);
-  const commercialBenefit = containsConcept(text, ['concession', 'discount', 'reduction', 'reduced', 'credit', 'rebate', 'waiver', 'free', 'complimentary']);
+  const liabilitySubject = containsConcept(text, [
+    'liability',
+    'liabilities',
+    'indemnity',
+    'indemnification',
+    'exposure',
+    'damages',
+    'risk allocation'
+  ]);
+  const liabilityChange = containsConcept(text, [
+    'broader',
+    'increase',
+    'increased',
+    'expand',
+    'expanded',
+    'uncapped',
+    'unlimited',
+    'accept',
+    'accepted',
+    'change',
+    'changed',
+    'revise',
+    'revised'
+  ]);
+  const commitment = containsConcept(text, [
+    'offer',
+    'offered',
+    'accept',
+    'accepted',
+    'agree',
+    'agreed',
+    'promise',
+    'promised',
+    'commit',
+    'committed',
+    'provide',
+    'provided',
+    'grant',
+    'granted',
+    'concede',
+    'conceded',
+    'waive',
+    'waived'
+  ]);
+  const commercialBenefit = containsConcept(text, [
+    'concession',
+    'discount',
+    'reduction',
+    'reduced',
+    'credit',
+    'rebate',
+    'waiver',
+    'free',
+    'complimentary'
+  ]);
   const dataSubject = containsConcept(text, ['data', 'records', 'recordings', 'transcripts']);
-  const retentionSubject = containsConcept(text, ['retention', 'retain', 'retained', 'delete', 'deletion', 'preserve', 'storage']);
-  const researchSubject = containsConcept(text, ['research', 'study', 'studies', 'benchmark', 'analysis']);
-  const restrictedSubject = containsConcept(text, ['restricted', 'confidential', 'private', 'nonpublic', 'sensitive']);
-  const securitySubject = containsConcept(text, ['security', 'encryption', 'breach', 'incident', 'vulnerability', 'compliance']);
-  const customerSpecific = containsConcept(text, ['customer', 'client', 'account', 'bespoke', 'custom', 'specific']);
+  const retentionSubject = containsConcept(text, [
+    'retention',
+    'retain',
+    'retained',
+    'delete',
+    'deletion',
+    'preserve',
+    'storage'
+  ]);
+  const researchSubject = containsConcept(text, [
+    'research',
+    'study',
+    'studies',
+    'benchmark',
+    'analysis'
+  ]);
+  const restrictedSubject = containsConcept(text, [
+    'restricted',
+    'confidential',
+    'private',
+    'nonpublic',
+    'sensitive'
+  ]);
+  const securitySubject = containsConcept(text, [
+    'security',
+    'encryption',
+    'breach',
+    'incident',
+    'vulnerability',
+    'compliance'
+  ]);
+  const customerSpecific = containsConcept(text, [
+    'customer',
+    'client',
+    'account',
+    'bespoke',
+    'custom',
+    'specific'
+  ]);
   return {
     liabilityCapChanged: liabilitySubject && liabilityChange,
     dataRetentionLanguage: dataSubject && retentionSubject,
@@ -113,7 +219,11 @@ function entry(
 
 /** Determines the approvals required by the canonical provider-independent policy. */
 export function decideApprovalRequirement(input: ApprovalRequirementInput): ApprovalRequirement {
-  if (![input.discountPercent, input.renewalUpliftPercent, input.overallConfidence].every(Number.isFinite)) {
+  if (
+    ![input.discountPercent, input.renewalUpliftPercent, input.overallConfidence].every(
+      Number.isFinite
+    )
+  ) {
     throw new TypeError('Approval policy numeric inputs must be finite');
   }
   if (input.overallConfidence < 0 || input.overallConfidence > 1) {
@@ -158,7 +268,14 @@ export function decideApprovalRequirement(input: ApprovalRequirementInput): Appr
 
   if (input.customerFacingConcessionLanguage) {
     const trigger = 'customer_facing_concession_language';
-    entries.push(entry('customer_concession', ['account_owner'], [trigger], entries.map(({ id }) => id)));
+    entries.push(
+      entry(
+        'customer_concession',
+        ['account_owner'],
+        [trigger],
+        entries.map(({ id }) => id)
+      )
+    );
     triggers.push(trigger);
   }
 

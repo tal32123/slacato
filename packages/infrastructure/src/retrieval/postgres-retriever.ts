@@ -1,157 +1,636 @@
 import { createHash } from 'node:crypto';
 import {
-  applyEvidenceAdjustments, AuthorizationDeniedError, buildEvidencePlan, createEvidenceScopeBinding, DomainConflictError, hashEvidenceScopeBinding, opaqueCitationDenial,
-  reciprocalRankFusion, type AuthorizedCitation, type AuthorizedSourceType, type CitationResolutionRequest,
-  type CitationResolver, type EmbeddingGateway, type EmbeddingProfile, type EvidenceRetriever, type RetrievedEvidence,
-  type RetrievalRequest, type RetrievalResult
+  AuthorizationDeniedError,
+  type AuthorizedCitation,
+  type AuthorizedSourceType,
+  applyEvidenceAdjustments,
+  buildEvidencePlan,
+  CANONICAL_FIXTURE_COMMIT,
+  type CitationResolutionRequest,
+  type CitationResolver,
+  createEvidenceScopeBinding,
+  DomainConflictError,
+  type EmbeddingGateway,
+  type EmbeddingProfile,
+  type EvidenceRetriever,
+  hashEvidenceScopeBinding,
+  opaqueCitationDenial,
+  type RetrievalRequest,
+  type RetrievalResult,
+  type RetrievedEvidence,
+  reciprocalRankFusion
 } from '@slacato/core';
 import type { DatabaseClient } from '../db/client.js';
 
-type SearchRow = Readonly<{ id: string; content: string; content_hash: string; source_type: AuthorizedSourceType; sensitivity: string; event_date: string | null; reliability_class: string; source_locator: string; classification_reason: string; policy_hash: string }>;
-type Candidate = Readonly<{ row: SearchRow; fusionScore: number; score: number; reliabilityAdjustment: number; recencyAdjustment: number; lexicalRank?: number; semanticRank?: number }>;
-type Health = Readonly<{ total: number; matching: number; source_types: AuthorizedSourceType[] | null; policy_hashes: string[] | null }>;
-type Header = Readonly<{ id: string; run_id: string; scope_hash: string; policy_hash: string; query_hash: string; index_profile: string; embedding_provider: string; embedding_model: string; embedding_dimension: number; embedding_version: string; embedding_normalization: string; context_limit: number; diagnostics: unknown }>;
-type Entry = SearchRow & Readonly<{ citation_id: string; rank: number; score: string; lexical_rank: number | null; semantic_rank: number | null; fusion_score: string; reliability_adjustment: string; recency_adjustment: string; included_characters: number }>;
-type QueryScope = Readonly<{ personaId: string; accountId: string; opportunityId: string; sourceTypes: readonly AuthorizedSourceType[]; allowSensitive: boolean; allowRestricted: boolean; sourceLimits: Readonly<Record<AuthorizedSourceType, number>>; candidateLimit: number }>;
-type Identity = Readonly<{ manifestId: string; queryHash: string; scopeHash: string; indexProfile: string; binding: ReturnType<typeof createEvidenceScopeBinding> }>;
+type SearchRow = Readonly<{
+  id: string;
+  content: string;
+  content_hash: string;
+  source_type: AuthorizedSourceType;
+  sensitivity: string;
+  event_date: string | null;
+  reliability_class: string;
+  source_locator: string;
+  classification_reason: string;
+  policy_hash: string;
+}>;
+type Candidate = Readonly<{
+  row: SearchRow;
+  fusionScore: number;
+  score: number;
+  reliabilityAdjustment: number;
+  recencyAdjustment: number;
+  lexicalRank?: number;
+  semanticRank?: number;
+}>;
+type Health = Readonly<{
+  total: number;
+  matching: number;
+  source_types: AuthorizedSourceType[] | null;
+  policy_hashes: string[] | null;
+}>;
+type Header = Readonly<{
+  id: string;
+  run_id: string;
+  scope_hash: string;
+  policy_hash: string;
+  query_hash: string;
+  index_profile: string;
+  embedding_provider: string;
+  embedding_model: string;
+  embedding_dimension: number;
+  embedding_version: string;
+  embedding_normalization: string;
+  context_limit: number;
+  diagnostics: unknown;
+}>;
+type Entry = SearchRow &
+  Readonly<{
+    citation_id: string;
+    rank: number;
+    score: string;
+    lexical_rank: number | null;
+    semantic_rank: number | null;
+    fusion_score: string;
+    reliability_adjustment: string;
+    recency_adjustment: string;
+    included_characters: number;
+  }>;
+type QueryScope = Readonly<{
+  personaId: string;
+  accountId: string;
+  opportunityId: string;
+  sourceTypes: readonly AuthorizedSourceType[];
+  allowSensitive: boolean;
+  allowRestricted: boolean;
+  sourceLimits: Readonly<Record<AuthorizedSourceType, number>>;
+  candidateLimit: number;
+}>;
+type Identity = Readonly<{
+  manifestId: string;
+  queryHash: string;
+  scopeHash: string;
+  indexProfile: string;
+  binding: ReturnType<typeof createEvidenceScopeBinding>;
+}>;
 
 /** Produces a stable SHA-256 identity for retrieval inputs and records. */
-function sha256(value: string): string { return createHash('sha256').update(value).digest('hex'); }
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
 /** Serializes structured retrieval inputs deterministically for hashing. */
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value !== null && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`).join(',')}}`;
+  if (value !== null && typeof value === 'object')
+    return `{${Object.entries(value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(',')}}`;
   return JSON.stringify(value);
 }
 /** Formats an embedding for PostgreSQL vector search. */
-function vectorLiteral(values: readonly number[]): string { return `[${values.join(',')}]`; }
+function vectorLiteral(values: readonly number[]): string {
+  return `[${values.join(',')}]`;
+}
 /** Derives an opaque citation identifier from immutable manifest membership. */
-function citationId(manifestId: string, evidenceId: string): RetrievedEvidence['citationId'] { return `citation_${sha256(`${manifestId}\u001f${evidenceId}`).slice(0, 40)}` as RetrievedEvidence['citationId']; }
+function citationId(manifestId: string, evidenceId: string): RetrievedEvidence['citationId'] {
+  return `citation_${sha256(`${manifestId}\u001f${evidenceId}`).slice(0, 40)}` as RetrievedEvidence['citationId'];
+}
 
 /** Finds authorized evidence in PostgreSQL and preserves the exact records needed to ground a deal brief. */
 export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
   /** Configures authorized retrieval with its database, embedding profile, and clock. */
-  public constructor(private readonly database: DatabaseClient, private readonly embeddingGateway: EmbeddingGateway, private readonly profile: EmbeddingProfile, private readonly now: () => Date = () => new Date()) {}
+  public constructor(
+    private readonly database: DatabaseClient,
+    private readonly embeddingGateway: EmbeddingGateway,
+    private readonly profile: EmbeddingProfile,
+    private readonly now: () => Date = () => new Date()
+  ) {}
 
   /** Finds, ranks, budgets, and durably records evidence authorized for the requested deal. */
   public async search(request: RetrievalRequest): Promise<RetrievalResult> {
     const plan = buildEvidencePlan(request);
     await this.assertRunBinding(request);
     const queryHash = sha256(stableJson({ algorithmVersion: 'authorized-hybrid-v1', plan }));
-    const binding = createEvidenceScopeBinding({ accountId: request.accountId, opportunityId: request.opportunityId }, request.scope);
+    const binding = createEvidenceScopeBinding(
+      { accountId: request.accountId, opportunityId: request.opportunityId },
+      request.scope
+    );
     const scopeHash = hashEvidenceScopeBinding(binding);
-    const identity: Identity = { queryHash, scopeHash, binding, indexProfile: sha256(stableJson(this.profile)), manifestId: `manifest_${sha256(`${request.runId}\u001f${queryHash}\u001f${scopeHash}`).slice(0, 40)}` };
-    const common: QueryScope = { personaId: request.scope.personaId, accountId: request.accountId, opportunityId: request.opportunityId, sourceTypes: [...request.scope.sourceTypes], allowSensitive: request.scope.canViewSensitivePricing, allowRestricted: request.scope.canViewRestrictedAccounts, sourceLimits: plan.sourceLimits, candidateLimit: Math.max(request.limit * plan.sectionQueries.length * 2, request.limit * request.scope.sourceTypes.length) };
+    const identity: Identity = {
+      queryHash,
+      scopeHash,
+      binding,
+      indexProfile: sha256(stableJson(this.profile)),
+      manifestId: `manifest_${sha256(`${request.runId}\u001f${queryHash}\u001f${scopeHash}`).slice(0, 40)}`
+    };
+    const common: QueryScope = {
+      personaId: request.scope.personaId,
+      accountId: request.accountId,
+      opportunityId: request.opportunityId,
+      sourceTypes: [...request.scope.sourceTypes],
+      allowSensitive: request.scope.canViewSensitivePricing,
+      allowRestricted: request.scope.canViewRestrictedAccounts,
+      sourceLimits: plan.sourceLimits,
+      candidateLimit: Math.max(
+        request.limit * plan.sectionQueries.length * 2,
+        request.limit * request.scope.sourceTypes.length
+      )
+    };
     const replay = await this.loadReplay(request, identity, undefined, common);
     if (replay !== undefined) return replay;
-    if (!request.scope.accountIds.includes(request.accountId) || request.scope.sourceTypes.length === 0) return this.persistOrReplay(request, identity, '0'.repeat(64), [], this.emptyDiagnostics());
+    if (
+      !request.scope.accountIds.includes(request.accountId) ||
+      request.scope.sourceTypes.length === 0
+    )
+      return this.persistOrReplay(request, identity, '0'.repeat(64), [], this.emptyDiagnostics());
     const health = await this.assertIndexReady(common);
     const policyHashes = health.policy_hashes ?? [];
-    if (policyHashes.length > 1) throw new Error('Inconsistent policy hashes in authorized evidence');
+    if (policyHashes.length > 1)
+      throw new Error('Inconsistent policy hashes in authorized evidence');
     const policyHash = policyHashes[0] ?? '0'.repeat(64);
-    if (health.total === 0) return this.persistOrReplay(request, identity, policyHash, [], this.emptyDiagnostics(), common);
+    if (health.total === 0)
+      return this.persistOrReplay(
+        request,
+        identity,
+        policyHash,
+        [],
+        this.emptyDiagnostics(),
+        common
+      );
 
-    const executions = [{ section: 'query', query: plan.query, sourceTypes: common.sourceTypes }, ...plan.sectionQueries.map((section) => ({ ...section, sourceTypes: section.sourceTypes.filter((source) => common.sourceTypes.includes(source)) }))];
-    const embeddings = await this.embeddingGateway.embed(executions.map((execution) => execution.query));
-    if (embeddings.length !== executions.length || embeddings.some((embedding) => embedding.length !== this.profile.dimension || embedding.some((value) => !Number.isFinite(value)) || embedding.every((value) => value === 0))) throw new Error('Query embedding dimension does not match the active index profile');
-    const searches = await Promise.all(executions.map(async (execution, index) => {
-      const scope = { ...common, sourceTypes: execution.sourceTypes };
-      const [lexical, semantic] = await Promise.all([this.searchLexical(execution.query, scope), this.searchSemantic(embeddings[index]!, scope)]);
-      return { section: execution.section, lexical, semantic };
-    }));
-    const [exactLookups, exactCrmEvidence, mandatoryPolicy] = await Promise.all([this.executeExactLookups(common), this.searchExactCrmEvidence(common), this.searchFixedSource('policy', common, 1)]);
-    const rows = new Map(searches.flatMap((search) => [...search.lexical, ...search.semantic]).concat(mandatoryPolicy).map((row) => [row.id, row]));
-    const fused = reciprocalRankFusion(searches.flatMap((search) => [search.lexical.map((row) => row.id), search.semantic.map((row) => row.id)]), plan.fusionK);
-    const primary = searches[0]!;
-    const ranked: Candidate[] = fused.map((entry) => {
-      const row = rows.get(entry.id)!;
-      const adjustment = applyEvidenceAdjustments({ fusionScore: entry.score, sourceType: row.source_type, reliabilityClass: row.reliability_class, ...(row.event_date === null ? {} : { eventDate: row.event_date }) }, this.now());
-      const lexicalIndex = primary.lexical.findIndex((candidate) => candidate.id === entry.id); const semanticIndex = primary.semantic.findIndex((candidate) => candidate.id === entry.id);
-      return { row, fusionScore: entry.score, ...adjustment, ...(lexicalIndex < 0 ? {} : { lexicalRank: lexicalIndex + 1 }), ...(semanticIndex < 0 ? {} : { semanticRank: semanticIndex + 1 }) };
-    }).sort((a, b) => b.score - a.score || a.row.id.localeCompare(b.row.id));
+    const executions = [
+      { section: 'query', query: plan.query, sourceTypes: common.sourceTypes },
+      ...plan.sectionQueries.map((section) => ({
+        ...section,
+        sourceTypes: section.sourceTypes.filter((source) => common.sourceTypes.includes(source))
+      }))
+    ];
+    const embeddings = await this.embeddingGateway.embed(
+      executions.map((execution) => execution.query)
+    );
+    if (
+      embeddings.length !== executions.length ||
+      embeddings.some(
+        (embedding) =>
+          embedding.length !== this.profile.dimension ||
+          embedding.some((value) => !Number.isFinite(value)) ||
+          embedding.every((value) => value === 0)
+      )
+    )
+      throw new Error('Query embedding dimension does not match the active index profile');
+    const searches = await Promise.all(
+      executions.map(async (execution, index) => {
+        const scope = { ...common, sourceTypes: execution.sourceTypes };
+        const embedding = embeddings[index];
+        if (embedding === undefined)
+          throw new Error('Missing query embedding for retrieval execution');
+        const [lexical, semantic] = await Promise.all([
+          this.searchLexical(execution.query, scope),
+          this.searchSemantic(embedding, scope)
+        ]);
+        return { section: execution.section, lexical, semantic };
+      })
+    );
+    const [exactLookups, exactCrmEvidence, mandatoryPolicy] = await Promise.all([
+      this.executeExactLookups(common),
+      this.searchExactCrmEvidence(common),
+      this.searchFixedSource('policy', common, 1)
+    ]);
+    const rows = new Map(
+      searches
+        .flatMap((search) => [...search.lexical, ...search.semantic])
+        .concat(mandatoryPolicy)
+        .map((row) => [row.id, row])
+    );
+    const fused = reciprocalRankFusion(
+      searches.flatMap((search) => [
+        search.lexical.map((row) => row.id),
+        search.semantic.map((row) => row.id)
+      ]),
+      plan.fusionK
+    );
+    const primary = searches[0];
+    if (primary === undefined) throw new Error('Primary retrieval search did not execute');
+    const ranked: Candidate[] = fused
+      .map((entry) => {
+        const row = rows.get(entry.id);
+        if (row === undefined)
+          throw new Error('Fused retrieval result is missing its evidence row');
+        const adjustment = applyEvidenceAdjustments(
+          {
+            fusionScore: entry.score,
+            sourceType: row.source_type,
+            reliabilityClass: row.reliability_class,
+            ...(row.event_date === null ? {} : { eventDate: row.event_date })
+          },
+          this.now()
+        );
+        const lexicalIndex = primary.lexical.findIndex((candidate) => candidate.id === entry.id);
+        const semanticIndex = primary.semantic.findIndex((candidate) => candidate.id === entry.id);
+        return {
+          row,
+          fusionScore: entry.score,
+          ...adjustment,
+          ...(lexicalIndex < 0 ? {} : { lexicalRank: lexicalIndex + 1 }),
+          ...(semanticIndex < 0 ? {} : { semanticRank: semanticIndex + 1 })
+        };
+      })
+      .sort((a, b) => b.score - a.score || a.row.id.localeCompare(b.row.id));
     const policyRow = mandatoryPolicy[0];
     let policy = ranked.find((entry) => entry.row.source_type === 'policy');
-    if (policyRow !== undefined && policy === undefined) policy = { row: policyRow, fusionScore: 0, ...applyEvidenceAdjustments({ fusionScore: 0, sourceType: policyRow.source_type, reliabilityClass: policyRow.reliability_class, ...(policyRow.event_date === null ? {} : { eventDate: policyRow.event_date }) }, this.now()) };
-    const exactCandidates = exactCrmEvidence.map((row): Candidate => ranked.find((entry) => entry.row.id === row.id)
-      ?? { row, fusionScore: 0, ...applyEvidenceAdjustments({ fusionScore: 0, sourceType: row.source_type, reliabilityClass: row.reliability_class, ...(row.event_date === null ? {} : { eventDate: row.event_date }) }, this.now()) });
+    if (policyRow !== undefined && policy === undefined)
+      policy = {
+        row: policyRow,
+        fusionScore: 0,
+        ...applyEvidenceAdjustments(
+          {
+            fusionScore: 0,
+            sourceType: policyRow.source_type,
+            reliabilityClass: policyRow.reliability_class,
+            ...(policyRow.event_date === null ? {} : { eventDate: policyRow.event_date })
+          },
+          this.now()
+        )
+      };
+    const exactCandidates = exactCrmEvidence.map(
+      (row): Candidate =>
+        ranked.find((entry) => entry.row.id === row.id) ?? {
+          row,
+          fusionScore: 0,
+          ...applyEvidenceAdjustments(
+            {
+              fusionScore: 0,
+              sourceType: row.source_type,
+              reliabilityClass: row.reliability_class,
+              ...(row.event_date === null ? {} : { eventDate: row.event_date })
+            },
+            this.now()
+          )
+        }
+    );
     const rankedIds = new Set<string>();
     if (policy !== undefined) rankedIds.add(policy.row.id);
-    const rankedSelection = [...(policy === undefined ? [] : [policy]), ...ranked.filter((entry) => !rankedIds.has(entry.row.id) && entry.row.source_type !== 'policy').slice(0, Math.max(0, request.limit - (policy === undefined ? 0 : 1)))];
-    rankedSelection.forEach((entry) => rankedIds.add(entry.row.id));
-    const excerpts = new Map<string, string>(); let remaining = plan.maxContextCharacters;
+    const rankedSelection = [
+      ...(policy === undefined ? [] : [policy]),
+      ...ranked
+        .filter((entry) => !rankedIds.has(entry.row.id) && entry.row.source_type !== 'policy')
+        .slice(0, Math.max(0, request.limit - (policy === undefined ? 0 : 1)))
+    ];
+    rankedSelection.forEach((entry) => {
+      rankedIds.add(entry.row.id);
+    });
+    const excerpts = new Map<string, string>();
+    let remaining = plan.maxContextCharacters;
     const extendTo = (candidate: Candidate, targetLength: number) => {
       const currentLength = excerpts.get(candidate.row.id)?.length ?? 0;
-      const nextLength = Math.min(candidate.row.content.length, targetLength, currentLength + remaining);
+      const nextLength = Math.min(
+        candidate.row.content.length,
+        targetLength,
+        currentLength + remaining
+      );
       if (nextLength <= currentLength) return;
       excerpts.set(candidate.row.id, candidate.row.content.slice(0, nextLength));
       remaining -= nextLength - currentLength;
     };
     const exactIds = new Set(exactCandidates.map((entry) => entry.row.id));
-    const nonExactRanked = rankedSelection.filter((entry) => entry.row.source_type !== 'policy' && !exactIds.has(entry.row.id));
-    const required = [...rankedSelection, ...exactCandidates]
-      .filter((entry, index, values) => values.findIndex((candidate) => candidate.row.id === entry.row.id) === index);
+    const nonExactRanked = rankedSelection.filter(
+      (entry) => entry.row.source_type !== 'policy' && !exactIds.has(entry.row.id)
+    );
+    const required = [...rankedSelection, ...exactCandidates].filter(
+      (entry, index, values) =>
+        values.findIndex((candidate) => candidate.row.id === entry.row.id) === index
+    );
     const minimumExcerptCharacters = 8;
-    const minimumRequiredCharacters = required.reduce((sum, candidate) => sum + Math.min(minimumExcerptCharacters, candidate.row.content.length), 0);
-    if (minimumRequiredCharacters > plan.maxContextCharacters) throw new Error('Context character budget is too small to preserve ranked and mandatory grounding evidence');
-    required.forEach((candidate) => extendTo(candidate, minimumExcerptCharacters));
+    const minimumRequiredCharacters = required.reduce(
+      (sum, candidate) => sum + Math.min(minimumExcerptCharacters, candidate.row.content.length),
+      0
+    );
+    if (minimumRequiredCharacters > plan.maxContextCharacters)
+      throw new Error(
+        'Context character budget is too small to preserve ranked and mandatory grounding evidence'
+      );
+    required.forEach((candidate) => {
+      extendTo(candidate, minimumExcerptCharacters);
+    });
     if (policy !== undefined) extendTo(policy, plan.policyReservation.contextCharacters);
-    nonExactRanked.forEach((candidate) => extendTo(candidate, candidate.row.content.length));
-    exactCandidates.forEach((candidate) => extendTo(candidate, candidate.row.content.length));
+    nonExactRanked.forEach((candidate) => {
+      extendTo(candidate, candidate.row.content.length);
+    });
+    exactCandidates.forEach((candidate) => {
+      extendTo(candidate, candidate.row.content.length);
+    });
     const selectedByBudget = [
-      ...rankedSelection.slice().sort((a, b) => b.score - a.score || a.row.id.localeCompare(b.row.id)),
+      ...rankedSelection
+        .slice()
+        .sort((a, b) => b.score - a.score || a.row.id.localeCompare(b.row.id)),
       ...exactCandidates.filter((entry) => !rankedIds.has(entry.row.id))
     ];
-    const packed = selectedByBudget.filter((candidate) => (excerpts.get(candidate.row.id)?.length ?? 0) > 0);
-    const truncatedEvidenceIds = packed.filter((candidate) => excerpts.get(candidate.row.id)!.length < candidate.row.content.length).map((candidate) => candidate.row.id);
-    const evidence = packed.map((candidate, index): RetrievedEvidence => ({ evidenceId: candidate.row.id, citationId: citationId(identity.manifestId, candidate.row.id), content: excerpts.get(candidate.row.id)!, contentHash: candidate.row.content_hash, sourceType: candidate.row.source_type, sensitivity: candidate.row.sensitivity, sourceLocator: candidate.row.source_locator, classificationReason: candidate.row.classification_reason, policyHash: candidate.row.policy_hash, ...(candidate.row.event_date === null ? {} : { eventDate: candidate.row.event_date }), reliabilityClass: candidate.row.reliability_class, ...(candidate.lexicalRank === undefined ? {} : { lexicalRank: candidate.lexicalRank }), ...(candidate.semanticRank === undefined ? {} : { semanticRank: candidate.semanticRank }), fusionScore: candidate.fusionScore, reliabilityAdjustment: candidate.reliabilityAdjustment, recencyAdjustment: candidate.recencyAdjustment, score: candidate.score, rank: index + 1 }));
+    const packed = selectedByBudget.filter(
+      (candidate) => (excerpts.get(candidate.row.id)?.length ?? 0) > 0
+    );
+    const excerptFor = (candidate: Candidate): string => {
+      const excerpt = excerpts.get(candidate.row.id);
+      if (excerpt === undefined) throw new Error('Packed evidence is missing its excerpt');
+      return excerpt;
+    };
+    const truncatedEvidenceIds = packed
+      .filter((candidate) => excerptFor(candidate).length < candidate.row.content.length)
+      .map((candidate) => candidate.row.id);
+    const evidence = packed.map(
+      (candidate, index): RetrievedEvidence => ({
+        evidenceId: candidate.row.id,
+        citationId: citationId(identity.manifestId, candidate.row.id),
+        content: excerptFor(candidate),
+        contentHash: candidate.row.content_hash,
+        sourceType: candidate.row.source_type,
+        sensitivity: candidate.row.sensitivity,
+        sourceLocator: candidate.row.source_locator,
+        classificationReason: candidate.row.classification_reason,
+        policyHash: candidate.row.policy_hash,
+        ...(candidate.row.event_date === null ? {} : { eventDate: candidate.row.event_date }),
+        reliabilityClass: candidate.row.reliability_class,
+        ...(candidate.lexicalRank === undefined ? {} : { lexicalRank: candidate.lexicalRank }),
+        ...(candidate.semanticRank === undefined ? {} : { semanticRank: candidate.semanticRank }),
+        fusionScore: candidate.fusionScore,
+        reliabilityAdjustment: candidate.reliabilityAdjustment,
+        recencyAdjustment: candidate.recencyAdjustment,
+        score: candidate.score,
+        rank: index + 1
+      })
+    );
     const present = new Set(evidence.map((entry) => entry.sourceType));
-    const diagnostics: RetrievalResult['diagnostics'] = { returned: evidence.length, contextCharacters: evidence.reduce((sum, entry) => sum + entry.content.length, 0), exactContextAvailable: exactLookups.account + exactLookups.opportunity + exactLookups.contacts, exactLookups, sectionMatches: Object.fromEntries(searches.slice(1).map((search) => [search.section, new Set([...search.lexical, ...search.semantic].map((row) => row.id)).size])), mandatoryPolicy: policy === undefined ? 'missing' : 'included', truncatedEvidenceIds, missingSourceTypes: request.scope.sourceTypes.filter((source) => !present.has(source)) };
+    const diagnostics: RetrievalResult['diagnostics'] = {
+      returned: evidence.length,
+      contextCharacters: evidence.reduce((sum, entry) => sum + entry.content.length, 0),
+      exactContextAvailable:
+        exactLookups.account + exactLookups.opportunity + exactLookups.contacts,
+      exactLookups,
+      sectionMatches: Object.fromEntries(
+        searches
+          .slice(1)
+          .map((search) => [
+            search.section,
+            new Set([...search.lexical, ...search.semantic].map((row) => row.id)).size
+          ])
+      ),
+      mandatoryPolicy: policy === undefined ? 'missing' : 'included',
+      truncatedEvidenceIds,
+      missingSourceTypes: request.scope.sourceTypes.filter((source) => !present.has(source))
+    };
     return this.persistOrReplay(request, identity, policyHash, evidence, diagnostics, common);
   }
 
   /** Supplies diagnostics for a request that returns no authorized evidence. */
-  private emptyDiagnostics(): RetrievalResult['diagnostics'] { return { returned: 0, contextCharacters: 0, exactContextAvailable: 0, exactLookups: { account: 0, opportunity: 0, contacts: 0 }, sectionMatches: {}, mandatoryPolicy: 'not_evaluated', truncatedEvidenceIds: [], missingSourceTypes: [] }; }
+  private emptyDiagnostics(): RetrievalResult['diagnostics'] {
+    return {
+      returned: 0,
+      contextCharacters: 0,
+      exactContextAvailable: 0,
+      exactLookups: { account: 0, opportunity: 0, contacts: 0 },
+      sectionMatches: {},
+      mandatoryPolicy: 'not_evaluated',
+      truncatedEvidenceIds: [],
+      missingSourceTypes: []
+    };
+  }
   /** Rejects retrieval when the run, deal, and requesting persona do not match. */
-  private async assertRunBinding(request: RetrievalRequest): Promise<void> { const rows = await this.database.sql<{ valid: boolean }[]>`select exists (select 1 from runs run join opportunities opportunity on opportunity.id = run.opportunity_id where run.id = ${request.runId} and run.opportunity_id = ${request.opportunityId} and run.requested_by = ${request.scope.personaId} and opportunity.account_id = ${request.accountId}) as valid`; if (rows[0]?.valid !== true) throw new AuthorizationDeniedError(); }
+  private async assertRunBinding(request: RetrievalRequest): Promise<void> {
+    const rows = await this.database.sql<
+      { valid: boolean }[]
+    >`select exists (select 1 from runs run join opportunities opportunity on opportunity.id = run.opportunity_id where run.id = ${request.runId} and run.opportunity_id = ${request.opportunityId} and run.requested_by = ${request.scope.personaId} and opportunity.account_id = ${request.accountId}) as valid`;
+    if (rows[0]?.valid !== true) throw new AuthorizationDeniedError();
+  }
   /** Builds the database rule that enforces each source's candidate limit. */
-  private sourceLimit(input: QueryScope) { return this.database.sql`case source_type when 'gong_summary' then ${input.sourceLimits.gong_summary} when 'gong_transcript' then ${input.sourceLimits.gong_transcript} when 'policy' then ${input.sourceLimits.policy} when 'pricing' then ${input.sourceLimits.pricing} when 'salesforce' then ${input.sourceLimits.salesforce} when 'slack' then ${input.sourceLimits.slack} else 0 end`; }
+  private sourceLimit(input: QueryScope) {
+    return this.database
+      .sql`case source_type when 'gong_summary' then ${input.sourceLimits.gong_summary} when 'gong_transcript' then ${input.sourceLimits.gong_transcript} when 'policy' then ${input.sourceLimits.policy} when 'pricing' then ${input.sourceLimits.pricing} when 'salesforce' then ${input.sourceLimits.salesforce} when 'slack' then ${input.sourceLimits.slack} else 0 end`;
+  }
   /** Finds authorized evidence whose text matches the requested query. */
-  private async searchLexical(query: string, input: QueryScope): Promise<SearchRow[]> { if (input.sourceTypes.length === 0) return []; return this.database.sql<SearchRow[]>`with authorized as (${this.authorizedRows(input)}), ranked as (select authorized.*, ts_rank_cd(authorized.lexical_content, websearch_to_tsquery('english', ${query})) as relevance, row_number() over (partition by authorized.source_type order by ts_rank_cd(authorized.lexical_content, websearch_to_tsquery('english', ${query})) desc, authorized.id asc) as source_rank from authorized where authorized.lexical_content @@ websearch_to_tsquery('english', ${query})) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from ranked where source_rank <= ${this.sourceLimit(input)} order by relevance desc, id asc limit ${input.candidateLimit}`; }
+  private async searchLexical(query: string, input: QueryScope): Promise<SearchRow[]> {
+    if (input.sourceTypes.length === 0) return [];
+    return this.database.sql<
+      SearchRow[]
+    >`with authorized as (${this.authorizedRows(input)}), ranked as (select authorized.*, ts_rank_cd(authorized.lexical_content, websearch_to_tsquery('english', ${query})) as relevance, row_number() over (partition by authorized.source_type order by ts_rank_cd(authorized.lexical_content, websearch_to_tsquery('english', ${query})) desc, authorized.id asc) as source_rank from authorized where authorized.lexical_content @@ websearch_to_tsquery('english', ${query})) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from ranked where source_rank <= ${this.sourceLimit(input)} order by relevance desc, id asc limit ${input.candidateLimit}`;
+  }
   /** Finds authorized evidence whose meaning is closest to the query embedding. */
-  private async searchSemantic(embedding: readonly number[], input: QueryScope): Promise<SearchRow[]> { if (input.sourceTypes.length === 0) return []; return this.database.sql<SearchRow[]>`with authorized as (${this.authorizedRows(input)}), ranked as (select authorized.*, row_number() over (partition by authorized.source_type order by authorized.embedding <=> ${vectorLiteral(embedding)}::vector, authorized.id asc) as source_rank from authorized where authorized.embedding is not null and vector_dims(authorized.embedding) = ${this.profile.dimension} and authorized.embedding_provider = ${this.profile.provider} and authorized.embedding_model = ${this.profile.model} and authorized.embedding_dimension = ${this.profile.dimension} and authorized.embedding_profile = ${this.profile.profile} and authorized.embedding_version = ${this.profile.version} and authorized.embedding_normalization = ${this.profile.normalization} and authorized.embedding_content_hash = authorized.content_hash) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from ranked where source_rank <= ${this.sourceLimit(input)} order by embedding <=> ${vectorLiteral(embedding)}::vector, id asc limit ${input.candidateLimit}`; }
+  private async searchSemantic(
+    embedding: readonly number[],
+    input: QueryScope
+  ): Promise<SearchRow[]> {
+    if (input.sourceTypes.length === 0) return [];
+    return this.database.sql<
+      SearchRow[]
+    >`with authorized as (${this.authorizedRows(input)}), ranked as (select authorized.*, row_number() over (partition by authorized.source_type order by authorized.embedding <=> ${vectorLiteral(embedding)}::vector, authorized.id asc) as source_rank from authorized where authorized.embedding is not null and vector_dims(authorized.embedding) = ${this.profile.dimension} and authorized.embedding_provider = ${this.profile.provider} and authorized.embedding_model = ${this.profile.model} and authorized.embedding_dimension = ${this.profile.dimension} and authorized.embedding_profile = ${this.profile.profile} and authorized.embedding_version = ${this.profile.version} and authorized.embedding_normalization = ${this.profile.normalization} and authorized.embedding_content_hash = authorized.content_hash) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from ranked where source_rank <= ${this.sourceLimit(input)} order by embedding <=> ${vectorLiteral(embedding)}::vector, id asc limit ${input.candidateLimit}`;
+  }
   /** Returns a bounded set from one mandatory evidence source. */
-  private async searchFixedSource(sourceType: AuthorizedSourceType, input: QueryScope, limit: number): Promise<SearchRow[]> { if (!input.sourceTypes.includes(sourceType)) return []; return this.database.sql<SearchRow[]>`with authorized as (${this.authorizedRows(input)}) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from authorized where source_type = ${sourceType} order by id asc limit ${limit}`; }
+  private async searchFixedSource(
+    sourceType: AuthorizedSourceType,
+    input: QueryScope,
+    limit: number
+  ): Promise<SearchRow[]> {
+    if (!input.sourceTypes.includes(sourceType)) return [];
+    return this.database.sql<
+      SearchRow[]
+    >`with authorized as (${this.authorizedRows(input)}) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from authorized where source_type = ${sourceType} order by id asc limit ${limit}`;
+  }
   /** Counts the canonical account, opportunity, and contact records available to the request. */
-  private async executeExactLookups(input: QueryScope): Promise<RetrievalResult['diagnostics']['exactLookups']> { if (!input.sourceTypes.includes('salesforce')) return { account: 0, opportunity: 0, contacts: 0 }; const rows = await this.database.sql<{ account: number; opportunity: number; contacts: number }[]>`select count(distinct account.id)::integer as account, count(distinct opportunity.id)::integer as opportunity, count(distinct contact.id)::integer as contacts from accounts account join opportunities opportunity on opportunity.account_id = account.id left join contacts contact on contact.account_id = account.id where account.id = ${input.accountId} and opportunity.id = ${input.opportunityId} and (opportunity.restricted = false or ${input.allowRestricted} = true) and exists (select 1 from permission_grants permission where permission.persona_id = ${input.personaId} and permission.can_read = true and (permission.account_id is null or permission.account_id = account.id) and (permission.source_type is null or permission.source_type = 'salesforce') and (opportunity.restricted = false or permission.can_read_restricted = true))`; return rows[0] ?? { account: 0, opportunity: 0, contacts: 0 }; }
+  private async executeExactLookups(
+    input: QueryScope
+  ): Promise<RetrievalResult['diagnostics']['exactLookups']> {
+    if (!input.sourceTypes.includes('salesforce'))
+      return { account: 0, opportunity: 0, contacts: 0 };
+    const rows = await this.database.sql<
+      { account: number; opportunity: number; contacts: number }[]
+    >`select count(distinct account.id)::integer as account, count(distinct opportunity.id)::integer as opportunity, count(distinct contact.id)::integer as contacts from accounts account join opportunities opportunity on opportunity.account_id = account.id join authorized_opportunity_grants opportunity_grant on opportunity_grant.opportunity_id = opportunity.id and opportunity_grant.account_id = account.id and opportunity_grant.persona_id = ${input.personaId} and opportunity_grant.source_type = 'salesforce' and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT} left join contacts contact on contact.account_id = account.id where account.id = ${input.accountId} and opportunity.id = ${input.opportunityId} and (opportunity.restricted = false or ${input.allowRestricted} = true)`;
+    return rows[0] ?? { account: 0, opportunity: 0, contacts: 0 };
+  }
   /** Returns every bounded canonical CRM record after authorization has filtered the corpus. */
-  private async searchExactCrmEvidence(input: QueryScope): Promise<SearchRow[]> { if (!input.sourceTypes.includes('salesforce')) return []; return this.database.sql<SearchRow[]>`with authorized as (${this.authorizedRows(input)}) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from authorized where source_type = 'salesforce' and (source_locator like ${`%accounts.tsv#${input.accountId}%`} or source_locator like ${`%opportunities.tsv#${input.opportunityId}%`} or source_locator like '%contacts.tsv#%') order by case when source_locator like ${`%accounts.tsv#${input.accountId}%`} then 0 when source_locator like ${`%opportunities.tsv#${input.opportunityId}%`} then 1 else 2 end, id limit ${input.sourceLimits.salesforce}`; }
+  private async searchExactCrmEvidence(input: QueryScope): Promise<SearchRow[]> {
+    if (!input.sourceTypes.includes('salesforce')) return [];
+    return this.database.sql<
+      SearchRow[]
+    >`with authorized as (${this.authorizedRows(input)}) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from authorized where source_type = 'salesforce' and (source_locator like ${`%accounts.tsv#${input.accountId}%`} or source_locator like ${`%opportunities.tsv#${input.opportunityId}%`} or source_locator like '%contacts.tsv#%') order by case when source_locator like ${`%accounts.tsv#${input.accountId}%`} then 0 when source_locator like ${`%opportunities.tsv#${input.opportunityId}%`} then 1 else 2 end, id limit ${input.sourceLimits.salesforce}`;
+  }
   /** Verifies that authorized evidence is consistently indexed with the active embedding profile. */
-  private async assertIndexReady(input: QueryScope): Promise<Health> { const rows = await this.database.sql<Health[]>`with authorized as (${this.authorizedRows(input)}) select count(*)::integer as total, count(*) filter (where embedding is not null and embedding_provider = ${this.profile.provider} and embedding_model = ${this.profile.model} and embedding_dimension = ${this.profile.dimension} and embedding_profile = ${this.profile.profile} and embedding_version = ${this.profile.version} and embedding_normalization = ${this.profile.normalization} and embedding_content_hash = content_hash and vector_dims(embedding) = ${this.profile.dimension})::integer as matching, array_agg(distinct source_type order by source_type) as source_types, array_agg(distinct policy_hash order by policy_hash) as policy_hashes from authorized`; const health = rows[0] ?? { total: 0, matching: 0, source_types: [], policy_hashes: [] }; if (health.total !== health.matching) throw new Error('Evidence index is not ready for the active embedding profile'); return health; }
+  private async assertIndexReady(input: QueryScope): Promise<Health> {
+    const rows = await this.database.sql<
+      Health[]
+    >`with authorized as (${this.authorizedRows(input)}) select count(*)::integer as total, count(*) filter (where embedding is not null and embedding_provider = ${this.profile.provider} and embedding_model = ${this.profile.model} and embedding_dimension = ${this.profile.dimension} and embedding_profile = ${this.profile.profile} and embedding_version = ${this.profile.version} and embedding_normalization = ${this.profile.normalization} and embedding_content_hash = content_hash and vector_dims(embedding) = ${this.profile.dimension})::integer as matching, array_agg(distinct source_type order by source_type) as source_types, array_agg(distinct policy_hash order by policy_hash) as policy_hashes from authorized`;
+    const health = rows[0] ?? { total: 0, matching: 0, source_types: [], policy_hashes: [] };
+    if (health.total !== health.matching)
+      throw new Error('Evidence index is not ready for the active embedding profile');
+    return health;
+  }
   /** Defines the authorized evidence corpus for the requested persona and deal. */
-  private authorizedRows(input: QueryScope) { return this.database.sql`select evidence.* from evidence_versions evidence join opportunities opportunity on opportunity.id = evidence.opportunity_id where evidence.account_id = ${input.accountId} and evidence.opportunity_id = ${input.opportunityId} and evidence.source_type = any(${input.sourceTypes}::text[]) and (opportunity.restricted = false or ${input.allowRestricted} = true) and (evidence.sensitivity <> 'restricted' or (evidence.source_type = 'pricing' and ${input.allowSensitive} = true) or (evidence.source_type <> 'pricing' and ${input.allowRestricted} = true)) and exists (select 1 from permission_grants permission where permission.persona_id = ${input.personaId} and permission.can_read = true and (permission.account_id is null or permission.account_id = evidence.account_id) and (permission.source_type is null or permission.source_type = evidence.source_type) and (opportunity.restricted = false or permission.can_read_restricted = true) and (evidence.sensitivity <> 'restricted' or (evidence.source_type = 'pricing' and permission.sensitive_pricing = true) or (evidence.source_type <> 'pricing' and permission.can_read_restricted = true)))`; }
+  private authorizedRows(input: QueryScope) {
+    return this.database
+      .sql`select evidence.* from evidence_versions evidence join authorized_evidence_grants evidence_grant on evidence_grant.evidence_id = evidence.id and evidence_grant.opportunity_id = evidence.opportunity_id and evidence_grant.account_id = evidence.account_id and evidence_grant.source_type = evidence.source_type and evidence_grant.persona_id = ${input.personaId} and evidence_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT} join opportunities opportunity on opportunity.id = evidence.opportunity_id where evidence.account_id = ${input.accountId} and evidence.opportunity_id = ${input.opportunityId} and evidence.source_type = any(${input.sourceTypes}::text[]) and (opportunity.restricted = false or ${input.allowRestricted} = true) and (evidence.sensitivity <> 'restricted' or (evidence.source_type = 'pricing' and ${input.allowSensitive} = true) or (evidence.source_type <> 'pricing' and ${input.allowRestricted} = true))`;
+  }
 
   /** Rejects a stored manifest whose identity, scope, policy, or embedding profile has changed. */
-  private validateHeader(header: Header, request: RetrievalRequest, identity: Identity, policyHash?: string): void { if (header.id !== identity.manifestId || header.run_id !== request.runId || header.scope_hash !== identity.scopeHash || (policyHash !== undefined && header.policy_hash !== policyHash) || !/^[0-9a-f]{64}$/.test(header.policy_hash) || header.query_hash !== identity.queryHash || header.index_profile !== identity.indexProfile || header.embedding_provider !== this.profile.provider || header.embedding_model !== this.profile.model || header.embedding_dimension !== this.profile.dimension || header.embedding_version !== this.profile.version || header.embedding_normalization !== this.profile.normalization || header.context_limit !== buildEvidencePlan(request).maxContextCharacters) throw new DomainConflictError('Run evidence manifest conflicts with the requested retrieval'); }
+  private validateHeader(
+    header: Header,
+    request: RetrievalRequest,
+    identity: Identity,
+    policyHash?: string
+  ): void {
+    if (
+      header.id !== identity.manifestId ||
+      header.run_id !== request.runId ||
+      header.scope_hash !== identity.scopeHash ||
+      (policyHash !== undefined && header.policy_hash !== policyHash) ||
+      !/^[0-9a-f]{64}$/.test(header.policy_hash) ||
+      header.query_hash !== identity.queryHash ||
+      header.index_profile !== identity.indexProfile ||
+      header.embedding_provider !== this.profile.provider ||
+      header.embedding_model !== this.profile.model ||
+      header.embedding_dimension !== this.profile.dimension ||
+      header.embedding_version !== this.profile.version ||
+      header.embedding_normalization !== this.profile.normalization ||
+      header.context_limit !== buildEvidencePlan(request).maxContextCharacters
+    )
+      throw new DomainConflictError('Run evidence manifest conflicts with the requested retrieval');
+  }
   /** Replays an existing manifest only when every stored entry remains authorized and intact. */
-  private async loadReplay(request: RetrievalRequest, identity: Identity, policyHash: string | undefined, input?: QueryScope): Promise<RetrievalResult | undefined> {
-    const header = (await this.database.sql<Header[]>`select * from run_evidence_manifests where run_id = ${request.runId} limit 1`)[0]; if (header === undefined) return undefined; this.validateHeader(header, request, identity, policyHash);
-    const total = (await this.database.sql<{ count: number }[]>`select count(*)::integer as count from run_evidence_manifest_entries where manifest_id = ${header.id}`)[0]?.count ?? 0;
-    const entries = input === undefined ? [] : await this.database.sql<Entry[]>`with authorized as (${this.authorizedRows(input)}) select authorized.id, authorized.content, authorized.content_hash, authorized.source_type, authorized.sensitivity, authorized.event_date::text, authorized.reliability_class, authorized.source_locator, authorized.classification_reason, authorized.policy_hash, entry.citation_id, entry.rank, entry.score, entry.lexical_rank, entry.semantic_rank, entry.fusion_score, entry.reliability_adjustment, entry.recency_adjustment, entry.included_characters from run_evidence_manifest_entries entry join authorized on authorized.id = entry.evidence_version_id and authorized.content_hash = entry.content_hash where entry.manifest_id = ${header.id} order by entry.rank`;
+  private async loadReplay(
+    request: RetrievalRequest,
+    identity: Identity,
+    policyHash: string | undefined,
+    input?: QueryScope
+  ): Promise<RetrievalResult | undefined> {
+    const header = (
+      await this.database.sql<
+        Header[]
+      >`select * from run_evidence_manifests where run_id = ${request.runId} limit 1`
+    )[0];
+    if (header === undefined) return undefined;
+    this.validateHeader(header, request, identity, policyHash);
+    const total =
+      (
+        await this.database.sql<
+          { count: number }[]
+        >`select count(*)::integer as count from run_evidence_manifest_entries where manifest_id = ${header.id}`
+      )[0]?.count ?? 0;
+    const entries =
+      input === undefined
+        ? []
+        : await this.database.sql<
+            Entry[]
+          >`with authorized as (${this.authorizedRows(input)}) select authorized.id, authorized.content, authorized.content_hash, authorized.source_type, authorized.sensitivity, authorized.event_date::text, authorized.reliability_class, authorized.source_locator, authorized.classification_reason, authorized.policy_hash, entry.citation_id, entry.rank, entry.score, entry.lexical_rank, entry.semantic_rank, entry.fusion_score, entry.reliability_adjustment, entry.recency_adjustment, entry.included_characters from run_evidence_manifest_entries entry join authorized on authorized.id = entry.evidence_version_id and authorized.content_hash = entry.content_hash where entry.manifest_id = ${header.id} order by entry.rank`;
     if (total !== entries.length) throw new AuthorizationDeniedError();
     const diagnostics = header.diagnostics as Partial<RetrievalResult['diagnostics']>;
-    const invalidEntry = entries.some((entry, index) => entry.rank !== index + 1 || entry.policy_hash !== header.policy_hash
-      || entry.citation_id !== citationId(header.id, entry.id) || entry.included_characters <= 0 || entry.included_characters > entry.content.length
-      || !Number.isFinite(Number(entry.score)) || !Number.isFinite(Number(entry.fusion_score)));
-    if (invalidEntry || diagnostics.returned !== entries.length || diagnostics.contextCharacters !== entries.reduce((sum, entry) => sum + entry.included_characters, 0)) throw new DomainConflictError('Stored evidence manifest invariants are invalid');
-    const evidence = entries.map((entry): RetrievedEvidence => ({ evidenceId: entry.id, citationId: entry.citation_id as RetrievedEvidence['citationId'], content: entry.content.slice(0, entry.included_characters), contentHash: entry.content_hash, sourceType: entry.source_type, sensitivity: entry.sensitivity, sourceLocator: entry.source_locator, classificationReason: entry.classification_reason, policyHash: entry.policy_hash, ...(entry.event_date === null ? {} : { eventDate: entry.event_date }), reliabilityClass: entry.reliability_class, ...(entry.lexical_rank === null ? {} : { lexicalRank: entry.lexical_rank }), ...(entry.semantic_rank === null ? {} : { semanticRank: entry.semantic_rank }), fusionScore: Number(entry.fusion_score), reliabilityAdjustment: Number(entry.reliability_adjustment), recencyAdjustment: Number(entry.recency_adjustment), score: Number(entry.score), rank: entry.rank }));
-    return { evidence, manifest: { id: header.id, runId: header.run_id, queryHash: header.query_hash, scopeHash: header.scope_hash, policyHash: header.policy_hash, indexProfile: header.index_profile, binding: identity.binding }, diagnostics: header.diagnostics as RetrievalResult['diagnostics'] };
+    const invalidEntry = entries.some(
+      (entry, index) =>
+        entry.rank !== index + 1 ||
+        entry.policy_hash !== header.policy_hash ||
+        entry.citation_id !== citationId(header.id, entry.id) ||
+        entry.included_characters <= 0 ||
+        entry.included_characters > entry.content.length ||
+        !Number.isFinite(Number(entry.score)) ||
+        !Number.isFinite(Number(entry.fusion_score))
+    );
+    if (
+      invalidEntry ||
+      diagnostics.returned !== entries.length ||
+      diagnostics.contextCharacters !==
+        entries.reduce((sum, entry) => sum + entry.included_characters, 0)
+    )
+      throw new DomainConflictError('Stored evidence manifest invariants are invalid');
+    const evidence = entries.map(
+      (entry): RetrievedEvidence => ({
+        evidenceId: entry.id,
+        citationId: entry.citation_id as RetrievedEvidence['citationId'],
+        content: entry.content.slice(0, entry.included_characters),
+        contentHash: entry.content_hash,
+        sourceType: entry.source_type,
+        sensitivity: entry.sensitivity,
+        sourceLocator: entry.source_locator,
+        classificationReason: entry.classification_reason,
+        policyHash: entry.policy_hash,
+        ...(entry.event_date === null ? {} : { eventDate: entry.event_date }),
+        reliabilityClass: entry.reliability_class,
+        ...(entry.lexical_rank === null ? {} : { lexicalRank: entry.lexical_rank }),
+        ...(entry.semantic_rank === null ? {} : { semanticRank: entry.semantic_rank }),
+        fusionScore: Number(entry.fusion_score),
+        reliabilityAdjustment: Number(entry.reliability_adjustment),
+        recencyAdjustment: Number(entry.recency_adjustment),
+        score: Number(entry.score),
+        rank: entry.rank
+      })
+    );
+    return {
+      evidence,
+      manifest: {
+        id: header.id,
+        runId: header.run_id,
+        queryHash: header.query_hash,
+        scopeHash: header.scope_hash,
+        policyHash: header.policy_hash,
+        indexProfile: header.index_profile,
+        binding: identity.binding
+      },
+      diagnostics: header.diagnostics as RetrievalResult['diagnostics']
+    };
   }
   /** Persists a new evidence manifest or safely replays the winner of a concurrent request. */
-  private async persistOrReplay(request: RetrievalRequest, identity: Identity, policyHash: string, evidence: readonly RetrievedEvidence[], diagnostics: RetrievalResult['diagnostics'], input?: QueryScope): Promise<RetrievalResult> {
+  private async persistOrReplay(
+    request: RetrievalRequest,
+    identity: Identity,
+    policyHash: string,
+    evidence: readonly RetrievedEvidence[],
+    diagnostics: RetrievalResult['diagnostics'],
+    input?: QueryScope
+  ): Promise<RetrievalResult> {
     let inserted = false;
-    await this.database.sql.begin(async (transaction) => { const rows = await transaction<{ id: string }[]>`insert into run_evidence_manifests (id, run_id, scope_hash, policy_hash, query_hash, index_profile, embedding_provider, embedding_model, embedding_dimension, embedding_version, embedding_normalization, context_limit, diagnostics) values (${identity.manifestId}, ${request.runId}, ${identity.scopeHash}, ${policyHash}, ${identity.queryHash}, ${identity.indexProfile}, ${this.profile.provider}, ${this.profile.model}, ${this.profile.dimension}, ${this.profile.version}, ${this.profile.normalization}, ${buildEvidencePlan(request).maxContextCharacters}, ${JSON.stringify(diagnostics)}::jsonb) on conflict do nothing returning id`; inserted = rows.length === 1; if (!inserted) return; for (const entry of evidence) await transaction`insert into run_evidence_manifest_entries (manifest_id, evidence_version_id, citation_id, rank, query_rank, score, content_hash, source_locator, source_type, sensitivity, classification_reason, policy_hash, lexical_rank, semantic_rank, fusion_score, reliability_adjustment, recency_adjustment, included_characters) values (${identity.manifestId}, ${entry.evidenceId}, ${entry.citationId}, ${entry.rank}, ${entry.rank}, ${entry.score}, ${entry.contentHash}, ${entry.sourceLocator}, ${entry.sourceType}, ${entry.sensitivity}, ${entry.classificationReason}, ${entry.policyHash}, ${entry.lexicalRank ?? null}, ${entry.semanticRank ?? null}, ${entry.fusionScore}, ${entry.reliabilityAdjustment}, ${entry.recencyAdjustment}, ${entry.content.length})`; });
-    if (!inserted) { const replay = await this.loadReplay(request, identity, policyHash, input); if (replay === undefined) throw new DomainConflictError('Run evidence manifest could not be replayed'); return replay; }
-    return { evidence, manifest: { id: identity.manifestId, runId: request.runId, queryHash: identity.queryHash, scopeHash: identity.scopeHash, policyHash, indexProfile: identity.indexProfile, binding: identity.binding }, diagnostics };
+    await this.database.sql.begin(async (transaction) => {
+      const rows = await transaction<
+        { id: string }[]
+      >`insert into run_evidence_manifests (id, run_id, scope_hash, policy_hash, query_hash, index_profile, embedding_provider, embedding_model, embedding_dimension, embedding_version, embedding_normalization, context_limit, diagnostics) values (${identity.manifestId}, ${request.runId}, ${identity.scopeHash}, ${policyHash}, ${identity.queryHash}, ${identity.indexProfile}, ${this.profile.provider}, ${this.profile.model}, ${this.profile.dimension}, ${this.profile.version}, ${this.profile.normalization}, ${buildEvidencePlan(request).maxContextCharacters}, ${JSON.stringify(diagnostics)}::jsonb) on conflict do nothing returning id`;
+      inserted = rows.length === 1;
+      if (!inserted) return;
+      for (const entry of evidence)
+        await transaction`insert into run_evidence_manifest_entries (manifest_id, evidence_version_id, citation_id, rank, query_rank, score, content_hash, source_locator, source_type, sensitivity, classification_reason, policy_hash, lexical_rank, semantic_rank, fusion_score, reliability_adjustment, recency_adjustment, included_characters) values (${identity.manifestId}, ${entry.evidenceId}, ${entry.citationId}, ${entry.rank}, ${entry.rank}, ${entry.score}, ${entry.contentHash}, ${entry.sourceLocator}, ${entry.sourceType}, ${entry.sensitivity}, ${entry.classificationReason}, ${entry.policyHash}, ${entry.lexicalRank ?? null}, ${entry.semanticRank ?? null}, ${entry.fusionScore}, ${entry.reliabilityAdjustment}, ${entry.recencyAdjustment}, ${entry.content.length})`;
+    });
+    if (!inserted) {
+      const replay = await this.loadReplay(request, identity, policyHash, input);
+      if (replay === undefined)
+        throw new DomainConflictError('Run evidence manifest could not be replayed');
+      return replay;
+    }
+    return {
+      evidence,
+      manifest: {
+        id: identity.manifestId,
+        runId: request.runId,
+        queryHash: identity.queryHash,
+        scopeHash: identity.scopeHash,
+        policyHash,
+        indexProfile: identity.indexProfile,
+        binding: identity.binding
+      },
+      diagnostics
+    };
   }
 }
 
@@ -161,7 +640,23 @@ export class PostgresCitationResolver implements CitationResolver {
   public constructor(private readonly database: DatabaseClient) {}
   /** Returns cited content only when its manifest membership and current authorization remain valid. */
   public async resolve(request: CitationResolutionRequest): Promise<AuthorizedCitation> {
-    const rows = await this.database.sql<{ citation_id: string; evidence_id: string; content: string; source_type: AuthorizedSourceType; source_locator: string }[]>`select entry.citation_id, evidence.id as evidence_id, evidence.content, evidence.source_type, entry.source_locator from run_evidence_manifest_entries entry join run_evidence_manifests manifest on manifest.id = entry.manifest_id join evidence_versions evidence on evidence.id = entry.evidence_version_id and evidence.content_hash = entry.content_hash join opportunities opportunity on opportunity.id = evidence.opportunity_id where entry.manifest_id = ${request.manifestId} and entry.citation_id = ${request.citationId} and evidence.account_id = any(${request.scope.accountIds}::text[]) and evidence.source_type = any(${request.scope.sourceTypes}::text[]) and (opportunity.restricted = false or ${request.scope.canViewRestrictedAccounts} = true) and (evidence.sensitivity <> 'restricted' or (evidence.source_type = 'pricing' and ${request.scope.canViewSensitivePricing} = true) or (evidence.source_type <> 'pricing' and ${request.scope.canViewRestrictedAccounts} = true)) and exists (select 1 from permission_grants permission where permission.persona_id = ${request.scope.personaId} and permission.can_read = true and (permission.account_id is null or permission.account_id = evidence.account_id) and (permission.source_type is null or permission.source_type = evidence.source_type) and (opportunity.restricted = false or permission.can_read_restricted = true) and (evidence.sensitivity <> 'restricted' or (evidence.source_type = 'pricing' and permission.sensitive_pricing = true) or (evidence.source_type <> 'pricing' and permission.can_read_restricted = true))) limit 1`;
-    const row = rows[0]; if (row === undefined) throw opaqueCitationDenial(); return { citationId: row.citation_id as AuthorizedCitation['citationId'], evidenceId: row.evidence_id, content: row.content, sourceType: row.source_type, sourceLocator: row.source_locator };
+    const rows = await this.database.sql<
+      {
+        citation_id: string;
+        evidence_id: string;
+        content: string;
+        source_type: AuthorizedSourceType;
+        source_locator: string;
+      }[]
+    >`select entry.citation_id, evidence.id as evidence_id, evidence.content, evidence.source_type, entry.source_locator from run_evidence_manifest_entries entry join run_evidence_manifests manifest on manifest.id = entry.manifest_id join evidence_versions evidence on evidence.id = entry.evidence_version_id and evidence.content_hash = entry.content_hash join authorized_evidence_grants evidence_grant on evidence_grant.evidence_id = evidence.id and evidence_grant.opportunity_id = evidence.opportunity_id and evidence_grant.account_id = evidence.account_id and evidence_grant.source_type = evidence.source_type and evidence_grant.persona_id = ${request.scope.personaId} and evidence_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT} join opportunities opportunity on opportunity.id = evidence.opportunity_id where entry.manifest_id = ${request.manifestId} and entry.citation_id = ${request.citationId} and evidence.account_id = any(${request.scope.accountIds}::text[]) and evidence.source_type = any(${request.scope.sourceTypes}::text[]) and (opportunity.restricted = false or ${request.scope.canViewRestrictedAccounts} = true) and (evidence.sensitivity <> 'restricted' or (evidence.source_type = 'pricing' and ${request.scope.canViewSensitivePricing} = true) or (evidence.source_type <> 'pricing' and ${request.scope.canViewRestrictedAccounts} = true)) limit 1`;
+    const row = rows[0];
+    if (row === undefined) throw opaqueCitationDenial();
+    return {
+      citationId: row.citation_id as AuthorizedCitation['citationId'],
+      evidenceId: row.evidence_id,
+      content: row.content,
+      sourceType: row.source_type,
+      sourceLocator: row.source_locator
+    };
   }
 }

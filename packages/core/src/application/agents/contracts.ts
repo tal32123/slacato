@@ -2,12 +2,6 @@
  * Shared agent-output contracts. Agents only exchange these immutable,
  * schema-validated artifacts; provider and persistence details stay outside core.
  */
-export {
-  commercialArtifactSchema,
-  conversationArtifactSchema,
-  stakeholderArtifactSchema,
-  strategyArtifactSchema
-} from '../../domain/briefs/schema.js';
 
 export type {
   CommercialArtifact,
@@ -15,20 +9,40 @@ export type {
   StakeholderArtifact,
   StrategyArtifact
 } from '../../domain/briefs/schema.js';
+export {
+  commercialArtifactSchema,
+  conversationArtifactSchema,
+  stakeholderArtifactSchema,
+  strategyArtifactSchema
+} from '../../domain/briefs/schema.js';
 
-import type { AuthorizedRetrievalScope, RunEvidenceManifest, RetrievedEvidence } from '../evidence/contracts.js';
+import type {
+  AuthorizedRetrievalScope,
+  RetrievedEvidence,
+  RunEvidenceManifest
+} from '../evidence/contracts.js';
 import type { RetryLimits, SharedRunBudget } from '../model/contracts.js';
 import type { ProviderAttemptContext } from '../model/provider-attempt-ledger.js';
 
 /** Evidence exposed to an agent is explicitly bound to its authorized deal target. */
-export type AgentEvidenceRecord = RetrievedEvidence & Readonly<{
-  accountId: string;
-  opportunityId: string;
-}>;
+export type AgentEvidenceRecord = RetrievedEvidence &
+  Readonly<{
+    accountId: string;
+    opportunityId: string;
+  }>;
 
 /** Exact persisted manifest-entry fingerprint used to reject free-standing evidence records. */
-export type AgentManifestEntry = Readonly<Pick<AgentEvidenceRecord,
-  'evidenceId' | 'citationId' | 'contentHash' | 'sourceLocator' | 'sourceType' | 'sensitivity' | 'policyHash'> & {
+export type AgentManifestEntry = Readonly<
+  Pick<
+    AgentEvidenceRecord,
+    | 'evidenceId'
+    | 'citationId'
+    | 'contentHash'
+    | 'sourceLocator'
+    | 'sourceType'
+    | 'sensitivity'
+    | 'policyHash'
+  > & {
     manifestId: string;
     includedCharacters: number;
     excerptHash: string;
@@ -36,7 +50,8 @@ export type AgentManifestEntry = Readonly<Pick<AgentEvidenceRecord,
     accountId: string;
     opportunityId: string;
     scopeHash: string;
-  }>;
+  }
+>;
 
 /** Provider-neutral generation controls supplied by the durable workflow composition root. */
 export type AgentGenerationContext = Readonly<{

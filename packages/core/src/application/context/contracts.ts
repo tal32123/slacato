@@ -49,8 +49,18 @@ export type ContextCheckpoint = Readonly<{
   validationState: 'validated';
 }>;
 
-export type ContextCheckpointBindings = Readonly<Pick<ContextCheckpoint,
-  'scopeHash' | 'policyHash' | 'evidenceHash' | 'promptHash' | 'schemaHash' | 'modelHash' | 'validationHash'>>;
+export type ContextCheckpointBindings = Readonly<
+  Pick<
+    ContextCheckpoint,
+    | 'scopeHash'
+    | 'policyHash'
+    | 'evidenceHash'
+    | 'promptHash'
+    | 'schemaHash'
+    | 'modelHash'
+    | 'validationHash'
+  >
+>;
 
 export type NonRecursiveCompactionInput = Readonly<{
   mode: 'non_recursive';

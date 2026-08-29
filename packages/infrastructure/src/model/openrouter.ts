@@ -1,23 +1,34 @@
-import {
-  APICallError, embedMany, generateText, InvalidPromptError, jsonSchema, NoObjectGeneratedError,
-  NoOutputGeneratedError, Output, type LanguageModel
-} from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { z } from 'zod';
 import {
-  createBudgetedModelGateway,
-  ModelGatewayTransportError,
-  normalizeModelError,
   type BudgetedModelGateway,
+  createBudgetedModelGateway,
   type EmbeddingGateway,
+  ModelGatewayTransportError,
   type ModelRegistry,
   type ModelTransport,
   type ModelTransportRequest,
+  normalizeModelError,
   type ProviderAttemptLedger,
   type TransportGeneration
 } from '@slacato/core';
+import {
+  APICallError,
+  embedMany,
+  generateText,
+  InvalidPromptError,
+  jsonSchema,
+  type LanguageModel,
+  NoObjectGeneratedError,
+  NoOutputGeneratedError,
+  Output
+} from 'ai';
+import { z } from 'zod';
 import { openRouterDiagnosticCode } from './openrouter-diagnostics.js';
-import { classifyApiCallError, createProviderModelRegistry, warningText } from './provider-adapter-helpers.js';
+import {
+  classifyApiCallError,
+  createProviderModelRegistry,
+  warningText
+} from './provider-adapter-helpers.js';
 
 export type OpenRouterGatewayConfig = Readonly<{
   apiKey: string;
@@ -27,15 +38,23 @@ export type OpenRouterGatewayConfig = Readonly<{
   fetch?: typeof globalThis.fetch;
 }>;
 
-const UNSUPPORTED_STRUCTURED_OUTPUT_KEYWORDS = new Set(['$schema', 'minLength', 'maxLength', 'pattern', 'maxItems']);
+const UNSUPPORTED_STRUCTURED_OUTPUT_KEYWORDS = new Set([
+  '$schema',
+  'minLength',
+  'maxLength',
+  'pattern',
+  'maxItems'
+]);
 
 /** Keeps the full Zod schema for local validation while sending only Gemini's documented JSON Schema subset. */
 export function providerJsonSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(providerJsonSchema);
   if (value === null || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-    .filter(([key]) => !UNSUPPORTED_STRUCTURED_OUTPUT_KEYWORDS.has(key))
-    .map(([key, nested]) => [key, providerJsonSchema(nested)]));
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !UNSUPPORTED_STRUCTURED_OUTPUT_KEYWORDS.has(key))
+      .map(([key, nested]) => [key, providerJsonSchema(nested)])
+  );
 }
 
 /** Keeps provider response bodies and credentials behind the safe model error boundary. */
@@ -59,17 +78,26 @@ export function normalizeOpenRouterTransportError(error: unknown): ModelGatewayT
     const finishReason = error.finishReason;
     return new ModelGatewayTransportError({
       category: finishReason === 'content-filter' ? 'content_filter' : 'deterministic_validation',
-      diagnosticCode: finishReason === 'length' ? 'openrouter_invalid_object_length' : 'openrouter_invalid_object',
+      diagnosticCode:
+        finishReason === 'length'
+          ? 'openrouter_invalid_object_length'
+          : 'openrouter_invalid_object',
       message: 'OpenRouter returned output that did not satisfy the required schema'
     });
   }
   const generic = normalizeModelError(error).normalized;
   const apiError = APICallError.isInstance(error) ? error : undefined;
-  const category = apiError === undefined ? generic.category : classifyApiCallError(apiError.statusCode, apiError.isRetryable);
+  const category =
+    apiError === undefined
+      ? generic.category
+      : classifyApiCallError(apiError.statusCode, apiError.isRetryable);
   return new ModelGatewayTransportError({
     category,
     ...(generic.statusCode === undefined ? {} : { statusCode: generic.statusCode }),
-    diagnosticCode: apiError === undefined ? 'openrouter_unknown_error' : openRouterDiagnosticCode(apiError.statusCode, apiError.responseBody),
+    diagnosticCode:
+      apiError === undefined
+        ? 'openrouter_unknown_error'
+        : openRouterDiagnosticCode(apiError.statusCode, apiError.responseBody),
     message: 'OpenRouter provider request failed'
   });
 }
@@ -82,19 +110,29 @@ class OpenRouterTransport implements ModelTransport {
   public constructor(private readonly model: LanguageModel) {}
 
   /** Generates one model response within its deadline and translates provider failures. */
-  public async generate<Value>(request: ModelTransportRequest<Value>): Promise<TransportGeneration<Value>> {
-    const instructions = request.messages.filter(({ role }) => role === 'system').map(({ content }) => content).join('\n\n');
+  public async generate<Value>(
+    request: ModelTransportRequest<Value>
+  ): Promise<TransportGeneration<Value>> {
+    const instructions = request.messages
+      .filter(({ role }) => role === 'system')
+      .map(({ content }) => content)
+      .join('\n\n');
     const common = {
       model: this.model,
-      messages: request.messages.filter(({ role }) => role !== 'system').map(({ role, content }) => ({ role, content })),
+      messages: request.messages
+        .filter(({ role }) => role !== 'system')
+        .map(({ role, content }) => ({ role, content })),
       ...(instructions.length === 0 ? {} : { instructions }),
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(Math.max(1, request.deadlineAt - Date.now()))
     };
     try {
       if (request.outputMode === 'native_schema') {
-        if (request.schema === undefined) throw new Error('Native structured generation requires a schema');
-        const inputJsonSchema = providerJsonSchema(z.toJSONSchema(request.schema, { io: 'input' })) as Parameters<typeof jsonSchema>[0];
+        if (request.schema === undefined)
+          throw new Error('Native structured generation requires a schema');
+        const inputJsonSchema = providerJsonSchema(
+          z.toJSONSchema(request.schema, { io: 'input' })
+        ) as Parameters<typeof jsonSchema>[0];
         try {
           const result = await generateText({
             ...common,
@@ -126,7 +164,11 @@ class OpenRouterTransport implements ModelTransport {
         }
       }
       const result = await generateText(common);
-      return { text: result.text, usage: result.usage, warnings: (result.warnings ?? []).map(warningText) };
+      return {
+        text: result.text,
+        usage: result.usage,
+        warnings: (result.warnings ?? []).map(warningText)
+      };
     } catch (error) {
       throw normalizeOpenRouterTransportError(error);
     }
@@ -153,12 +195,20 @@ export function createOpenRouterModelGateways(config: OpenRouterGatewayConfig): 
     nativeStructuredOutput: true
   });
   return {
-    modelGateway: createBudgetedModelGateway(new OpenRouterTransport(provider.chat(config.generationModelId)), undefined, config.attemptLedger),
+    modelGateway: createBudgetedModelGateway(
+      new OpenRouterTransport(provider.chat(config.generationModelId)),
+      undefined,
+      config.attemptLedger
+    ),
     embeddingGateway: {
       async embed(values: readonly string[]): Promise<number[][]> {
         if (values.length === 0) return [];
         try {
-        const result = await embedMany({ model: provider.textEmbeddingModel(config.embeddingModelId), values: [...values], maxRetries: 0 });
+          const result = await embedMany({
+            model: provider.textEmbeddingModel(config.embeddingModelId),
+            values: [...values],
+            maxRetries: 0
+          });
           return result.embeddings.map((embedding) => [...embedding]);
         } catch (error) {
           throw normalizeOpenRouterTransportError(error);

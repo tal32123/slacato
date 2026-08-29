@@ -7,13 +7,23 @@ const opaqueIdSuffix = '[A-Za-z0-9][A-Za-z0-9_-]*';
 
 /** Builds a bounded schema for opaque and canonical business identifiers. */
 function prefixedIdSchema<Brand extends string>(prefix: string, canonicalPrefix?: string) {
-  const pattern = canonicalPrefix === undefined
-    ? `^${prefix}_${opaqueIdSuffix}$`
-    : `^(?:${prefix}_${opaqueIdSuffix}|${canonicalPrefix}-\\d+)$`;
-  return z.string()
-    .min(Math.min(prefix.length + 1, canonicalPrefix === undefined ? Number.POSITIVE_INFINITY : canonicalPrefix.length + 2))
+  const pattern =
+    canonicalPrefix === undefined
+      ? `^${prefix}_${opaqueIdSuffix}$`
+      : `^(?:${prefix}_${opaqueIdSuffix}|${canonicalPrefix}-\\d+)$`;
+  return z
+    .string()
+    .min(
+      Math.min(
+        prefix.length + 1,
+        canonicalPrefix === undefined ? Number.POSITIVE_INFINITY : canonicalPrefix.length + 2
+      )
+    )
     .max(MAX_ID_LENGTH)
-    .regex(new RegExp(pattern), `Expected a ${prefix}_ opaque identifier or canonical ${canonicalPrefix ?? prefix} identifier`)
+    .regex(
+      new RegExp(pattern),
+      `Expected a ${prefix}_ opaque identifier or canonical ${canonicalPrefix ?? prefix} identifier`
+    )
     .brand<Brand>();
 }
 
@@ -26,7 +36,8 @@ export const opportunityIdSchema = prefixedIdSchema<'OpportunityId'>('opportunit
 /** Runtime-validated identifier for a persisted workflow run. */
 export const runIdSchema = prefixedIdSchema<'RunId'>('run');
 /** Runtime-validated identifier for an immutable evidence version. */
-export const evidenceIdSchema = z.string()
+export const evidenceIdSchema = z
+  .string()
   .min(3)
   .max(MAX_ID_LENGTH)
   .regex(

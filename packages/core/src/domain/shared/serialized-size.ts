@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 
 /**
  * Largest accepted serialized generated artifact or DealBrief (128 KiB).
@@ -12,7 +12,10 @@ export function serializedByteLength(value: unknown): number {
 }
 
 /** Adds the shared serialized-size limit to a strict generated-output schema. */
-export function withSerializedByteLimit<Schema extends z.ZodType>(schema: Schema, maxBytes = MAX_SERIALIZED_ARTIFACT_BYTES): Schema {
+export function withSerializedByteLimit<Schema extends z.ZodType>(
+  schema: Schema,
+  maxBytes = MAX_SERIALIZED_ARTIFACT_BYTES
+): Schema {
   return schema.superRefine((value, context) => {
     const actualBytes = serializedByteLength(value);
     if (actualBytes > maxBytes) {

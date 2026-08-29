@@ -1,13 +1,17 @@
 import {
   CANONICAL_FIXTURE_COMMIT,
   collectDealBriefReferences,
+  type DealBriefExportFormat,
   dealBriefSchema,
-  exportBrief,
-  type DealBriefExportFormat
+  exportBrief
 } from '@slacato/core';
 import type { DatabaseClient } from '../client.js';
 
-type ManifestEntryRow = Readonly<{ citation_id: string; evidence_version_id: string; source_locator: string }>;
+type ManifestEntryRow = Readonly<{
+  citation_id: string;
+  evidence_version_id: string;
+  source_locator: string;
+}>;
 type FinalizedBriefRow = Readonly<{
   payload: unknown | null;
   opportunity_id: string | null;
@@ -21,19 +25,23 @@ export class PostgresBriefExportService {
   public constructor(private readonly database: DatabaseClient) {}
 
   /** Produces the requested finalized brief and records an opaque denial or successful export atomically. */
-  public async exportFinalized(input: Readonly<{
-    actorId: string;
-    runId: string;
-    format: DealBriefExportFormat;
-  }>): Promise<Readonly<{ content: string; format: DealBriefExportFormat }> | undefined> {
+  public async exportFinalized(
+    input: Readonly<{
+      actorId: string;
+      runId: string;
+      format: DealBriefExportFormat;
+    }>
+  ): Promise<Readonly<{ content: string; format: DealBriefExportFormat }> | undefined> {
     return this.database.sql.begin(async (sql) => {
-      const deny = async (): Promise<undefined> => {
+      /** Records an opaque export denial in the audit log. */
+      const recordExportDenial = async (): Promise<undefined> => {
         await sql`insert into audit_events (id, run_id, actor_id, type, payload)
           values (${`audit_${crypto.randomUUID()}`}, null, ${input.actorId}, 'brief_export_denied',
             '{\"reason\":\"not_found\"}'::jsonb)`;
         return undefined;
       };
-      const row = (await sql<FinalizedBriefRow[]>`
+      const exportCandidateRow = (
+        await sql<FinalizedBriefRow[]>`
         with candidate as materialized (
           select run.id run_id, brief.payload, opportunity.id opportunity_id
           from runs run
@@ -42,10 +50,11 @@ export class PostgresBriefExportService {
           join briefs brief on brief.run_id = run.id
           where run.id = ${input.runId} and run.status = 'completed' and brief.finalized_at is not null
             and exists (
-              select 1 from permission_grants permission
-              where permission.persona_id = ${input.actorId} and permission.account_id = account.id
-                and permission.can_read and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-                and (not opportunity.restricted or permission.can_read_restricted)
+              select 1 from authorized_opportunity_grants opportunity_grant
+              where opportunity_grant.persona_id = ${input.actorId}
+                and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+                and opportunity_grant.opportunity_id = opportunity.id
+                and opportunity_grant.account_id = account.id
             )
           order by brief.draft_version desc limit 1
         ),
@@ -86,42 +95,47 @@ export class PostgresBriefExportService {
               and evidence.account_id = opportunity.account_id
               and evidence.source_locator is not null and btrim(evidence.source_locator) <> ''
               and exists (
-                select 1 from permission_grants source_grant
-                where source_grant.persona_id = ${input.actorId}
-                  and source_grant.account_id = evidence.account_id
-                  and source_grant.source_type = evidence.source_type
-                  and source_grant.can_read = true
-                  and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-                  and (opportunity.restricted = false or source_grant.can_read_restricted = true)
-                  and (
-                    evidence.sensitivity <> 'restricted'
-                    or (evidence.source_type = 'pricing' and source_grant.sensitive_pricing = true)
-                    or (evidence.source_type <> 'pricing' and source_grant.can_read_restricted = true)
-                  )
+                select 1 from authorized_evidence_grants evidence_grant
+                where evidence_grant.persona_id = ${input.actorId}
+                  and evidence_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+                  and evidence_grant.evidence_id = evidence.id
+                  and evidence_grant.opportunity_id = opportunity.id
+                  and evidence_grant.account_id = evidence.account_id
+                  and evidence_grant.source_type = evidence.source_type
               )
           ), array[]::text[]) readable_evidence_ids
         from (values (true)) singleton(always_one)
-        left join candidate on true`)[0];
-      if (row?.payload === null || row === undefined) return deny();
-
-      const brief = dealBriefSchema.parse(row.payload);
-      const references = collectDealBriefReferences(brief);
-      const entriesByCitation = new Map<string, readonly ManifestEntryRow[]>();
-      for (const entry of row.manifest_entries) {
-        const entries = entriesByCitation.get(entry.citation_id) ?? [];
-        entriesByCitation.set(entry.citation_id, [...entries, entry]);
+        left join candidate on true`
+      )[0];
+      if (exportCandidateRow?.payload === null || exportCandidateRow === undefined) {
+        return recordExportDenial();
       }
-      if (references.citations.some((citation) => {
-        const entries = entriesByCitation.get(citation.id);
-        return entries?.length !== 1
-          || entries[0]?.evidence_version_id !== citation.evidenceId
-          || entries[0]?.source_locator !== citation.locator;
-      })) return deny();
 
-      const readableEvidenceIds = new Set(row.readable_evidence_ids);
-      if (references.evidenceIds.some((evidenceId) => !readableEvidenceIds.has(evidenceId))) return deny();
+      const brief = dealBriefSchema.parse(exportCandidateRow.payload);
+      const briefReferences = collectDealBriefReferences(brief);
+      const manifestEntriesByCitationId = new Map<string, readonly ManifestEntryRow[]>();
+      for (const entry of exportCandidateRow.manifest_entries) {
+        const entries = manifestEntriesByCitationId.get(entry.citation_id) ?? [];
+        manifestEntriesByCitationId.set(entry.citation_id, [...entries, entry]);
+      }
+      if (
+        briefReferences.citations.some((citation) => {
+          const entries = manifestEntriesByCitationId.get(citation.id);
+          return (
+            entries?.length !== 1 ||
+            entries[0]?.evidence_version_id !== citation.evidenceId ||
+            entries[0]?.source_locator !== citation.locator
+          );
+        })
+      )
+        return recordExportDenial();
 
-      const content = exportBrief(row.payload, input.format);
+      const readableEvidenceIds = new Set(exportCandidateRow.readable_evidence_ids);
+      if (briefReferences.evidenceIds.some((evidenceId) => !readableEvidenceIds.has(evidenceId))) {
+        return recordExportDenial();
+      }
+
+      const content = exportBrief(exportCandidateRow.payload, input.format);
       await sql`insert into audit_events (id, run_id, actor_id, type, payload)
         values (${`audit_${crypto.randomUUID()}`}, ${input.runId}, ${input.actorId}, 'brief_exported',
           ${JSON.stringify({ format: input.format, status: 'completed' })}::jsonb)`;

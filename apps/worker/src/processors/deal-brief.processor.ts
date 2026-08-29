@@ -1,6 +1,6 @@
-import { Worker, type Job } from 'bullmq';
 import type { ProcessDealBriefStep, WorkflowCommand } from '@slacato/core';
 import { logger, WORKFLOW_QUEUE_NAME } from '@slacato/infrastructure';
+import { type Job, Worker } from 'bullmq';
 
 export type DealBriefProcessorOptions = Readonly<{
   redisUrl: string;

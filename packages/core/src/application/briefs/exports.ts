@@ -1,5 +1,5 @@
-import { assertApprovableBrief, canonicalJson } from './workflow.js';
 import type { Citation, Claim, DealBrief } from '../../domain/briefs/schema.js';
+import { assertApprovableBrief, canonicalJson } from './workflow.js';
 
 export type DealBriefExportFormat = 'json' | 'markdown';
 
@@ -9,7 +9,10 @@ type MarkdownContext = {
 
 /** Escapes brief text so Markdown exports preserve its literal content. */
 function escapeMarkdown(value: string): string {
-  return value.replace(/\r\n?/g, '\n').replaceAll('&', '&amp;').replace(/[\\`*_{}[\]()<>#+.!|~-]/g, '\\$&');
+  return value
+    .replace(/\r\n?/g, '\n')
+    .replaceAll('&', '&amp;')
+    .replace(/[\\`*_{}[\]()<>#+.!|~-]/g, '\\$&');
 }
 
 /** Renders one optional labeled value as a Markdown list item. */
@@ -26,15 +29,24 @@ function listLines(label: string, values: readonly string[]): string[] {
 }
 
 /** Renders claims with confidence scores and validated citation labels. */
-function claimLines(claims: readonly Claim[] | undefined, context: MarkdownContext, heading = '### Claims'): string[] {
+function claimLines(
+  claims: readonly Claim[] | undefined,
+  context: MarkdownContext,
+  heading = '### Claims'
+): string[] {
   if (claims === undefined || claims.length === 0) return [];
   const lines = [heading];
   for (const claim of claims) {
-    const labels = claim.citations.map((citation) => {
-      if (!context.citations.has(citation.id)) throw new Error('Citation label registry is incomplete');
-      return `[^${citation.id}]`;
-    }).join(' ');
-    lines.push(`- ${escapeMarkdown(claim.statement)} (confidence: ${claim.confidence.toFixed(2)})${labels.length === 0 ? '' : ` ${labels}`}`);
+    const labels = claim.citations
+      .map((citation) => {
+        if (!context.citations.has(citation.id))
+          throw new Error('Citation label registry is incomplete');
+        return `[^${citation.id}]`;
+      })
+      .join(' ');
+    lines.push(
+      `- ${escapeMarkdown(claim.statement)} (confidence: ${claim.confidence.toFixed(2)})${labels.length === 0 ? '' : ` ${labels}`}`
+    );
   }
   return lines;
 }
@@ -115,13 +127,16 @@ function renderMarkdown(brief: DealBrief, citations: ReadonlyMap<string, Citatio
       ...claimLines(stakeholder.claims, context, '#### Claims')
     );
   }
-  if (brief.stakeholderMap.coverageGaps !== undefined) lines.push(...listLines('Coverage Gaps', brief.stakeholderMap.coverageGaps));
+  if (brief.stakeholderMap.coverageGaps !== undefined)
+    lines.push(...listLines('Coverage Gaps', brief.stakeholderMap.coverageGaps));
   lines.push(
     ...claimLines(brief.stakeholderMap.claims, context),
     '',
     '## 5. Negotiation State',
     escapeMarkdown(brief.negotiationState.currentState),
-    ...(brief.negotiationState.leverage === undefined ? [] : listLines('Leverage', brief.negotiationState.leverage)),
+    ...(brief.negotiationState.leverage === undefined
+      ? []
+      : listLines('Leverage', brief.negotiationState.leverage)),
     ...listLines('Risks', brief.negotiationState.risks),
     ...claimLines(brief.negotiationState.claims, context),
     '',
@@ -162,8 +177,12 @@ function renderMarkdown(brief: DealBrief, citations: ReadonlyMap<string, Citatio
   }
   lines.push('### Citation Labels');
   if (context.citations.size === 0) lines.push('- None');
-  for (const citation of [...context.citations.values()].sort((left, right) => left.id.localeCompare(right.id))) {
-    lines.push(`[^${citation.id}]: Evidence \`${citation.evidenceId}\` — ${escapeMarkdown(citation.locator)}${citation.rationale === undefined ? '' : ` — ${escapeMarkdown(citation.rationale)}`}`);
+  for (const citation of [...context.citations.values()].sort((left, right) =>
+    left.id.localeCompare(right.id)
+  )) {
+    lines.push(
+      `[^${citation.id}]: Evidence \`${citation.evidenceId}\` — ${escapeMarkdown(citation.locator)}${citation.rationale === undefined ? '' : ` — ${escapeMarkdown(citation.rationale)}`}`
+    );
   }
   lines.push(
     '',
@@ -172,8 +191,11 @@ function renderMarkdown(brief: DealBrief, citations: ReadonlyMap<string, Citatio
   );
   if (brief.confidenceAndReviewWarnings.warnings.length === 0) lines.push('- **Warnings:** None');
   for (const warning of brief.confidenceAndReviewWarnings.warnings) {
-    const claimIds = warning.claimIds.length === 0 ? 'none' : warning.claimIds.map((id) => `\`${id}\``).join(', ');
-    lines.push(`- **${warning.code} (${warning.severity}):** ${escapeMarkdown(warning.message)} — claims: ${claimIds}`);
+    const claimIds =
+      warning.claimIds.length === 0 ? 'none' : warning.claimIds.map((id) => `\`${id}\``).join(', ');
+    lines.push(
+      `- **${warning.code} (${warning.severity}):** ${escapeMarkdown(warning.message)} — claims: ${claimIds}`
+    );
   }
   return `${lines.join('\n')}\n`;
 }

@@ -1,16 +1,16 @@
-import { DynamicModule, Module } from '@nestjs/common';
-import { HealthModule } from './modules/health/health.module.js';
+import { type DynamicModule, Module } from '@nestjs/common';
+import { ApprovalsModule } from './modules/approvals/approvals.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import type { AuthModuleOptions } from './modules/auth/contracts.js';
-import { RunsModule } from './modules/runs/runs.module.js';
-import { ApprovalsModule } from './modules/approvals/approvals.module.js';
-import type { WorkflowApiOptions } from './modules/runs/contracts.js';
-import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module.js';
-import type { DiagnosticsModuleOptions } from './modules/diagnostics/contracts.js';
-import { DealsModule } from './modules/deals/deals.module.js';
 import type { DealsModuleOptions } from './modules/deals/contracts.js';
-import { ExportsModule } from './modules/exports/exports.module.js';
+import { DealsModule } from './modules/deals/deals.module.js';
+import type { DiagnosticsModuleOptions } from './modules/diagnostics/contracts.js';
+import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module.js';
 import type { BriefExportService } from './modules/exports/contracts.js';
+import { ExportsModule } from './modules/exports/exports.module.js';
+import { HealthModule } from './modules/health/health.module.js';
+import type { WorkflowApiOptions } from './modules/runs/contracts.js';
+import { RunsModule } from './modules/runs/runs.module.js';
 
 /** Composes the API delivery modules with their externally supplied dependencies. */
 @Module({})
@@ -28,12 +28,17 @@ export class AppModule {
       imports: [
         HealthModule,
         AuthModule.register(authOptions),
-        ...(diagnosticsOptions === undefined ? [] : [DiagnosticsModule.register(diagnosticsOptions)]),
+        ...(diagnosticsOptions === undefined
+          ? []
+          : [DiagnosticsModule.register(diagnosticsOptions)]),
         ...(workflowOptions === undefined
           ? []
           : [
               RunsModule.register(workflowOptions),
-              ApprovalsModule.register(workflowOptions.decideApproval, workflowOptions.approvalQueries)
+              ApprovalsModule.register(
+                workflowOptions.decideApproval,
+                workflowOptions.approvalQueries
+              )
             ]),
         ...(dealsOptions === undefined ? [] : [DealsModule.register(dealsOptions)]),
         ...(briefExportService === undefined ? [] : [ExportsModule.register(briefExportService)])

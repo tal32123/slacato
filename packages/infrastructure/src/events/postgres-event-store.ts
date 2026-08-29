@@ -1,27 +1,27 @@
-import type { ListenMeta } from 'postgres';
 import {
-  runEventEnvelopeSchema,
-  runEventToPublishSchema,
-  runSnapshotSchema,
-  traceSpanSchema,
   type RunEventEnvelope,
   type RunEventToPublish,
   type RunSnapshot,
-  type TraceSpan
+  runEventEnvelopeSchema,
+  runEventToPublishSchema,
+  runSnapshotSchema,
+  type TraceSpan,
+  traceSpanSchema
 } from '@slacato/contracts';
 import {
   CANONICAL_FIXTURE_COMMIT,
   CursorExpiredError,
-  TraceCompletenessError,
-  DomainConflictError,
-  assertTraceComplete as validateTraceComplete,
   canonicalJson,
   createRunEventSubscription,
+  DomainConflictError,
   type RunEventBus,
   type RunEventQuery,
   type RunEventSubscriptionSource,
-  type TraceStore
+  TraceCompletenessError,
+  type TraceStore,
+  assertTraceComplete as validateTraceComplete
 } from '@slacato/core';
+import type { ListenMeta } from 'postgres';
 import type { DatabaseClient } from '../db/client.js';
 
 const CHANNEL = 'slacato_run_events';
@@ -103,7 +103,8 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
   public async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    for (const streamWaiters of this.waiters.values()) for (const waiter of streamWaiters) waiter.abort();
+    for (const streamWaiters of this.waiters.values())
+      for (const waiter of streamWaiters) waiter.abort();
     this.waiters.clear();
     clearInterval(this.reconciliation);
     if (this.listener !== undefined) await (await this.listener).unlisten();
@@ -113,18 +114,28 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     await this.close();
   }
 
-
-
   /** Appends an idempotent run event and wakes subscribers after the database commits it. */
   public async publish(input: RunEventToPublish): Promise<void> {
     const envelope = runEventToPublishSchema.parse(input);
     await this.database.sql.begin(async (sql) => {
       await sql`select pg_advisory_xact_lock(hashtext(${`run-events:${envelope.streamId}`}))`;
-      const prior = (await sql<EventRow[]>`select id, run_id, sequence, type, version, payload, created_at from run_events where id = ${envelope.id}`)[0];
+      const prior = (
+        await sql<
+          EventRow[]
+        >`select id, run_id, sequence, type, version, payload, created_at from run_events where id = ${envelope.id}`
+      )[0];
       if (prior !== undefined) {
         const priorEnvelope = envelopeFromRow(prior);
-        const comparable = { id: priorEnvelope.id, streamId: priorEnvelope.streamId, type: priorEnvelope.type, version: priorEnvelope.version, timestamp: priorEnvelope.timestamp, payload: priorEnvelope.payload };
-        if (canonicalJson(comparable) !== canonicalJson(envelope)) throw new DomainConflictError('Run event ID conflicts with another event');
+        const comparable = {
+          id: priorEnvelope.id,
+          streamId: priorEnvelope.streamId,
+          type: priorEnvelope.type,
+          version: priorEnvelope.version,
+          timestamp: priorEnvelope.timestamp,
+          payload: priorEnvelope.payload
+        };
+        if (canonicalJson(comparable) !== canonicalJson(envelope))
+          throw new DomainConflictError('Run event ID conflicts with another event');
         return;
       }
       await sql`insert into run_events (id, run_id, sequence, type, version, payload, created_at)
@@ -136,7 +147,12 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
   }
 
   /** Streams authorized run events after an optional durable cursor. */
-  public subscribe(streamId: string, afterId?: string, signal?: AbortSignal, authorize?: () => Promise<boolean>): AsyncIterable<RunEventEnvelope> {
+  public subscribe(
+    streamId: string,
+    afterId?: string,
+    signal?: AbortSignal,
+    authorize?: () => Promise<boolean>
+  ): AsyncIterable<RunEventEnvelope> {
     return createRunEventSubscription(this, streamId, afterId, signal, authorize);
   }
 
@@ -144,14 +160,23 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
   public async resolveCursor(streamId: string, afterId: string | undefined): Promise<number> {
     await this.ensureListener();
     if (afterId === undefined) return 0;
-    const row = (await this.database.sql<{ sequence: number }[]>`select sequence from run_events where run_id = ${streamId} and id = ${afterId}`)[0];
+    const row = (
+      await this.database.sql<
+        { sequence: number }[]
+      >`select sequence from run_events where run_id = ${streamId} and id = ${afterId}`
+    )[0];
     if (row === undefined) throw new CursorExpiredError();
     return row.sequence;
   }
 
   /** Reads the next bounded page of events after a durable sequence. */
-  public async readAfter(streamId: string, afterSequence: number): Promise<readonly RunEventEnvelope[]> {
-    const rows = await this.database.sql<EventRow[]>`select id, run_id, sequence, type, version, payload, created_at
+  public async readAfter(
+    streamId: string,
+    afterSequence: number
+  ): Promise<readonly RunEventEnvelope[]> {
+    const rows = await this.database.sql<
+      EventRow[]
+    >`select id, run_id, sequence, type, version, payload, created_at
       from run_events where run_id = ${streamId} and sequence > ${afterSequence}
       order by sequence limit ${REPLAY_PAGE_SIZE}`;
     return rows.map(envelopeFromRow);
@@ -184,10 +209,15 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
   public async appendTrace(input: TraceSpan): Promise<void> {
     const span = traceSpanSchema.parse(input);
     await this.database.sql.begin(async (sql) => {
-      const existing = (await sql<TraceRow[]>`select trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at
-        from trace_spans where id = ${span.spanId}`)[0];
+      const existing = (
+        await sql<
+          TraceRow[]
+        >`select trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at
+        from trace_spans where id = ${span.spanId}`
+      )[0];
       if (existing !== undefined) {
-        if (canonicalJson(traceFromRow(existing)) !== canonicalJson(span)) throw new DomainConflictError('Trace span ID conflicts with another span');
+        if (canonicalJson(traceFromRow(existing)) !== canonicalJson(span))
+          throw new DomainConflictError('Trace span ID conflicts with another span');
         return;
       }
       await sql`insert into trace_spans (id, trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at)
@@ -198,7 +228,9 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
 
   /** Returns the ordered trace history for a run. */
   public async tracesForRun(runId: string): Promise<readonly TraceSpan[]> {
-    const rows = await this.database.sql<TraceRow[]>`select trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at
+    const rows = await this.database.sql<
+      TraceRow[]
+    >`select trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at
       from trace_spans where run_id = ${runId} order by started_at, span_id`;
     return rows.map(traceFromRow);
   }
@@ -207,39 +239,55 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
   public async assertTraceComplete(runId: string): Promise<void> {
     const spans = await this.tracesForRun(runId);
     validateTraceComplete(runId, spans);
-    const decisions = await this.database.sql<{
-      entry_id: string;
-      category: string;
-      authority: string;
-      approved_subject_hash: string;
-    }[]>`select decision.entry_id, decision.category, decision.authority, decision.approved_subject_hash
+    const decisions = await this.database.sql<
+      {
+        entry_id: string;
+        category: string;
+        authority: string;
+        approved_subject_hash: string;
+      }[]
+    >`select decision.entry_id, decision.category, decision.authority, decision.approved_subject_hash
       from approval_decisions decision
       join approval_subjects subject on subject.id = decision.approval_subject_id
       where subject.run_id = ${runId}`;
     for (const decision of decisions) {
-      const traced = spans.some((span) => span.kind === 'approval_decision'
-        && span.data.entryId === decision.entry_id
-        && span.data.category === decision.category
-        && span.data.authority === decision.authority
-        && span.data.subjectHash === decision.approved_subject_hash);
-      if (!traced) throw new TraceCompletenessError(`Trace is missing persisted approval decision ${decision.entry_id}`);
+      const traced = spans.some(
+        (span) =>
+          span.kind === 'approval_decision' &&
+          span.data.entryId === decision.entry_id &&
+          span.data.category === decision.category &&
+          span.data.authority === decision.authority &&
+          span.data.subjectHash === decision.approved_subject_hash
+      );
+      if (!traced)
+        throw new TraceCompletenessError(
+          `Trace is missing persisted approval decision ${decision.entry_id}`
+        );
     }
-    const requirements = await this.database.sql<{
-      entry_id: string;
-      category: string;
-      eligible_authorities: string[];
-      subject_hash: string;
-    }[]>`select entry.id entry_id, entry.category, entry.eligible_authorities, subject.subject_hash
+    const requirements = await this.database.sql<
+      {
+        entry_id: string;
+        category: string;
+        eligible_authorities: string[];
+        subject_hash: string;
+      }[]
+    >`select entry.id entry_id, entry.category, entry.eligible_authorities, subject.subject_hash
       from approval_requirement_entries entry
       join approval_subjects subject on subject.id = entry.approval_subject_id
       where subject.run_id = ${runId}`;
     for (const requirement of requirements) {
-      const traced = spans.some((span) => span.kind === 'approval_requirement'
-        && span.data.entryId === requirement.entry_id
-        && span.data.category === requirement.category
-        && span.data.subjectHash === requirement.subject_hash
-        && canonicalJson(span.data.authorities) === canonicalJson(requirement.eligible_authorities));
-      if (!traced) throw new TraceCompletenessError(`Trace is missing persisted approval requirement ${requirement.entry_id}`);
+      const traced = spans.some(
+        (span) =>
+          span.kind === 'approval_requirement' &&
+          span.data.entryId === requirement.entry_id &&
+          span.data.category === requirement.category &&
+          span.data.subjectHash === requirement.subject_hash &&
+          canonicalJson(span.data.authorities) === canonicalJson(requirement.eligible_authorities)
+      );
+      if (!traced)
+        throw new TraceCompletenessError(
+          `Trace is missing persisted approval requirement ${requirement.entry_id}`
+        );
     }
   }
 
@@ -268,36 +316,37 @@ export class PostgresRunEventQuery implements RunEventQuery {
   public constructor(private readonly database: DatabaseClient) {}
 
   /** Returns the current run snapshot only when the actor can view or approve that run. */
-  public async authorizeAndSnapshot(streamId: string, actorId: string): Promise<RunSnapshot | undefined> {
-    const row = (await this.database.sql<{
-      id: string;
-      status: string;
-      version: number;
-      watermark: string | null;
-    }[]>`select run.id, run.status, run.version,
+  public async authorizeAndSnapshot(
+    streamId: string,
+    actorId: string
+  ): Promise<RunSnapshot | undefined> {
+    const row = (
+      await this.database.sql<
+        {
+          id: string;
+          status: string;
+          version: number;
+          watermark: string | null;
+        }[]
+      >`select run.id, run.status, run.version,
         (select event.id from run_events event where event.run_id = run.id order by event.sequence desc limit 1) watermark
       from runs run
-      join opportunities opportunity on opportunity.id = run.opportunity_id
       where run.id = ${streamId}
         and (
           exists (
-            select 1 from permission_grants permission
-            where permission.persona_id = ${actorId}
-              and permission.account_id = opportunity.account_id
-              and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-              and permission.can_read
-              and (not opportunity.restricted or permission.can_read_restricted)
+            select 1 from authorized_opportunity_grants opportunity_grant
+            where opportunity_grant.persona_id = ${actorId}
+              and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+              and opportunity_grant.opportunity_id = run.opportunity_id
           ) or exists (
-            select 1 from approval_subjects subject
-            join approval_requirement_entries entry on entry.approval_subject_id = subject.id
-            join approval_authority_grants authority on authority.persona_id = ${actorId}
-              and authority.account_id = opportunity.account_id
-              and authority.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-              and authority.authority in (select jsonb_array_elements_text(entry.eligible_authorities))
-            where subject.run_id = run.id
+            select 1 from authorized_run_approval_grants approval_grant
+            where approval_grant.persona_id = ${actorId}
+              and approval_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+              and approval_grant.run_id = run.id
           )
         )
-        `)[0];
+        `
+    )[0];
     if (row === undefined) return undefined;
     return runSnapshotSchema.parse({
       streamId: row.id,

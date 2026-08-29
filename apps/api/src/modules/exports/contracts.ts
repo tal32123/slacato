@@ -10,9 +10,11 @@ export type BriefExportResult = Readonly<{
 /** Supplies finalized brief exports to the API delivery layer. */
 export interface BriefExportService {
   /** Exports an authorized finalized run, or returns undefined when access is denied. */
-  exportFinalized(input: Readonly<{
-    actorId: string;
-    runId: string;
-    format: DealBriefExportFormat;
-  }>): Promise<BriefExportResult | undefined>;
+  exportFinalized(
+    input: Readonly<{
+      actorId: string;
+      runId: string;
+      format: DealBriefExportFormat;
+    }>
+  ): Promise<BriefExportResult | undefined>;
 }

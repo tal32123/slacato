@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { DealWorkspaceView } from '@slacato/contracts';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LoaderFunctionArgs } from 'react-router';
 import { useLoaderData, useNavigate, useSearchParams } from 'react-router';
-import { queryClient, sessionQueryOptions, sessionRuntime, SessionInvalidatedError } from '@/api/session';
+import {
+  queryClient,
+  SessionInvalidatedError,
+  sessionQueryOptions,
+  sessionRuntime
+} from '@/api/session';
 import { DealBrief } from '@/features/briefs/deal-brief';
 import { EvidenceDetail } from '@/features/briefs/evidence-detail';
 import { dealWorkspaceQueryOptions } from '@/features/deals/queries';
@@ -10,7 +15,10 @@ import { GenerateBriefAction } from '@/features/runs/generate-brief-action';
 import { throwProtectedLoaderError } from './loader-security';
 
 /** Loads the requested deal workspace while preserving protected-session transition guarantees. */
-export async function dealLoader({ request, params }: LoaderFunctionArgs): Promise<DealWorkspaceView | null> {
+export async function dealLoader({
+  request,
+  params
+}: LoaderFunctionArgs): Promise<DealWorkspaceView | null> {
   const opportunityId = params.opportunityId;
   if (!opportunityId) throw new Response('Invalid deal route', { status: 400 });
   try {
@@ -22,11 +30,15 @@ export async function dealLoader({ request, params }: LoaderFunctionArgs): Promi
       try {
         const session = await queryClient.fetchQuery(sessionQueryOptions());
         if (session.authenticated) {
-          const workspace = await queryClient.fetchQuery(dealWorkspaceQueryOptions(session.version, opportunityId));
+          const workspace = await queryClient.fetchQuery(
+            dealWorkspaceQueryOptions(session.version, opportunityId)
+          );
           sessionRuntime.finishTransition();
           return workspace;
         }
-      } catch (retryError) { throwProtectedLoaderError(retryError, request); }
+      } catch (retryError) {
+        throwProtectedLoaderError(retryError, request);
+      }
     }
     throwProtectedLoaderError(error, request);
   }
@@ -49,12 +61,19 @@ export function DealRoute(): React.JSX.Element {
   useLayoutEffect(() => {
     const element = container.current;
     if (!element) return;
-    const update = (): void => setDesktopEvidence(window.matchMedia('(min-width: 1024px)').matches && element.getBoundingClientRect().width >= 1_024);
+    const update = (): void =>
+      setDesktopEvidence(
+        window.matchMedia('(min-width: 1024px)').matches &&
+          element.getBoundingClientRect().width >= 1_024
+      );
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
     window.addEventListener('resize', update);
-    return () => { observer.disconnect(); window.removeEventListener('resize', update); };
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
   }, []);
 
   useEffect(() => {
@@ -105,15 +124,26 @@ export function DealRoute(): React.JSX.Element {
   return (
     <div
       ref={container}
-      className={desktopEvidence && selected !== undefined ? 'grid min-w-0 grid-cols-[minmax(640px,1fr)_clamp(360px,28vw,440px)] gap-6' : 'min-w-0'}
+      className={
+        desktopEvidence && selected !== undefined
+          ? 'grid min-w-0 grid-cols-[minmax(640px,1fr)_clamp(360px,28vw,440px)] gap-6'
+          : 'min-w-0'
+      }
     >
       <DealBrief
         workspace={workspace}
         selectedEvidenceId={selectedEvidenceId}
         onEvidence={openEvidence}
-        primaryAction={<GenerateBriefAction opportunityId={workspace.deal.opportunityId} sessionVersion={workspace.sessionVersion} />}
+        primaryAction={
+          <GenerateBriefAction
+            opportunityId={workspace.deal.opportunityId}
+            sessionVersion={workspace.sessionVersion}
+          />
+        }
       />
-      {selected !== undefined && <EvidenceDetail evidence={selected} desktop={desktopEvidence} onClose={closeEvidence} />}
+      {selected !== undefined && (
+        <EvidenceDetail evidence={selected} desktop={desktopEvidence} onClose={closeEvidence} />
+      )}
     </div>
   );
 }

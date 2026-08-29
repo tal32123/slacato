@@ -3,9 +3,9 @@ import { ApiError } from '@/api/client';
 import {
   queryClient,
   queryKeys,
+  SessionInvalidatedError,
   safeDestination,
-  sessionRuntime,
-  SessionInvalidatedError
+  sessionRuntime
 } from '@/api/session';
 
 /** Converts protected-loader failures into safe reauthentication, denial, or retry responses. */

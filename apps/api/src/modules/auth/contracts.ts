@@ -24,7 +24,6 @@ export interface SessionRegistry {
   isActive(version: string, userId: string): Promise<boolean>;
 }
 
-
 export type AuthModuleOptions = Readonly<{
   sessionSecret: string;
   environment: 'development' | 'test' | 'production';

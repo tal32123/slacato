@@ -1,12 +1,16 @@
 import 'reflect-metadata';
-import { json } from 'express';
 import { HttpException, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
-import type { ErrorRequestHandler } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { CancelDealBrief, DecideApproval, RegenerateDealBrief, StartDealBrief } from '@slacato/core';
+import {
+  CancelDealBrief,
+  DecideApproval,
+  RegenerateDealBrief,
+  StartDealBrief
+} from '@slacato/core';
 import {
   createDatabaseClient,
+  type Env,
   loadRuntimeEnv,
   PostgresApprovalAuthorityQuery,
   PostgresApprovalQueryRepository,
@@ -16,14 +20,15 @@ import {
   PostgresEventStore,
   PostgresRunEventQuery,
   PostgresRunQueryRepository,
-  PostgresWorkflowStore,
-  type Env
+  PostgresWorkflowStore
 } from '@slacato/infrastructure';
-import { PostgresSessionRegistry } from './modules/auth/postgres-session-registry.js';
+import type { ErrorRequestHandler } from 'express';
+import { json } from 'express';
 import { AppModule } from './app.module.js';
-import { PostgresDealQueryRepository } from './modules/deals/deals.repository.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
+import { PostgresSessionRegistry } from './modules/auth/postgres-session-registry.js';
+import { PostgresDealQueryRepository } from './modules/deals/deals.repository.js';
 import type { ProviderRuntimeDescriptor } from './modules/diagnostics/contracts.js';
 
 export interface ApiApplicationOptions {
@@ -31,12 +36,20 @@ export interface ApiApplicationOptions {
 }
 
 /** Resolves the configured model names at the provider-selection composition boundary. */
-export function configuredProviderModels(environment: Env): Readonly<{ generation: string; embedding: string }> {
+export function configuredProviderModels(
+  environment: Env
+): Readonly<{ generation: string; embedding: string }> {
   if (environment.AI_PROVIDER === 'ollama') {
-    return { generation: environment.OLLAMA_CHAT_MODEL, embedding: environment.OLLAMA_EMBEDDING_MODEL };
+    return {
+      generation: environment.OLLAMA_CHAT_MODEL,
+      embedding: environment.OLLAMA_EMBEDDING_MODEL
+    };
   }
   if (environment.AI_PROVIDER === 'openrouter') {
-    return { generation: environment.OPENROUTER_CHAT_MODEL, embedding: environment.OPENROUTER_EMBEDDING_MODEL };
+    return {
+      generation: environment.OPENROUTER_CHAT_MODEL,
+      embedding: environment.OPENROUTER_EMBEDDING_MODEL
+    };
   }
   return { generation: 'mock-brief', embedding: 'mock-embedding' };
 }
@@ -77,14 +90,18 @@ const bodyParserErrorHandler: ErrorRequestHandler = (error: unknown, _request, r
   }
   const parserError = error as { type?: string };
   if (parserError.type === 'entity.too.large') {
-    response.status(413).json({ code: 'REQUEST_TOO_LARGE', message: 'Request body exceeds the 1 MiB limit' });
+    response
+      .status(413)
+      .json({ code: 'REQUEST_TOO_LARGE', message: 'Request body exceeds the 1 MiB limit' });
     return;
   }
   if (parserError.type === 'entity.parse.failed') {
     response.status(400).json({ code: 'INVALID_JSON', message: 'Malformed JSON request body' });
     return;
   }
-  response.status(400).json({ code: 'INVALID_REQUEST', message: 'Request body could not be processed' });
+  response
+    .status(400)
+    .json({ code: 'INVALID_REQUEST', message: 'Request body could not be processed' });
 };
 
 /** Installs the runtime wire boundary for all Nest HTTP applications. */
@@ -93,13 +110,17 @@ export function configureApiApplication(app: NestExpressApplication): void {
   app.use(json({ limit: '1mb', type: 'application/json' }));
   app.use(wireMiddleware.use.bind(wireMiddleware));
   app.use(bodyParserErrorHandler);
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })
+  );
   app.useGlobalInterceptors(new WireContractInterceptor(app.get(Reflector)));
   app.enableShutdownHooks();
 }
 
 /** Creates the API only after server-only configuration has validated successfully. */
-export async function createApiApplication(options: ApiApplicationOptions = {}): Promise<NestExpressApplication> {
+export async function createApiApplication(
+  options: ApiApplicationOptions = {}
+): Promise<NestExpressApplication> {
   const env = loadRuntimeEnv(options.environment ?? process.env);
   const providerRuntime = configuredProviderRuntime(env);
   const database = createDatabaseClient(env.DATABASE_URL, 5);
@@ -110,35 +131,46 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
   const dealQueries = new PostgresDealQueryRepository(database);
   const runQueries = new PostgresRunQueryRepository(database);
   const approvalQueries = new PostgresApprovalQueryRepository(database);
-  const app = await NestFactory.create<NestExpressApplication>(AppModule.register({
-    sessionSecret: env.SESSION_SECRET,
-    environment: env.NODE_ENV,
-    allowedOrigins: [env.WEB_ORIGIN],
-    personaDirectory: personas,
-    sessionRegistry: new PostgresSessionRegistry(database)
-  }, {
-    startDealBrief: new StartDealBrief(workflowStore, workflowAccess, {
-      provider: env.AI_PROVIDER,
-      model: providerRuntime.pinnedGenerationModel
-    }),
-    regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
-    cancelDealBrief: new CancelDealBrief(workflowStore, workflowAccess),
-    decideApproval: new DecideApproval(workflowStore, workflowAccess),
-    runQueries,
-    approvalQueries,
-    runEvents: { bus: runEvents, query: new PostgresRunEventQuery(database) }
-  }, {
-    providerRuntime,
-    approvalAuthorities: new PostgresApprovalAuthorityQuery(database)
-  }, {
-    repository: dealQueries
-  }, new PostgresBriefExportService(database)), { bodyParser: false });
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule.register(
+      {
+        sessionSecret: env.SESSION_SECRET,
+        environment: env.NODE_ENV,
+        allowedOrigins: [env.WEB_ORIGIN],
+        personaDirectory: personas,
+        sessionRegistry: new PostgresSessionRegistry(database)
+      },
+      {
+        startDealBrief: new StartDealBrief(workflowStore, workflowAccess, {
+          provider: env.AI_PROVIDER,
+          model: providerRuntime.pinnedGenerationModel
+        }),
+        regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
+        cancelDealBrief: new CancelDealBrief(workflowStore, workflowAccess),
+        decideApproval: new DecideApproval(workflowStore, workflowAccess),
+        runQueries,
+        approvalQueries,
+        runEvents: { bus: runEvents, query: new PostgresRunEventQuery(database) }
+      },
+      {
+        providerRuntime,
+        approvalAuthorities: new PostgresApprovalAuthorityQuery(database)
+      },
+      {
+        repository: dealQueries
+      },
+      new PostgresBriefExportService(database)
+    ),
+    { bodyParser: false }
+  );
   configureApiApplication(app);
   return app;
 }
 
 /** Creates and starts the configured API server on the selected port. */
-export async function bootstrap(options: ApiApplicationOptions = {}): Promise<NestExpressApplication> {
+export async function bootstrap(
+  options: ApiApplicationOptions = {}
+): Promise<NestExpressApplication> {
   const app = await createApiApplication(options);
   await app.listen(process.env.PORT ? Number(process.env.PORT) : 3000);
   return app;

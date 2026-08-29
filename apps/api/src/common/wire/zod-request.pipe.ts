@@ -1,4 +1,9 @@
-import { BadRequestException, type ArgumentMetadata, Injectable, type PipeTransform } from '@nestjs/common';
+import {
+  type ArgumentMetadata,
+  BadRequestException,
+  Injectable,
+  type PipeTransform
+} from '@nestjs/common';
 import type { ZodType } from 'zod';
 
 /** Validates one controller input and exposes no unvalidated data beyond the wire boundary. */

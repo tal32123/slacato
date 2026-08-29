@@ -1,10 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
 import {
+  type DealListResponse,
+  type DealWorkspaceView,
   dealListResponseSchema,
   dealWorkspaceViewSchema,
-  opaqueIdSchema,
-  type DealListResponse,
-  type DealWorkspaceView
+  opaqueIdSchema
 } from '@slacato/contracts';
 import { z } from 'zod';
 import { ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
@@ -17,12 +17,15 @@ const dealParamsSchema = z.object({ opportunityId: opaqueIdSchema }).strict();
 /** Serves deal listings and workspaces authorized for the current principal. */
 @Controller('api/deals')
 export class DealsController {
+  /** Initializes deal routes with their application service. */
   public constructor(private readonly deals: DealsService) {}
 
   /** Lists the deals visible to the current principal. */
   @Get()
   @ZodResponse(dealListResponseSchema)
-  public async list(@CurrentPrincipal() principal: AuthenticatedPrincipal): Promise<DealListResponse> {
+  public async list(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal
+  ): Promise<DealListResponse> {
     return dealListResponseSchema.parse({
       sessionVersion: principal.claims.version,
       deals: await this.deals.listAuthorizedDeals(principal)
@@ -39,4 +42,3 @@ export class DealsController {
     return this.deals.getAuthorizedDealWorkspace(principal, params.opportunityId);
   }
 }
-

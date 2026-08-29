@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
 import type { DemoSession } from '@slacato/contracts';
-import type { LoaderFunctionArgs } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpenCheck, Check, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import type { LoaderFunctionArgs } from 'react-router';
 import { Link, useNavigate, useRevalidator, useRouteLoaderData } from 'react-router';
 import {
   csrfQueryOptions,
@@ -79,19 +79,30 @@ export function SettingsRoute(): React.JSX.Element {
         <p className="text-sm font-medium text-primary">Settings</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Persona &amp; session</h1>
         <p className="mt-3 leading-6 text-muted-foreground">
-          Choose a canonical demo identity. The server signs each session and reauthorizes every protected request.
+          Choose a canonical demo identity. The server signs each session and reauthorizes every
+          protected request.
         </p>
       </header>
 
       <Card className="border-primary/30 bg-primary/5 shadow-none">
         <CardHeader>
           <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"><BookOpenCheck aria-hidden="true" /></span>
-            <div><CardTitle>New here? Follow the home-task walkthrough</CardTitle><CardDescription className="mt-2 leading-6">See how each Cato assignment requirement maps to a persona, screen, action, and inspectable result.</CardDescription></div>
+            <span className="grid size-10 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
+              <BookOpenCheck aria-hidden="true" />
+            </span>
+            <div>
+              <CardTitle>New here? Follow the home-task walkthrough</CardTitle>
+              <CardDescription className="mt-2 leading-6">
+                See how each Cato assignment requirement maps to a persona, screen, action, and
+                inspectable result.
+              </CardDescription>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Button asChild className="min-h-11"><Link to="/walkthrough">Start walkthrough</Link></Button>
+          <Button asChild className="min-h-11">
+            <Link to="/walkthrough">Start walkthrough</Link>
+          </Button>
         </CardContent>
       </Card>
 
@@ -105,8 +116,13 @@ export function SettingsRoute(): React.JSX.Element {
       <section aria-labelledby="persona-heading">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 id="persona-heading" className="text-xl font-semibold">Active persona</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Changing persona closes open views and live connections before protected data is reloaded.</p>
+            <h2 id="persona-heading" className="text-xl font-semibold">
+              Active persona
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Changing persona closes open views and live connections before protected data is
+              reloaded.
+            </p>
           </div>
           <Button
             className="min-h-11"
@@ -155,30 +171,55 @@ export function SettingsRoute(): React.JSX.Element {
         <Card className="gap-4 shadow-none">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-md bg-secondary text-secondary-foreground"><LockKeyhole aria-hidden="true" /></span>
-              <div><CardTitle>Signed demo session</CardTitle><CardDescription>HTTP-only identity cookie with CSRF protection</CardDescription></div>
+              <span className="grid size-10 place-items-center rounded-md bg-secondary text-secondary-foreground">
+                <LockKeyhole aria-hidden="true" />
+              </span>
+              <div>
+                <CardTitle>Signed demo session</CardTitle>
+                <CardDescription>HTTP-only identity cookie with CSRF protection</CardDescription>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">Persona</dt><dd>{session.persona.displayName}</dd>
-              <dt className="text-muted-foreground">Role</dt><dd>{session.persona.role}</dd>
-              <dt className="text-muted-foreground">Duration</dt><dd>Up to eight hours</dd>
+              <dt className="text-muted-foreground">Persona</dt>
+              <dd>{session.persona.displayName}</dd>
+              <dt className="text-muted-foreground">Role</dt>
+              <dd>{session.persona.role}</dd>
+              <dt className="text-muted-foreground">Duration</dt>
+              <dd>Up to eight hours</dd>
             </dl>
-            <Button className="mt-5 min-h-11" variant="outline" disabled={saving || csrf.data === undefined} onClick={() => void logOut()}>Log out</Button>
+            <Button
+              className="mt-5 min-h-11"
+              variant="outline"
+              disabled={saving || csrf.data === undefined}
+              onClick={() => void logOut()}
+            >
+              Log out
+            </Button>
           </CardContent>
         </Card>
 
         <Card className="gap-4 shadow-none">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-md bg-secondary text-secondary-foreground"><ShieldCheck aria-hidden="true" /></span>
-              <div><CardTitle>Demo Diagnostics</CardTitle><CardDescription>Secondary, read-only implementation facts</CardDescription></div>
+              <span className="grid size-10 place-items-center rounded-md bg-secondary text-secondary-foreground">
+                <ShieldCheck aria-hidden="true" />
+              </span>
+              <div>
+                <CardTitle>Demo Diagnostics</CardTitle>
+                <CardDescription>Secondary, read-only implementation facts</CardDescription>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-sm leading-6 text-muted-foreground">Inspect the canonical grants and runtime configuration attached to this signed persona.</p>
-            <Button asChild className="mt-5 min-h-11" variant="outline"><Link to="/diagnostics">Demo Diagnostics</Link></Button>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Inspect the canonical grants and runtime configuration attached to this signed
+              persona.
+            </p>
+            <Button asChild className="mt-5 min-h-11" variant="outline">
+              <Link to="/diagnostics">Demo Diagnostics</Link>
+            </Button>
           </CardContent>
         </Card>
       </section>

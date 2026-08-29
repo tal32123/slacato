@@ -1,8 +1,8 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { liveHealthSchema, readinessHealthSchema } from '@slacato/contracts';
 import type { Response } from 'express';
-import { ZodResponse } from '../../common/wire/zod.decorators.js';
 import { NonBrowserPublic } from '../../common/security/access.metadata.js';
+import { ZodResponse } from '../../common/wire/zod.decorators.js';
 import { HealthService, type ReadinessHealth } from './health.service.js';
 
 /** Reports application liveness and dependency readiness to infrastructure health checks. */

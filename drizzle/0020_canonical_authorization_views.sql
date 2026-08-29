@@ -42,6 +42,8 @@ SELECT DISTINCT
   authority_grant.persona_id,
   authority_grant.source_commit,
   run.id AS run_id,
+  subject.id AS approval_subject_id,
+  requirement.id AS approval_entry_id,
   opportunity.id AS opportunity_id,
   opportunity.account_id,
   authority_grant.authority

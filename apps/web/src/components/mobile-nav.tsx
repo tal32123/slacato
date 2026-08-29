@@ -20,9 +20,12 @@ export function MobileNav(): React.JSX.Element {
     >
       <ul className="grid grid-cols-4 px-1 py-1">
         {primaryDestinations.map(({ label, to, icon: Icon }) => {
-          const current = location.pathname === to || location.pathname.startsWith(`${to}/`)
-            ? 'page'
-            : label === 'Settings' && location.pathname === '/diagnostics' ? 'location' : undefined;
+          const current =
+            location.pathname === to || location.pathname.startsWith(`${to}/`)
+              ? 'page'
+              : label === 'Settings' && location.pathname === '/diagnostics'
+                ? 'location'
+                : undefined;
           return (
             <li key={to}>
               <Link

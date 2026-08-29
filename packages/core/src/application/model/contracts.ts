@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 import type { ContextWindowInput, ModelMessage } from '../context/contracts.js';
 import type { ProviderAttemptContext } from './provider-attempt-ledger.js';
 

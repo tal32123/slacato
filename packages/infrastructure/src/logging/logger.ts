@@ -2,25 +2,51 @@ import pino, { type DestinationStream, type Logger } from 'pino';
 import { redactLogPayload } from './redaction.js';
 
 const PINO_REDACTION_PATHS = [
-  'authorization', 'cookie', 'apiKey', 'x-api-key', 'auth', 'credentials', 'msg', 'err', 'error', 'stack', 'cause',
-  'message', 'messages', 'prompt', 'completion', 'sourceBody', 'sourceBodies', 'sourceContent', 'sourceContents',
-  'evidenceExcerpt', 'evidenceExcerpts',
-  'headers.authorization', 'headers.cookie', 'headers.set-cookie', 'headers.x-api-key',
-  'req.headers.authorization', 'req.headers.cookie', 'req.headers.x-api-key'
+  'authorization',
+  'cookie',
+  'apiKey',
+  'x-api-key',
+  'auth',
+  'credentials',
+  'msg',
+  'err',
+  'error',
+  'stack',
+  'cause',
+  'message',
+  'messages',
+  'prompt',
+  'completion',
+  'sourceBody',
+  'sourceBodies',
+  'sourceContent',
+  'sourceContents',
+  'evidenceExcerpt',
+  'evidenceExcerpts',
+  'headers.authorization',
+  'headers.cookie',
+  'headers.set-cookie',
+  'headers.x-api-key',
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers.x-api-key'
 ] as const;
 
 /** Ensures child loggers sanitize their inherited bindings through the same allowlist. */
-function protectChildBindings<CustomLevels extends string = never, UseOnlyCustomLevels extends boolean = boolean>(
-  instance: Logger<CustomLevels, UseOnlyCustomLevels>
-): Logger<CustomLevels, UseOnlyCustomLevels> {
+function protectChildBindings<
+  CustomLevels extends string = never,
+  UseOnlyCustomLevels extends boolean = boolean
+>(instance: Logger<CustomLevels, UseOnlyCustomLevels>): Logger<CustomLevels, UseOnlyCustomLevels> {
   const createChild = instance.child.bind(instance) as typeof instance.child;
   instance.child = <ChildCustomLevels extends string = never>(
     bindings: pino.Bindings,
     options?: pino.ChildLoggerOptions<ChildCustomLevels>
   ): Logger<CustomLevels | ChildCustomLevels> => {
     const sanitized = redactLogPayload(bindings);
-    const safeBindings = sanitized !== null && typeof sanitized === 'object' && !Array.isArray(sanitized)
-      ? sanitized : {};
+    const safeBindings =
+      sanitized !== null && typeof sanitized === 'object' && !Array.isArray(sanitized)
+        ? sanitized
+        : {};
     return protectChildBindings(createChild<ChildCustomLevels>(safeBindings, options));
   };
   return instance;
@@ -35,11 +61,13 @@ export function createSafeLogger(destination?: DestinationStream): Logger {
     redact: { paths: [...PINO_REDACTION_PATHS], censor: '[REDACTED]' },
     hooks: {
       logMethod(args, method) {
-        const safeArgs = args.map((argument) => (
+        const safeArgs = args.map((argument) =>
           argument !== null && typeof argument === 'object'
             ? redactLogPayload(argument)
-            : typeof argument === 'string' ? '[REDACTED]' : argument
-        ));
+            : typeof argument === 'string'
+              ? '[REDACTED]'
+              : argument
+        );
         Reflect.apply(method, this, safeArgs);
       }
     }

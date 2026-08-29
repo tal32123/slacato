@@ -1,9 +1,9 @@
-import { DynamicModule, Module } from '@nestjs/common';
+import { type DynamicModule, Module } from '@nestjs/common';
 import { HealthModule } from '../health/health.module.js';
 import {
   APPROVAL_AUTHORITY_QUERY,
-  PROVIDER_RUNTIME_DESCRIPTOR,
-  type DiagnosticsModuleOptions
+  type DiagnosticsModuleOptions,
+  PROVIDER_RUNTIME_DESCRIPTOR
 } from './contracts.js';
 import { DiagnosticsController } from './diagnostics.controller.js';
 import { DiagnosticsService } from './diagnostics.service.js';

@@ -1,36 +1,36 @@
 import {
-  authErrorResponseSchema,
-  authSessionResponseSchema,
-  authenticatedMutationResponseSchema,
-  csrfResponseSchema,
-  demoDiagnosticsResponseSchema,
-  dealListResponseSchema,
-  dealWorkspaceViewSchema,
-  logoutResponseSchema,
-  personaListResponseSchema,
-  approvalDecisionRequestSchema,
-  approvalDecisionResultSchema,
-  approvalDetailResponseSchema,
-  approvalInboxResponseSchema,
-  cancelRunResponseSchema,
-  runDetailResponseSchema,
-  runListResponseSchema,
-  startBriefRequestSchema,
-  startBriefResponseSchema,
-  type AuthSessionResponse,
-  type DealListResponse,
-  type DealWorkspaceView,
-  type DemoDiagnosticsResponse,
-  type Persona,
   type ApprovalDecisionRequest,
   type ApprovalDecisionResult,
   type ApprovalDetailResponse,
   type ApprovalInboxResponse,
+  type AuthSessionResponse,
+  approvalDecisionRequestSchema,
+  approvalDecisionResultSchema,
+  approvalDetailResponseSchema,
+  approvalInboxResponseSchema,
+  authErrorResponseSchema,
+  authenticatedMutationResponseSchema,
+  authSessionResponseSchema,
   type CancelRunResponse,
+  cancelRunResponseSchema,
+  csrfResponseSchema,
+  type DealListResponse,
+  type DealWorkspaceView,
+  type DemoDiagnosticsResponse,
+  dealListResponseSchema,
+  dealWorkspaceViewSchema,
+  demoDiagnosticsResponseSchema,
+  logoutResponseSchema,
+  type Persona,
+  personaListResponseSchema,
   type RunDetailResponse,
   type RunListResponse,
+  runDetailResponseSchema,
+  runListResponseSchema,
   type StartBriefRequest,
   type StartBriefResponse,
+  startBriefRequestSchema,
+  startBriefResponseSchema
 } from '@slacato/contracts';
 
 interface WireSchema<T> {
@@ -49,7 +49,11 @@ export class ApiError extends Error {
 }
 
 /** Sends a credentialed API request and validates its successful response against the expected contract. */
-export async function requestJson<T>(schema: WireSchema<T>, path: string, init: RequestInit = {}): Promise<T> {
+export async function requestJson<T>(
+  schema: WireSchema<T>,
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
   const response = await fetch(path, { ...init, credentials: 'include' });
   if (!response.ok) {
     const body = await response.json().catch((): undefined => undefined);
@@ -93,7 +97,9 @@ export function endSession(csrfToken: string) {
 }
 
 /** Loads demo diagnostics for the active session. */
-export function fetchDiagnostics(signal: AbortSignal | undefined): Promise<DemoDiagnosticsResponse> {
+export function fetchDiagnostics(
+  signal: AbortSignal | undefined
+): Promise<DemoDiagnosticsResponse> {
   return requestJson(demoDiagnosticsResponseSchema, '/api/diagnostics', { signal });
 }
 
@@ -103,8 +109,13 @@ export function fetchDeals(signal: AbortSignal | undefined): Promise<DealListRes
 }
 
 /** Loads the authorized workspace for a selected deal. */
-export function fetchDealWorkspace(opportunityId: string, signal: AbortSignal | undefined): Promise<DealWorkspaceView> {
-  return requestJson(dealWorkspaceViewSchema, `/api/deals/${encodeURIComponent(opportunityId)}`, { signal });
+export function fetchDealWorkspace(
+  opportunityId: string,
+  signal: AbortSignal | undefined
+): Promise<DealWorkspaceView> {
+  return requestJson(dealWorkspaceViewSchema, `/api/deals/${encodeURIComponent(opportunityId)}`, {
+    signal
+  });
 }
 
 /** Loads the brief-generation runs visible to the active persona. */
@@ -113,12 +124,20 @@ export function fetchRuns(signal: AbortSignal | undefined): Promise<RunListRespo
 }
 
 /** Loads the latest detail for a selected brief-generation run. */
-export function fetchRunDetail(runId: string, signal: AbortSignal | undefined): Promise<RunDetailResponse> {
-  return requestJson(runDetailResponseSchema, `/api/runs/${encodeURIComponent(runId)}/detail`, { signal });
+export function fetchRunDetail(
+  runId: string,
+  signal: AbortSignal | undefined
+): Promise<RunDetailResponse> {
+  return requestJson(runDetailResponseSchema, `/api/runs/${encodeURIComponent(runId)}/detail`, {
+    signal
+  });
 }
 
 /** Starts a source-backed brief-generation run for a deal. */
-export function startBrief(input: StartBriefRequest, csrfToken: string): Promise<StartBriefResponse> {
+export function startBrief(
+  input: StartBriefRequest,
+  csrfToken: string
+): Promise<StartBriefResponse> {
   return requestJson(startBriefResponseSchema, '/api/runs/deal-brief', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
@@ -141,12 +160,22 @@ export function fetchApprovals(signal: AbortSignal | undefined): Promise<Approva
 }
 
 /** Loads the authorized detail for a selected approval request. */
-export function fetchApprovalDetail(subjectId: string, signal: AbortSignal | undefined): Promise<ApprovalDetailResponse> {
-  return requestJson(approvalDetailResponseSchema, `/api/approvals/${encodeURIComponent(subjectId)}`, { signal });
+export function fetchApprovalDetail(
+  subjectId: string,
+  signal: AbortSignal | undefined
+): Promise<ApprovalDetailResponse> {
+  return requestJson(
+    approvalDetailResponseSchema,
+    `/api/approvals/${encodeURIComponent(subjectId)}`,
+    { signal }
+  );
 }
 
 /** Records the active persona's decision on an approval request. */
-export function decideApproval(input: ApprovalDecisionRequest, csrfToken: string): Promise<ApprovalDecisionResult> {
+export function decideApproval(
+  input: ApprovalDecisionRequest,
+  csrfToken: string
+): Promise<ApprovalDecisionResult> {
   return requestJson(approvalDecisionResultSchema, '/api/approvals/decisions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },

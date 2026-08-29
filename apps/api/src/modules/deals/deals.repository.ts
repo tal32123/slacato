@@ -48,9 +48,13 @@ function parseStoredDealBrief(value: unknown): unknown {
 
 /** Converts an authorized SQL projection into the camelCase deal query model. */
 function mapAuthorizedDealSqlRow(row: AuthorizedDealSqlRow): AuthorizedDeal {
-  const latestRun = row.latest_run_status === null || row.latest_run_updated_at === null
-    ? null
-    : { status: runStatusSchema.parse(row.latest_run_status), updatedAt: row.latest_run_updated_at };
+  const latestRun =
+    row.latest_run_status === null || row.latest_run_updated_at === null
+      ? null
+      : {
+          status: runStatusSchema.parse(row.latest_run_status),
+          updatedAt: row.latest_run_updated_at
+        };
   return {
     opportunityId: row.opportunity_id,
     opportunityName: row.opportunity_name,
@@ -69,9 +73,13 @@ function mapLatestDealRunSqlRow(row: LatestDealRunSqlRow): LatestDealRun {
     runId: row.id,
     status: runStatusSchema.parse(row.status),
     updatedAt: row.updated_at,
-    generatedOutput: row.generated_output_lifecycle === null || row.generated_output_payload === null
-      ? null
-      : { lifecycle: row.generated_output_lifecycle, brief: dealBriefSchema.parse(parseStoredDealBrief(row.generated_output_payload)) }
+    generatedOutput:
+      row.generated_output_lifecycle === null || row.generated_output_payload === null
+        ? null
+        : {
+            lifecycle: row.generated_output_lifecycle,
+            brief: dealBriefSchema.parse(parseStoredDealBrief(row.generated_output_payload))
+          }
   };
 }
 
@@ -108,14 +116,13 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
           and evidence.source_type = 'salesforce'
           and evidence.source_locator like 'salesforce/opportunities.tsv#%'
           and exists (
-            select 1 from permission_grants source_grant
-            where source_grant.persona_id = ${personaId}
-              and source_grant.account_id = opportunity.account_id
-              and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-              and source_grant.source_type = 'salesforce'
-              and source_grant.can_read = true
-              and (evidence.sensitivity <> 'restricted' or source_grant.can_read_restricted = true)
-              and (opportunity.restricted = false or source_grant.can_read_restricted = true)
+            select 1 from authorized_evidence_grants evidence_grant
+            where evidence_grant.persona_id = ${personaId}
+              and evidence_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+              and evidence_grant.evidence_id = evidence.id
+              and evidence_grant.opportunity_id = opportunity.id
+              and evidence_grant.account_id = opportunity.account_id
+              and evidence_grant.source_type = 'salesforce'
           )
         order by evidence.id limit 1
       ) opportunity_record on true
@@ -125,13 +132,12 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
         order by run.updated_at desc, run.id desc limit 1
       ) latest_run on true
       where exists (
-        select 1 from permission_grants source_grant
-        where source_grant.persona_id = ${personaId}
-          and source_grant.account_id = opportunity.account_id
-          and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-          and source_grant.source_type = 'salesforce'
-          and source_grant.can_read = true
-          and (opportunity.restricted = false or source_grant.can_read_restricted = true)
+        select 1 from authorized_opportunity_grants opportunity_grant
+        where opportunity_grant.persona_id = ${personaId}
+          and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+          and opportunity_grant.opportunity_id = opportunity.id
+          and opportunity_grant.account_id = opportunity.account_id
+          and opportunity_grant.source_type = 'salesforce'
       )
       order by opportunity.id
     `;
@@ -139,7 +145,10 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
   }
 
   /** Finds one deal only when a live Salesforce source grant authorizes its metadata. */
-  public async findAuthorizedDeal(personaId: string, opportunityId: string): Promise<AuthorizedDeal | undefined> {
+  public async findAuthorizedDeal(
+    personaId: string,
+    opportunityId: string
+  ): Promise<AuthorizedDeal | undefined> {
     const rows = await this.database.sql<AuthorizedDealSqlRow[]>`
       select opportunity.id as opportunity_id, opportunity.name as opportunity_name,
         opportunity.account_id, account.name as account_name, opportunity.restricted,
@@ -149,13 +158,12 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
       join accounts account on account.id = opportunity.account_id
       where opportunity.id = ${opportunityId}
         and exists (
-          select 1 from permission_grants source_grant
-          where source_grant.persona_id = ${personaId}
-            and source_grant.account_id = opportunity.account_id
-            and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-            and source_grant.source_type = 'salesforce'
-            and source_grant.can_read = true
-            and (opportunity.restricted = false or source_grant.can_read_restricted = true)
+          select 1 from authorized_opportunity_grants opportunity_grant
+          where opportunity_grant.persona_id = ${personaId}
+            and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+            and opportunity_grant.opportunity_id = opportunity.id
+            and opportunity_grant.account_id = opportunity.account_id
+            and opportunity_grant.source_type = 'salesforce'
         )
       limit 1
     `;
@@ -163,7 +171,10 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
   }
 
   /** Loads the latest run and any generated draft or finalized payload while its deal remains authorized. */
-  public async findLatestRun(personaId: string, opportunityId: string): Promise<LatestDealRun | undefined> {
+  public async findLatestRun(
+    personaId: string,
+    opportunityId: string
+  ): Promise<LatestDealRun | undefined> {
     const rows = await this.database.sql<LatestDealRunSqlRow[]>`
       select run.id, run.status, run.updated_at,
         case when finalized_brief.payload is not null then 'finalized'
@@ -189,13 +200,12 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
       ) generated_draft on true
       where run.opportunity_id = ${opportunityId}
         and exists (
-          select 1 from permission_grants source_grant
-          where source_grant.persona_id = ${personaId}
-            and source_grant.account_id = opportunity.account_id
-            and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-            and source_grant.source_type = 'salesforce'
-            and source_grant.can_read = true
-            and (opportunity.restricted = false or source_grant.can_read_restricted = true)
+          select 1 from authorized_opportunity_grants opportunity_grant
+          where opportunity_grant.persona_id = ${personaId}
+            and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+            and opportunity_grant.opportunity_id = opportunity.id
+            and opportunity_grant.account_id = opportunity.account_id
+            and opportunity_grant.source_type = 'salesforce'
         )
       order by run.updated_at desc, run.id desc
       limit 1
@@ -204,7 +214,10 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
   }
 
   /** Lists evidence whose source-specific live grant authorizes the requested workspace category. */
-  public async listEvidence(scope: EvidenceScope, category: EvidenceCategory): Promise<readonly DealEvidence[]> {
+  public async listEvidence(
+    scope: EvidenceScope,
+    category: EvidenceCategory
+  ): Promise<readonly DealEvidence[]> {
     const rows = await this.database.sql<DealEvidenceSqlRow[]>`
       select evidence.id, evidence.source_type, evidence.sensitivity, evidence.event_date::text,
         evidence.source_locator, evidence.content, evidence.created_at
@@ -214,18 +227,13 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
         and evidence.source_locator is not null
         and btrim(evidence.source_locator) <> ''
         and exists (
-          select 1 from permission_grants source_grant
-          where source_grant.persona_id = ${scope.personaId}
-            and source_grant.account_id = evidence.account_id
-            and source_grant.source_type = evidence.source_type
-            and source_grant.can_read = true
-            and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-            and (${scope.restrictedOpportunity} = false or source_grant.can_read_restricted = true)
-            and (
-              evidence.sensitivity <> 'restricted'
-              or (evidence.source_type = 'pricing' and source_grant.sensitive_pricing = true)
-              or (evidence.source_type <> 'pricing' and source_grant.can_read_restricted = true)
-            )
+          select 1 from authorized_evidence_grants evidence_grant
+          where evidence_grant.persona_id = ${scope.personaId}
+            and evidence_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+            and evidence_grant.evidence_id = evidence.id
+            and evidence_grant.opportunity_id = ${scope.opportunityId}
+            and evidence_grant.account_id = ${scope.accountId}
+            and evidence_grant.source_type = evidence.source_type
         )
         and (
           (${category} = 'opportunity' and evidence.source_type = 'salesforce' and evidence.source_locator like 'salesforce/opportunities.tsv#%')

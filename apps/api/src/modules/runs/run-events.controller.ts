@@ -1,19 +1,29 @@
-import { BadRequestException, Controller, Get, HttpException, HttpStatus, Inject, NotFoundException, Req, Res } from '@nestjs/common';
-import type { Request, Response } from 'express';
-import { z } from 'zod';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Inject,
+  NotFoundException,
+  Req,
+  Res
+} from '@nestjs/common';
 import {
   opaqueIdSchema,
+  type RunEventEnvelope,
   runEventCursorSchema,
   runEventResyncInstructionSchema,
   runSnapshotSchema,
-  terminalRunEventTypes,
-  type RunEventEnvelope
+  terminalRunEventTypes
 } from '@slacato/contracts';
 import { CursorExpiredError, type RunEventBus, type RunEventQuery } from '@slacato/core';
+import type { Request, Response } from 'express';
+import { z } from 'zod';
+import { ZodParam, ZodQuery, ZodResponse } from '../../common/wire/zod.decorators.js';
+import { AuthService } from '../auth/auth.service.js';
 import type { AuthenticatedPrincipal } from '../auth/contracts.js';
 import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
-import { AuthService } from '../auth/auth.service.js';
-import { ZodParam, ZodQuery, ZodResponse } from '../../common/wire/zod.decorators.js';
 import { RUN_EVENT_BUS, RUN_EVENT_HEARTBEAT_MS, RUN_EVENT_QUERY } from './contracts.js';
 
 const paramsSchema = z.object({ runId: opaqueIdSchema }).strict();
@@ -25,16 +35,21 @@ const MAX_STREAMS_PER_ACTOR_RUN = 2;
 
 /** Hides whether a requested run exists or is merely inaccessible. */
 function opaqueNotFound(): never {
-  throw new NotFoundException({ code: 'NOT_FOUND', message: 'The requested resource was not found.' });
+  throw new NotFoundException({
+    code: 'NOT_FOUND',
+    message: 'The requested resource was not found.'
+  });
 }
 
 /** Reads and validates an SSE resume cursor from the request headers. */
 function headerCursor(request: Request): string | undefined {
   const raw = request.headers['last-event-id'];
   if (raw === undefined) return undefined;
-  if (Array.isArray(raw)) throw new BadRequestException({ code: 'INVALID_CURSOR', message: 'Event cursor is invalid' });
+  if (Array.isArray(raw))
+    throw new BadRequestException({ code: 'INVALID_CURSOR', message: 'Event cursor is invalid' });
   const parsed = runEventCursorSchema.safeParse(raw);
-  if (!parsed.success) throw new BadRequestException({ code: 'INVALID_CURSOR', message: 'Event cursor is invalid' });
+  if (!parsed.success)
+    throw new BadRequestException({ code: 'INVALID_CURSOR', message: 'Event cursor is invalid' });
   return parsed.data;
 }
 
@@ -42,6 +57,7 @@ function headerCursor(request: Request): string | undefined {
 class SerializedSseWriter {
   private tail = Promise.resolve();
 
+  /** Creates an ordered SSE writer for the response. */
   public constructor(private readonly response: Response) {}
 
   /** Enqueues one SSE frame for ordered delivery. */
@@ -56,13 +72,21 @@ class SerializedSseWriter {
     if (this.response.writableEnded || this.response.destroyed) return;
     if (this.response.write(frame)) return;
     let resolveReady!: () => void;
-    const ready = new Promise<void>((resolve) => { resolveReady = resolve; });
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
     const cleanup = (): void => {
       this.response.off('drain', onDrain);
       this.response.off('close', onClose);
     };
-    const onDrain = (): void => { cleanup(); resolveReady(); };
-    const onClose = (): void => { cleanup(); resolveReady(); };
+    const onDrain = (): void => {
+      cleanup();
+      resolveReady();
+    };
+    const onClose = (): void => {
+      cleanup();
+      resolveReady();
+    };
     this.response.once('drain', onDrain);
     this.response.once('close', onClose);
     if (this.response.writableEnded || this.response.destroyed) onClose();
@@ -82,6 +106,7 @@ export class RunEventsController {
   private readonly actorStreams = new Map<string, number>();
   private readonly actorRunStreams = new Map<string, number>();
 
+  /** Creates a run event controller with its streaming dependencies. */
   public constructor(
     @Inject(RUN_EVENT_BUS) private readonly bus: RunEventBus,
     @Inject(RUN_EVENT_QUERY) private readonly query: RunEventQuery,
@@ -115,10 +140,11 @@ export class RunEventsController {
     const actorId = principal.persona.userId;
     const sessionVersion = principal.claims.version;
     const authorize = async (): Promise<boolean> =>
-      await this.auth.isSessionActive(sessionVersion, actorId)
-      && await this.query.authorizeAndSnapshot(params.runId, actorId) !== undefined;
+      (await this.auth.isSessionActive(sessionVersion, actorId)) &&
+      (await this.query.authorizeAndSnapshot(params.runId, actorId)) !== undefined;
     const snapshot = await this.query.authorizeAndSnapshot(params.runId, actorId);
-    if (snapshot === undefined || !await this.auth.isSessionActive(sessionVersion, actorId)) return opaqueNotFound();
+    if (snapshot === undefined || !(await this.auth.isSessionActive(sessionVersion, actorId)))
+      return opaqueNotFound();
     const cursor = headerCursor(request) ?? query.after;
     if (snapshot.terminal && (cursor === undefined || cursor === snapshot.watermark)) {
       response.status(204).end();
@@ -143,38 +169,48 @@ export class RunEventsController {
     const heartbeat = setInterval(() => {
       if (abort.signal.aborted || response.writableEnded || heartbeatPending) return;
       heartbeatPending = true;
-      void authorize().then(async (allowed) => {
-        if (!allowed) {
+      void authorize()
+        .then(async (allowed) => {
+          if (!allowed) {
+            abort.abort();
+            response.end();
+            return;
+          }
+          await writer.write(': heartbeat\n\n');
+        })
+        .catch(() => {
           abort.abort();
           response.end();
-          return;
-        }
-        await writer.write(': heartbeat\n\n');
-      }).catch(() => {
-        abort.abort();
-        response.end();
-      }).finally(() => { heartbeatPending = false; });
+        })
+        .finally(() => {
+          heartbeatPending = false;
+        });
     }, this.heartbeatMs);
     heartbeat.unref();
 
     try {
       for await (const event of this.bus.subscribe(params.runId, cursor, abort.signal, authorize)) {
         if (abort.signal.aborted) break;
-        if (!await authorize()) {
+        if (!(await authorize())) {
           response.end();
           break;
         }
         await writer.write(eventFrame(event));
-        if (terminalRunEventTypes.includes(event.type) || ('terminal' in event.payload && event.payload.terminal === true)) {
+        if (
+          terminalRunEventTypes.includes(event.type) ||
+          ('terminal' in event.payload && event.payload.terminal === true)
+        ) {
           response.end();
           break;
         }
       }
     } catch (error) {
       if (!(error instanceof CursorExpiredError)) throw error;
-      if (!abort.signal.aborted && await authorize()) {
+      if (!abort.signal.aborted && (await authorize())) {
         const instruction = runEventResyncInstructionSchema.parse({
-          type: 'stream.resync_required', version: 1, streamId: params.runId,
+          type: 'stream.resync_required',
+          version: 1,
+          streamId: params.runId,
           timestamp: new Date().toISOString(),
           payload: { reason: 'cursor_expired', snapshotPath: `/api/runs/${params.runId}` }
         });
@@ -198,7 +234,10 @@ export class RunEventsController {
     const actorCount = this.actorStreams.get(actorId) ?? 0;
     const actorRunCount = this.actorRunStreams.get(actorRunKey) ?? 0;
     if (actorCount >= MAX_STREAMS_PER_ACTOR || actorRunCount >= MAX_STREAMS_PER_ACTOR_RUN) {
-      throw new HttpException({ code: 'STREAM_LIMIT', message: 'Too many active run streams' }, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        { code: 'STREAM_LIMIT', message: 'Too many active run streams' },
+        HttpStatus.TOO_MANY_REQUESTS
+      );
     }
     this.actorStreams.set(actorId, actorCount + 1);
     this.actorRunStreams.set(actorRunKey, actorRunCount + 1);
@@ -208,8 +247,10 @@ export class RunEventsController {
       released = true;
       const nextActorCount = (this.actorStreams.get(actorId) ?? 1) - 1;
       const nextActorRunCount = (this.actorRunStreams.get(actorRunKey) ?? 1) - 1;
-      if (nextActorCount === 0) this.actorStreams.delete(actorId); else this.actorStreams.set(actorId, nextActorCount);
-      if (nextActorRunCount === 0) this.actorRunStreams.delete(actorRunKey); else this.actorRunStreams.set(actorRunKey, nextActorRunCount);
+      if (nextActorCount === 0) this.actorStreams.delete(actorId);
+      else this.actorStreams.set(actorId, nextActorCount);
+      if (nextActorRunCount === 0) this.actorRunStreams.delete(actorRunKey);
+      else this.actorRunStreams.set(actorRunKey, nextActorRunCount);
     };
   }
 }

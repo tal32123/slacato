@@ -1,18 +1,15 @@
 import {
-  CANONICAL_FIXTURE_COMMIT,
-  MAX_SHORT_TEXT_LENGTH,
   type AgentManifestEntry,
+  CANONICAL_FIXTURE_COMMIT,
   type EmbeddingGateway,
   type EmbeddingProfile,
+  MAX_SHORT_TEXT_LENGTH,
   type PermissionGrant,
   type RetrievalRequest,
   type RetrievalResult,
   type RunBudgetLimits
 } from '@slacato/core';
-import {
-  PostgresHybridEvidenceRetriever,
-  type DatabaseClient
-} from '@slacato/infrastructure';
+import { type DatabaseClient, PostgresHybridEvidenceRetriever } from '@slacato/infrastructure';
 
 type OpportunityContextRow = Readonly<{
   account_id: string;
@@ -79,7 +76,12 @@ function readCanonicalOpportunityStage(content: string): string {
     .filter((stage): stage is string => stage !== undefined);
 
   const stage = stages[0];
-  if (stage === undefined || stages.length !== 1 || stage.length === 0 || stage.length > MAX_SHORT_TEXT_LENGTH) {
+  if (
+    stage === undefined ||
+    stages.length !== 1 ||
+    stage.length === 0 ||
+    stage.length > MAX_SHORT_TEXT_LENGTH
+  ) {
     throw new Error('Canonical Salesforce opportunity stage is unavailable');
   }
   return stage;
@@ -131,26 +133,29 @@ export class PostgresDealBriefContextRepository implements DealBriefContextRepos
         stage_evidence.id as stage_evidence_id,
         stage_evidence.content as stage_evidence_content
       from opportunities opportunity
+      join authorized_opportunity_grants opportunity_grant
+        on opportunity_grant.opportunity_id = opportunity.id
+        and opportunity_grant.account_id = opportunity.account_id
+        and opportunity_grant.persona_id = ${personaId}
+        and opportunity_grant.source_type = 'salesforce'
+        and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
       join accounts account on account.id = opportunity.account_id
       join lateral (
         select evidence.id, evidence.content
         from evidence_versions evidence
+        join authorized_evidence_grants evidence_grant
+          on evidence_grant.evidence_id = evidence.id
+          and evidence_grant.opportunity_id = opportunity.id
+          and evidence_grant.account_id = opportunity.account_id
+          and evidence_grant.persona_id = ${personaId}
+          and evidence_grant.source_type = 'salesforce'
+          and evidence_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
         where evidence.account_id = opportunity.account_id
           and evidence.opportunity_id = opportunity.id
           and evidence.source_type = 'salesforce'
           and evidence.chunk_index = 0
           and evidence.reliability_class = 'authoritative_system'
           and evidence.source_locator like ${`salesforce/opportunities.tsv#${opportunityId}%`}
-          and exists (
-            select 1 from permission_grants permission
-            where permission.persona_id = ${personaId}
-              and permission.account_id = opportunity.account_id
-              and permission.source_type = 'salesforce'
-              and permission.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-              and permission.can_read = true
-              and (opportunity.restricted = false or permission.can_read_restricted = true)
-              and (evidence.sensitivity <> 'restricted' or permission.can_read_restricted = true)
-          )
         order by evidence.created_at desc, evidence.id desc
         limit 1
       ) stage_evidence on true
@@ -170,7 +175,10 @@ export class PostgresDealBriefContextRepository implements DealBriefContextRepos
   }
 
   /** Loads the persona's current canonical permission grants for one account. */
-  public async readPermissionGrants(personaId: string, accountId: string): Promise<readonly PermissionGrant[]> {
+  public async readPermissionGrants(
+    personaId: string,
+    accountId: string
+  ): Promise<readonly PermissionGrant[]> {
     const rows = await this.database.sql<GrantRow[]>`
       select account_id "accountId", source_type,
         can_read "canRead", can_read_restricted "canReadRestricted",
@@ -223,7 +231,9 @@ export class PostgresDealBriefContextRepository implements DealBriefContextRepos
     embeddingGateway: EmbeddingGateway,
     profile: EmbeddingProfile
   ): Promise<RetrievalResult> {
-    return new PostgresHybridEvidenceRetriever(this.database, embeddingGateway, profile).search(request);
+    return new PostgresHybridEvidenceRetriever(this.database, embeddingGateway, profile).search(
+      request
+    );
   }
 
   /** Confirms that persisted manifest entries exactly match the durable generation context fingerprints. */
@@ -242,14 +252,16 @@ export class PostgresDealBriefContextRepository implements DealBriefContextRepos
     const expectedByEvidenceId = new Map(expectedEntries.map((entry) => [entry.evidenceId, entry]));
     return rows.every((row) => {
       const expected = expectedByEvidenceId.get(row.evidence_version_id);
-      return expected !== undefined
-        && row.citation_id === expected.citationId
-        && row.content_hash === expected.contentHash
-        && row.source_locator === expected.sourceLocator
-        && row.source_type === expected.sourceType
-        && row.sensitivity === expected.sensitivity
-        && row.policy_hash === expected.policyHash
-        && row.included_characters === expected.includedCharacters;
+      return (
+        expected !== undefined &&
+        row.citation_id === expected.citationId &&
+        row.content_hash === expected.contentHash &&
+        row.source_locator === expected.sourceLocator &&
+        row.source_type === expected.sourceType &&
+        row.sensitivity === expected.sensitivity &&
+        row.policy_hash === expected.policyHash &&
+        row.included_characters === expected.includedCharacters
+      );
     });
   }
 }

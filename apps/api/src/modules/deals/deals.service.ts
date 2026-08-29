@@ -1,8 +1,8 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import {
-  dealWorkspaceViewSchema,
   type DealListItem,
-  type DealWorkspaceView
+  type DealWorkspaceView,
+  dealWorkspaceViewSchema
 } from '@slacato/contracts';
 import {
   DEALS_OPTIONS,
@@ -30,11 +30,20 @@ export class DealsService {
     return deals.map((deal) => mapAuthorizedDealToListItem(deal));
   }
 
-/** Loads an authorized deal workspace with source records and generated artifacts as separate representations. */
-  public async getAuthorizedDealWorkspace(session: DealQuerySession, opportunityId: string): Promise<DealWorkspaceView> {
-    const target = await this.options.repository.findAuthorizedDeal(session.persona.userId, opportunityId);
+  /** Loads an authorized deal workspace with source records and generated artifacts as separate representations. */
+  public async getAuthorizedDealWorkspace(
+    session: DealQuerySession,
+    opportunityId: string
+  ): Promise<DealWorkspaceView> {
+    const target = await this.options.repository.findAuthorizedDeal(
+      session.persona.userId,
+      opportunityId
+    );
     if (target === undefined) {
-      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Request could not be authorized' });
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'Request could not be authorized'
+      });
     }
 
     const scope: EvidenceScope = {
@@ -49,7 +58,11 @@ export class DealsService {
       this.options.repository.listEvidence(scope, 'stakeholders'),
       this.options.repository.listEvidence(scope, 'supplemental')
     ]);
-    const workspaceEvidence = projectAuthorizedWorkspaceEvidence(opportunityRows, stakeholderRows, supplementalRows);
+    const workspaceEvidence = projectAuthorizedWorkspaceEvidence(
+      opportunityRows,
+      stakeholderRows,
+      supplementalRows
+    );
     const deal = mapAuthorizedDealToListItem(
       { ...target, recordContent: workspaceEvidence.opportunityRecord?.content ?? null },
       latestRun ?? null

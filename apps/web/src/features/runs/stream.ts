@@ -1,14 +1,14 @@
 import {
+  type RunDetailResponse,
+  type RunEventEnvelope,
+  type RunStatus,
   runDetailResponseSchema,
   runEventEnvelopeSchema,
   runEventFallbackStatuses,
   runEventResyncInstructionSchema,
   runEventTypes,
   runStatusSchema,
-  terminalRunEventTypes,
-  type RunDetailResponse,
-  type RunEventEnvelope,
-  type RunStatus
+  terminalRunEventTypes
 } from '@slacato/contracts';
 
 export interface RunStreamSource {
@@ -29,48 +29,59 @@ export function applyRunEvent(
   const parsed = runEventEnvelopeSchema.safeParse(candidate);
   if (!parsed.success) return current;
   const event = parsed.data as RunEventEnvelope;
-  if (event.streamId !== current.runId || event.sequence <= current.watermarkSequence) return current;
+  if (event.streamId !== current.runId || event.sequence <= current.watermarkSequence)
+    return current;
   const status = statusForEvent(event, current.status);
-  const version = 'version' in event.payload && typeof event.payload.version === 'number'
-    ? event.payload.version
-    : current.version;
+  const version =
+    'version' in event.payload && typeof event.payload.version === 'number'
+      ? event.payload.version
+      : current.version;
   return runDetailResponseSchema.parse({
     ...current,
     status,
     version,
     watermark: event.id,
     watermarkSequence: event.sequence,
-    terminal: terminalRunEventTypes.includes(event.type)
-      || ('terminal' in event.payload && event.payload.terminal === true),
+    terminal:
+      terminalRunEventTypes.includes(event.type) ||
+      ('terminal' in event.payload && event.payload.terminal === true),
     updatedAt: event.timestamp,
     progress: {
       ...current.progress,
       phase: status,
-      timeline: [...current.progress.timeline, {
-        sequence: event.sequence,
-        eventId: event.id,
-        phase: status,
-        label: labelForEvent(event.type),
-        at: event.timestamp
-      }].slice(-200)
+      timeline: [
+        ...current.progress.timeline,
+        {
+          sequence: event.sequence,
+          eventId: event.id,
+          phase: status,
+          label: labelForEvent(event.type),
+          at: event.timestamp
+        }
+      ].slice(-200)
     }
   });
 }
 
 /** Streams live run updates while preserving session boundaries and requesting resync when needed. */
-export function openRunEventStream(input: Readonly<{
-  detail: RunDetailResponse;
-  generation: number;
-  currentGeneration: () => number;
-  createSource: (url: string) => RunStreamSource;
-  registerStream: (source: RunStreamSource) => () => void;
-  onEvent: (event: unknown) => void;
-  onConnection: (state: ConnectionState) => void;
-  onResync: () => void;
-}>): () => void {
+export function openRunEventStream(
+  input: Readonly<{
+    detail: RunDetailResponse;
+    generation: number;
+    currentGeneration: () => number;
+    createSource: (url: string) => RunStreamSource;
+    registerStream: (source: RunStreamSource) => () => void;
+    onEvent: (event: unknown) => void;
+    onConnection: (state: ConnectionState) => void;
+    onResync: () => void;
+  }>
+): () => void {
   if (input.detail.terminal) return () => undefined;
-  const query = input.detail.watermark === null ? '' : `?after=${encodeURIComponent(input.detail.watermark)}`;
-  const source = input.createSource(`/api/runs/${encodeURIComponent(input.detail.runId)}/events${query}`);
+  const query =
+    input.detail.watermark === null ? '' : `?after=${encodeURIComponent(input.detail.watermark)}`;
+  const source = input.createSource(
+    `/api/runs/${encodeURIComponent(input.detail.runId)}/events${query}`
+  );
   const unregister = input.registerStream(source);
   let closed = false;
   const accepts = (): boolean => input.currentGeneration() === input.generation && !closed;
@@ -83,12 +94,18 @@ export function openRunEventStream(input: Readonly<{
     }
   };
   for (const type of runEventTypes) source.addEventListener(type, handleEvent);
-  source.addEventListener('open', () => { if (accepts()) input.onConnection('connected'); });
-  source.addEventListener('error', () => { if (accepts()) input.onConnection('reconnecting'); });
+  source.addEventListener('open', () => {
+    if (accepts()) input.onConnection('connected');
+  });
+  source.addEventListener('error', () => {
+    if (accepts()) input.onConnection('reconnecting');
+  });
   source.addEventListener('stream.resync_required', (message) => {
     if (!accepts()) return;
     try {
-      const instruction = runEventResyncInstructionSchema.parse(JSON.parse(message.data) as unknown);
+      const instruction = runEventResyncInstructionSchema.parse(
+        JSON.parse(message.data) as unknown
+      );
       if (instruction.streamId === input.detail.runId) input.onResync();
     } catch {
       // A malformed control envelope cannot alter or disclose cached run state.
@@ -108,7 +125,8 @@ function statusForEvent(event: RunEventEnvelope, fallback: RunStatus): RunStatus
     const parsed = runStatusSchema.safeParse(event.payload.status);
     if (parsed.success) return parsed.data;
   }
-  return runEventFallbackStatuses[event.type] ?? fallback;
+  const mapped = runStatusSchema.safeParse(runEventFallbackStatuses[event.type]);
+  return mapped.success ? mapped.data : fallback;
 }
 
 /** Provides the user-facing timeline label for a run event. */

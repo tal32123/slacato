@@ -1,11 +1,11 @@
+import type { TraceSpan } from '@slacato/contracts';
 import {
-  dealBriefSchema,
-  hashApprovalPayload,
   type ApprovalAuthority,
   type ApprovalCategory,
-  type ApprovalRequirementEntry
+  type ApprovalRequirementEntry,
+  dealBriefSchema,
+  hashApprovalPayload
 } from '@slacato/core';
-import type { TraceSpan } from '@slacato/contracts';
 import { z } from 'zod';
 
 const unknownRecordSchema = z.record(z.string(), z.unknown());
@@ -64,7 +64,7 @@ type ProjectedTraceSpanFor<K extends TraceKind> = Readonly<{
 }>;
 
 export type ProjectedTraceSpan = {
-  [K in TraceKind]: ProjectedTraceSpanFor<K>
+  [K in TraceKind]: ProjectedTraceSpanFor<K>;
 }[TraceKind];
 
 export type GenerationAttemptProjection = Readonly<{
@@ -186,18 +186,26 @@ export type WorkflowTraceProjection = Readonly<{
 export function projectWorkflowTrace(input: WorkflowTraceProjectionInput): WorkflowTraceProjection {
   switch (input.type) {
     case 'run_started':
-      return { spans: [projectSpan({
-        runId: input.runId,
-        kind: 'authorization_lookup',
-        discriminator: 'start',
-        step: 'authorization',
-        data: {
-          decision: 'allowed',
-          correlationHash: hashApprovalPayload({ runId: input.runId, opportunityId: input.opportunityId, requestedBy: input.requestedBy }),
-          readKinds: ['opportunity', 'account', 'requester', 'permissions'],
-          readCount: 4
-        }
-      })] };
+      return {
+        spans: [
+          projectSpan({
+            runId: input.runId,
+            kind: 'authorization_lookup',
+            discriminator: 'start',
+            step: 'authorization',
+            data: {
+              decision: 'allowed',
+              correlationHash: hashApprovalPayload({
+                runId: input.runId,
+                opportunityId: input.opportunityId,
+                requestedBy: input.requestedBy
+              }),
+              readKinds: ['opportunity', 'account', 'requester', 'permissions'],
+              readCount: 4
+            }
+          })
+        ]
+      };
     case 'generation_checkpoint':
       return projectGenerationCheckpoint(input);
     case 'retrieval_completed':
@@ -209,44 +217,56 @@ export function projectWorkflowTrace(input: WorkflowTraceProjectionInput): Workf
     case 'approval_decided':
       return { spans: [projectApprovalDecision(input)] };
     case 'approval_subject_replaced': {
-      const priorDecision = projectApprovalDecision({
-        type: 'approval_decided',
-        runId: input.runId,
-        version: input.version,
-        approvalSubjectId: input.priorSubjectId,
-        subjectHash: input.priorDecision.subjectHash,
-        entryId: input.priorDecision.entryId,
-        category: input.priorDecision.category,
-        authority: input.priorDecision.authority,
-        decision: 'approved'
-      }, 'edited');
+      const priorDecision = projectApprovalDecision(
+        {
+          type: 'approval_decided',
+          runId: input.runId,
+          version: input.version,
+          approvalSubjectId: input.priorSubjectId,
+          subjectHash: input.priorDecision.subjectHash,
+          entryId: input.priorDecision.entryId,
+          category: input.priorDecision.category,
+          authority: input.priorDecision.authority,
+          decision: 'approved'
+        },
+        'edited'
+      );
       return { spans: [priorDecision, ...projectApprovalSubject(input.runId, input.subject)] };
     }
     case 'finalized':
-      return { spans: [projectSpan({
-        runId: input.runId,
-        kind: 'finalization',
-        discriminator: `${input.subjectHash}:${input.version}`,
-        step: 'finalization',
-        parent: { type: 'latest', candidates: [{ kinds: ['approval_decision', 'strategy_attempt'] }] },
-        data: { decision: 'completed', artifactHash: input.subjectHash }
-      })] };
+      return {
+        spans: [
+          projectSpan({
+            runId: input.runId,
+            kind: 'finalization',
+            discriminator: `${input.subjectHash}:${input.version}`,
+            step: 'finalization',
+            parent: {
+              type: 'latest',
+              candidates: [{ kinds: ['approval_decision', 'strategy_attempt'] }]
+            },
+            data: { decision: 'completed', artifactHash: input.subjectHash }
+          })
+        ]
+      };
     case 'failed':
       return projectFailure(input);
   }
 }
 
 /** Builds deterministic span identifiers while preserving the data type associated with each trace kind. */
-function projectSpan<K extends TraceKind>(input: Readonly<{
-  runId: string;
-  kind: K;
-  discriminator: string;
-  step: string;
-  attempt?: number;
-  status?: TraceSpanFor<K>['status'];
-  parent?: TraceParentReference;
-  data: TraceSpanFor<K>['data'];
-}>): ProjectedTraceSpanFor<K> {
+function projectSpan<K extends TraceKind>(
+  input: Readonly<{
+    runId: string;
+    kind: K;
+    discriminator: string;
+    step: string;
+    attempt?: number;
+    status?: TraceSpanFor<K>['status'];
+    parent?: TraceParentReference;
+    data: TraceSpanFor<K>['data'];
+  }>
+): ProjectedTraceSpanFor<K> {
   return {
     traceId: `trace_${hashApprovalPayload(input.runId)}`,
     spanId: traceSpanId(input.runId, input.kind, input.discriminator),
@@ -266,17 +286,32 @@ function traceSpanId(runId: string, kind: TraceKind, discriminator: string): str
 }
 
 /** Projects model, validation, guardrail, usage, repair, and degradation spans from a durable generation attempt. */
-function projectGenerationCheckpoint(input: Extract<WorkflowTraceProjectionInput, { type: 'generation_checkpoint' }>): WorkflowTraceProjection {
-  if (input.logicalGenerationId === undefined || (!input.step.startsWith('specialist:') && !input.step.startsWith('strategy'))) {
+function projectGenerationCheckpoint(
+  input: Extract<WorkflowTraceProjectionInput, { type: 'generation_checkpoint' }>
+): WorkflowTraceProjection {
+  if (
+    input.logicalGenerationId === undefined ||
+    (!input.step.startsWith('specialist:') && !input.step.startsWith('strategy'))
+  ) {
     return { spans: [] };
   }
 
-  const operation = input.step.startsWith('specialist:') ? input.step.slice('specialist:'.length) : 'strategy';
-  const kind: 'specialist_attempt' | 'strategy_attempt' = input.step.startsWith('specialist:') ? 'specialist_attempt' : 'strategy_attempt';
-  const attemptStatus = input.checkpoint.status === 'degraded' ? 'degraded' : input.checkpoint.status === 'failed' ? 'failed' : 'completed';
-  const generationAttempt = input.persistedAttempts.length === 0
-    ? projectFallbackGenerationAttempt(input, operation, attemptStatus)
-    : undefined;
+  const operation = input.step.startsWith('specialist:')
+    ? input.step.slice('specialist:'.length)
+    : 'strategy';
+  const kind: 'specialist_attempt' | 'strategy_attempt' = input.step.startsWith('specialist:')
+    ? 'specialist_attempt'
+    : 'strategy_attempt';
+  const attemptStatus =
+    input.checkpoint.status === 'degraded'
+      ? 'degraded'
+      : input.checkpoint.status === 'failed'
+        ? 'failed'
+        : 'completed';
+  const generationAttempt =
+    input.persistedAttempts.length === 0
+      ? projectFallbackGenerationAttempt(input, operation, attemptStatus)
+      : undefined;
   const attempts = generationAttempt === undefined ? input.persistedAttempts : [generationAttempt];
   const attemptSpan = projectSpan({
     runId: input.runId,
@@ -284,7 +319,10 @@ function projectGenerationCheckpoint(input: Extract<WorkflowTraceProjectionInput
     discriminator: input.step,
     step: operation,
     status: attemptStatus,
-    parent: { type: 'if_present', spanId: traceSpanId(input.runId, 'evidence_retrieval', 'retrieval') },
+    parent: {
+      type: 'if_present',
+      spanId: traceSpanId(input.runId, 'evidence_retrieval', 'retrieval')
+    },
     data: { operation, logicalGenerationId: input.logicalGenerationId }
   });
   const spans: ProjectedTraceSpan[] = [attemptSpan];
@@ -305,7 +343,12 @@ function projectGenerationCheckpoint(input: Extract<WorkflowTraceProjectionInput
         ordinal: attempt.ordinal,
         provider: attempt.provider,
         model: attempt.model,
-        parametersHash: hashApprovalPayload({ provider: attempt.provider, model: attempt.model, operation, outputMode: attempt.outputMode }),
+        parametersHash: hashApprovalPayload({
+          provider: attempt.provider,
+          model: attempt.model,
+          operation,
+          outputMode: attempt.outputMode
+        }),
         outputMode: attempt.outputMode,
         possibleDuplicate: attempt.possibleDuplicate
       }
@@ -320,7 +363,10 @@ function projectGenerationCheckpoint(input: Extract<WorkflowTraceProjectionInput
         attempt: attempt.ordinal,
         status: failed ? 'failed' : 'completed',
         parent: { type: 'direct', spanId: modelSpan.spanId },
-        data: { decision: failed ? 'rejected' : 'accepted', validationAttempts: attempt.validationAttempts }
+        data: {
+          decision: failed ? 'rejected' : 'accepted',
+          validationAttempts: attempt.validationAttempts
+        }
       }),
       projectSpan({
         runId: input.runId,
@@ -342,27 +388,34 @@ function projectGenerationCheckpoint(input: Extract<WorkflowTraceProjectionInput
       })
     );
     if (attempt.validationAttempts > 0) {
-      spans.push(projectSpan({
-        runId: input.runId,
-        kind: 'repair',
-        discriminator: `${input.step}:repair:${attempt.id}`,
-        step: operation,
-        attempt: attempt.ordinal,
-        parent: { type: 'direct', spanId: modelSpan.spanId },
-        data: { attempts: attempt.validationAttempts, decision: 'validated' }
-      }));
+      spans.push(
+        projectSpan({
+          runId: input.runId,
+          kind: 'repair',
+          discriminator: `${input.step}:repair:${attempt.id}`,
+          step: operation,
+          attempt: attempt.ordinal,
+          parent: { type: 'direct', spanId: modelSpan.spanId },
+          data: { attempts: attempt.validationAttempts, decision: 'validated' }
+        })
+      );
     }
   }
   if (attemptStatus === 'degraded') {
-    spans.push(projectSpan({
-      runId: input.runId,
-      kind: 'partial_failure',
-      discriminator: `${input.step}:partial`,
-      step: operation,
-      status: 'degraded',
-      parent: { type: 'direct', spanId: attemptSpan.spanId },
-      data: { decision: 'partial', reasonCode: partialFailureReasonSchema.parse(`${operation}_unavailable`) }
-    }));
+    spans.push(
+      projectSpan({
+        runId: input.runId,
+        kind: 'partial_failure',
+        discriminator: `${input.step}:partial`,
+        step: operation,
+        status: 'degraded',
+        parent: { type: 'direct', spanId: attemptSpan.spanId },
+        data: {
+          decision: 'partial',
+          reasonCode: partialFailureReasonSchema.parse(`${operation}_unavailable`)
+        }
+      })
+    );
   }
   return { spans, ...(generationAttempt === undefined ? {} : { generationAttempt }) };
 }
@@ -379,7 +432,8 @@ function projectFallbackGenerationAttempt(
   const model = z.string().safeParse(metadata.model);
   const possibleDuplicate = z.boolean().safeParse(metadata.possibleDuplicate);
   const logicalGenerationId = input.logicalGenerationId;
-  if (logicalGenerationId === undefined) throw new Error('Generation projection requires a logical generation ID');
+  if (logicalGenerationId === undefined)
+    throw new Error('Generation projection requires a logical generation ID');
   return {
     runId: input.runId,
     id: `attempt_${hashApprovalPayload({ runId: input.runId, logicalGenerationId, operation, ordinal: 1 })}`,
@@ -399,7 +453,10 @@ function projectFallbackGenerationAttempt(
 }
 
 /** Extracts only schema-checked evidence identifiers and scores from a retrieval checkpoint. */
-function projectRetrieval(runId: string, checkpoint: Readonly<Record<string, unknown>>): WorkflowTraceProjection {
+function projectRetrieval(
+  runId: string,
+  checkpoint: Readonly<Record<string, unknown>>
+): WorkflowTraceProjection {
   const value = unknownRecordSchema.safeParse(checkpoint.value);
   const evidence = value.success && Array.isArray(value.data.evidence) ? value.data.evidence : [];
   const resultIds: string[] = [];
@@ -412,74 +469,102 @@ function projectRetrieval(runId: string, checkpoint: Readonly<Record<string, unk
     if (evidenceId.success) resultIds.push(evidenceId.data);
     if (score.success) scores.push(score.data);
   }
-  return { spans: [projectSpan({
-    runId,
-    kind: 'evidence_retrieval',
-    discriminator: 'retrieval',
-    step: 'retrieval',
-    parent: { type: 'if_present', spanId: traceSpanId(runId, 'authorization_lookup', 'start') },
-    data: { resultIds, scores, evidenceCount: resultIds.length }
-  })] };
+  return {
+    spans: [
+      projectSpan({
+        runId,
+        kind: 'evidence_retrieval',
+        discriminator: 'retrieval',
+        step: 'retrieval',
+        parent: { type: 'if_present', spanId: traceSpanId(runId, 'authorization_lookup', 'start') },
+        data: { resultIds, scores, evidenceCount: resultIds.length }
+      })
+    ]
+  };
 }
 
 /** Projects validation policy and recommendation spans from a checkpoint without trusting its payload shape. */
-function projectValidation(runId: string, version: number, checkpoint: Readonly<Record<string, unknown>>): WorkflowTraceProjection {
+function projectValidation(
+  runId: string,
+  version: number,
+  checkpoint: Readonly<Record<string, unknown>>
+): WorkflowTraceProjection {
   const parsed = dealBriefSchema.safeParse(checkpoint.payload);
   const recommendationIds = parsed.success
-    ? parsed.data.recommendedNextActions.actions.map((action, index) => `recommendation:${index}:${hashApprovalPayload(action).slice(0, 16)}`)
+    ? parsed.data.recommendedNextActions.actions.map(
+        (action, index) => `recommendation:${index}:${hashApprovalPayload(action).slice(0, 16)}`
+      )
     : [];
-  const subjectHash = typeof checkpoint.subjectHash === 'string' ? checkpoint.subjectHash : hashApprovalPayload(checkpoint);
-  return { spans: projectPolicyAndRecommendations({
-    runId,
-    discriminator: `validation:${version}`,
-    subjectHash,
-    recommendationIds,
-    decision: 'no_approval_required',
-    policyHash: hashApprovalPayload({ decision: 'no_approval_required', subjectHash })
-  }) };
+  const subjectHash =
+    typeof checkpoint.subjectHash === 'string'
+      ? checkpoint.subjectHash
+      : hashApprovalPayload(checkpoint);
+  return {
+    spans: projectPolicyAndRecommendations({
+      runId,
+      discriminator: `validation:${version}`,
+      subjectHash,
+      recommendationIds,
+      decision: 'no_approval_required',
+      policyHash: hashApprovalPayload({ decision: 'no_approval_required', subjectHash })
+    })
+  };
 }
 
 /** Projects policy, recommendation, and requirement spans for an approval subject. */
-function projectApprovalSubject(runId: string, subject: ApprovalSubjectTraceInput): readonly ProjectedTraceSpan[] {
+function projectApprovalSubject(
+  runId: string,
+  subject: ApprovalSubjectTraceInput
+): readonly ProjectedTraceSpan[] {
   const policySpans = projectPolicyAndRecommendations({
     runId,
     discriminator: subject.id,
     subjectHash: subject.subjectHash,
     recommendationIds: subject.recommendationIds,
     decision: 'approval_required',
-    policyHash: hashApprovalPayload({ policyTriggers: subject.policyTriggers, quorumVersion: subject.quorumVersion })
+    policyHash: hashApprovalPayload({
+      policyTriggers: subject.policyTriggers,
+      quorumVersion: subject.quorumVersion
+    })
   });
   const policySpan = policySpans[0];
   if (policySpan === undefined) return [];
   return [
     ...policySpans,
-    ...subject.entries.map((entry) => projectSpan({
-      runId,
-      kind: 'approval_requirement',
-      discriminator: `${subject.id}:${entry.id}`,
-      step: 'approval',
-      parent: { type: 'direct', spanId: policySpan.spanId },
-      data: {
-        subjectHash: subject.subjectHash,
-        entryId: entry.id,
-        category: entry.category,
-        authorities: [...entry.eligibleAuthorities],
-        policyHash: hashApprovalPayload(entry.policyTriggers)
-      }
-    }))
+    ...subject.entries.map((entry) =>
+      projectSpan({
+        runId,
+        kind: 'approval_requirement',
+        discriminator: `${subject.id}:${entry.id}`,
+        step: 'approval',
+        parent: { type: 'direct', spanId: policySpan.spanId },
+        data: {
+          subjectHash: subject.subjectHash,
+          entryId: entry.id,
+          category: entry.category,
+          authorities: [...entry.eligibleAuthorities],
+          policyHash: hashApprovalPayload(entry.policyTriggers)
+        }
+      })
+    )
   ];
 }
 
 /** Projects the policy decision and its sibling recommendation span. */
-function projectPolicyAndRecommendations(input: Readonly<{
-  runId: string;
-  discriminator: string;
-  subjectHash: string;
-  recommendationIds: readonly string[];
-  decision: 'approval_required' | 'no_approval_required';
-  policyHash: string;
-}>): readonly ProjectedTraceSpan[] {
-  const parent: TraceParentReference = { type: 'latest', candidates: [{ kinds: ['strategy_attempt'] }] };
+function projectPolicyAndRecommendations(
+  input: Readonly<{
+    runId: string;
+    discriminator: string;
+    subjectHash: string;
+    recommendationIds: readonly string[];
+    decision: 'approval_required' | 'no_approval_required';
+    policyHash: string;
+  }>
+): readonly ProjectedTraceSpan[] {
+  const parent: TraceParentReference = {
+    type: 'latest',
+    candidates: [{ kinds: ['strategy_attempt'] }]
+  };
   return [
     projectSpan({
       runId: input.runId,
@@ -487,7 +572,11 @@ function projectPolicyAndRecommendations(input: Readonly<{
       discriminator: `${input.discriminator}:policy`,
       step: 'policy',
       parent,
-      data: { decision: input.decision, policyHash: input.policyHash, subjectHash: input.subjectHash }
+      data: {
+        decision: input.decision,
+        policyHash: input.policyHash,
+        subjectHash: input.subjectHash
+      }
     }),
     projectSpan({
       runId: input.runId,
@@ -510,7 +599,14 @@ function projectApprovalDecision(
     kind: 'approval_decision',
     discriminator: `${input.approvalSubjectId}:${input.entryId}:${input.version}`,
     step: 'approval',
-    parent: { type: 'if_present', spanId: traceSpanId(input.runId, 'approval_requirement', `${input.approvalSubjectId}:${input.entryId}`) },
+    parent: {
+      type: 'if_present',
+      spanId: traceSpanId(
+        input.runId,
+        'approval_requirement',
+        `${input.approvalSubjectId}:${input.entryId}`
+      )
+    },
     data: {
       subjectHash: input.subjectHash,
       entryId: input.entryId,
@@ -522,10 +618,13 @@ function projectApprovalDecision(
 }
 
 /** Projects the failed attempt and terminal failure spans with the same parent fallback order as the workflow. */
-function projectFailure(input: Extract<WorkflowTraceProjectionInput, { type: 'failed' }>): WorkflowTraceProjection {
+function projectFailure(
+  input: Extract<WorkflowTraceProjectionInput, { type: 'failed' }>
+): WorkflowTraceProjection {
   const reasonCode = failureReasonCode(input.reason);
   const operation = failureOperations[reasonCode];
-  const attemptKind: 'strategy_attempt' | 'specialist_attempt' = operation === 'strategy' ? 'strategy_attempt' : 'specialist_attempt';
+  const attemptKind: 'strategy_attempt' | 'specialist_attempt' =
+    operation === 'strategy' ? 'strategy_attempt' : 'specialist_attempt';
   const attemptSpan = projectSpan({
     runId: input.runId,
     kind: attemptKind,

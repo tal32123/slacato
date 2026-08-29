@@ -1,6 +1,6 @@
-import type { Citation, Claim, DealBrief } from './schema.js';
 import { DomainValidationError } from '../shared/errors.js';
 import type { EvidenceId } from '../shared/ids.js';
+import type { Citation, Claim, DealBrief } from './schema.js';
 
 /** Immutable evidence references retained across every claim-bearing DealBrief section. */
 export type DealBriefReferences = Readonly<{
@@ -17,14 +17,13 @@ function compareIdentifiers(left: string, right: string): number {
 
 /** Determines whether two occurrences preserve the immutable evidence and locator binding. */
 function citationsHaveSameBinding(left: Citation, right: Citation): boolean {
-  return left.id === right.id
-    && left.evidenceId === right.evidenceId
-    && left.locator === right.locator;
+  return (
+    left.id === right.id && left.evidenceId === right.evidenceId && left.locator === right.locator
+  );
 }
 
 /**
- * Collects deterministic citation and evidence references through all nine DealBrief sections.
- * Repeated identical citations are retained once; conflicting uses of a citation ID are invalid.
+ * Collects deterministic DealBrief citation and evidence references while rejecting conflicting uses of a citation ID.
  */
 export function collectDealBriefReferences(brief: DealBrief): DealBriefReferences {
   const citationsById = new Map<Citation['id'], Citation>();
@@ -35,13 +34,13 @@ export function collectDealBriefReferences(brief: DealBrief): DealBriefReference
     if (claims === undefined) return;
     for (const claim of claims) {
       for (const citation of claim.citations) {
+        const existing = citationsById.get(citation.id);
         if (existing !== undefined && !citationsHaveSameBinding(existing, citation)) {
-        if (existing !== undefined && !citationsAreIdentical(existing, citation)) {
           throw new DomainValidationError('A citation ID is bound to conflicting evidence', {
             citationId: citation.id
           });
         }
-        citationsById.set(citation.id, citation);
+        if (existing === undefined) citationsById.set(citation.id, citation);
         evidenceIds.add(citation.evidenceId);
       }
     }

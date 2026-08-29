@@ -3,17 +3,31 @@ import type { Sql, TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../db/client.js';
 
 type ProfileRow = Readonly<{
-  provider: string; model: string; dimension: number; profile: string; version: string; normalization: string;
+  provider: string;
+  model: string;
+  dimension: number;
+  profile: string;
+  version: string;
+  normalization: string;
 }>;
 type ChunkRow = Readonly<{ id: string; content: string }>;
 type PreparedChunk = ChunkRow & Readonly<{ embedding: readonly number[] }>;
 type SqlExecutor = Sql | TransactionSql;
 
 /** Formats an embedding for PostgreSQL vector storage. */
-function vectorLiteral(values: readonly number[]): string { return `[${values.join(',')}]`; }
+function vectorLiteral(values: readonly number[]): string {
+  return `[${values.join(',')}]`;
+}
 /** Produces a stable identity for an embedding profile. */
 function profileKey(profile: EmbeddingProfile): string {
-  return [profile.provider, profile.model, profile.dimension, profile.profile, profile.version, profile.normalization].join('\u001f');
+  return [
+    profile.provider,
+    profile.model,
+    profile.dimension,
+    profile.profile,
+    profile.version,
+    profile.normalization
+  ].join('\u001f');
 }
 
 export type EmbeddingIndexResult = Readonly<{ indexed: number; skipped: number; batches: number }>;
@@ -36,12 +50,24 @@ export class EmbeddingIndexer {
   ) {
     this.batchSize = options.batchSize ?? 32;
     this.corpus = options.corpus;
-    if (!Number.isInteger(this.batchSize) || this.batchSize <= 0 || this.batchSize > 256) throw new Error('Embedding batch size must be between 1 and 256');
-    if (!Number.isInteger(profile.dimension) || profile.dimension <= 0) throw new Error('Embedding profile dimension must be positive');
-    for (const value of [profile.provider, profile.model, profile.profile, profile.version, profile.normalization]) {
+    if (!Number.isInteger(this.batchSize) || this.batchSize <= 0 || this.batchSize > 256)
+      throw new Error('Embedding batch size must be between 1 and 256');
+    if (!Number.isInteger(profile.dimension) || profile.dimension <= 0)
+      throw new Error('Embedding profile dimension must be positive');
+    for (const value of [
+      profile.provider,
+      profile.model,
+      profile.profile,
+      profile.version,
+      profile.normalization
+    ]) {
       if (value.trim().length === 0) throw new Error('Embedding profile fields must not be empty');
     }
-    if (this.corpus !== undefined && (this.corpus.sourceLocatorPrefixes.length === 0 || this.corpus.sourceLocatorPrefixes.some((prefix) => prefix.length === 0))) {
+    if (
+      this.corpus !== undefined &&
+      (this.corpus.sourceLocatorPrefixes.length === 0 ||
+        this.corpus.sourceLocatorPrefixes.some((prefix) => prefix.length === 0))
+    ) {
       throw new Error('Embedding corpus locator prefixes must not be empty');
     }
   }
@@ -53,7 +79,8 @@ export class EmbeddingIndexer {
     let batches = 0;
     let cursor: string | undefined;
     while (true) {
-      const cursorPredicate = cursor === undefined ? this.database.sql`` : this.database.sql`and evidence.id > ${cursor}`;
+      const cursorPredicate =
+        cursor === undefined ? this.database.sql`` : this.database.sql`and evidence.id > ${cursor}`;
       const chunks = await this.database.sql<ChunkRow[]>`
         select evidence.id, evidence.content from evidence_versions evidence
         join document_versions document on document.id = evidence.document_version_id
@@ -62,11 +89,18 @@ export class EmbeddingIndexer {
       `;
       if (chunks.length === 0) break;
       const embeddings = await this.gateway.embed(chunks.map((chunk) => chunk.content));
-      if (embeddings.length !== chunks.length) throw new Error('Embedding provider returned the wrong batch cardinality');
-      embeddings.forEach((embedding, index) => this.assertEmbedding(embedding, chunks[index]!.id));
-      prepared.push(...chunks.map((chunk, index) => ({ ...chunk, embedding: embeddings[index]! })));
+      if (embeddings.length !== chunks.length)
+        throw new Error('Embedding provider returned the wrong batch cardinality');
+      for (let index = 0; index < chunks.length; index += 1) {
+        const chunk = chunks[index];
+        const embedding = embeddings[index];
+        if (chunk === undefined || embedding === undefined)
+          throw new Error('Embedding provider returned the wrong batch cardinality');
+        this.assertEmbedding(embedding, chunk.id);
+        prepared.push({ ...chunk, embedding });
+        cursor = chunk.id;
+      }
       batches += 1;
-      cursor = chunks[chunks.length - 1]!.id;
     }
 
     const preparedIds = new Set(prepared.map((chunk) => chunk.id));
@@ -99,7 +133,8 @@ export class EmbeddingIndexer {
         from evidence_versions evidence join document_versions document on document.id = evidence.document_version_id
         where true ${this.corpusPredicate(transaction)}
       `;
-      if ((totals[0]?.pending ?? 0) !== 0) throw new Error('Evidence corpus changed while embeddings were activated; rerun indexing');
+      if ((totals[0]?.pending ?? 0) !== 0)
+        throw new Error('Evidence corpus changed while embeddings were activated; rerun indexing');
       await this.assertCompatibleCorpus(transaction);
       return { indexed, skipped: (totals[0]?.total ?? 0) - indexed, batches };
     });
@@ -113,7 +148,8 @@ export class EmbeddingIndexer {
         join document_versions document on document.id = evidence.document_version_id
         where ${this.corpusCandidatePredicate(sql)} and not (${this.completeProvenancePredicate(sql)})
       `;
-      if ((incomplete[0]?.count ?? 0) > 0) throw new Error('Canonical embedding corpus provenance is incomplete');
+      if ((incomplete[0]?.count ?? 0) > 0)
+        throw new Error('Canonical embedding corpus provenance is incomplete');
     }
     const existing = await sql<ProfileRow[]>`
       select distinct embedding_provider as provider, embedding_model as model, embedding_dimension as dimension,
@@ -122,7 +158,9 @@ export class EmbeddingIndexer {
       where evidence.embedding is not null ${this.corpusPredicate(sql)}
     `;
     if (existing.some((entry) => profileKey(entry) !== profileKey(this.profile))) {
-      throw new Error('Refusing mixed embedding profiles; re-embedding requires an explicit deployment migration');
+      throw new Error(
+        'Refusing mixed embedding profiles; re-embedding requires an explicit deployment migration'
+      );
     }
   }
 
@@ -154,12 +192,17 @@ export class EmbeddingIndexer {
 
   /** Rejects provider embeddings that cannot safely join the active search index. */
   private assertEmbedding(embedding: readonly number[], evidenceId: string): void {
-    if (embedding.length !== this.profile.dimension) throw new Error(`Embedding dimension mismatch for ${evidenceId}`);
-    const norm = Math.sqrt(embedding.reduce((sum, value) => {
-      if (!Number.isFinite(value)) throw new Error(`Non-finite embedding value for ${evidenceId}`);
-      return sum + value * value;
-    }, 0));
+    if (embedding.length !== this.profile.dimension)
+      throw new Error(`Embedding dimension mismatch for ${evidenceId}`);
+    const norm = Math.sqrt(
+      embedding.reduce((sum, value) => {
+        if (!Number.isFinite(value))
+          throw new Error(`Non-finite embedding value for ${evidenceId}`);
+        return sum + value * value;
+      }, 0)
+    );
     if (norm === 0) throw new Error(`Zero embedding returned for ${evidenceId}`);
-    if (this.profile.normalization === 'l2' && Math.abs(norm - 1) > 0.001) throw new Error(`Embedding is not unit normalized for ${evidenceId}`);
+    if (this.profile.normalization === 'l2' && Math.abs(norm - 1) > 0.001)
+      throw new Error(`Embedding is not unit normalized for ${evidenceId}`);
   }
 }

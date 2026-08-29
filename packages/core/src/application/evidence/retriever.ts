@@ -1,4 +1,7 @@
-import { AUTHORIZED_SOURCE_TYPES, type AuthorizedSourceType } from '../../domain/permissions/authorize.js';
+import {
+  AUTHORIZED_SOURCE_TYPES,
+  type AuthorizedSourceType
+} from '../../domain/permissions/authorize.js';
 import type { EvidencePlan } from './contracts.js';
 
 const DEFAULT_CONTEXT_CHARACTERS = 24_000;
@@ -12,30 +15,65 @@ const RELIABILITY_ADJUSTMENTS: Readonly<Record<string, number>> = Object.freeze(
 });
 
 /** Produces the versioned, provider-independent retrieval recipe hashed into each manifest. */
-export function buildEvidencePlan(input: Readonly<{ query: string; limit: number; maxContextCharacters?: number }>): EvidencePlan {
+export function buildEvidencePlan(
+  input: Readonly<{ query: string; limit: number; maxContextCharacters?: number }>
+): EvidencePlan {
   const query = input.query.trim();
   if (query.length === 0) throw new Error('Retrieval query must not be empty');
-  if (!Number.isInteger(input.limit) || input.limit <= 0 || input.limit > 100) throw new Error('Retrieval limit must be between 1 and 100');
+  if (!Number.isInteger(input.limit) || input.limit <= 0 || input.limit > 100)
+    throw new Error('Retrieval limit must be between 1 and 100');
   const maxContextCharacters = input.maxContextCharacters ?? DEFAULT_CONTEXT_CHARACTERS;
-  if (!Number.isInteger(maxContextCharacters) || maxContextCharacters <= 0) throw new Error('Context character budget must be positive');
+  if (!Number.isInteger(maxContextCharacters) || maxContextCharacters <= 0)
+    throw new Error('Context character budget must be positive');
   return {
     query,
     fusionK: 60,
     exactLookups: ['account', 'opportunity', 'contacts'],
     sectionQueries: [
-      { section: 'deal_snapshot', query: 'stage value close date renewal term next step', sourceTypes: ['salesforce'] },
-      { section: 'buyer_goals', query: 'buyer goals business drivers outcomes', sourceTypes: ['gong_summary', 'gong_transcript', 'slack'] },
-      { section: 'stakeholders', query: 'stakeholder role influence decision approval', sourceTypes: ['salesforce', 'gong_summary', 'gong_transcript', 'slack'] },
-      { section: 'negotiation_state', query: 'negotiation objection discount legal commercial risk', sourceTypes: ['gong_summary', 'gong_transcript', 'pricing', 'slack'] },
-      { section: 'next_actions', query: 'next action owner deadline commitment', sourceTypes: [...AUTHORIZED_SOURCE_TYPES] },
-      { section: 'missing_information', query: 'missing unclear unresolved pending gap', sourceTypes: [...AUTHORIZED_SOURCE_TYPES] }
+      {
+        section: 'deal_snapshot',
+        query: 'stage value close date renewal term next step',
+        sourceTypes: ['salesforce']
+      },
+      {
+        section: 'buyer_goals',
+        query: 'buyer goals business drivers outcomes',
+        sourceTypes: ['gong_summary', 'gong_transcript', 'slack']
+      },
+      {
+        section: 'stakeholders',
+        query: 'stakeholder role influence decision approval',
+        sourceTypes: ['salesforce', 'gong_summary', 'gong_transcript', 'slack']
+      },
+      {
+        section: 'negotiation_state',
+        query: 'negotiation objection discount legal commercial risk',
+        sourceTypes: ['gong_summary', 'gong_transcript', 'pricing', 'slack']
+      },
+      {
+        section: 'next_actions',
+        query: 'next action owner deadline commitment',
+        sourceTypes: [...AUTHORIZED_SOURCE_TYPES]
+      },
+      {
+        section: 'missing_information',
+        query: 'missing unclear unresolved pending gap',
+        sourceTypes: [...AUTHORIZED_SOURCE_TYPES]
+      }
     ],
     sourceLimits: {
-      gong_summary: Math.min(input.limit, 2), gong_transcript: input.limit, policy: 1,
-      pricing: Math.min(input.limit, 2), salesforce: CANONICAL_CRM_RECORD_LIMIT, slack: Math.min(input.limit, 2)
+      gong_summary: Math.min(input.limit, 2),
+      gong_transcript: input.limit,
+      policy: 1,
+      pricing: Math.min(input.limit, 2),
+      salesforce: CANONICAL_CRM_RECORD_LIMIT,
+      slack: Math.min(input.limit, 2)
     },
     mandatorySourceTypes: ['policy'],
-    policyReservation: { resultSlots: 1, contextCharacters: Math.max(1, Math.min(512, Math.ceil(maxContextCharacters * 0.25))) },
+    policyReservation: {
+      resultSlots: 1,
+      contextCharacters: Math.max(1, Math.min(512, Math.ceil(maxContextCharacters * 0.25)))
+    },
     maxContextCharacters
   };
 }
@@ -49,10 +87,18 @@ export type AdjustmentInput = Readonly<{
 }>;
 
 /** Adjusts fused evidence scores with capped reliability and recency signals while exempting policy from age penalties. */
-export function applyEvidenceAdjustments(input: AdjustmentInput, now = new Date()): Readonly<{
-  score: number; reliabilityAdjustment: number; recencyAdjustment: number;
+export function applyEvidenceAdjustments(
+  input: AdjustmentInput,
+  now = new Date()
+): Readonly<{
+  score: number;
+  reliabilityAdjustment: number;
+  recencyAdjustment: number;
 }> {
-  const reliabilityAdjustment = Math.max(0, Math.min(0.02, RELIABILITY_ADJUSTMENTS[input.reliabilityClass] ?? 0));
+  const reliabilityAdjustment = Math.max(
+    0,
+    Math.min(0.02, RELIABILITY_ADJUSTMENTS[input.reliabilityClass] ?? 0)
+  );
   let recencyAdjustment = 0;
   if (input.sourceType !== 'policy' && input.eventDate !== undefined) {
     const eventTime = Date.parse(`${input.eventDate}T00:00:00.000Z`);
@@ -61,5 +107,9 @@ export function applyEvidenceAdjustments(input: AdjustmentInput, now = new Date(
       recencyAdjustment = Math.max(-0.02, Math.min(0.02, 0.02 - (ageDays / 365) * 0.04));
     }
   }
-  return { score: input.fusionScore + reliabilityAdjustment + recencyAdjustment, reliabilityAdjustment, recencyAdjustment };
+  return {
+    score: input.fusionScore + reliabilityAdjustment + recencyAdjustment,
+    reliabilityAdjustment,
+    recencyAdjustment
+  };
 }

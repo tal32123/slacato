@@ -1,25 +1,25 @@
 import { createHash } from 'node:crypto';
 import {
-  CommercialAgent,
-  ConversationAgent,
-  StrategyAgent,
-  StakeholderAgent,
-  authorizeOpportunity,
-  createEvidenceScopeBinding,
-  dealBriefSchema,
-  hashEvidenceScopeBinding,
   type AgentContext,
   type ApprovalRequirementInput,
+  authorizeOpportunity,
+  CommercialAgent,
   type CommercialArtifact,
+  ConversationAgent,
   type ConversationArtifact,
+  createEvidenceScopeBinding,
   type DealBrief,
   type DealBriefRetrievalContext,
   type DealBriefWorkflowServices,
+  dealBriefSchema,
+  hashEvidenceScopeBinding,
+  StakeholderAgent,
   type StakeholderArtifact,
+  StrategyAgent,
   type WorkflowRun
 } from '@slacato/core';
-import {
-  type ConfiguredModelGateways,
+import type {
+  ConfiguredModelGateways,
   PostgresDealBriefPolicyFacts
 } from '@slacato/infrastructure';
 import type { DealBriefContextRepository } from './postgres-deal-brief-context.repository.js';
@@ -32,24 +32,19 @@ type AgentOperation =
   | 'negotiation-strategy';
 
 /** Requires every durable field needed to construct a provider-neutral agent context. */
-function requireDurableDealBriefContext(context: DealBriefRetrievalContext): DurableDealBriefContext {
-  const {
-    runId,
-    account,
-    opportunity,
-    manifest,
-    currentScope,
-    manifestEntries,
-    evidence
-  } = context;
+function requireDurableDealBriefContext(
+  context: DealBriefRetrievalContext
+): DurableDealBriefContext {
+  const { runId, account, opportunity, manifest, currentScope, manifestEntries, evidence } =
+    context;
   if (
-    runId === undefined
-    || account === undefined
-    || opportunity === undefined
-    || manifest === undefined
-    || currentScope === undefined
-    || manifestEntries === undefined
-    || evidence === undefined
+    runId === undefined ||
+    account === undefined ||
+    opportunity === undefined ||
+    manifest === undefined ||
+    currentScope === undefined ||
+    manifestEntries === undefined ||
+    evidence === undefined
   ) {
     throw new Error('Durable deal brief context is incomplete');
   }
@@ -66,7 +61,10 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
   ) {}
 
   /** Retrieves authorized evidence and composes the durable context shared by every specialist. */
-  public async retrieve(run: WorkflowRun, invocationId: string): Promise<DealBriefRetrievalContext> {
+  public async retrieve(
+    run: WorkflowRun,
+    invocationId: string
+  ): Promise<DealBriefRetrievalContext> {
     this.assertPersistedModelMatchesConfiguration(run);
     const opportunity = await this.contextRepository.findAuthorizedOpportunity(
       run.requestedBy,
@@ -74,7 +72,10 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
     );
     if (opportunity === undefined) throw new Error('Authorized opportunity context is unavailable');
 
-    const grants = await this.contextRepository.readPermissionGrants(run.requestedBy, opportunity.accountId);
+    const grants = await this.contextRepository.readPermissionGrants(
+      run.requestedBy,
+      opportunity.accountId
+    );
     const authorization = authorizeOpportunity(
       { userId: run.requestedBy, grants },
       { accountId: opportunity.accountId, restricted: opportunity.restricted }
@@ -100,17 +101,23 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
       budget
     });
     const currentScope = { ...authorization, personaId: run.requestedBy };
-    const result = await this.contextRepository.retrieveEvidence({
-      query: `${opportunity.opportunityName} negotiation commercial terms stakeholders`,
-      accountId: opportunity.accountId,
-      opportunityId: run.opportunityId,
-      runId: run.id,
-      scope: currentScope,
-      limit: 20,
-      maxContextCharacters: 60_000
-    }, embeddingGateway, profile);
+    const result = await this.contextRepository.retrieveEvidence(
+      {
+        query: `${opportunity.opportunityName} negotiation commercial terms stakeholders`,
+        accountId: opportunity.accountId,
+        opportunityId: run.opportunityId,
+        runId: run.id,
+        scope: currentScope,
+        limit: 20,
+        maxContextCharacters: 60_000
+      },
+      embeddingGateway,
+      profile
+    );
     if (!result.evidence.some((record) => record.evidenceId === opportunity.stageEvidenceId)) {
-      throw new Error('Canonical Salesforce opportunity stage evidence is absent from the run manifest');
+      throw new Error(
+        'Canonical Salesforce opportunity stage evidence is absent from the run manifest'
+      );
     }
 
     const evidence = result.evidence.map((record) => ({
@@ -277,17 +284,22 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
       run.opportunityId
     );
     if (
-      opportunity === undefined
-      || durableContext.account.id !== opportunity.accountId
-      || durableContext.opportunity.id !== run.opportunityId
-      || durableContext.opportunity.name !== opportunity.opportunityName
-      || durableContext.opportunity.stage !== opportunity.stage
-      || !durableContext.manifestEntries.some((entry) => entry.evidenceId === opportunity.stageEvidenceId)
+      opportunity === undefined ||
+      durableContext.account.id !== opportunity.accountId ||
+      durableContext.opportunity.id !== run.opportunityId ||
+      durableContext.opportunity.name !== opportunity.opportunityName ||
+      durableContext.opportunity.stage !== opportunity.stage ||
+      !durableContext.manifestEntries.some(
+        (entry) => entry.evidenceId === opportunity.stageEvidenceId
+      )
     ) {
       throw new Error('Current opportunity authorization is unavailable');
     }
 
-    const grants = await this.contextRepository.readPermissionGrants(run.requestedBy, opportunity.accountId);
+    const grants = await this.contextRepository.readPermissionGrants(
+      run.requestedBy,
+      opportunity.accountId
+    );
     const authorization = authorizeOpportunity(
       { userId: run.requestedBy, grants },
       { accountId: opportunity.accountId, restricted: opportunity.restricted }
@@ -297,19 +309,23 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
     }
 
     const currentScope = { ...authorization, personaId: run.requestedBy };
-    const scopeHash = hashEvidenceScopeBinding(createEvidenceScopeBinding({
-      accountId: opportunity.accountId,
-      opportunityId: run.opportunityId
-    }, currentScope));
-    const evidenceOutsideCurrentScope = durableContext.evidence.some((record) => (
-      !currentScope.sourceTypes.includes(record.sourceType)
-      || (
-        record.sourceType === 'pricing'
-        && record.sensitivity === 'sensitive'
-        && !currentScope.canViewSensitivePricing
+    const scopeHash = hashEvidenceScopeBinding(
+      createEvidenceScopeBinding(
+        {
+          accountId: opportunity.accountId,
+          opportunityId: run.opportunityId
+        },
+        currentScope
       )
-      || (opportunity.restricted && !currentScope.canViewRestrictedAccounts)
-    ));
+    );
+    const evidenceOutsideCurrentScope = durableContext.evidence.some(
+      (record) =>
+        !currentScope.sourceTypes.includes(record.sourceType) ||
+        (record.sourceType === 'pricing' &&
+          record.sensitivity === 'sensitive' &&
+          !currentScope.canViewSensitivePricing) ||
+        (opportunity.restricted && !currentScope.canViewRestrictedAccounts)
+    );
     if (scopeHash !== durableContext.manifest.scopeHash || evidenceOutsideCurrentScope) {
       throw new Error('Evidence authorization changed before generation');
     }
@@ -327,8 +343,8 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
   private assertPersistedModelMatchesConfiguration(run: WorkflowRun): void {
     const configured = this.gateways.registry.resolve('brief');
     if (
-      run.generationProvider !== this.gateways.provider
-      || run.generationModel !== configured.modelId
+      run.generationProvider !== this.gateways.provider ||
+      run.generationModel !== configured.modelId
     ) {
       throw new Error('Persisted run model identity does not match worker configuration');
     }

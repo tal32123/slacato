@@ -1,4 +1,4 @@
-import { DynamicModule, Module } from '@nestjs/common';
+import { type DynamicModule, Module } from '@nestjs/common';
 import { DEALS_OPTIONS, type DealsModuleOptions } from './contracts.js';
 import { DealsController } from './deals.controller.js';
 import { DealsService } from './deals.service.js';
@@ -11,10 +11,7 @@ export class DealsModule {
     return {
       module: DealsModule,
       controllers: [DealsController],
-      providers: [
-        { provide: DEALS_OPTIONS, useValue: options },
-        DealsService
-      ]
+      providers: [{ provide: DEALS_OPTIONS, useValue: options }, DealsService]
     };
   }
 }

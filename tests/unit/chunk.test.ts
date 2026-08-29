@@ -37,7 +37,8 @@ describe('deterministic evidence chunking', () => {
 
   it('uses overlapping speaker windows without changing stable IDs', () => {
     const turns = Array.from({ length: 9 }, (_, index) => `Speaker ${index + 1}: Turn ${index + 1}`).join('\n\n');
-    const document: EvidenceDocument = { ...base, content: `# Transcript\n\n${turns}` };
+    const transcriptHeader = '# Transcript\n\n**Opportunity:** OPP-1001\n**Account:** ACC-2001\n**Date:** 2026-03-11\n**Source access level:** standard';
+    const document: EvidenceDocument = { ...base, content: `${transcriptHeader}\n\n${turns}` };
 
     const first = chunkDocument(document);
     const second = chunkDocument(document);
@@ -47,24 +48,22 @@ describe('deterministic evidence chunking', () => {
       'gong_transcript:CALL-001:0',
       'gong_transcript:CALL-001:1'
     ]);
+    expect(first.map((chunk) => chunk.content.startsWith(`${transcriptHeader}\n\n`))).toEqual([true, true]);
     expect(first[0]?.content).toContain('Speaker 6: Turn 6');
     expect(first[1]?.content).toContain('Speaker 6: Turn 6');
   });
 
-  it('chunks policy Markdown at headings', () => {
+  it('keeps policy Markdown as one complete chunk', () => {
+    const policyMarkdown = '# Policy\nIntro\n\n## Approval Rules\n1. Approval is required.\n\n## Access Rules\n1. Deny by default.';
     const chunks = chunkDocument({
       ...base,
       sourceType: 'policy',
       externalId: 'deal-desk-policy',
       reliability: 'authoritative_policy',
-      content: '# Policy\nIntro\n\n## Approval Rules\n1. Approval is required.\n\n## Access Rules\n1. Deny by default.'
+      content: policyMarkdown
     });
 
-    expect(chunks.map((chunk) => chunk.content)).toEqual([
-      '# Policy\nIntro',
-      '## Approval Rules\n1. Approval is required.',
-      '## Access Rules\n1. Deny by default.'
-    ]);
+    expect(chunks.map((chunk) => chunk.content)).toEqual([policyMarkdown]);
   });
 
   it('builds classified canonical documents without embeddings', () => {
@@ -74,8 +73,17 @@ describe('deterministic evidence chunking', () => {
 
     expect(documents).toHaveLength(74);
     expect(pricing).toHaveLength(5);
-    expect(pricing.every((document) => document.accessLevel === 'restricted')).toBe(true);
-    expect(pricing.every((document) => document.classificationReason === 'policy_sensitive_pricing')).toBe(true);
+    expect(pricing.map(({ externalId, accessLevel, classificationReason }) => ({
+      externalId,
+      accessLevel,
+      classificationReason
+    }))).toEqual([
+      { externalId: 'PN-4001', accessLevel: 'standard', classificationReason: 'policy_non_sensitive_pricing' },
+      { externalId: 'PN-4002', accessLevel: 'standard', classificationReason: 'policy_non_sensitive_pricing' },
+      { externalId: 'PN-4003', accessLevel: 'standard', classificationReason: 'policy_non_sensitive_pricing' },
+      { externalId: 'PN-4004', accessLevel: 'restricted', classificationReason: 'policy_sensitive_pricing' },
+      { externalId: 'PN-4005', accessLevel: 'restricted', classificationReason: 'policy_sensitive_pricing' }
+    ]);
     expect(documents.every((document) => document.policyHash === fixtures.policy.contentHash)).toBe(true);
     expect(documents.every((document) => document.opportunityId !== undefined)).toBe(true);
     expect(JSON.stringify(documents)).not.toContain('embedding');

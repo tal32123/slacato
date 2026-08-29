@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 import { fetchDeals, fetchDealWorkspace } from '@/api/client';
-import { queryKeys, sessionRuntime, SessionInvalidatedError } from '@/api/session';
+import { queryKeys, SessionInvalidatedError, sessionRuntime } from '@/api/session';
 
 /** Defines session-aware loading for the deals visible to the active persona. */
 export const dealsQueryOptions = (version: string) => {

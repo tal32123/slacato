@@ -9,12 +9,15 @@ import { DiagnosticsService } from './diagnostics.service.js';
 /** Exposes authenticated operational diagnostics for the current principal. */
 @Controller('api/diagnostics')
 export class DiagnosticsController {
+  /** Initializes the controller with its diagnostics service. */
   public constructor(private readonly diagnostics: DiagnosticsService) {}
 
   /** Returns runtime health and approval authority diagnostics visible to the current principal. */
   @Get()
   @ZodResponse(demoDiagnosticsResponseSchema)
-  public view(@CurrentPrincipal() principal: AuthenticatedPrincipal): Promise<DemoDiagnosticsResponse> {
+  public view(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal
+  ): Promise<DemoDiagnosticsResponse> {
     return this.diagnostics.view(principal);
   }
 }

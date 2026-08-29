@@ -1,11 +1,17 @@
 import 'reflect-metadata';
+import type { DynamicModule } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ProcessDealBriefStep } from '@slacato/core';
 import {
   BullMqCommandQueue,
+  type ConfiguredModelGateways,
   createConfiguredModelGateways,
   createDatabaseClient,
+  type DatabaseClient,
+  type Env,
   loadRuntimeEnv,
+  type MockGenerationResolver,
+  type OllamaCapabilities,
   OutboxDispatcher,
   OutboxDispatcherLoop,
   PostgresCommandReconciler,
@@ -13,14 +19,8 @@ import {
   PostgresProviderAttemptLedger,
   PostgresWorkflowStore,
   ReconcilerLoop,
-  WORKFLOW_DEAD_LETTER_QUEUE_NAME,
-  type ConfiguredModelGateways,
-  type DatabaseClient,
-  type Env,
-  type MockGenerationResolver,
-  type OllamaCapabilities
+  WORKFLOW_DEAD_LETTER_QUEUE_NAME
 } from '@slacato/infrastructure';
-import type { DynamicModule } from '@nestjs/common';
 import { DealBriefProcessor } from './processors/deal-brief.processor.js';
 import { PostgresDealBriefContextRepository } from './processors/postgres-deal-brief-context.repository.js';
 import { PostgresDealBriefWorkflowServices } from './processors/postgres-deal-brief-workflow-services.js';
@@ -31,37 +31,64 @@ export interface WorkerApplicationOptions {
   modelGateway?: WorkerModelGatewayOptions;
 }
 
-export type WorkerModelGatewayOptions = Readonly<{ mockFixtureResolver?: MockGenerationResolver; ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'> }>;
+export type WorkerModelGatewayOptions = Readonly<{
+  mockFixtureResolver?: MockGenerationResolver;
+  ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'>;
+}>;
 
 /** Creates the model gateways used by the worker for its configured AI provider. */
 export class WorkerModelGatewayFactory {
   /** Initializes the factory with validated runtime configuration and the provider-attempt ledger. */
-  public constructor(private readonly environment: Env, private readonly attemptLedger: PostgresProviderAttemptLedger) {}
+  public constructor(
+    private readonly environment: Env,
+    private readonly attemptLedger: PostgresProviderAttemptLedger
+  ) {}
 
   /** Builds model gateways for the configured provider and applies any worker-specific overrides. */
   public create(options: WorkerModelGatewayOptions = {}): ConfiguredModelGateways {
     if (this.environment.AI_PROVIDER === 'mock') {
-      if (options.mockFixtureResolver === undefined) throw new Error('Worker mock model composition requires a fixture resolver');
-      return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger, mock: { resolve: options.mockFixtureResolver } });
+      if (options.mockFixtureResolver === undefined)
+        throw new Error('Worker mock model composition requires a fixture resolver');
+      return createConfiguredModelGateways(this.environment, {
+        attemptLedger: this.attemptLedger,
+        mock: { resolve: options.mockFixtureResolver }
+      });
     }
     if (this.environment.AI_PROVIDER === 'ollama') {
-      return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger, ...(options.ollamaCapabilities === undefined ? {} : { ollamaCapabilities: options.ollamaCapabilities }) });
+      return createConfiguredModelGateways(this.environment, {
+        attemptLedger: this.attemptLedger,
+        ...(options.ollamaCapabilities === undefined
+          ? {}
+          : { ollamaCapabilities: options.ollamaCapabilities })
+      });
     }
     return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger });
   }
 }
 
 /** Creates the worker module with a model gateway factory backed by the worker database. */
-export function createWorkerCompositionModule(environment: Env, database: DatabaseClient): DynamicModule {
-  const factory = new WorkerModelGatewayFactory(environment, new PostgresProviderAttemptLedger(database));
-  return { module: WorkerModule, providers: [{ provide: WorkerModelGatewayFactory, useValue: factory }], exports: [WorkerModelGatewayFactory] };
+export function createWorkerCompositionModule(
+  environment: Env,
+  database: DatabaseClient
+): DynamicModule {
+  const factory = new WorkerModelGatewayFactory(
+    environment,
+    new PostgresProviderAttemptLedger(database)
+  );
+  return {
+    module: WorkerModule,
+    providers: [{ provide: WorkerModelGatewayFactory, useValue: factory }],
+    exports: [WorkerModelGatewayFactory]
+  };
 }
 
 /** Creates the worker context only after server-only configuration has validated successfully. */
 export async function createWorkerApplication(options: WorkerApplicationOptions = {}) {
   const environment = loadRuntimeEnv(options.environment ?? process.env);
   const database = createDatabaseClient(environment.DATABASE_URL, 10);
-  const app = await NestFactory.createApplicationContext(createWorkerCompositionModule(environment, database));
+  const app = await NestFactory.createApplicationContext(
+    createWorkerCompositionModule(environment, database)
+  );
   const gateways = app.get(WorkerModelGatewayFactory).create(options.modelGateway);
   const workflowStore = new PostgresWorkflowStore(database);
   const contextRepository = new PostgresDealBriefContextRepository(database);
@@ -81,10 +108,17 @@ export async function createWorkerApplication(options: WorkerApplicationOptions 
     }
   );
   const commands = new BullMqCommandQueue(environment.REDIS_URL);
-  const deadLetters = new BullMqCommandQueue(environment.REDIS_URL, WORKFLOW_DEAD_LETTER_QUEUE_NAME);
+  const deadLetters = new BullMqCommandQueue(
+    environment.REDIS_URL,
+    WORKFLOW_DEAD_LETTER_QUEUE_NAME
+  );
   const dispatcher = new OutboxDispatcher(database, commands, deadLetters);
   const loop = new OutboxDispatcherLoop(dispatcher, 1_000, 25);
-  const reconciler = new ReconcilerLoop(new PostgresCommandReconciler(database, commands, deadLetters), 5_000, 25);
+  const reconciler = new ReconcilerLoop(
+    new PostgresCommandReconciler(database, commands, deadLetters),
+    5_000,
+    25
+  );
   loop.start();
   reconciler.start();
   /** Stops delivery loops and closes their shared resources in dependency order. */

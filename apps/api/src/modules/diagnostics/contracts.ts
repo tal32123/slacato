@@ -1,9 +1,11 @@
 import type { AccountApprovalAuthorityView, ProviderHealthView } from '@slacato/contracts';
 
-export type ProviderRuntimeDescriptor = Readonly<Pick<
-  ProviderHealthView,
-  'provider' | 'outputMode' | 'pinnedGenerationModel' | 'pinnedEmbeddingModel'
->>;
+export type ProviderRuntimeDescriptor = Readonly<
+  Pick<
+    ProviderHealthView,
+    'provider' | 'outputMode' | 'pinnedGenerationModel' | 'pinnedEmbeddingModel'
+  >
+>;
 
 /** Reads canonical, account-scoped approval authority without consulting session roles or evidence grants. */
 export interface ApprovalAuthorityQuery {
