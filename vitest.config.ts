@@ -8,7 +8,8 @@ export default defineConfig({
     { find: /^@slacato\/infrastructure\/(.+)$/, replacement: fileURLToPath(new URL('./packages/infrastructure/src/$1.ts', import.meta.url)) },
     { find: '@slacato/infrastructure', replacement: fileURLToPath(new URL('./packages/infrastructure/src/index.ts', import.meta.url)) },
     { find: '@slacato/api', replacement: fileURLToPath(new URL('./apps/api/src', import.meta.url)) },
-    { find: '@slacato/web', replacement: fileURLToPath(new URL('./apps/web/src', import.meta.url)) }
+    { find: '@slacato/web', replacement: fileURLToPath(new URL('./apps/web/src', import.meta.url)) },
+    { find: '@', replacement: fileURLToPath(new URL('./apps/web/src', import.meta.url)) }
   ] },
   test: { include: ['tests/**/*.test.ts'], environment: 'node' }
 });

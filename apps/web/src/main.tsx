@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { queryClient } from './api/session';
+import { AppErrorBoundary } from './components/app-error-boundary';
 import { DiagnosticsRoute, diagnosticsLoader } from './routes/diagnostics';
 import { DealRoute, dealLoader } from './routes/deal';
 import { DealsRoute, dealsLoader } from './routes/deals';
@@ -50,8 +51,10 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </AppErrorBoundary>
   </StrictMode>
 );

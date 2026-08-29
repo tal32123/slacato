@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "nest start --watch",
+    "dev": "SLACATO_BOOTSTRAP=1 concurrently --kill-others --names compile,serve \"tsc -b --watch --preserveWatchOutput\" \"node --watch dist/main.js\"",
     "build": "nest build",
-    "start": "node dist/src/main.js"
+    "start": "SLACATO_BOOTSTRAP=1 node dist/main.js"
   },
   "dependencies": {
     "@nestjs/bullmq": "12.0.0",
@@ -22,6 +22,7 @@
   "devDependencies": {
     "@nestjs/cli": "12.0.0",
     "@types/node": "^26.4.0",
+    "concurrently": "^9.2.1",
     "ts-node": "^10.9.2",
     "typescript": "5.9.3"
   }

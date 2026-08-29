@@ -1,5 +1,4 @@
 import 'reflect-metadata';
-import { pathToFileURL } from 'node:url';
 import { NestFactory } from '@nestjs/core';
 import { ProcessDealBriefStep } from '@slacato/core';
 import { BullMqCommandQueue, createConfiguredModelGateways, createDatabaseClient, loadRuntimeEnv, OutboxDispatcher, OutboxDispatcherLoop, PostgresCommandReconciler, PostgresProviderAttemptLedger, PostgresWorkflowStore, ReconcilerLoop, WORKFLOW_DEAD_LETTER_QUEUE_NAME, type ConfiguredModelGateways, type DatabaseClient, type Env, type MockGenerationResolver, type OllamaCapabilities } from '@slacato/infrastructure';
@@ -65,5 +64,4 @@ export async function bootstrap(options: WorkerApplicationOptions = {}) {
   return createWorkerApplication(options);
 }
 
-const entrypoint = process.argv[1];
-if (entrypoint && pathToFileURL(entrypoint).href === import.meta.url) void bootstrap();
+if (process.env.SLACATO_BOOTSTRAP === '1') void bootstrap();

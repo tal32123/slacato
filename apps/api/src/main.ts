@@ -1,5 +1,4 @@
 import 'reflect-metadata';
-import { pathToFileURL } from 'node:url';
 import { json } from 'express';
 import { HttpException, ValidationPipe } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
@@ -110,5 +109,4 @@ export async function bootstrap(options: ApiApplicationOptions = {}): Promise<Ne
   return app;
 }
 
-const entrypoint = process.argv[1];
-if (entrypoint && pathToFileURL(entrypoint).href === import.meta.url) void bootstrap();
+if (process.env.SLACATO_BOOTSTRAP === '1') void bootstrap();
