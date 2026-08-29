@@ -88,3 +88,33 @@ pnpm typecheck
 git diff --check
 # clean
 ```
+
+## Round-2 review hardening
+
+Focused RED proof reproduced all five review findings before production changes:
+
+```text
+pnpm vitest run tests/integration/workflow.test.ts tests/integration/workflow-production.test.ts
+# 2 files failed; 8 failed, 18 passed
+# recoverable production delivery remained stuck after the first retrieval failure
+# checkpoint persistence errors resolved/degraded/terminalized instead of rethrowing
+# exact regeneration and edited-decision replays failed
+# unrelated Legal plus Deal Desk decisions were incorrectly actor-distinct
+```
+
+The fix explicitly abandons recoverable invocation leases without consuming their causal commands; separates specialist service-call classification from checkpoint persistence; persists and atomically replays canonical regeneration requests; scopes distinct actors to the Deal Desk/Sales Leader commercial pair; and resolves authorized decision idempotency before superseded-subject staleness.
+
+Final round-2 focused evidence:
+
+```text
+pnpm vitest run tests/integration/workflow.test.ts tests/integration/workflow-production.test.ts
+# 2 files passed, 26 tests passed
+# production path proves a transient retrieval failure is reclaimed on BullMQ retry
+# production path proves exact regeneration and edit-and-approve HTTP replays
+
+pnpm typecheck
+# exit 0
+
+git diff --check
+# clean
+```

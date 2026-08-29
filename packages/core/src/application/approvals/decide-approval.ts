@@ -82,6 +82,20 @@ export class DecideApproval {
       await this.access.recordOpaqueDenial({ type: 'approval_decision_denied', actorId: input.actorId, reason: 'forbidden' });
       throw new AuthorizationDeniedError('Approval decision denied');
     }
+    const requestHash = hashApprovalPayload({
+      runId: input.runId, approvalSubjectId: input.approvalSubjectId, expectedRunVersion: input.expectedRunVersion,
+      expectedSubjectHash: input.expectedSubjectHash, entryId: input.entryId, category: input.category, authority: input.authority,
+      actorId: input.actorId, action: input.action, idempotencyKey: input.idempotencyKey,
+      rationale: input.rationale?.trim() ?? null, editedPayload: input.editedPayload ?? null
+    });
+    const replay = await this.store.findDecisionByIdempotencyKey({ idempotencyKey: input.idempotencyKey, requestHash });
+    if (replay !== undefined) {
+      return {
+        status: replay.rejected ? 'rejected' : replay.quorumSatisfied ? 'finalizing' : 'awaiting_approval',
+        runVersion: replay.run.version, approvalSubjectId: replay.approvalSubjectId, entryId: replay.entryId,
+        approvedSubjectHash: replay.approvedSubjectHash, quorumSatisfied: replay.quorumSatisfied, replayed: true
+      };
+    }
     const subject = await this.store.getApprovalSubject({ runId, approvalSubjectId: input.approvalSubjectId });
     if (subject === undefined || subject.supersededBySubjectId !== undefined) throw new DomainNotFoundError('approval subject');
     if (subject.subjectHash !== input.expectedSubjectHash) throw new DomainConflictError('Approval subject is stale');
@@ -91,11 +105,11 @@ export class DecideApproval {
 
     const alreadyApproved = new Set(subject.decisions.filter((decision) => decision.action !== 'reject').map((decision) => decision.entryId));
     if (entry.dependsOn.some((dependency) => !alreadyApproved.has(dependency))) throw new DomainConflictError('Underlying approval entries are incomplete');
-    const distinctCommercialQuorum = subject.entries.filter((candidate) => candidate.category === 'commercial_discount')
-      .some((candidate) => candidate.eligibleAuthorities.includes('deal_desk'))
-      && subject.entries.filter((candidate) => candidate.category === 'commercial_discount')
-        .some((candidate) => candidate.eligibleAuthorities.includes('sales_leader'));
-    if (distinctCommercialQuorum && subject.decisions.some((decision) => decision.actorId === input.actorId && decision.entryId !== entry.id)) {
+    const oppositeCommercialAuthority = input.authority === 'deal_desk' ? 'sales_leader'
+      : input.authority === 'sales_leader' ? 'deal_desk' : undefined;
+    if (entry.category === 'commercial_discount' && oppositeCommercialAuthority !== undefined
+      && subject.decisions.some((decision) => decision.category === 'commercial_discount'
+        && decision.authority === oppositeCommercialAuthority && decision.actorId === input.actorId)) {
       throw new AuthorizationDeniedError('Distinct approval actors are required for commercial quorum');
     }
 
@@ -113,12 +127,6 @@ export class DecideApproval {
       ? await this.access.validateApprovalEdit({ actorId: input.actorId, opportunityId: run.opportunityId, runId: run.id, payload: approvedPayload })
       : undefined;
 
-    const requestHash = hashApprovalPayload({
-      runId: input.runId, approvalSubjectId: input.approvalSubjectId, expectedRunVersion: input.expectedRunVersion,
-      expectedSubjectHash: input.expectedSubjectHash, entryId: input.entryId, category: input.category, authority: input.authority,
-      actorId: input.actorId, action: input.action, idempotencyKey: input.idempotencyKey,
-      rationale: input.rationale?.trim() ?? null, editedPayload: input.editedPayload ?? null
-    });
     const decidedAt = new Date().toISOString();
     const decision = {
       action: input.action,

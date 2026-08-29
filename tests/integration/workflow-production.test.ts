@@ -69,12 +69,17 @@ describe('production DealBrief seams', () => {
 
     const store = new PostgresWorkflowStore(database); const access = new PostgresDealBriefAccessControl(database);
     const strategyCalls = new Map<string, number>();
+    const retrievalCalls = new Map<string, number>();
     const services: DealBriefWorkflowServices = {
-      async retrieve() { return { manifestId: `manifest_${suffix}` }; },
+      async retrieve(run) {
+        const attempt = (retrievalCalls.get(run.id) ?? 0) + 1; retrievalCalls.set(run.id, attempt);
+        if (attempt === 1) throw new Error('transient retrieval failure');
+        return { manifestId: `manifest_${suffix}` };
+      },
       async conversation() { return { goals: [] }; }, async stakeholder() { return { stakeholders: [] }; }, async commercial() { return { terms: [] }; },
       async strategy(run) { strategyCalls.set(run.id, (strategyCalls.get(run.id) ?? 0) + 1); return dealBriefSchema.parse({
         dealSnapshot: { accountName: 'Workflow Account', opportunityName: 'Workflow Opportunity', stage: 'Negotiate' },
-        executiveSummary: { narrative: 'Insufficient verified information is available.' }, buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
+        executiveSummary: { narrative: 'Insufficient supported evidence is available for an executive summary.' }, buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
         stakeholderMap: { stakeholders: [] }, negotiationState: { currentState: 'Insufficient supported evidence is available.', risks: [] },
         recommendedNextActions: { actions: [] }, missingInformation: { items: [] }, sourceEvidence: { evidence: [] },
         confidenceAndReviewWarnings: { overallConfidence: 0.9, warnings: [] }
@@ -108,7 +113,7 @@ describe('production DealBrief seams', () => {
       if (current?.status === 'failed') throw new Error(`Workflow failed: ${current.errorCode}: ${current.errorMessage}`);
       return current?.status === 'awaiting_approval' ? current : undefined;
     });
-    expect(waiting.status).toBe('awaiting_approval'); expect(strategyCalls.get(runId)).toBe(1); expect(await queue.queue.getJob(runId)).toBeUndefined();
+    expect(waiting.status).toBe('awaiting_approval'); expect(retrievalCalls.get(runId)).toBe(2); expect(strategyCalls.get(runId)).toBe(1); expect(await queue.queue.getJob(runId)).toBeUndefined();
     const subject = await store.getApprovalSubject({ runId: runId as never }); const entry = subject?.entries[0];
     if (subject === undefined || entry === undefined) throw new Error('Approval subject not persisted');
     await admin`insert into run_evidence_manifests (id, run_id, scope_hash, policy_hash, query_hash, index_profile,
@@ -124,6 +129,9 @@ describe('production DealBrief seams', () => {
     const regenerationResponse = await browser.post(`/api/runs/${runId}/regenerate`).set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
       .set('X-CSRF-Token', selected.body.csrfToken).send({ idempotencyKey: `regenerate-${suffix}` });
     expect(regenerationResponse.status, JSON.stringify(regenerationResponse.body)).toBe(201);
+    const regenerationReplay = await browser.post(`/api/runs/${runId}/regenerate`).set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', selected.body.csrfToken).send({ idempotencyKey: `regenerate-${suffix}` }).expect(201);
+    expect(regenerationReplay.body.runId).toBe(runId);
     const regenerated = await waitFor(async () => {
       const current = await store.getRun(runId as never);
       return current?.status === 'awaiting_approval' && current.version > waiting.version ? current : undefined;
@@ -135,9 +143,24 @@ describe('production DealBrief seams', () => {
     expect(strategyCalls.get(runId)).toBe(2);
     expect(await queue.queue.getJob(runId)).toBeUndefined();
     const switched = await browser.post('/api/auth/persona').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', selected.body.csrfToken).send({ userId: approver }).expect(201);
+    const editCommand = {
+      runId, approvalSubjectId: regeneratedSubject.id, expectedRunVersion: regenerated.version,
+      expectedSubjectHash: regeneratedSubject.subjectHash, entryId: regeneratedEntry.id, category: regeneratedEntry.category,
+      authority: 'deal_desk', action: 'edit_and_approve', rationale: 'Confirm the exact grounded snapshot.',
+      editedPayload: regeneratedSubject.payload, idempotencyKey: `edit-${suffix}`
+    };
+    const editResult = await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', switched.body.csrfToken).send(editCommand);
+    expect(editResult.status, JSON.stringify(editResult.body)).toBe(201);
+    const editReplay = await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', switched.body.csrfToken).send(editCommand).expect(201);
+    expect(editReplay.body).toEqual({ ...editResult.body, replayed: true });
+    const replacement = await store.getApprovalSubject({ runId: runId as never }); const replacementEntry = replacement?.entries[0];
+    const editedRun = await store.getRun(runId as never);
+    if (replacement === undefined || replacementEntry === undefined || editedRun === undefined) throw new Error('Edited replacement subject not persisted');
     await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', switched.body.csrfToken).send({
-      runId, approvalSubjectId: regeneratedSubject.id, expectedRunVersion: regenerated.version, expectedSubjectHash: regeneratedSubject.subjectHash,
-      entryId: regeneratedEntry.id, category: regeneratedEntry.category, authority: 'deal_desk', action: 'approve_unchanged', idempotencyKey: `approve-${suffix}`
+      runId, approvalSubjectId: replacement.id, expectedRunVersion: editedRun.version, expectedSubjectHash: replacement.subjectHash,
+      entryId: replacementEntry.id, category: replacementEntry.category, authority: 'deal_desk', action: 'approve_unchanged', idempotencyKey: `approve-${suffix}`
     }).expect(201);
     const completed = await waitFor(async () => (await store.getRun(runId as never))?.status === 'completed' ? store.getRun(runId as never) : undefined);
     expect(completed.status).toBe('completed'); expect(strategyCalls.get(runId)).toBe(2);

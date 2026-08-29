@@ -93,11 +93,16 @@ export class RegenerateDealBrief {
       await this.access.recordOpaqueDenial({ type: 'deal_brief_regeneration_denied', actorId: input.requestedBy, reason: 'forbidden' });
       throw new AuthorizationDeniedError('DealBrief regeneration denied');
     }
+    const requestHash = hashApprovalPayload({
+      runId: input.runId, requestedBy: input.requestedBy, idempotencyKey: input.idempotencyKey
+    });
+    const replay = await this.store.findRegenerationByIdempotencyKey({ idempotencyKey: input.idempotencyKey, requestHash });
+    if (replay !== undefined) return replay.id;
     if (!['awaiting_approval', 'rejected'].includes(run.status)) throw new DomainConflictError('Only an approval-bound draft can be regenerated');
     const draftVersion = run.version + 1;
     await this.store.regenerateRun({
       runId: run.id, expectedVersion: run.version, requestedBy: run.requestedBy, idempotencyKey: input.idempotencyKey,
-      command: workflowCommand(run.id, 'synthesize', `regenerate:${draftVersion}`, { draftVersion })
+      requestHash, command: workflowCommand(run.id, 'synthesize', `regenerate:${draftVersion}`, { draftVersion })
     });
     return run.id;
   }
@@ -123,7 +128,10 @@ export class ProcessDealBriefStep {
       else if (step === 'validate') await this.validate(current, lease, input.command);
       else await this.finalize(current, lease, input.command);
     } catch (error) {
-      if (!(error instanceof FatalDealBriefWorkflowError)) throw error;
+      if (!(error instanceof FatalDealBriefWorkflowError)) {
+        await this.store.abandonStep({ invocationId: lease.invocationId, owner: lease.owner, leaseToken: lease.leaseToken });
+        throw error;
+      }
       const latest = await this.store.getRun(run.id);
       if (latest !== undefined && !['completed', 'rejected', 'failed', 'awaiting_approval'].includes(latest.status)) {
         await this.store.failRun({ runId: latest.id, expectedVersion: latest.version, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, causalCommandId: input.command.id, reason: error.reason });
@@ -138,13 +146,19 @@ export class ProcessDealBriefStep {
   }
   private async specialists(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand) {
     const context = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'retrieval' }), 'retrieval'); const names = ['conversation', 'stakeholder', 'commercial'] as const;
-    const results = await Promise.allSettled(names.map(async (name) => {
+    await Promise.all(names.map(async (name) => {
       const step = `specialist:${name}`; const existing = await this.store.getCheckpoint({ runId: run.id, step }); if (existing !== undefined) return existing;
       const generationMetadata = generation(run, lease, name);
-      try { const checkpoint = { status: 'completed', value: await this.services[name](run, context, lease.invocationId), generation: generationMetadata }; return this.store.saveCheckpoint({ runId: run.id, step, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, logicalGenerationId: generationMetadata.logicalGenerationId, checkpoint }); }
-      catch (error) { if (name === 'commercial') throw error; const checkpoint = { status: 'degraded', value: { warnings: [`${name}_unavailable`], claims: [] }, warning: `${name} specialist unavailable; dependent claims removed`, generation: generationMetadata }; return this.store.saveCheckpoint({ runId: run.id, step, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, logicalGenerationId: generationMetadata.logicalGenerationId, checkpoint }); }
+      let checkpoint: Readonly<Record<string, unknown>>;
+      try {
+        checkpoint = { status: 'completed', value: await this.services[name](run, context, lease.invocationId), generation: generationMetadata };
+      } catch (error) {
+        if (name === 'commercial') throw new FatalDealBriefWorkflowError('commercial_specialist_failed', error);
+        checkpoint = { status: 'degraded', value: { warnings: [`${name}_unavailable`], claims: [] }, warning: `${name} specialist unavailable; dependent claims removed`, generation: generationMetadata };
+      }
+      return this.store.saveCheckpoint({ runId: run.id, step, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, logicalGenerationId: generationMetadata.logicalGenerationId, checkpoint });
     }));
-    if (results[2]?.status === 'rejected') throw new FatalDealBriefWorkflowError('commercial_specialist_failed', results[2].reason); await this.advance(run, lease, causal, 'specialists_completed', 'specialists', { status: 'completed' }, 'synthesize');
+    await this.advance(run, lease, causal, 'specialists_completed', 'specialists', { status: 'completed' }, 'synthesize');
   }
   private async synthesize(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand) {
     const context = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'retrieval' }), 'retrieval'); const conversation = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'specialist:conversation' }), 'conversation'); const stakeholder = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'specialist:stakeholder' }), 'stakeholder'); const commercial = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'specialist:commercial' }), 'commercial');

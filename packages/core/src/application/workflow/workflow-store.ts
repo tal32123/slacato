@@ -27,6 +27,12 @@ export type StepLease = Readonly<{
   attempt: number;
 }>;
 
+export type AbandonStepInput = Readonly<{
+  invocationId: string;
+  owner: string;
+  leaseToken: string;
+}>;
+
 export type ApprovalAction = 'approve_unchanged' | 'edit_and_approve' | 'reject';
 
 export type ApprovalDecision = Readonly<{
@@ -133,6 +139,15 @@ export type ApprovalDecisionStoreResult = Readonly<{
   approvedSubjectHash: string;
 }>;
 
+export type ApprovalDecisionReplay = Readonly<{
+  run: WorkflowRun;
+  approvalSubjectId: string;
+  entryId: string;
+  approvedSubjectHash: string;
+  quorumSatisfied: boolean;
+  rejected: boolean;
+}>;
+
 export type ReplaceApprovalSubjectInput = Readonly<{
   runId: RunId;
   expectedVersion: number;
@@ -148,7 +163,13 @@ export type RegenerateRunInput = Readonly<{
   expectedVersion: number;
   requestedBy: UserId;
   idempotencyKey: string;
+  requestHash: string;
   command: WorkflowCommand;
+}>;
+
+export type RegenerationReplayInput = Readonly<{
+  idempotencyKey: string;
+  requestHash: string;
 }>;
 
 export type FinalizeRunInput = Readonly<{
@@ -171,14 +192,17 @@ export interface WorkflowStore {
   startRun(input: StartRunInput): Promise<WorkflowRun>;
   claimStep(input: Readonly<{ runId: RunId; step: string; invocationId: string; causalCommandId: string; owner: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
   heartbeatStep(input: Readonly<{ invocationId: string; owner: string; leaseToken: string; leaseMs: number; now?: Date }>): Promise<StepLease | undefined>;
+  abandonStep(input: AbandonStepInput): Promise<void>;
   getCheckpoint(input: Readonly<{ runId: RunId; step: string }>): Promise<Readonly<Record<string, unknown>> | undefined>;
   saveCheckpoint(input: SaveCheckpointInput): Promise<Readonly<Record<string, unknown>>>;
   commitStepAndEnqueueNext(input: CommitStepInput): Promise<WorkflowRun>;
   awaitApproval(input: AwaitApprovalInput): Promise<WorkflowRun>;
   getApprovalSubject(input: Readonly<{ runId: RunId; approvalSubjectId?: string | undefined }>): Promise<ApprovalSubject | undefined>;
+  findDecisionByIdempotencyKey(input: Readonly<{ idempotencyKey: string; requestHash: string }>): Promise<ApprovalDecisionReplay | undefined>;
   recordDecisionAndEnqueueFinalization(input: ApprovalDecisionInput): Promise<ApprovalDecisionStoreResult>;
   replaceApprovalSubject(input: ReplaceApprovalSubjectInput): Promise<Readonly<{ run: WorkflowRun; subject: ApprovalSubject; replayed: boolean }>>;
   regenerateRun(input: RegenerateRunInput): Promise<WorkflowRun>;
+  findRegenerationByIdempotencyKey(input: RegenerationReplayInput): Promise<WorkflowRun | undefined>;
   finalizeRun(input: FinalizeRunInput): Promise<WorkflowRun>;
   failRun(input: Readonly<{ runId: RunId; expectedVersion: number; invocationId: string; invocationOwner: string; leaseToken: string; causalCommandId: string; reason: string }>): Promise<WorkflowRun>;
 }
