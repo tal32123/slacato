@@ -2,6 +2,7 @@ import { AUTHORIZED_SOURCE_TYPES, type AuthorizedSourceType } from '../../domain
 import type { EvidencePlan } from './contracts.js';
 
 const DEFAULT_CONTEXT_CHARACTERS = 24_000;
+const CANONICAL_CRM_RECORD_LIMIT = 1 + 1 + 5; // Account, opportunity, and every canonical contact.
 const RELIABILITY_ADJUSTMENTS: Readonly<Record<string, number>> = Object.freeze({
   authoritative_policy: 0.02,
   authoritative_system: 0.015,
@@ -31,7 +32,7 @@ export function buildEvidencePlan(input: Readonly<{ query: string; limit: number
     ],
     sourceLimits: {
       gong_summary: Math.min(input.limit, 2), gong_transcript: input.limit, policy: 1,
-      pricing: Math.min(input.limit, 2), salesforce: Math.min(input.limit, 3), slack: Math.min(input.limit, 2)
+      pricing: Math.min(input.limit, 2), salesforce: CANONICAL_CRM_RECORD_LIMIT, slack: Math.min(input.limit, 2)
     },
     mandatorySourceTypes: ['policy'],
     policyReservation: { resultSlots: 1, contextCharacters: Math.max(1, Math.min(512, Math.ceil(maxContextCharacters * 0.25))) },

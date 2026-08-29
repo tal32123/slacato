@@ -3,6 +3,7 @@ import { Progress as ProgressPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Communicates task completion visually and to assistive technology. */
 function Progress({
   className,
   value,

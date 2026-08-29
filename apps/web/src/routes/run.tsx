@@ -15,6 +15,7 @@ import { statusLabel } from './runs';
 import { throwProtectedLoaderError } from './loader-security';
 import { cancelRun, fetchCsrf } from '@/api/client';
 
+/** Loads the requested run while preserving protected-session transition guarantees. */
 export async function runLoader({ request, params }: LoaderFunctionArgs): Promise<RunDetailResponse | null> {
   const runId = params.runId;
   if (!runId) throw new Response('Invalid run route', { status: 400 });
@@ -37,6 +38,7 @@ export async function runLoader({ request, params }: LoaderFunctionArgs): Promis
   }
 }
 
+/** Presents live workflow progress, outcomes, and the next available action for a run. */
 export function RunRoute(): React.JSX.Element {
   const initial = useLoaderData() as RunDetailResponse;
   const session = useRouteLoaderData('protected-root') as DemoSession;
@@ -193,11 +195,13 @@ export function RunRoute(): React.JSX.Element {
   );
 }
 
+/** Summarizes whether live run updates are healthy, delayed, or disconnected. */
 function ConnectionBadge({ connection, stalled }: Readonly<{ connection: string; stalled: boolean }>): React.JSX.Element {
   const label = connection === 'offline' ? 'Offline' : connection === 'reconnecting' ? 'Reconnecting' : stalled ? 'Progress delayed' : connection === 'connected' ? 'Live' : 'Connecting';
   return <StatusBadge status={connection === 'connected' && !stalled ? 'ready' : 'attention'} label={label} />;
 }
 
+/** Explains terminal, approval, failure, cancellation, or stalled states that need user attention. */
 function RunStateNotice({ detail, stalled }: Readonly<{ detail: RunDetailResponse; stalled: boolean }>): React.JSX.Element | null {
   if (detail.status === 'awaiting_approval') return <Notice icon={Clock3} title="Awaiting approval" text="The validated brief is persisted. An authorized approver must satisfy every required entry before finalization." action="Open approval inbox" href="/approvals" />;
   if (detail.status === 'completed') return <Notice icon={CheckCircle2} title="Brief completed" text="The validated brief is available in the authorized deal workspace." action="View deal" href={`/deals/${encodeURIComponent(detail.opportunityId)}`} />;
@@ -208,15 +212,20 @@ function RunStateNotice({ detail, stalled }: Readonly<{ detail: RunDetailRespons
   return null;
 }
 
+/** Presents an actionable run-state message with optional navigation to the next step. */
 function Notice({ icon: Icon, title, text, action, href }: Readonly<{ icon: typeof Clock3; title: string; text: string; action?: string; href?: string }>): React.JSX.Element {
   return <aside className="mt-6 flex flex-col gap-4 rounded-xl border border-attention bg-attention/10 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Icon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-attention-foreground" /><div><h2 className="font-semibold">{title}</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{text}</p></div></div>{action && href && <Button asChild variant="outline"><Link data-tour="run-primary-action" to={href}>{action}</Link></Button>}</aside>;
 }
+/** Displays one labeled run fact for quick scanning. */
 function Fact({ label, value }: Readonly<{ label: string; value: string }>): React.JSX.Element { return <div className="rounded-lg border bg-card p-4"><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt><dd className="mt-1 text-lg font-semibold">{value}</dd></div>; }
+/** Formats a recorded run timestamp for the user's locale. */
 function formatTime(value: string): string { return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }
+/** Maps a workflow state to its representative completion percentage. */
 function progressPercent(status: RunStatus): number {
   const values: Record<RunStatus, number> = { created: 5, retrieving: 20, specialists_running: 40, synthesizing: 60, validating: 75, awaiting_approval: 82, finalizing: 92, completed: 100, rejected: 82, failed: 75, cancelled: 0 };
   return values[status];
 }
+/** Builds the accessible progress presentation for the run's current state. */
 function progressView(detail: RunDetailResponse): { value: number; label: string; valueText: string } {
   if (detail.status === 'completed') return { value: 100, label: '100% workflow complete', valueText: 'Workflow complete' };
   const terminal = detail.status === 'failed' || detail.status === 'rejected' || detail.status === 'cancelled';

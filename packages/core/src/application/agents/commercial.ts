@@ -7,13 +7,15 @@ import { MAX_SPECIALIST_ARTIFACT_BYTES } from '../briefs/prompts.js';
 import { withSerializedByteLimit } from '../../domain/shared/serialized-size.js';
 
 const SOURCES = new Set<AgentEvidenceRecord['sourceType']>(['salesforce', 'pricing', 'policy']);
-const TASK = 'Analyze commercial terms, pricing state, deterministic policy triggers, and approvals that may be required. Policy evidence outranks model inference. Every factual claim must cite an exact supplied citation ID. Return only the strict commercial artifact.';
+const TASK = 'Analyze commercial terms, pricing state, deterministic policy triggers, and approvals that may be required. Policy evidence outranks model inference. Every factual claim must copy one complete supplied citation tuple without changing any of its three fields. Return only the strict commercial artifact.';
 const agentArtifactSchema = withSerializedByteLimit(commercialArtifactSchema, MAX_SPECIALIST_ARTIFACT_BYTES);
 
-/** Commercial-and-policy specialist composed over the provider-neutral budgeted gateway. */
+/** Analyzes pricing, commercial terms, policy triggers, and approval needs for a deal. */
 export class CommercialAgent {
+  /** Creates the commercial analyst with the model gateway used to generate its assessment. */
   public constructor(private readonly gateway: BudgetedModelGateway) {}
 
+  /** Produces a validated commercial assessment from the evidence authorized for a deal. */
   public async run(context: AgentContext): Promise<CommercialArtifact> {
     const result = await runAgent({
       gateway: this.gateway, context, operation: 'commercial-policy-analysis', task: TASK,

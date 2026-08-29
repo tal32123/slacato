@@ -6,6 +6,7 @@ import { DealList } from '@/features/deals/deal-list';
 import { dealsQueryOptions } from '@/features/deals/queries';
 import { throwProtectedLoaderError } from './loader-security';
 
+/** Loads the deal list while preserving protected-session transition guarantees. */
 export async function dealsLoader({ request }: LoaderFunctionArgs): Promise<DealListResponse | null> {
   try {
     const session = await queryClient.fetchQuery(sessionQueryOptions());
@@ -26,6 +27,7 @@ export async function dealsLoader({ request }: LoaderFunctionArgs): Promise<Deal
   }
 }
 
+/** Presents the deals available to the current persona and their latest workflow state. */
 export function DealsRoute(): React.JSX.Element {
   const response = useLoaderData() as DealListResponse;
   const session = useRouteLoaderData('protected-root') as DemoSession;

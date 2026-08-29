@@ -6,6 +6,7 @@ import { Tabs as TabsPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Coordinates a set of panels so users can switch between related views. */
 function Tabs({
   className,
   orientation = "horizontal",
@@ -40,6 +41,7 @@ const tabsListVariants = cva(
   }
 )
 
+/** Organizes the available view choices within a tab set. */
 function TabsList({
   className,
   variant = "default",
@@ -56,6 +58,7 @@ function TabsList({
   )
 }
 
+/** Lets the user activate one view within a tab set. */
 function TabsTrigger({
   className,
   ...props
@@ -75,6 +78,7 @@ function TabsTrigger({
   )
 }
 
+/** Presents the content associated with the active tab. */
 function TabsContent({
   className,
   ...props

@@ -24,6 +24,7 @@ export interface EvidenceRepository {
   searchExactCosine(input: ExactEvidenceQuery): Promise<readonly EvidenceMatch[]>;
 }
 
+/** Rejects embeddings that cannot participate safely in exact cosine comparison. */
 export function assertEmbeddingComparison(input: ExactEvidenceQuery): void {
   if (!Number.isInteger(input.profile.dimension) || input.profile.dimension <= 0) throw new Error('Embedding profile dimension must be positive');
   if (input.embedding.length !== input.profile.dimension) throw new Error('Embedding dimension does not match the requested profile');

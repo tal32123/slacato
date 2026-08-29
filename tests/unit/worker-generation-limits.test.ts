@@ -4,10 +4,10 @@ import type { ProviderRunScope } from '../../packages/infrastructure/src/model/p
 import { PostgresDealBriefWorkflowServices } from '../../apps/worker/src/processors/deal-brief.processor.js';
 
 describe('worker generation limits', () => {
-  it('uses the configured output ceiling without imposing a hidden per-generation cap', async () => {
+  it('does not install app-defined input or output token limits', async () => {
     let receivedScope: ProviderRunScope | undefined;
     const database = {
-      sql: async () => [{ max_calls: 24, max_input_tokens: 80_000, max_output_tokens: 24_000, deadline_ms: 120_000 }]
+      sql: async () => [{ max_calls: 24, max_input_tokens: 80_000, max_output_tokens: 96_000, deadline_ms: 120_000 }]
     };
     const gateways = {
       provider: 'openrouter',
@@ -31,7 +31,14 @@ describe('worker generation limits', () => {
 
     const result = await internals.agentContext(run, {}, 'invocation_generation_limits', 'commercial-policy');
 
-    expect(result.agentContext.generation.limits.maxOutputTokens).toBe(24_000);
-    expect(receivedScope?.budget.maxOutputTokens).toBe(24_000);
+    expect(result.agentContext.generation.limits).toMatchObject({
+      maxCalls: 4,
+      maxSchemaRepairs: 2,
+      maxTransportRetries: 1
+    });
+    expect(result.agentContext.generation.limits).not.toHaveProperty('maxInputTokens');
+    expect(result.agentContext.generation.limits).not.toHaveProperty('maxOutputTokens');
+    expect(receivedScope?.budget).not.toHaveProperty('maxInputTokens');
+    expect(receivedScope?.budget).not.toHaveProperty('maxOutputTokens');
   });
 });

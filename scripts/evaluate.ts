@@ -22,6 +22,7 @@ export type RetrievalEvaluationInput = Readonly<{
   id: string; k: number; relevantEvidenceIds: readonly string[]; retrievedEvidenceIds: readonly string[]; denied: boolean;
 }>;
 
+/** Measures retrieval quality and permission leakage across the supplied evaluation cases. */
 export function evaluateRetrievalResults(inputs: readonly RetrievalEvaluationInput[]) {
   const cases = inputs.map((input) => {
     const relevant = new Set(input.relevantEvidenceIds);
@@ -52,6 +53,7 @@ const unusedGenerationLedger: ProviderAttemptLedger = {
   async settleAttempt() {}, async releaseAttempt() {}
 };
 
+/** Runs the retrieval evaluation against an isolated database and returns its quality report. */
 async function runRetrievalEvaluation(): Promise<ReturnType<typeof evaluateRetrievalResults>> {
   const golden = goldenSchema.parse(JSON.parse(await readFile(resolve('evals/golden-retrieval.json'), 'utf8')));
   const baseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
@@ -93,6 +95,7 @@ async function runRetrievalEvaluation(): Promise<ReturnType<typeof evaluateRetri
   }
 }
 
+/** Runs the retrieval evaluation CLI and writes its report for review. */
 async function main(): Promise<void> {
   if (process.argv[2] !== 'retrieval') throw new Error('Usage: pnpm tsx scripts/evaluate.ts retrieval');
   const report = await runRetrievalEvaluation();

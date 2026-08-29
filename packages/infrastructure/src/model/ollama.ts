@@ -4,17 +4,17 @@ import { z } from 'zod';
 import {
   createBudgetedModelGateway,
   ModelGatewayTransportError,
-  ModelRegistry,
   normalizeModelError,
-  type ModelErrorCategory,
   type BudgetedModelGateway,
   type EmbeddingGateway,
+  type ModelRegistry,
   type ModelTransport,
   type ModelTransportRequest,
   type ProviderAttemptLedger,
   type TransportGeneration
 } from '@slacato/core';
 import type { OllamaCapabilities, OllamaCapabilityProbe } from './capabilities.js';
+import { classifyApiCallError, createProviderModelRegistry, warningText } from './provider-adapter-helpers.js';
 
 export type OllamaGatewayConfig = Readonly<{
   baseURL: string;
@@ -24,27 +24,12 @@ export type OllamaGatewayConfig = Readonly<{
   attemptLedger: ProviderAttemptLedger;
 }>;
 
-function warningText(warning: unknown): string {
-  return typeof warning === 'object' && warning !== null && 'type' in warning && typeof warning.type === 'string'
-    ? warning.type : 'provider_warning';
-}
-
-function categoryForApiCallError(error: InstanceType<typeof APICallError>): ModelErrorCategory {
-  const status = error.statusCode;
-  if (status === 401 || status === 403) return 'authorization';
-  if (status === 429) return 'rate_limited';
-  if (status !== undefined && status >= 400 && status < 500) return 'nonretryable_client';
-  if (status !== undefined && status >= 500 && error.isRetryable) return 'server';
-  if (status === undefined && error.isRetryable) return 'transient_transport';
-  return 'unknown';
-}
-
 /** Converts SDK/provider structured errors to the provider-neutral core contract. */
 export function normalizeOllamaTransportError(error: unknown): ModelGatewayTransportError {
   if (error instanceof ModelGatewayTransportError) return error;
   const generic = normalizeModelError(error).normalized;
   const apiError = APICallError.isInstance(error) ? error : undefined;
-  const category = apiError === undefined ? generic.category : categoryForApiCallError(apiError);
+  const category = apiError === undefined ? generic.category : classifyApiCallError(apiError.statusCode, apiError.isRetryable);
   return new ModelGatewayTransportError({
     category,
     ...(generic.statusCode === undefined ? {} : { statusCode: generic.statusCode }),
@@ -53,12 +38,15 @@ export function normalizeOllamaTransportError(error: unknown): ModelGatewayTrans
   });
 }
 
+/** Runs Ollama generation requests behind the provider-neutral transport contract. */
 class OllamaTransport implements ModelTransport {
+  /** Configures generation with the selected model and verified structured-output capability. */
   public constructor(
     private readonly model: LanguageModel,
     public readonly capabilities: Readonly<{ nativeStructuredOutput: boolean }>
   ) {}
 
+  /** Generates one model response within its deadline and translates provider failures. */
   public async generate<Value>(request: ModelTransportRequest<Value>): Promise<TransportGeneration<Value>> {
     const timeout = Math.max(1, request.deadlineAt - Date.now());
     const common = {
@@ -66,7 +54,6 @@ class OllamaTransport implements ModelTransport {
       messages: request.messages.map(({ role, content }) => ({ role, content })),
       allowSystemInMessages: true,
       maxRetries: 0,
-      maxOutputTokens: request.maxOutputTokens,
       abortSignal: AbortSignal.timeout(timeout)
     };
     try {
@@ -92,6 +79,7 @@ class OllamaTransport implements ModelTransport {
   }
 }
 
+/** Creates the authenticated Ollama client shared by generation and embedding operations. */
 function createProvider(config: OllamaGatewayConfig) {
   return createOllama({
     baseURL: config.baseURL,
@@ -106,12 +94,12 @@ export function createOllamaModelGateways(config: OllamaGatewayConfig, capabilit
   registry: ModelRegistry;
 }> {
   const provider = createProvider(config);
-  const registry = new ModelRegistry();
-  const languageModel = { providerId: 'ollama', modelId: config.generationModelId, nativeStructuredOutput: capabilities.nativeStructuredOutput };
-  registry.register('brief', languageModel);
-  registry.register('specialist', languageModel);
-  registry.register('compaction', languageModel);
-  registry.register('embedding', { providerId: 'ollama', modelId: config.embeddingModelId });
+  const registry = createProviderModelRegistry({
+    providerId: 'ollama',
+    generationModelId: config.generationModelId,
+    embeddingModelId: config.embeddingModelId,
+    nativeStructuredOutput: capabilities.nativeStructuredOutput
+  });
   return {
     modelGateway: createBudgetedModelGateway(new OllamaTransport(provider(config.generationModelId), capabilities), undefined, config.attemptLedger),
     embeddingGateway: {
@@ -129,6 +117,7 @@ export function createOllamaModelGateways(config: OllamaGatewayConfig, capabilit
   };
 }
 
+/** Lists the model IDs currently available from the configured Ollama service. */
 async function listModelIds(config: OllamaGatewayConfig): Promise<readonly string[]> {
   try {
     const response = await fetch(`${config.baseURL.replace(/\/$/, '')}/tags`, {
@@ -145,16 +134,13 @@ async function listModelIds(config: OllamaGatewayConfig): Promise<readonly strin
   }
 }
 
+/** Reports whether an embedding is effectively unit length. */
 function isUnitNormalized(vector: readonly number[]): boolean {
   const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
   return Math.abs(magnitude - 1) < 0.001;
 }
 
-/**
- * Credentialed capability probe. It is intentionally separate from run budgets
- * and reports only observed facts; callers must persist its result before using
- * native output mode or assuming embedding properties.
- */
+/** Measures live Ollama model availability, structured-output support, and embedding properties outside run budgets. */
 export async function probeOllamaCapabilities(config: OllamaGatewayConfig): Promise<OllamaCapabilityProbe> {
   const provider = createProvider(config);
   const availableModelIds = await listModelIds(config);
@@ -167,7 +153,6 @@ export async function probeOllamaCapabilities(config: OllamaGatewayConfig): Prom
       prompt: 'Return the requested object.',
       output: Output.object({ schema: z.object({ ready: z.literal(true) }) }),
       maxRetries: 0,
-      maxOutputTokens: 32,
       abortSignal: AbortSignal.timeout(15_000)
     });
     nativeStructuredOutput = result.output.ready === true;

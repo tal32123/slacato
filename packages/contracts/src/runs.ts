@@ -17,17 +17,9 @@ export const runStatusSchema = z.enum([
   'cancelled'
 ]);
 
-export const runBudgetSchema = z.object({
-  maxCalls: z.number().int().positive(),
-  maxInputTokens: z.number().int().positive(),
-  maxOutputTokens: z.number().int().positive(),
-  deadlineMs: z.number().int().min(1_000)
-}).strict();
-
 export const startBriefRequestSchema = z.object({
   opportunityId: opaqueIdSchema,
-  idempotencyKey: z.string().min(1).max(256),
-  budget: runBudgetSchema
+  idempotencyKey: z.string().min(1).max(256)
 }).strict();
 
 export const startBriefResponseSchema = z.object({ runId: opaqueIdSchema }).strict();
@@ -93,7 +85,6 @@ export const runDetailResponseSchema = z.object({
 }).strict();
 
 export type RunStatus = z.infer<typeof runStatusSchema>;
-export type RunBudget = z.infer<typeof runBudgetSchema>;
 export type StartBriefRequest = z.infer<typeof startBriefRequestSchema>;
 export type StartBriefResponse = z.infer<typeof startBriefResponseSchema>;
 export type CancelRunResponse = z.infer<typeof cancelRunResponseSchema>;

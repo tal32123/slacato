@@ -5,30 +5,35 @@ import { Dialog as DialogPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
+/** Coordinates an accessible modal conversation that temporarily focuses the user's attention. */
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
 
+/** Opens the associated dialog from an explicit user action. */
 function DialogTrigger({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 }
 
+/** Renders dialog content in the appropriate document layer. */
 function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
 }
 
+/** Lets the user close the associated dialog. */
 function DialogClose({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Close>) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
+/** Dims and protects the page while a modal dialog is open. */
 function DialogOverlay({
   className,
   ...props
@@ -45,6 +50,7 @@ function DialogOverlay({
   )
 }
 
+/** Presents dialog content in a focused surface with optional dismissal controls. */
 function DialogContent({
   className,
   children,
@@ -79,6 +85,7 @@ function DialogContent({
   )
 }
 
+/** Organizes the heading and explanation at the start of a dialog. */
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -89,6 +96,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Arranges dialog actions and can supply a standard close action. */
 function DialogFooter({
   className,
   showCloseButton = false,
@@ -116,6 +124,7 @@ function DialogFooter({
   )
 }
 
+/** Gives a dialog the accessible title that identifies its purpose. */
 function DialogTitle({
   className,
   ...props
@@ -129,6 +138,7 @@ function DialogTitle({
   )
 }
 
+/** Provides the supporting explanation for a dialog. */
 function DialogDescription({
   className,
   ...props

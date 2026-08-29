@@ -1,9 +1,10 @@
-import { Controller, Get, Inject, InternalServerErrorException, NotFoundException, Req, Res } from '@nestjs/common';
+import { Controller, Get, Inject, InternalServerErrorException, NotFoundException, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { logger } from '@slacato/infrastructure';
 import { z } from 'zod';
 import { ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
-import type { AuthenticatedRequest } from '../auth/guard.js';
+import type { AuthenticatedPrincipal } from '../auth/contracts.js';
+import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { BRIEF_EXPORT_SERVICE, type BriefExportService } from './exports.service.js';
 
 const exportParamsSchema = z.object({
@@ -12,15 +13,17 @@ const exportParamsSchema = z.object({
 }).strict();
 type ExportParams = z.infer<typeof exportParamsSchema>;
 
+/** Serves finalized run briefs as authenticated file downloads. */
 @Controller('api/runs')
 export class ExportsController {
   public constructor(@Inject(BRIEF_EXPORT_SERVICE) private readonly exports: BriefExportService) {}
 
+  /** Exports a finalized run in the requested format with download-safe headers. */
   @Get(':runId/export/:format')
   @ZodResponse(z.string())
   public async download(
     @ZodParam(exportParamsSchema) params: ExportParams | Promise<ExportParams>,
-    @Req() request: AuthenticatedRequest,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Res({ passthrough: true }) response: Response
   ): Promise<string> {
     const resolved = await params;
@@ -29,7 +32,7 @@ export class ExportsController {
     let result;
     try {
       result = await this.exports.exportFinalized({
-        actorId: request.auth!.persona.userId,
+        actorId: principal.persona.userId,
         runId: resolved.runId,
         format: resolved.format
       });

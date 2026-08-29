@@ -8,6 +8,7 @@ import {
   SessionInvalidatedError
 } from '@/api/session';
 
+/** Converts protected-loader failures into safe reauthentication, denial, or retry responses. */
 export function throwProtectedLoaderError(error: unknown, request: Request): never {
   if (error instanceof SessionInvalidatedError) {
     sessionRuntime.finishTransition();

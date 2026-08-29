@@ -7,13 +7,15 @@ import { MAX_SPECIALIST_ARTIFACT_BYTES } from '../briefs/prompts.js';
 import { withSerializedByteLimit } from '../../domain/shared/serialized-size.js';
 
 const SOURCES = new Set<AgentEvidenceRecord['sourceType']>(['gong_summary', 'gong_transcript', 'slack']);
-const TASK = 'Extract buyer goals, concerns, commitments, objections, and missing context. Every factual claim must cite an exact supplied citation ID. Return only the strict conversation artifact.';
+const TASK = 'Extract buyer goals, concerns, commitments, objections, and missing context. Every factual claim must copy one complete supplied citation tuple without changing any of its three fields. Return only the strict conversation artifact.';
 const agentArtifactSchema = withSerializedByteLimit(conversationArtifactSchema, MAX_SPECIALIST_ARTIFACT_BYTES);
 
-/** Conversation specialist composed over the provider-neutral budgeted gateway. */
+/** Extracts buyer goals, concerns, commitments, objections, and missing context from deal conversations. */
 export class ConversationAgent {
+  /** Creates the conversation analyst with the model gateway used to generate its assessment. */
   public constructor(private readonly gateway: BudgetedModelGateway) {}
 
+  /** Produces a validated conversation assessment from the evidence authorized for a deal. */
   public async run(context: AgentContext): Promise<ConversationArtifact> {
     const result = await runAgent({
       gateway: this.gateway, context, operation: 'conversation-intelligence', task: TASK,

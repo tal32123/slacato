@@ -31,6 +31,7 @@ export type ApprovalResult = Readonly<{
   replayed: boolean;
 }>;
 
+/** Collects immutable evidence bindings for every citation in an approval payload. */
 function citationBindings(value: unknown): ReadonlyMap<string, string> {
   const bindings = new Map<string, string>();
   const visit = (current: unknown): void => {
@@ -49,6 +50,7 @@ function citationBindings(value: unknown): ReadonlyMap<string, string> {
   return bindings;
 }
 
+/** Converts the persisted decision outcome into the approval result returned to callers. */
 function result(input: DecideApprovalCommand, stored: ApprovalDecisionStoreResult): ApprovalResult {
   return {
     status: stored.rejected ? 'rejected' : stored.quorumSatisfied ? 'finalizing' : 'awaiting_approval',
@@ -60,6 +62,7 @@ function result(input: DecideApprovalCommand, stored: ApprovalDecisionStoreResul
     replayed: stored.replayed
   };
 }
+/** Summarizes approval edits as changed review fields and brief sections. */
 function structuredApprovalDiff(before: DealBrief, after: DealBrief): Readonly<Record<string, unknown>> {
   const fields = [
     {
@@ -101,8 +104,10 @@ function structuredApprovalDiff(before: DealBrief, after: DealBrief): Readonly<R
 
 /** Records one authority decision against an immutable snapshot and advances only on complete quorum. */
 export class DecideApproval {
+  /** Provides the workflow store and access policy used to decide approvals. */
   public constructor(private readonly store: WorkflowStore, private readonly access: DealBriefAccessControl) {}
 
+  /** Validates and records one decision, then returns the resulting approval state. */
   public async execute(input: DecideApprovalCommand): Promise<ApprovalResult> {
     if (!Number.isInteger(input.expectedRunVersion) || input.expectedRunVersion < 0) throw new DomainValidationError('Expected run version is invalid');
     if (input.idempotencyKey.trim().length === 0) throw new DomainValidationError('Decision idempotency key is required');

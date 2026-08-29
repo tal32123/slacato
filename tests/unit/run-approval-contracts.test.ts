@@ -10,16 +10,14 @@ import {
 const timestamp = '2026-08-29T12:00:00.000Z';
 
 describe('run and approval wire contracts', () => {
-  it('accepts bounded create requests and rejects untyped fields', () => {
+  it('accepts create requests without caller-defined token budgets and rejects untyped fields', () => {
     expect(startBriefRequestSchema.parse({
       opportunityId: 'OPP-1001',
-      idempotencyKey: 'browser-operation-1',
-      budget: { maxCalls: 20, maxInputTokens: 50_000, maxOutputTokens: 20_000, deadlineMs: 60_000 }
+      idempotencyKey: 'browser-operation-1'
     })).toMatchObject({ opportunityId: 'OPP-1001' });
     expect(() => startBriefRequestSchema.parse({
       opportunityId: 'OPP-1001', idempotencyKey: 'operation-1',
-      budget: { maxCalls: 20, maxInputTokens: 50_000, maxOutputTokens: 20_000, deadlineMs: 60_000 },
-      prompt: 'hidden reasoning'
+      budget: { maxCalls: 20, maxInputTokens: 50_000, maxOutputTokens: 20_000, deadlineMs: 60_000 }
     })).toThrow();
   });
 

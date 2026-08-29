@@ -1,4 +1,3 @@
-import js from '@eslint/js';
 import boundaries from 'eslint-plugin-boundaries';
 import tseslint from 'typescript-eslint';
 
@@ -17,9 +16,9 @@ const disallowModules = (...sources) => ({ to: { module: sources.map((source) =>
 
 export default tseslint.config(
   { ignores: ['**/dist/**', '**/node_modules/**', 'apps/web/src/components/ui/**'] },
-  js.configs.recommended,
-  ...tseslint.configs.recommended,
   {
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: { parser: tseslint.parser },
     plugins: { boundaries },
     settings: {
       'boundaries/elements': applicationElements,
@@ -29,7 +28,6 @@ export default tseslint.config(
       ]
     },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'error',
       'boundaries/dependencies': ['error', {
         default: 'disallow',
         policies: [

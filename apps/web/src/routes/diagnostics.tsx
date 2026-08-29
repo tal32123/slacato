@@ -31,6 +31,7 @@ export async function diagnosticsLoader({ request }: LoaderFunctionArgs): Promis
   }
 }
 
+/** Displays server-reported runtime, source-permission, and approval-authority facts. */
 export function DiagnosticsRoute(): React.JSX.Element {
   const diagnostics = useLoaderData() as DemoDiagnosticsResponse;
   const session = useRouteLoaderData('protected-root') as DemoSession;
@@ -94,10 +95,10 @@ export function DiagnosticsRoute(): React.JSX.Element {
         <div className="mb-4 max-w-4xl">
           <h2 id="permissions-title" className="text-xl font-semibold">Canonical permission view</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Grants shown for {session.persona.displayName} separate the ability to request a decision from Account Owner, Sales Leader, Deal Desk, and Legal Reviewer authority. A request never grants decision authority.
+            Source permissions for {session.persona.displayName} are shown independently from account-scoped approval authority. Request permission never grants decision authority.
           </p>
         </div>
-        <PermissionMatrix grants={diagnostics.permissions} />
+        <PermissionMatrix grants={diagnostics.permissions} approvalAuthorities={diagnostics.approvalAuthorities} />
       </section>
     </div>
   );

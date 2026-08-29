@@ -8,6 +8,7 @@ import { CancelDealBrief, DecideApproval, RegenerateDealBrief, StartDealBrief } 
 import {
   createDatabaseClient,
   loadRuntimeEnv,
+  PostgresApprovalAuthorityQuery,
   PostgresCanonicalPersonaDirectory,
   PostgresDealBriefAccessControl,
   PostgresEventStore,
@@ -22,11 +23,13 @@ import { PostgresRunApprovalQueryRepository } from './modules/runs/run-approval.
 import { PostgresBriefExportService } from './modules/exports/exports.service.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
+import type { ProviderRuntimeDescriptor } from './modules/diagnostics/contracts.js';
 
 export interface ApiApplicationOptions {
   environment?: NodeJS.ProcessEnv;
 }
 
+/** Resolves the configured model names at the provider-selection composition boundary. */
 export function configuredProviderModels(environment: Env): Readonly<{ generation: string; embedding: string }> {
   if (environment.AI_PROVIDER === 'ollama') {
     return { generation: environment.OLLAMA_CHAT_MODEL, embedding: environment.OLLAMA_EMBEDDING_MODEL };
@@ -35,6 +38,33 @@ export function configuredProviderModels(environment: Env): Readonly<{ generatio
     return { generation: environment.OPENROUTER_CHAT_MODEL, embedding: environment.OPENROUTER_EMBEDDING_MODEL };
   }
   return { generation: 'mock-brief', embedding: 'mock-embedding' };
+}
+
+/** Describes the provider runtime facts that diagnostics reports without reconstructing them. */
+export function configuredProviderRuntime(environment: Env): ProviderRuntimeDescriptor {
+  const models = configuredProviderModels(environment);
+  if (environment.AI_PROVIDER === 'mock') {
+    return {
+      provider: environment.AI_PROVIDER,
+      outputMode: 'deterministic_mock',
+      pinnedGenerationModel: models.generation,
+      pinnedEmbeddingModel: models.embedding
+    };
+  }
+  if (environment.AI_PROVIDER === 'openrouter') {
+    return {
+      provider: environment.AI_PROVIDER,
+      outputMode: 'native_schema',
+      pinnedGenerationModel: models.generation,
+      pinnedEmbeddingModel: models.embedding
+    };
+  }
+  return {
+    provider: environment.AI_PROVIDER,
+    outputMode: 'capability_probe_required',
+    pinnedGenerationModel: models.generation,
+    pinnedEmbeddingModel: models.embedding
+  };
 }
 
 const bodyParserErrorHandler: ErrorRequestHandler = (error: unknown, _request, response, next) => {
@@ -69,7 +99,7 @@ export function configureApiApplication(app: NestExpressApplication): void {
 /** Creates the API only after server-only configuration has validated successfully. */
 export async function createApiApplication(options: ApiApplicationOptions = {}): Promise<NestExpressApplication> {
   const env = loadRuntimeEnv(options.environment ?? process.env);
-  const models = configuredProviderModels(env);
+  const providerRuntime = configuredProviderRuntime(env);
   const database = createDatabaseClient(env.DATABASE_URL, 5);
   const personas = new PostgresCanonicalPersonaDirectory(database);
   const workflowStore = new PostgresWorkflowStore(database);
@@ -86,7 +116,7 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
   }, {
     startDealBrief: new StartDealBrief(workflowStore, workflowAccess, {
       provider: env.AI_PROVIDER,
-      model: models.generation
+      model: providerRuntime.pinnedGenerationModel
     }),
     regenerateDealBrief: new RegenerateDealBrief(workflowStore, workflowAccess),
     cancelDealBrief: new CancelDealBrief(workflowStore, workflowAccess),
@@ -94,9 +124,8 @@ export async function createApiApplication(options: ApiApplicationOptions = {}):
     queries: runApprovalQueries,
     runEvents: { bus: runEvents, query: new PostgresRunEventQuery(database) }
   }, {
-    provider: env.AI_PROVIDER,
-    pinnedGenerationModel: models.generation,
-    pinnedEmbeddingModel: models.embedding
+    providerRuntime,
+    approvalAuthorities: new PostgresApprovalAuthorityQuery(database)
   }, {
     repository: dealQueries
   }, new PostgresBriefExportService(database)), { bodyParser: false });

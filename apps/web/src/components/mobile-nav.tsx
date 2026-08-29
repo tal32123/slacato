@@ -9,6 +9,7 @@ export const primaryDestinations = [
   { label: 'Settings', to: '/settings', icon: Settings }
 ] as const;
 
+/** Provides compact navigation to the primary product areas on smaller screens. */
 export function MobileNav(): React.JSX.Element {
   const location = useLocation();
   return (

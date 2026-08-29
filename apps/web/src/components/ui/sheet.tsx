@@ -6,28 +6,33 @@ import { Dialog as SheetPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Coordinates an accessible side panel for temporary supporting content or actions. */
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
 }
 
+/** Opens the associated side panel from an explicit user action. */
 function SheetTrigger({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
 }
 
+/** Lets the user close the associated side panel. */
 function SheetClose({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Close>) {
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
 }
 
+/** Renders side-panel content in the appropriate document layer. */
 function SheetPortal({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
 }
 
+/** Dims and protects the page while a side panel is open. */
 function SheetOverlay({
   className,
   ...props
@@ -44,6 +49,7 @@ function SheetOverlay({
   )
 }
 
+/** Presents temporary content in a dismissible panel on the requested screen edge. */
 function SheetContent({
   className,
   children,
@@ -85,6 +91,7 @@ function SheetContent({
   )
 }
 
+/** Organizes the heading and explanation at the start of a side panel. */
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -95,6 +102,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Arranges actions or supporting information at the end of a side panel. */
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -105,6 +113,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Gives a side panel the accessible title that identifies its purpose. */
 function SheetTitle({
   className,
   ...props
@@ -118,6 +127,7 @@ function SheetTitle({
   )
 }
 
+/** Provides the supporting explanation for a side panel. */
 function SheetDescription({
   className,
   ...props

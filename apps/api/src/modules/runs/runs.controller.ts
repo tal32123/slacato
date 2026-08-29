@@ -1,5 +1,6 @@
-import { Controller, Inject, Post, Req } from '@nestjs/common';
-import type { AuthenticatedRequest } from '../auth/guard.js';
+import { Controller, Inject, Post } from '@nestjs/common';
+import type { AuthenticatedPrincipal } from '../auth/contracts.js';
+import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { z } from 'zod';
 import { cancelRunResponseSchema, startBriefRequestSchema, startBriefResponseSchema, type StartBriefRequest } from '@slacato/contracts';
 import { ZodBody, ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
@@ -14,6 +15,7 @@ const regenerateParamsSchema = z.object({ runId: z.string().min(1) }).strict();
 type RegenerateParams = z.infer<typeof regenerateParamsSchema>;
 type RegenerateInput = z.infer<typeof regenerateSchema>;
 
+/** Starts, cancels, and regenerates deal-brief runs for the current principal. */
 @Controller('api/runs')
 export class RunsController {
   public constructor(
@@ -22,40 +24,37 @@ export class RunsController {
     @Inject(CANCEL_DEAL_BRIEF) private readonly cancelDealBrief: CancelDealBrief
   ) {}
 
+  /** Starts a deal-brief run requested by the current principal. */
   @Post('deal-brief')
   @ZodResponse(runResponseSchema)
-  public async start(@ZodBody(startSchema) input: StartInput, @Req() request: AuthenticatedRequest) {
-    const actorId = request.auth?.persona.userId;
-    if (actorId === undefined) throw new Error('Authenticated request identity was not installed');
+  public async start(@ZodBody(startSchema) input: StartInput, @CurrentPrincipal() principal: AuthenticatedPrincipal) {
     try {
-      const runId = await this.startDealBrief.execute({ ...input, requestedBy: actorId });
+      const runId = await this.startDealBrief.execute({ ...input, requestedBy: principal.persona.userId });
       return { runId };
     } catch (error) {
       return toHttpError(error);
     }
   }
 
+  /** Cancels a deal-brief run on behalf of the current principal. */
   @Post(':runId/cancel')
   @ZodResponse(cancelRunResponseSchema)
-  public async cancel(@ZodParam(regenerateParamsSchema) params: RegenerateParams, @Req() request: AuthenticatedRequest) {
-    const actorId = request.auth?.persona.userId;
-    if (actorId === undefined) throw new Error('Authenticated request identity was not installed');
+  public async cancel(@ZodParam(regenerateParamsSchema) params: RegenerateParams, @CurrentPrincipal() principal: AuthenticatedPrincipal) {
     try {
-      const run = await this.cancelDealBrief.execute({ runId: params.runId, requestedBy: actorId });
+      const run = await this.cancelDealBrief.execute({ runId: params.runId, requestedBy: principal.persona.userId });
       return { runId: run.id, status: 'cancelled' as const, version: run.version };
     } catch (error) {
       return toHttpError(error);
     }
   }
 
+  /** Regenerates a deal-brief run on behalf of the current principal. */
   @Post(':runId/regenerate')
   @ZodResponse(runResponseSchema)
-  public async regenerate(@ZodParam(regenerateParamsSchema) params: RegenerateParams, @ZodBody(regenerateSchema) input: RegenerateInput, @Req() request: AuthenticatedRequest) {
-    const actorId = request.auth?.persona.userId;
-    if (actorId === undefined) throw new Error('Authenticated request identity was not installed');
+  public async regenerate(@ZodParam(regenerateParamsSchema) params: RegenerateParams, @ZodBody(regenerateSchema) input: RegenerateInput, @CurrentPrincipal() principal: AuthenticatedPrincipal) {
     try {
       return { runId: await this.regenerateDealBrief.execute({
-        runId: params.runId, requestedBy: actorId, idempotencyKey: input.idempotencyKey
+        runId: params.runId, requestedBy: principal.persona.userId, idempotencyKey: input.idempotencyKey
       }) };
     } catch (error) {
       return toHttpError(error);

@@ -4,6 +4,7 @@ import { FileText, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
+/** Shows the selected evidence in an accessible desktop panel or mobile sheet. */
 export function EvidenceDetail({ evidence, desktop, onClose }: Readonly<{
   evidence: EvidenceDetailView;
   desktop: boolean;
@@ -36,6 +37,7 @@ export function EvidenceDetail({ evidence, desktop, onClose }: Readonly<{
   return <ModalEvidence evidence={evidence} onClose={onClose} />;
 }
 
+/** Presents selected evidence in a mobile sheet and restores focus when it closes. */
 function ModalEvidence({ evidence, onClose }: Readonly<{ evidence: EvidenceDetailView; onClose: () => void }>): React.JSX.Element {
   useEffect(() => {
     const protectedShell = document.querySelector('[data-protected-app-shell]');
@@ -71,6 +73,7 @@ function ModalEvidence({ evidence, onClose }: Readonly<{ evidence: EvidenceDetai
   );
 }
 
+/** Identifies the selected evidence and lets the seller close its detail view. */
 function EvidenceHeader({ evidence, onClose }: Readonly<{ evidence: EvidenceDetailView; onClose: () => void }>): React.JSX.Element {
   return (
     <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b bg-card px-5 py-5">
@@ -80,6 +83,7 @@ function EvidenceHeader({ evidence, onClose }: Readonly<{ evidence: EvidenceDeta
   );
 }
 
+/** Presents the source metadata, excerpt, and authorization note for selected evidence. */
 function EvidenceBody({ evidence }: Readonly<{ evidence: EvidenceDetailView }>): React.JSX.Element {
   return (
     <div className="grid gap-6 px-5 py-6">
@@ -95,6 +99,7 @@ function EvidenceBody({ evidence }: Readonly<{ evidence: EvidenceDetailView }>):
   );
 }
 
+/** Shows one labeled source fact in the evidence detail. */
 function EvidenceFact({ label, value }: Readonly<{ label: string; value: string }>): React.JSX.Element {
   return <div className="grid gap-1 border-b pb-3"><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt><dd className="break-words">{value}</dd></div>;
 }

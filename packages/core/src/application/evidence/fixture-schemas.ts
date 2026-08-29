@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 
+/** Builds a validation schema for canonical prefixed fixture identifiers. */
 const identifier = (prefix: string) => z.string().regex(new RegExp(`^${prefix}-\\d+$`));
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
   const [year, month, day] = value.split('-').map(Number);
@@ -125,17 +126,43 @@ export type Classification = Readonly<{
   accessLevel: 'standard' | 'restricted'; reason: string; policyHash: string;
 }>;
 
+type EvidenceClassificationRecord = Readonly<{
+  sourceType: 'salesforce' | 'gong_summary' | 'gong_transcript' | 'slack' | 'pricing' | 'policy';
+  sourceAccessLevel?: z.infer<typeof accessLevelSchema> | undefined;
+  requestedDiscount?: number | undefined;
+  renewalUplift?: number | undefined;
+  approvalStatus?: string | undefined;
+  pricingNotes?: string | undefined;
+}>;
+
+const sensitivePricingLanguage = /\b(?:liability(?:\s+cap)?|data retention|restricted (?:research data|evidence|workflow|source|access)|customer-specific (?:security|legal) language|sensitive legal language|legal (?:approval|review required))\b/i;
+
 const requiredPricingRule = /sensitive pricing notes may only be shown to users with `?can_view_sensitive_pricing=true`?/i;
 
-/** Derives effective sensitivity before storage. Missing pricing policy fails closed. */
+/** Derives effective sensitivity from source, opportunity, pricing, and canonical-policy signals before storage. */
 export function classifyEvidenceSensitivity(
-  record: Readonly<{ sourceType: 'salesforce' | 'gong_summary' | 'gong_transcript' | 'slack' | 'pricing' | 'policy'; sourceAccessLevel?: z.infer<typeof accessLevelSchema> | undefined }>,
+  record: EvidenceClassificationRecord,
   opportunity: OpportunityFixture | undefined,
   policy: PolicyFixture
 ): Classification {
   if (record.sourceType === 'pricing') {
     if (!requiredPricingRule.test(policy.content)) throw new Error('Pricing classification cannot be proven from the canonical policy');
-    return { accessLevel: 'restricted', reason: 'policy_sensitive_pricing', policyHash: policy.contentHash };
+    if (record.requestedDiscount === undefined
+      || record.renewalUplift === undefined
+      || record.approvalStatus === undefined
+      || record.pricingNotes === undefined) {
+      return { accessLevel: 'restricted', reason: 'policy_sensitive_pricing', policyHash: policy.contentHash };
+    }
+    const isSensitivePricing = record.sourceAccessLevel === 'restricted'
+      || record.sourceAccessLevel === 'sensitive_pricing'
+      || opportunity?.restrictedAccess === true
+      || record.requestedDiscount > 10
+      || record.renewalUplift < 0
+      || record.approvalStatus.trim().toLowerCase() !== 'not_required'
+      || sensitivePricingLanguage.test(record.pricingNotes);
+    return isSensitivePricing
+      ? { accessLevel: 'restricted', reason: 'policy_sensitive_pricing', policyHash: policy.contentHash }
+      : { accessLevel: 'standard', reason: 'policy_non_sensitive_pricing', policyHash: policy.contentHash };
   }
   if (record.sourceAccessLevel === 'restricted' || record.sourceAccessLevel === 'sensitive_pricing') {
     return { accessLevel: 'restricted', reason: `source_declared_${record.sourceAccessLevel}`, policyHash: policy.contentHash };
@@ -146,6 +173,7 @@ export function classifyEvidenceSensitivity(
   return { accessLevel: 'standard', reason: 'source_declared_standard', policyHash: policy.contentHash };
 }
 
+/** Verifies that every expected opportunity has enough synthetic Slack context. */
 export function assertSlackCoverage(rows: readonly SlackUpdate[], opportunityIds: readonly string[]): Record<string, number> {
   const counts: Record<string, number> = Object.fromEntries(opportunityIds.map((id) => [id, 0]));
   for (const row of rows) {
@@ -228,6 +256,7 @@ const numericKeys = new Set(['acv', 'tcv', 'renewalTermMonths', 'probability', '
 const booleanKeys = new Set(['approvalRequired', 'restrictedAccess', 'canViewSensitivePricing', 'canRequestApproval', 'canViewRestrictedAccount', 'syntheticNotice']);
 const listKeys = new Set(['participants', 'allowedAccountIds', 'allowedSourceTypes']);
 
+/** Parses a fixture TSV into typed primitive values with normalized field names. */
 function parseTsv(path: string): unknown[] {
   const content = readFileSync(path, 'utf8').replace(/^\uFEFF/, '').trimEnd();
   const lines = content.split(/\r?\n/);
@@ -255,6 +284,7 @@ function parseTsv(path: string): unknown[] {
   });
 }
 
+/** Rejects duplicate fixture records for the requested business key. */
 function uniqueBy(records: readonly Record<string, unknown>[], key: string, label: string): void {
   const values = new Set<unknown>();
   for (const record of records) {
@@ -263,8 +293,10 @@ function uniqueBy(records: readonly Record<string, unknown>[], key: string, labe
   }
 }
 
+/** Produces the content hash used to verify fixture provenance. */
 function sha256(content: string): string { return createHash('sha256').update(content).digest('hex'); }
 
+/** Verifies that every canonical fixture file matches its pinned source attribution. */
 function verifySourceAttribution(root: string): z.infer<typeof sourceAttributionSchema> {
   const attribution = sourceAttributionSchema.parse(JSON.parse(readFileSync(join(root, 'source-attribution.json'), 'utf8')));
   if (attribution.repository !== CANONICAL_FIXTURE_REPOSITORY) throw new Error('Canonical repository does not match the pinned fixture source');
@@ -279,6 +311,7 @@ function verifySourceAttribution(root: string): z.infer<typeof sourceAttribution
   return attribution;
 }
 
+/** Parses one canonical transcript and validates its required metadata. */
 function parseTranscript(path: string, locator: string): TranscriptFixture {
   const content = readFileSync(path, 'utf8').trim();
   const read = (label: string) => new RegExp(`^\\*\\*${label}:\\*\\*\\s*(.+)$`, 'mi').exec(content)?.[1]?.trim();

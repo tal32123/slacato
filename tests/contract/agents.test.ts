@@ -320,11 +320,32 @@ describe('specialized agents', () => {
       ...emptyCommercial,
       claims: [{
         id: 'claim_amount', statement: 'The proposed annual amount is USD 100000.', confidence: 0.9,
-        citations: [{ id: 'citation_forged', evidenceId: cited.evidenceId, locator: cited.sourceLocator }]
+        citations: [{ id: 'citation_forged', evidenceId: 'evidence_forged', locator: 'forged/locator' }]
       }]
     }]);
 
     await expect(new CommercialAgent(gateway).run(context([cited]))).rejects.toThrow('Unknown or stale citation');
+  });
+
+  it('replaces model-copied manifest metadata and citation fields with authorized code-owned values', async () => {
+    const cited = evidence('evidence_code_owned_terms', 'pricing', 'The proposed annual amount is USD 100000.');
+    const gateway = new RecordingGateway([{
+      ...emptyCommercial,
+      evidenceManifestId: 'manifest_model_guess',
+      claims: [{
+        id: 'claim_code_owned_amount', statement: 'The proposed annual amount is USD 100000.', confidence: 0.9,
+        citations: [{ id: cited.citationId, evidenceId: 'document_model_guess', locator: 'model/guess' }]
+      }]
+    }]);
+
+    const artifact = await new CommercialAgent(gateway).run(context([cited]));
+
+    expect(artifact.evidenceManifestId).toBe('manifest_agents');
+    expect(artifact.claims[0]?.citations).toEqual([{
+      id: cited.citationId,
+      evidenceId: cited.evidenceId,
+      locator: cited.sourceLocator
+    }]);
   });
 
   it('feeds citation validation failures and the failed artifact back into native repair', async () => {
@@ -334,7 +355,7 @@ describe('specialized agents', () => {
       ...emptyCommercial,
       claims: [{
         id: 'claim_amount', statement: 'The proposed annual amount is USD 100000.', confidence: 0.9,
-        citations: [{ ...validCitation, id: 'citation_forged' }]
+        citations: [{ id: 'citation_forged', evidenceId: 'evidence_forged', locator: 'forged/locator' }]
       }]
     };
     const validArtifact = {
@@ -388,8 +409,42 @@ describe('specialized agents', () => {
     expect(artifact.claims).toEqual([]);
     expect(artifact.missingContext).toContain('Verify evidence for claim claim_discount.');
     expect(artifact.reviewWarnings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'INSUFFICIENT_CLAIM_SUPPORT', claimIds: ['claim_discount'] })
+      {
+        code: 'INSUFFICIENT_CLAIM_SUPPORT',
+        severity: 'warning',
+        message: 'Material anchors are absent: 35%, discount',
+        claimIds: ['claim_discount']
+      }
     ]));
+  });
+
+  it('supports a natural paraphrase of the code-owned pricing-notes field from OPP-1001', async () => {
+    const cited = evidence('evidence_opp_1001_pricing', 'pricing', [
+      'pricingNoteId: PN-4001',
+      'opportunityId: OPP-1001',
+      'currentAcv: 3900000',
+      'proposedAcv: 4217500',
+      'requestedDiscount: 4',
+      'renewalUplift: 8',
+      'commercialRisk: medium',
+      'approvalStatus: not_required',
+      'pricingNotes: Customer accepted uplift range if payment schedule and migration success metrics are documented.'
+    ].join('\n'));
+    const gateway = new RecordingGateway([{
+      ...emptyCommercial,
+      claims: [{
+        id: 'claim_opp_1001_uplift',
+        statement: 'The customer accepted uplift range if payment schedule and migration success metrics are documented.',
+        confidence: 0.9,
+        citations: [{ id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator }]
+      }]
+    }]);
+
+    const artifact = await new CommercialAgent(gateway).run(context([cited]));
+
+    expect(artifact.claims).toEqual([
+      expect.objectContaining({ id: 'claim_opp_1001_uplift' })
+    ]);
   });
 
   it('does not treat an unrelated citation as support for a non-numeric factual claim', async () => {
@@ -996,7 +1051,7 @@ describe('specialized agents', () => {
       async releaseAttempt() {}
     };
     const policy = new ContextWindowPolicy({
-      contextWindowTokens: 3_000,
+      contextWindowTokens: 3_500,
       reservedOutputTokens: 256,
       sectionTokenBudgets: { instructions: 256, currentTask: 256, evidence: 1_700, artifacts: 0, history: 0 }
     });
@@ -1091,6 +1146,15 @@ describe('specialized agents', () => {
       task: 'Build a bounded brief.', trustedContext: { runId: 'run_agents' },
       evidence: pruned, artifacts
     });
+    expect(prompt.instructions).toContain('id = record.citation.id');
+    expect(prompt.instructions).toContain('evidenceId = record.citation.evidenceId');
+    expect(prompt.instructions).toContain('locator = record.citation.locator');
+    expect(prompt.instructions).not.toContain('Never invent, infer, or copy an identifier');
+    expect(prompt.evidence[0]?.content).toContain(JSON.stringify({
+      id: pruned[0]!.citationId,
+      evidenceId: pruned[0]!.evidenceId,
+      locator: pruned[0]!.sourceLocator
+    }));
     const requiredTokens = [...prompt.evidence, ...prompt.artifacts].reduce((sum, section) =>
       sum + Math.ceil(`[evidence id=${section.id}]\n`.length / 4) + Math.ceil(section.content.length / 4), 0);
     expect(requiredTokens).toBeLessThanOrEqual(MIN_AGENT_REQUIRED_EVIDENCE_TOKENS);

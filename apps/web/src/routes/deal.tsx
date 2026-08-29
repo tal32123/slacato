@@ -9,6 +9,7 @@ import { dealWorkspaceQueryOptions } from '@/features/deals/queries';
 import { GenerateBriefAction } from '@/features/runs/generate-brief-action';
 import { throwProtectedLoaderError } from './loader-security';
 
+/** Loads the requested deal workspace while preserving protected-session transition guarantees. */
 export async function dealLoader({ request, params }: LoaderFunctionArgs): Promise<DealWorkspaceView | null> {
   const opportunityId = params.opportunityId;
   if (!opportunityId) throw new Response('Invalid deal route', { status: 400 });
@@ -31,6 +32,7 @@ export async function dealLoader({ request, params }: LoaderFunctionArgs): Promi
   }
 }
 
+/** Presents a deal workspace and lets users inspect the evidence behind its brief. */
 export function DealRoute(): React.JSX.Element {
   const workspace = useLoaderData() as DealWorkspaceView;
   const [searchParams, setSearchParams] = useSearchParams();

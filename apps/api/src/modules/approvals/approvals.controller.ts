@@ -1,5 +1,6 @@
-import { Controller, Inject, Post, Req } from '@nestjs/common';
-import type { AuthenticatedRequest } from '../auth/guard.js';
+import { Controller, Inject, Post } from '@nestjs/common';
+import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
+import type { AuthenticatedPrincipal } from '../auth/contracts.js';
 import { approvalDecisionRequestSchema, approvalDecisionResultSchema, type ApprovalDecisionRequest } from '@slacato/contracts';
 import { ZodBody, ZodResponse } from '../../common/wire/zod.decorators.js';
 import { DECIDE_APPROVAL, toHttpError } from '../runs/contracts.js';
@@ -10,15 +11,19 @@ const decisionSchema = approvalDecisionRequestSchema;
 const resultSchema = approvalDecisionResultSchema;
 type DecisionInput = ApprovalDecisionRequest;
 
+/** Executes authenticated approval decisions and emits their operational outcome. */
 @Controller('api/approvals')
 export class ApprovalsController {
   public constructor(@Inject(DECIDE_APPROVAL) private readonly decideApproval: DecideApproval) {}
 
+  /** Applies one approval decision on behalf of the current authenticated principal. */
   @Post('decisions')
   @ZodResponse(resultSchema)
-  public async execute(@ZodBody(decisionSchema) input: DecisionInput, @Req() request: AuthenticatedRequest) {
-    const actorId = request.auth?.persona.userId;
-    if (actorId === undefined) throw new Error('Authenticated request identity was not installed');
+  public async execute(
+    @ZodBody(decisionSchema) input: DecisionInput,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal
+  ) {
+    const actorId = principal.persona.userId;
     const correlationId = `approval_${crypto.randomUUID()}`;
     const startedAt = Date.now();
     try {

@@ -7,6 +7,7 @@ import { AppShell } from '@/components/app-shell';
 import { throwProtectedLoaderError } from './loader-security';
 import { RoutePending } from './route-pending';
 
+/** Establishes an authenticated session before protected pages are allowed to render. */
 export async function protectedRootLoader({ request }: LoaderFunctionArgs): Promise<DemoSession | Response> {
   try {
     const session = await queryClient.fetchQuery(sessionQueryOptions());
@@ -23,6 +24,7 @@ export async function protectedRootLoader({ request }: LoaderFunctionArgs): Prom
   }
 }
 
+/** Hosts the protected application shell and coordinates logout and session transitions. */
 export function RootRoute(): React.JSX.Element {
   const session = useLoaderData() as DemoSession;
   const navigate = useNavigate();

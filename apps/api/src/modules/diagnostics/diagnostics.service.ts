@@ -1,30 +1,38 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { DemoDiagnosticsResponse, DecisionAuthorityView, PermissionGrantView } from '@slacato/contracts';
+import type { DemoDiagnosticsResponse, PermissionGrantView } from '@slacato/contracts';
 import type { PermissionGrant } from '@slacato/core';
 import { HealthService } from '../health/health.service.js';
 import type { AuthenticatedRequest } from '../auth/guard.js';
-import { DIAGNOSTICS_OPTIONS, type DiagnosticsModuleOptions } from './contracts.js';
+import {
+  APPROVAL_AUTHORITY_QUERY,
+  PROVIDER_RUNTIME_DESCRIPTOR,
+  type ApprovalAuthorityQuery,
+  type ProviderRuntimeDescriptor
+} from './contracts.js';
 
 type AuthenticatedSession = NonNullable<AuthenticatedRequest['auth']>;
 
+/** Builds a read-only diagnostics view from injected runtime and authorization facts. */
 @Injectable()
 export class DiagnosticsService {
   public constructor(
     private readonly health: HealthService,
-    @Inject(DIAGNOSTICS_OPTIONS) private readonly options: DiagnosticsModuleOptions
+    @Inject(PROVIDER_RUNTIME_DESCRIPTOR) private readonly runtime: ProviderRuntimeDescriptor,
+    @Inject(APPROVAL_AUTHORITY_QUERY) private readonly approvalAuthorities: ApprovalAuthorityQuery
   ) {}
 
+  /** Returns current runtime health, source permissions, and canonical account approval authorities. */
   public async view(session: AuthenticatedSession): Promise<DemoDiagnosticsResponse> {
-    const readiness = await this.health.readiness();
+    const [readiness, approvalAuthorities] = await Promise.all([
+      this.health.readiness(),
+      this.approvalAuthorities.forPersona(session.persona.userId)
+    ]);
     return {
       sessionVersion: session.claims.version,
-      permissions: session.persona.grants.map((grant) => permissionView(session.persona.role, grant)),
+      permissions: session.persona.grants.map(permissionView),
+      approvalAuthorities,
       providerHealth: {
-        provider: this.options.provider,
-        outputMode: this.options.provider === 'mock' ? 'deterministic_mock'
-          : this.options.provider === 'openrouter' ? 'native_schema' : 'capability_probe_required',
-        pinnedGenerationModel: this.options.pinnedGenerationModel,
-        pinnedEmbeddingModel: this.options.pinnedEmbeddingModel,
+        ...this.runtime,
         indexHealth: readiness.checks.index,
         runtimeReadiness: readiness.status,
         checks: readiness.checks
@@ -33,23 +41,14 @@ export class DiagnosticsService {
   }
 }
 
-function permissionView(role: string, grant: PermissionGrant): PermissionGrantView {
+/** Projects a source permission without inferring any approval authority. */
+function permissionView(grant: PermissionGrant): PermissionGrantView {
   return {
     accountId: grant.accountId,
     sourceType: grant.sourceType,
     canRead: grant.canRead,
     restrictedOpportunityAccess: grant.canReadRestricted,
     sensitivePricing: grant.sensitivePricing,
-    canRequestApproval: grant.canRequestApproval,
-    decisionAuthority: decisionAuthority(role, grant.canApprove)
-  };
-}
-
-function decisionAuthority(role: string, canApprove: boolean): DecisionAuthorityView {
-  return {
-    accountOwner: canApprove && (role === 'Account Owner' || role === 'Restricted Account Owner'),
-    salesLeader: canApprove && (role === 'Sales Leader' || role === 'Restricted Sales Leader'),
-    dealDesk: canApprove && role === 'Deal Desk Approver',
-    legalReviewer: canApprove && role === 'Legal Reviewer'
+    canRequestApproval: grant.canRequestApproval
   };
 }

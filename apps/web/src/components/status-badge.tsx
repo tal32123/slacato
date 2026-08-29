@@ -11,6 +11,7 @@ const statusPresentation = {
 
 export type ProductStatus = keyof typeof statusPresentation;
 
+/** Presents a product status with consistent wording, color, and iconography. */
 export function StatusBadge({ status, label }: Readonly<{ status: ProductStatus; label?: string }>): React.JSX.Element {
   const presentation = statusPresentation[status];
   const Icon = presentation.icon;

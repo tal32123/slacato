@@ -5,6 +5,7 @@ import { ScrollArea as ScrollAreaPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Provides a consistently styled region for content that may need scrolling. */
 function ScrollArea({
   className,
   children,
@@ -28,6 +29,7 @@ function ScrollArea({
   )
 }
 
+/** Gives a scrollable region a visible control for its overflow direction. */
 function ScrollBar({
   className,
   orientation = "vertical",

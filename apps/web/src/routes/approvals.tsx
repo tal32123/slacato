@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { approvalsQueryOptions } from '@/features/approvals/queries';
 import { throwProtectedLoaderError } from './loader-security';
 
+/** Loads the approval inbox while preserving protected-session transition guarantees. */
 export async function approvalsLoader({ request }: LoaderFunctionArgs): Promise<ApprovalInboxResponse | null> {
   try {
     const session = await queryClient.fetchQuery(sessionQueryOptions());
@@ -28,6 +29,7 @@ export async function approvalsLoader({ request }: LoaderFunctionArgs): Promise<
   }
 }
 
+/** Presents approval work grouped by items awaiting action and completed decisions. */
 export function ApprovalsRoute(): React.JSX.Element {
   const response = useLoaderData() as ApprovalInboxResponse;
   return (
@@ -43,6 +45,7 @@ export function ApprovalsRoute(): React.JSX.Element {
   );
 }
 
+/** Displays one approval-inbox section with a clear empty or loading state. */
 function ApprovalSection({ title, entries, empty, pending = false }: Readonly<{
   title: string;
   entries: readonly ApprovalInboxEntry[];
@@ -59,6 +62,7 @@ function ApprovalSection({ title, entries, empty, pending = false }: Readonly<{
   );
 }
 
+/** Summarizes one approval request, its authority, and its available next action. */
 function ApprovalRow({ entry, pending }: Readonly<{ entry: ApprovalInboxEntry; pending: boolean }>): React.JSX.Element {
   return (
     <li className="grid min-w-0 gap-4 rounded-xl border bg-card p-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(14rem,0.8fr)_auto] lg:items-center">
@@ -81,9 +85,13 @@ function ApprovalRow({ entry, pending }: Readonly<{ entry: ApprovalInboxEntry; p
   );
 }
 
+/** Converts a recorded approval decision into a concise outcome label. */
 function decisionLabel(entry: ApprovalInboxEntry): string { return entry.decision?.action === 'reject' ? 'Rejected' : entry.decision?.changed ? 'Edited and approved' : 'Approved'; }
+/** Converts an approval category into a user-facing label. */
 function categoryLabel(value: ApprovalInboxEntry['category']): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+/** Converts an approval authority into a user-facing label. */
 function authorityLabel(value: ApprovalInboxEntry['availableAuthority'] | NonNullable<ApprovalInboxEntry['decision']>['authority']): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+/** Expresses how long an approval item has been waiting in a compact form. */
 function age(value: string): string {
   const hours = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 3_600_000));
   return hours < 1 ? 'Less than an hour' : hours < 24 ? `${hours}h` : `${Math.floor(hours / 24)}d`;

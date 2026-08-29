@@ -2,19 +2,51 @@ import type { CommandQueue, WorkflowCommand } from '@slacato/core';
 import type { DatabaseClient } from '../db/client.js';
 import type { CommandInspection } from './bullmq.js';
 
-export interface LiveCommandInspector {
+/** Queue capabilities needed to recover every live-command state without stranding a durable claim. */
+export interface LiveCommandInspector extends CommandQueue {
   state(commandId: string): Promise<'live' | 'completed' | 'failed' | 'missing'>;
-  inspect?(commandId: string): Promise<CommandInspection>;
-  reopenCompleted?(commandId: string): Promise<void>;
-  publish?(command: WorkflowCommand): Promise<void>;
+  reopenCompleted(commandId: string): Promise<void>;
+}
+
+/** Complete live-command capabilities for reconciliation that also classifies exhausted deliveries. */
+export interface ExhaustionAwareLiveCommandInspector extends LiveCommandInspector {
+  inspect(commandId: string): Promise<CommandInspection>;
+}
+
+/** Distinguishes queues that can report retry exhaustion for dead-letter reconciliation. */
+function isExhaustionAware(inspector: LiveCommandInspector): inspector is ExhaustionAwareLiveCommandInspector {
+  return 'inspect' in inspector && typeof inspector.inspect === 'function';
+}
+
+/** Rejects incomplete runtime adapters before reconciliation can mutate an outbox row. */
+function assertRecoveryCapabilities(inspector: LiveCommandInspector): void {
+  if (typeof inspector.state !== 'function' || typeof inspector.reopenCompleted !== 'function' || typeof inspector.publish !== 'function') {
+    throw new TypeError('Live command reconciliation requires state, reopenCompleted, and publish capabilities');
+  }
 }
 
 type OutboxRow = Readonly<{ id: string; run_id: string; type: string; payload: Record<string, unknown>; idempotency_key: string; claim_token: string | null }>;
 
-/** Repairs Redis-loss ambiguity by returning stranded, nonterminal commands to the PostgreSQL outbox. */
+/** Repairs stranded commands while keeping PostgreSQL recovery claims resumable after failures. */
 export class PostgresCommandReconciler {
   private readonly owner = `reconciler_${crypto.randomUUID()}`;
-  public constructor(private readonly database: DatabaseClient, private readonly commands: LiveCommandInspector, private readonly deadLetters?: CommandQueue) {}
+  private readonly database: DatabaseClient;
+  private readonly commands: LiveCommandInspector;
+  private readonly deadLetters: CommandQueue | undefined;
+
+  /** Configures command recovery and optional exhausted-delivery dead lettering. */
+  public constructor(database: DatabaseClient, commands: LiveCommandInspector);
+  public constructor(database: DatabaseClient, commands: ExhaustionAwareLiveCommandInspector, deadLetters: CommandQueue);
+  public constructor(database: DatabaseClient, commands: LiveCommandInspector, deadLetters?: CommandQueue) {
+    assertRecoveryCapabilities(commands);
+    if (deadLetters !== undefined && !isExhaustionAware(commands)) {
+      throw new TypeError('Dead-letter reconciliation requires inspect capability');
+    }
+    this.database = database;
+    this.commands = commands;
+    this.deadLetters = deadLetters;
+  }
+  /** Repairs stranded published commands and resumes incomplete recovery claims. */
   public async reconcile(limit = 25): Promise<number> {
     let restored = await this.recoverCompletedClaims(limit);
     const rows = await this.database.sql<OutboxRow[]>`
@@ -60,38 +92,37 @@ export class PostgresCommandReconciler {
     return restored;
   }
 
+  /** Reopens and republishes a completed recovery claim, or resumes at the last recoverable boundary. */
   private async recoverCompletedClaim(row: OutboxRow): Promise<boolean> {
     if (row.claim_token === null) return false;
     const inspection = await this.inspect(row.id);
     if (inspection.state === 'completed') {
-      if (this.commands.reopenCompleted === undefined) return false;
       await this.commands.reopenCompleted(row.id);
     } else if (inspection.state === 'live' || inspection.state === 'failed') {
       return (await this.markRecoveredPublished(row)) > 0;
     }
     const marked = await this.markRecoveredPublished(row);
     if (marked === 0) return false;
-    if (this.commands.publish === undefined) {
-      await this.database.sql`update outbox_commands set status = 'pending', available_at = now(), published_at = null where id = ${row.id} and status = 'published' and consumed_at is null`;
-      return true;
-    }
     const command: WorkflowCommand = { id: row.id, runId: row.run_id as WorkflowCommand['runId'], type: row.type, payload: row.payload, idempotencyKey: row.idempotency_key };
     await this.commands.publish(command);
     return true;
   }
 
+  /** Returns a completed-recovery claim to published state when its fencing token still matches. */
   private async markRecoveredPublished(row: OutboxRow): Promise<number> {
     const result = await this.database.sql`update outbox_commands set status = 'published', published_at = now(), claim_owner = null, claim_token = null, claim_expires_at = null
       where id = ${row.id} and status = 'claimed' and claim_owner = 'completed_recovery' and claim_token = ${row.claim_token} and consumed_at is null`;
     return result.count;
   }
 
+  /** Returns detailed delivery state when the configured queue supports exhausted-job recovery. */
   private async inspect(commandId: string): Promise<CommandInspection> {
-    if (this.commands.inspect !== undefined) return this.commands.inspect(commandId);
+    if (isExhaustionAware(this.commands)) return this.commands.inspect(commandId);
     const state = await this.commands.state(commandId);
     return { state, attemptsMade: 0, maxAttempts: 0, exhausted: false };
   }
 
+  /** Claims an exhausted command before publishing its dead-letter record. */
   private async claimAndPublishDeadLetter(row: OutboxRow, inspection: CommandInspection): Promise<void> {
     if (this.deadLetters === undefined) return;
     const claimToken = `dead_letter_${crypto.randomUUID()}`;
@@ -103,12 +134,14 @@ export class PostgresCommandReconciler {
     if (claimedRow !== undefined) await this.publishAndAcknowledgeDeadLetter(claimedRow, inspection);
   }
 
+  /** Resumes dead-letter publications left claimed by an interrupted reconciler. */
   private async recoverClaimedDeadLetters(limit: number): Promise<void> {
     if (this.deadLetters === undefined) return;
     const rows = await this.database.sql<OutboxRow[]>`select id, run_id, type, payload, idempotency_key, claim_token from outbox_commands where status = 'dead_letter_claimed' and consumed_at is null order by claimed_at nulls first limit ${limit}`;
     for (const row of rows) await this.publishAndAcknowledgeDeadLetter(row, await this.inspect(row.id));
   }
 
+  /** Publishes an exhausted command's safe dead-letter record before acknowledging its claim. */
   private async publishAndAcknowledgeDeadLetter(row: OutboxRow, inspection: CommandInspection): Promise<void> {
     if (this.deadLetters === undefined || row.claim_token === null) return;
     const command: WorkflowCommand = {
@@ -140,9 +173,13 @@ export class ReconcilerLoop {
   private timer: NodeJS.Timeout | undefined;
   private stopping = false;
   private running = false;
+  /** Configures bounded polling for command reconciliation. */
   public constructor(private readonly reconciler: PostgresCommandReconciler, private readonly pollMs = 5_000, private readonly batchSize = 25, private readonly onTransientError: () => void = () => {}) {}
+  /** Starts reconciliation polling when the loop is not already active. */
   public start(): void { if (this.timer === undefined) void this.tick(); }
+  /** Stops future polling and waits for the active reconciliation pass to finish. */
   public async stop(): Promise<void> { this.stopping = true; if (this.timer !== undefined) clearTimeout(this.timer); while (this.running) await new Promise((resolve) => setTimeout(resolve, 10)); }
+  /** Runs one reconciliation pass and schedules the next poll with bounded failure backoff. */
   private async tick(): Promise<void> {
     this.running = true;
     let delay = this.pollMs;

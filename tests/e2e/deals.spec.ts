@@ -33,7 +33,7 @@ async function openCitation(_page: Page, citation: Locator): Promise<void> {
 
 test.describe.configure({ mode: 'serial' });
 
-test('lists only the signed persona authorized deals and opens the brief-first workspace', async ({ page }) => {
+test('lists only the signed persona authorized deals and opens the source-snapshot workspace', async ({ page }) => {
   await loginAs(page, 'Maya Levin');
 
   await expect(page.getByRole('heading', { name: 'Authorized deals' })).toBeVisible();
@@ -52,6 +52,9 @@ test('lists only the signed persona authorized deals and opens the brief-first w
   await expect(page.getByText('OPP-1001', { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/Order Review/).first()).toBeVisible();
   await expect(page.getByText(/medium risk/i).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Source snapshot', exact: true })).toBeVisible();
+  await expect(page.getByText('Evidence overview assembled deterministically from currently authorized, ingested records. It is not AI-generated and is not produced by a run.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Generated draft', exact: true })).toHaveCount(0);
 
   for (const section of sections) {
     await expect(page.getByRole('heading', { name: section, exact: true })).toBeVisible();
@@ -77,6 +80,33 @@ test('lists only the signed persona authorized deals and opens the brief-first w
   await page.getByRole('button', { name: 'Close evidence detail' }).click();
   await page.goBack();
   await expect(page).toHaveURL('/deals');
+});
+
+test('shows a generated draft separately from the source snapshot and names its producing run', async ({ page }) => {
+  await loginAs(page, 'Maya Levin');
+  const workspace = await page.evaluate(async () => {
+    const response = await fetch('/api/deals/OPP-1001', { credentials: 'same-origin' });
+    return response.json() as Record<string, unknown>;
+  });
+  const sourceSnapshot = workspace.sourceSnapshot as { evidenceOverview: Record<string, unknown> };
+  const generatedContent = { ...sourceSnapshot.evidenceOverview, status: 'generated' };
+  const generatedWorkspace = {
+    ...workspace,
+    generatedOutput: {
+      type: 'generated_output', lifecycle: 'draft',
+      producingRun: { id: 'run-workspace-draft', status: 'awaiting_approval', updatedAt: '2026-08-29T01:00:00.000Z' },
+      content: generatedContent
+    },
+    brief: generatedContent
+  };
+  await page.route('**/api/deals/OPP-1001', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(generatedWorkspace) });
+  });
+
+  await page.getByRole('link', { name: /Open OPP-1001/ }).click();
+  await expect(page.getByRole('heading', { name: 'Source snapshot', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Generated draft', exact: true })).toBeVisible();
+  await expect(page.getByText('Produced by run run-workspace-draft · awaiting approval')).toBeVisible();
 });
 
 test('desktop evidence uses one non-modal complementary region with replace and back history', async ({ page }) => {

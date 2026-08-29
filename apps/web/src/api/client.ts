@@ -37,7 +37,9 @@ interface WireSchema<T> {
   parse(input: unknown): T;
 }
 
+/** Represents a failed API request with the status and safe error code the interface can act on. */
 export class ApiError extends Error {
+  /** Creates a client-safe API failure from the server response status and error code. */
   public constructor(
     public readonly status: number,
     public readonly code?: 'UNAUTHORIZED' | 'FORBIDDEN' | 'INVALID_CSRF'
@@ -46,6 +48,7 @@ export class ApiError extends Error {
   }
 }
 
+/** Sends a credentialed API request and validates its successful response against the expected contract. */
 export async function requestJson<T>(schema: WireSchema<T>, path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, { ...init, credentials: 'include' });
   if (!response.ok) {
@@ -56,18 +59,22 @@ export async function requestJson<T>(schema: WireSchema<T>, path: string, init: 
   return schema.parse(await response.json());
 }
 
+/** Loads the current signed-in session for the interface. */
 export function fetchSession(signal?: AbortSignal): Promise<AuthSessionResponse> {
   return requestJson(authSessionResponseSchema, '/api/auth/session', { signal });
 }
 
+/** Loads the personas the current user may select. */
 export async function fetchPersonas(signal?: AbortSignal): Promise<readonly Persona[]> {
   return (await requestJson(personaListResponseSchema, '/api/auth/personas', { signal })).personas;
 }
 
+/** Loads a fresh CSRF token for protected actions. */
 export async function fetchCsrf(signal?: AbortSignal): Promise<string> {
   return (await requestJson(csrfResponseSchema, '/api/auth/csrf', { signal })).csrfToken;
 }
 
+/** Switches the active persona and returns the resulting authenticated session. */
 export function changePersona(userId: string, csrfToken: string) {
   return requestJson(authenticatedMutationResponseSchema, '/api/auth/persona', {
     method: 'POST',
@@ -76,6 +83,7 @@ export function changePersona(userId: string, csrfToken: string) {
   });
 }
 
+/** Ends the active session and returns the resulting signed-out state. */
 export function endSession(csrfToken: string) {
   return requestJson(logoutResponseSchema, '/api/auth/logout', {
     method: 'POST',
@@ -84,26 +92,32 @@ export function endSession(csrfToken: string) {
   });
 }
 
+/** Loads demo diagnostics for the active session. */
 export function fetchDiagnostics(signal: AbortSignal | undefined): Promise<DemoDiagnosticsResponse> {
   return requestJson(demoDiagnosticsResponseSchema, '/api/diagnostics', { signal });
 }
 
+/** Loads the deals visible to the active persona. */
 export function fetchDeals(signal: AbortSignal | undefined): Promise<DealListResponse> {
   return requestJson(dealListResponseSchema, '/api/deals', { signal });
 }
 
+/** Loads the authorized workspace for a selected deal. */
 export function fetchDealWorkspace(opportunityId: string, signal: AbortSignal | undefined): Promise<DealWorkspaceView> {
   return requestJson(dealWorkspaceViewSchema, `/api/deals/${encodeURIComponent(opportunityId)}`, { signal });
 }
 
+/** Loads the brief-generation runs visible to the active persona. */
 export function fetchRuns(signal: AbortSignal | undefined): Promise<RunListResponse> {
   return requestJson(runListResponseSchema, '/api/runs', { signal });
 }
 
+/** Loads the latest detail for a selected brief-generation run. */
 export function fetchRunDetail(runId: string, signal: AbortSignal | undefined): Promise<RunDetailResponse> {
   return requestJson(runDetailResponseSchema, `/api/runs/${encodeURIComponent(runId)}/detail`, { signal });
 }
 
+/** Starts a source-backed brief-generation run for a deal. */
 export function startBrief(input: StartBriefRequest, csrfToken: string): Promise<StartBriefResponse> {
   return requestJson(startBriefResponseSchema, '/api/runs/deal-brief', {
     method: 'POST',
@@ -112,6 +126,7 @@ export function startBrief(input: StartBriefRequest, csrfToken: string): Promise
   });
 }
 
+/** Cancels an in-progress brief-generation run. */
 export function cancelRun(runId: string, csrfToken: string): Promise<CancelRunResponse> {
   return requestJson(cancelRunResponseSchema, `/api/runs/${encodeURIComponent(runId)}/cancel`, {
     method: 'POST',
@@ -120,14 +135,17 @@ export function cancelRun(runId: string, csrfToken: string): Promise<CancelRunRe
   });
 }
 
+/** Loads the approval requests visible to the active persona. */
 export function fetchApprovals(signal: AbortSignal | undefined): Promise<ApprovalInboxResponse> {
   return requestJson(approvalInboxResponseSchema, '/api/approvals', { signal });
 }
 
+/** Loads the authorized detail for a selected approval request. */
 export function fetchApprovalDetail(subjectId: string, signal: AbortSignal | undefined): Promise<ApprovalDetailResponse> {
   return requestJson(approvalDetailResponseSchema, `/api/approvals/${encodeURIComponent(subjectId)}`, { signal });
 }
 
+/** Records the active persona's decision on an approval request. */
 export function decideApproval(input: ApprovalDecisionRequest, csrfToken: string): Promise<ApprovalDecisionResult> {
   return requestJson(approvalDecisionResultSchema, '/api/approvals/decisions', {
     method: 'POST',

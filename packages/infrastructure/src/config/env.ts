@@ -54,6 +54,7 @@ const envKeys = [
   'OPENROUTER_API_KEY', 'OPENROUTER_CHAT_MODEL', 'OPENROUTER_EMBEDDING_MODEL'
 ] as const;
 
+/** Parses process variables into validated provider-specific runtime configuration. */
 export const parseEnv = (input: NodeJS.ProcessEnv): Env => envSchema.parse(Object.fromEntries(
   envKeys.flatMap((key) => input[key] === undefined ? [] : [[key, input[key]]])
 ));

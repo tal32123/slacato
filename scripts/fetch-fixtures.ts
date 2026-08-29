@@ -19,6 +19,7 @@ export type FixtureFetchOptions = Readonly<{
   repository: string; commit: string; destination: string; files: readonly string[];
 }>;
 
+/** Runs a Git command in the temporary repository used to collect canonical fixtures. */
 function git(cwd: string, args: readonly string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
 }
@@ -58,6 +59,7 @@ export function fetchCanonicalFixtures(options: FixtureFetchOptions): FixtureAtt
   }
 }
 
+/** Runs the canonical-fixture fetch CLI and reports the verified revision. */
 function main(): void {
   const destination = resolve(process.cwd(), 'fixtures/cato');
   const result = fetchCanonicalFixtures({ repository: PINNED_REPOSITORY, commit: PINNED_COMMIT, destination, files: CANONICAL_FILES });

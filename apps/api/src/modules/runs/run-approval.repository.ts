@@ -7,6 +7,7 @@ import {
   runListResponseSchema,
   runStatusSchema,
   type ApprovalAuthority,
+  type ApprovalBriefPayload,
   type ApprovalDecisionView,
   type ApprovalDetailResponse,
   type ApprovalInboxEntry,
@@ -54,6 +55,7 @@ const sectionNames = [
 const specialistNames = ['conversation', 'stakeholder', 'commercial'] as const;
 const terminalStatuses: readonly RunStatus[] = ['completed', 'rejected', 'failed', 'cancelled'];
 
+/** Reads run and approval views while independently enforcing the actor's evidence visibility. */
 export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepository {
   public constructor(private readonly database: DatabaseClient) {}
 
@@ -190,6 +192,7 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
     });
   }
 
+  /** Returns an approval view whose persisted payload is projected to evidence the actor may read. */
   public async getApproval(actorId: string, sessionVersion: string, subjectId: string): Promise<ApprovalDetailResponse | undefined> {
     const subject = (await this.database.sql<ApprovalSubjectRow[]>`
       select subject.id approval_subject_id, run.id run_id, run.version run_version, run.status run_status,
@@ -209,8 +212,9 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
         ) limit 1`)[0];
     if (subject === undefined) return undefined;
 
-    const payload = approvalBriefPayloadSchema.parse(subject.payload);
-    const payloadEvidenceIds = payload.sourceEvidence.evidence.map((evidence) => evidence.evidenceId);
+    const persistedPayload = approvalBriefPayloadSchema.safeParse(subject.payload);
+    if (!persistedPayload.success) return undefined;
+    const payloadEvidenceIds = persistedPayload.data.sourceEvidence.evidence.map((evidence) => evidence.evidenceId);
     const [entryRows, authorityRows, decisionRows, decidedEntryRows, readableDealRows, readableEvidenceRows] = await Promise.all([
       this.database.sql<ApprovalEntryRow[]>`select id entry_id, category, eligible_authorities, depends_on from approval_requirement_entries where approval_subject_id = ${subjectId} order by ordinal`,
       this.database.sql<{ authority: string }[]>`select authority from approval_authority_grants
@@ -250,6 +254,8 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
     const decisions = decisionRows.map(mapDecision);
     const decidedEntries = new Set(decidedEntryRows.map((row) => row.entry_id));
     const readableEvidenceIds = new Set(readableEvidenceRows.map(({ id }) => id));
+    const visiblePayload = projectApprovalPayloadForReadableEvidence(persistedPayload.data, readableEvidenceIds);
+    if (visiblePayload === undefined) return undefined;
     return approvalDetailResponseSchema.parse({
       sessionVersion,
       approvalSubjectId: subject.approval_subject_id,
@@ -260,7 +266,7 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
       opportunityName: subject.opportunity_name,
       accountName: subject.account_name,
       status: subject.run_status,
-      payload,
+      payload: visiblePayload,
       entries: entryRows.map((entry) => {
         const required = authorities(entry.eligible_authorities);
         return {
@@ -276,14 +282,142 @@ export class PostgresRunApprovalQueryRepository implements RunApprovalQueryRepos
       quorum: { completed: decisions.length, required: entryRows.length },
       capabilities: {
         canReadDeal: readableDealRows.length > 0,
-        evidenceIds: payload.sourceEvidence.evidence
-          .filter((evidence) => readableEvidenceIds.has(evidence.evidenceId))
-          .map((evidence) => evidence.evidenceId)
+        evidenceIds: visiblePayload.sourceEvidence.evidence.map((evidence) => evidence.evidenceId)
       },
       createdAt: iso(subject.created_at),
       supersededBySubjectId: subject.superseded_by_subject_id
     });
   }
+}
+
+const REDACTED_APPROVAL_TEXT = 'Restricted pending evidence access';
+
+/**
+ * Produces a schema-valid brief that replaces generated content unless its own claims are entirely readable.
+ */
+function projectApprovalPayloadForReadableEvidence(
+  payload: ApprovalBriefPayload,
+  readableEvidenceIds: ReadonlySet<string>
+): ApprovalBriefPayload | undefined {
+  const dealSnapshotClaims = retainClaimsCitingReadableEvidence(payload.dealSnapshot.claims, readableEvidenceIds);
+  const executiveSummaryClaims = retainClaimsCitingReadableEvidence(payload.executiveSummary.claims, readableEvidenceIds);
+  const buyerClaims = retainClaimsCitingReadableEvidence(payload.buyerGoalsAndBusinessDrivers.claims, readableEvidenceIds);
+  const stakeholderMapClaims = retainClaimsCitingReadableEvidence(payload.stakeholderMap.claims, readableEvidenceIds);
+  const negotiationClaims = retainClaimsCitingReadableEvidence(payload.negotiationState.claims, readableEvidenceIds);
+
+  const projectedWithoutWarnings = approvalBriefPayloadSchema.safeParse({
+    dealSnapshot: dealSnapshotClaims.complete
+      ? { ...payload.dealSnapshot, claims: dealSnapshotClaims.claims }
+      : {
+          accountName: REDACTED_APPROVAL_TEXT,
+          opportunityName: REDACTED_APPROVAL_TEXT,
+          stage: REDACTED_APPROVAL_TEXT,
+          claims: dealSnapshotClaims.claims
+        },
+    executiveSummary: executiveSummaryClaims.complete
+      ? { ...payload.executiveSummary, claims: executiveSummaryClaims.claims }
+      : { narrative: REDACTED_APPROVAL_TEXT, claims: executiveSummaryClaims.claims },
+    buyerGoalsAndBusinessDrivers: buyerClaims.complete
+      ? { ...payload.buyerGoalsAndBusinessDrivers, claims: buyerClaims.claims }
+      : { goals: [], businessDrivers: [], claims: buyerClaims.claims },
+    stakeholderMap: {
+      stakeholders: payload.stakeholderMap.stakeholders.flatMap((stakeholder) => {
+        const claims = retainClaimsCitingReadableEvidence(stakeholder.claims, readableEvidenceIds);
+        return claims.complete ? [{ ...stakeholder, claims: claims.claims }] : [];
+      }),
+      ...(stakeholderMapClaims.complete && payload.stakeholderMap.coverageGaps !== undefined
+        ? { coverageGaps: payload.stakeholderMap.coverageGaps }
+        : {}),
+      claims: stakeholderMapClaims.claims
+    },
+    negotiationState: negotiationClaims.complete
+      ? { ...payload.negotiationState, claims: negotiationClaims.claims }
+      : { currentState: REDACTED_APPROVAL_TEXT, risks: [], claims: negotiationClaims.claims },
+    recommendedNextActions: {
+      actions: payload.recommendedNextActions.actions.flatMap((action) => {
+        const claims = retainClaimsCitingReadableEvidence(action.claims, readableEvidenceIds);
+        return claims.complete ? [{ ...action, claims: claims.claims }] : [];
+      })
+    },
+    missingInformation: { items: [] },
+    sourceEvidence: {
+      evidence: payload.sourceEvidence.evidence
+        .filter((evidence) => readableEvidenceIds.has(evidence.evidenceId))
+        .map((evidence) => ({
+          ...evidence,
+          claims: retainClaimsCitingReadableEvidence(evidence.claims, readableEvidenceIds).claims
+        }))
+    },
+    confidenceAndReviewWarnings: { overallConfidence: 0, warnings: [] }
+  });
+  if (!projectedWithoutWarnings.success) return undefined;
+
+  const retainedClaimIds = new Set<string>();
+  collectProjectedClaimIds(projectedWithoutWarnings.data, retainedClaimIds);
+  const projectedPayload = approvalBriefPayloadSchema.safeParse({
+    ...projectedWithoutWarnings.data,
+    confidenceAndReviewWarnings: {
+      overallConfidence: 0,
+      warnings: payload.confidenceAndReviewWarnings.warnings.filter((warning) =>
+        warning.claimIds.length > 0 && warning.claimIds.every((claimId) => retainedClaimIds.has(claimId))
+      )
+    }
+  });
+  return projectedPayload.success ? projectedPayload.data : undefined;
+}
+
+/** Retains a claim only when it has citations and every citation names readable evidence. */
+function retainClaimsCitingReadableEvidence(
+  claims: readonly unknown[] | undefined,
+  readableEvidenceIds: ReadonlySet<string>
+): Readonly<{ claims: unknown[]; complete: boolean }> {
+  const originalClaims = claims ?? [];
+  const readableClaims = originalClaims.filter((claim) => claimCitesOnlyReadableEvidence(claim, readableEvidenceIds));
+  return {
+    claims: readableClaims,
+    complete: originalClaims.length > 0 && readableClaims.length === originalClaims.length
+  };
+}
+
+/** Collects claim identifiers that remain present in the validated projected payload. */
+function collectProjectedClaimIds(value: unknown, retainedClaimIds: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) collectProjectedClaimIds(item, retainedClaimIds);
+    return;
+  }
+  if (value === null || typeof value !== 'object') return;
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (key === 'claims' && Array.isArray(nestedValue)) {
+      for (const claim of nestedValue) {
+        if (claim !== null && typeof claim === 'object' && !Array.isArray(claim) && 'id' in claim && typeof claim.id === 'string') {
+          retainedClaimIds.add(claim.id);
+        }
+      }
+      continue;
+    }
+    collectProjectedClaimIds(nestedValue, retainedClaimIds);
+  }
+}
+
+/** Accepts a claim only when it cites evidence and every citation names evidence the actor may read. */
+function claimCitesOnlyReadableEvidence(claim: unknown, readableEvidenceIds: ReadonlySet<string>): boolean {
+  if (
+    claim === null
+    || typeof claim !== 'object'
+    || Array.isArray(claim)
+    || !('citations' in claim)
+    || !Array.isArray(claim.citations)
+    || claim.citations.length === 0
+  ) return false;
+  return claim.citations.every((citation) =>
+    citation !== null
+    && typeof citation === 'object'
+    && !Array.isArray(citation)
+    && 'evidenceId' in citation
+    && typeof citation.evidenceId === 'string'
+    && readableEvidenceIds.has(citation.evidenceId)
+  );
 }
 
 function mapRunListRow(row: RunRow) {

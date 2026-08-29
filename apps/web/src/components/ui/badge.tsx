@@ -26,6 +26,7 @@ const badgeVariants = cva(
   }
 )
 
+/** Highlights a short status or category label with consistent emphasis. */
 function Badge({
   className,
   variant = "default",

@@ -4,12 +4,14 @@ import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Coordinates an accessible menu of contextual actions or choices. */
 function DropdownMenu({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
 }
 
+/** Renders menu content in the appropriate document layer. */
 function DropdownMenuPortal({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
@@ -18,6 +20,7 @@ function DropdownMenuPortal({
   )
 }
 
+/** Opens the associated menu from an explicit user action. */
 function DropdownMenuTrigger({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
@@ -29,6 +32,7 @@ function DropdownMenuTrigger({
   )
 }
 
+/** Presents contextual menu choices in a positioned, scrollable surface. */
 function DropdownMenuContent({
   className,
   sideOffset = 4,
@@ -49,6 +53,7 @@ function DropdownMenuContent({
   )
 }
 
+/** Keeps a related set of menu choices together for navigation and semantics. */
 function DropdownMenuGroup({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Group>) {
@@ -57,6 +62,7 @@ function DropdownMenuGroup({
   )
 }
 
+/** Provides one selectable action within a menu. */
 function DropdownMenuItem({
   className,
   inset,
@@ -80,6 +86,7 @@ function DropdownMenuItem({
   )
 }
 
+/** Provides a menu choice whose selected state can be toggled independently. */
 function DropdownMenuCheckboxItem({
   className,
   children,
@@ -106,6 +113,7 @@ function DropdownMenuCheckboxItem({
   )
 }
 
+/** Coordinates a set of menu choices where only one value can be selected. */
 function DropdownMenuRadioGroup({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioGroup>) {
@@ -117,6 +125,7 @@ function DropdownMenuRadioGroup({
   )
 }
 
+/** Provides one mutually exclusive choice within a menu. */
 function DropdownMenuRadioItem({
   className,
   children,
@@ -141,6 +150,7 @@ function DropdownMenuRadioItem({
   )
 }
 
+/** Gives a group of menu choices a descriptive heading. */
 function DropdownMenuLabel({
   className,
   inset,
@@ -161,6 +171,7 @@ function DropdownMenuLabel({
   )
 }
 
+/** Visually separates related groups of menu choices. */
 function DropdownMenuSeparator({
   className,
   ...props
@@ -174,6 +185,7 @@ function DropdownMenuSeparator({
   )
 }
 
+/** Shows the keyboard shortcut associated with a menu action. */
 function DropdownMenuShortcut({
   className,
   ...props
@@ -190,12 +202,14 @@ function DropdownMenuShortcut({
   )
 }
 
+/** Coordinates a nested set of contextual menu choices. */
 function DropdownMenuSub({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Sub>) {
   return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />
 }
 
+/** Opens a nested menu from its parent menu. */
 function DropdownMenuSubTrigger({
   className,
   inset,
@@ -220,6 +234,7 @@ function DropdownMenuSubTrigger({
   )
 }
 
+/** Presents nested menu choices alongside their parent menu. */
 function DropdownMenuSubContent({
   className,
   ...props

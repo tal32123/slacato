@@ -1,20 +1,20 @@
-import { Controller, Get, Req, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import type { DemoDiagnosticsResponse } from '@slacato/contracts';
 import { demoDiagnosticsResponseSchema } from '@slacato/contracts';
 import { ZodResponse } from '../../common/wire/zod.decorators.js';
-import type { AuthenticatedRequest } from '../auth/guard.js';
+import type { AuthenticatedPrincipal } from '../auth/contracts.js';
+import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { DiagnosticsService } from './diagnostics.service.js';
 
+/** Exposes authenticated operational diagnostics for the current principal. */
 @Controller('api/diagnostics')
 export class DiagnosticsController {
   public constructor(private readonly diagnostics: DiagnosticsService) {}
 
+  /** Returns runtime health and approval authority diagnostics visible to the current principal. */
   @Get()
   @ZodResponse(demoDiagnosticsResponseSchema)
-  public view(@Req() request: AuthenticatedRequest): Promise<DemoDiagnosticsResponse> {
-    if (request.auth === undefined) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Authentication is required' });
-    }
-    return this.diagnostics.view(request.auth);
+  public view(@CurrentPrincipal() principal: AuthenticatedPrincipal): Promise<DemoDiagnosticsResponse> {
+    return this.diagnostics.view(principal);
   }
 }

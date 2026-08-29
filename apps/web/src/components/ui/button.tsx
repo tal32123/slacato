@@ -38,6 +38,7 @@ const buttonVariants = cva(
   }
 )
 
+/** Provides a consistently styled action control that can also adopt a child link or control. */
 function Button({
   className,
   variant = "default",

@@ -18,6 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { cn } from '@/lib/utils';
 import { throwProtectedLoaderError } from './loader-security';
 
+/** Preloads the persona and security data needed to manage the current demo session. */
 export async function settingsLoader({ request }: LoaderFunctionArgs): Promise<null> {
   try {
     const session = await queryClient.fetchQuery(sessionQueryOptions());
@@ -33,6 +34,7 @@ export async function settingsLoader({ request }: LoaderFunctionArgs): Promise<n
   }
 }
 
+/** Lets users inspect their persona and switch the active demo identity safely. */
 export function SettingsRoute(): React.JSX.Element {
   const session = useProtectedSession();
   const personas = useQuery(personasQueryOptions());
@@ -184,6 +186,7 @@ export function SettingsRoute(): React.JSX.Element {
   );
 }
 
+/** Provides the authenticated session required by the settings experience. */
 function useProtectedSession(): DemoSession {
   const session = useRouteLoaderData('protected-root') as DemoSession | undefined;
   if (session === undefined) throw new Error('Protected session was not loaded');

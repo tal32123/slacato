@@ -9,14 +9,17 @@ type AppErrorBoundaryState = Readonly<{ failed: boolean }>;
 export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundaryState> {
   public state: AppErrorBoundaryState = { failed: false };
 
+  /** Marks the application as failed when React reports an unrecoverable rendering error. */
   public static getDerivedStateFromError(): AppErrorBoundaryState {
     return { failed: true };
   }
 
+  /** Records unexpected rendering failures for operators without exposing technical details to users. */
   public componentDidCatch(error: Error, details: ErrorInfo): void {
     console.error('Uncaught application render failure', error, details);
   }
 
+  /** Shows recovery guidance after a rendering failure or the protected application otherwise. */
   public render(): ReactNode {
     if (!this.state.failed) return this.props.children;
 

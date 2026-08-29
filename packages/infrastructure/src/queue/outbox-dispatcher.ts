@@ -7,8 +7,10 @@ type OutboxRow = Readonly<{ id: string; run_id: string; type: string; payload: R
 /** Multi-replica-safe outbox publisher: database claims are short; Redis I/O happens outside transactions. */
 export class OutboxDispatcher {
   private readonly owner = `dispatcher_${crypto.randomUUID()}`;
+  /** Configures durable command delivery, dead letters, retry limits, and claim leases. */
   public constructor(private readonly database: DatabaseClient, private readonly commandQueue: CommandQueue, private readonly deadLetterQueue: CommandQueue, private readonly maxAttempts = 3, private readonly claimLeaseMs = 30_000) {}
 
+  /** Claims and publishes one bounded batch while preserving safe retry and dead-letter outcomes. */
   public async dispatchBatch(limit = 25): Promise<Readonly<{ claimed: number; published: number; deadLettered: number }>> {
     const claimToken = `outbox_claim_${crypto.randomUUID()}`;
     const claimed = await this.database.sql.begin(async (sql) => sql<OutboxRow[]>`
@@ -47,6 +49,7 @@ export class OutboxDispatcher {
     return { claimed: claimed.length, published, deadLettered };
   }
 
+  /** Marks a claimed command as published only when this dispatcher still owns its claim. */
   private async markPublished(row: OutboxRow): Promise<boolean> {
     const marked = await this.database.sql`update outbox_commands set status = 'published', published_at = now(), claim_owner = null, claim_token = null, claim_expires_at = null where id = ${row.id} and status = 'claimed' and claim_token = ${row.claim_token}`;
     return marked.count > 0;
@@ -70,9 +73,13 @@ export class OutboxDispatcherLoop {
   private timer: NodeJS.Timeout | undefined;
   private stopping = false;
   private running = false;
+  /** Configures bounded polling for the outbox dispatcher. */
   public constructor(private readonly dispatcher: OutboxDispatcher, private readonly pollMs = 1_000, private readonly batchSize = 25, private readonly onTransientError: () => void = () => {}) {}
+  /** Starts polling when the loop is not already active. */
   public start(): void { if (this.timer === undefined) void this.tick(); }
+  /** Stops future polling and waits for the active batch to finish. */
   public async stop(): Promise<void> { this.stopping = true; if (this.timer !== undefined) clearTimeout(this.timer); while (this.running) await new Promise((resolve) => setTimeout(resolve, 10)); }
+  /** Dispatches one batch and schedules the next poll with bounded failure backoff. */
   private async tick(): Promise<void> {
     this.running = true;
     let delay = this.pollMs;

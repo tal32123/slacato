@@ -5,14 +5,13 @@ import {
   AUTH_OPTIONS, PERSONA_DIRECTORY, SESSION_REGISTRY,
   type AuthModuleOptions, type CanonicalPersonaDirectory, type SessionRegistry
 } from './contracts.js';
-import { DemoSessionCodec, SessionCsrf } from './session.js';
+import { DEMO_SESSION_TTL_MS, DemoSessionCodec, SessionCsrf } from './session.js';
 import { Inject } from '@nestjs/common';
 
 const SESSION_COOKIE_DEV = 'slacato_session';
 const CSRF_COOKIE_DEV = 'slacato_csrf_seed';
 const SESSION_COOKIE_PROD = '__Host-slacato_session';
 const CSRF_COOKIE_PROD = '__Host-slacato_csrf_seed';
-const EIGHT_HOURS_MS = 8 * 60 * 60 * 1_000;
 
 type CookieOptions = Readonly<{
   httpOnly: true;
@@ -22,6 +21,7 @@ type CookieOptions = Readonly<{
   maxAge: number;
 }>;
 
+/** Coordinates demo persona selection, session registry state, cookies, and CSRF enforcement. */
 @Injectable()
 export class AuthService {
   private readonly sessionCodec: DemoSessionCodec;
@@ -36,11 +36,13 @@ export class AuthService {
     this.csrf = new SessionCsrf(options.sessionSecret);
   }
 
+  /** Lists selectable personas without exposing directory-only fields. */
   public async listPersonas(): Promise<Readonly<{ personas: readonly Persona[] }>> {
     const personas = await this.personas.list();
     return { personas: personas.map(({ userId, displayName, role }) => ({ userId, displayName, role })) };
   }
 
+  /** Resolves the request's active signed session into the public authentication response. */
   public async getSession(request: Request): Promise<AuthSessionResponse> {
     const resolved = await this.resolveSession(request);
     return resolved === undefined ? { authenticated: false } : {
@@ -54,6 +56,7 @@ export class AuthService {
     };
   }
 
+  /** Issues a CSRF token bound to the request's current anonymous or authenticated session. */
   public async bootstrapCsrf(request: Request, response: Response): Promise<Readonly<{ csrfToken: string }>> {
     const session = await this.resolveSession(request);
     const seed = this.readCookie(request, this.csrfCookieName) ?? this.csrf.createSeed();
@@ -61,6 +64,7 @@ export class AuthService {
     return { csrfToken: this.csrf.issue(seed, session?.claims.version) };
   }
 
+  /** Revokes any request session, activates the selected persona, and writes the new session cookies. */
   public async selectPersona(
     input: SelectPersonaRequest,
     request: Request,
@@ -76,7 +80,7 @@ export class AuthService {
     await this.sessions.activate({
       version: claims.version,
       userId: claims.userId,
-      expiresAt: new Date(claims.issuedAt + EIGHT_HOURS_MS)
+      expiresAt: new Date(claims.issuedAt + DEMO_SESSION_TTL_MS)
     });
     const seed = this.csrf.createSeed();
     this.writeCookie(response, this.sessionCookieName, sessionToken);
@@ -91,6 +95,7 @@ export class AuthService {
     };
   }
 
+  /** Revokes the request session, clears its cookie, and rotates anonymous CSRF state. */
   public async logout(
     request: Request,
     response: Response
@@ -102,20 +107,25 @@ export class AuthService {
     return { session: { authenticated: false }, csrfToken: this.csrf.issue(seed, undefined) };
   }
 
+  /** Returns the active session or throws an unauthorized response. */
   public async requireSession(request: Request): Promise<NonNullable<Awaited<ReturnType<AuthService['resolveSession']>>>> {
     const session = await this.resolveSession(request);
     if (session === undefined) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Authentication is required' });
     return session;
   }
 
+  /** Requires a valid CSRF token bound to the request's current session state. */
   public async assertPublicMutationCsrf(request: Request, token: string | undefined): Promise<void> {
     const session = await this.resolveSession(request);
     this.assertCsrf(token, request, session?.claims.version);
   }
 
+  /** Requires a valid CSRF token bound to the supplied authenticated session generation. */
   public assertAuthenticatedMutationCsrf(request: Request, token: string | undefined, sessionVersion: string): void {
     this.assertCsrf(token, request, sessionVersion);
   }
+
+  /** Checks whether the registry still recognizes a session generation for the user. */
   public async isSessionActive(version: string, userId: string): Promise<boolean> {
     return this.sessions.isActive(version, userId);
   }
@@ -157,7 +167,7 @@ export class AuthService {
   }
 
   private writeCookie(response: Response, name: string, value: string): void {
-    response.cookie(name, value, { ...this.baseCookieOptions, maxAge: EIGHT_HOURS_MS });
+    response.cookie(name, value, { ...this.baseCookieOptions, maxAge: DEMO_SESSION_TTL_MS });
   }
 
   private readCookie(request: Request, name: string): string | undefined {

@@ -3,6 +3,7 @@ import { Separator as SeparatorPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Visually or semantically separates related groups of content. */
 function Separator({
   className,
   orientation = "horizontal",

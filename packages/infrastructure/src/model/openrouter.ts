@@ -7,16 +7,17 @@ import { z } from 'zod';
 import {
   createBudgetedModelGateway,
   ModelGatewayTransportError,
-  ModelRegistry,
   normalizeModelError,
   type BudgetedModelGateway,
   type EmbeddingGateway,
-  type ModelErrorCategory,
+  type ModelRegistry,
   type ModelTransport,
   type ModelTransportRequest,
   type ProviderAttemptLedger,
   type TransportGeneration
 } from '@slacato/core';
+import { openRouterDiagnosticCode } from './openrouter-diagnostics.js';
+import { classifyApiCallError, createProviderModelRegistry, warningText } from './provider-adapter-helpers.js';
 
 export type OpenRouterGatewayConfig = Readonly<{
   apiKey: string;
@@ -26,19 +27,15 @@ export type OpenRouterGatewayConfig = Readonly<{
   fetch?: typeof globalThis.fetch;
 }>;
 
-function warningText(warning: unknown): string {
-  return typeof warning === 'object' && warning !== null && 'type' in warning && typeof warning.type === 'string'
-    ? warning.type : 'provider_warning';
-}
+const UNSUPPORTED_STRUCTURED_OUTPUT_KEYWORDS = new Set(['$schema', 'minLength', 'maxLength', 'pattern', 'maxItems']);
 
-function categoryForApiCallError(error: InstanceType<typeof APICallError>): ModelErrorCategory {
-  const status = error.statusCode;
-  if (status === 401 || status === 403) return 'authorization';
-  if (status === 429) return 'rate_limited';
-  if (status !== undefined && status >= 400 && status < 500) return 'nonretryable_client';
-  if (status !== undefined && status >= 500 && error.isRetryable) return 'server';
-  if (status === undefined && error.isRetryable) return 'transient_transport';
-  return 'unknown';
+/** Keeps the full Zod schema for local validation while sending only Gemini's documented JSON Schema subset. */
+export function providerJsonSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(providerJsonSchema);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => !UNSUPPORTED_STRUCTURED_OUTPUT_KEYWORDS.has(key))
+    .map(([key, nested]) => [key, providerJsonSchema(nested)]));
 }
 
 /** Keeps provider response bodies and credentials behind the safe model error boundary. */
@@ -68,20 +65,23 @@ export function normalizeOpenRouterTransportError(error: unknown): ModelGatewayT
   }
   const generic = normalizeModelError(error).normalized;
   const apiError = APICallError.isInstance(error) ? error : undefined;
-  const category = apiError === undefined ? generic.category : categoryForApiCallError(apiError);
+  const category = apiError === undefined ? generic.category : classifyApiCallError(apiError.statusCode, apiError.isRetryable);
   return new ModelGatewayTransportError({
     category,
     ...(generic.statusCode === undefined ? {} : { statusCode: generic.statusCode }),
-    diagnosticCode: apiError === undefined ? 'openrouter_unknown_error' : 'openrouter_api_error',
+    diagnosticCode: apiError === undefined ? 'openrouter_unknown_error' : openRouterDiagnosticCode(apiError.statusCode, apiError.responseBody),
     message: 'OpenRouter provider request failed'
   });
 }
 
+/** Runs OpenRouter generation requests behind the provider-neutral transport contract. */
 class OpenRouterTransport implements ModelTransport {
   public readonly capabilities = { nativeStructuredOutput: true } as const;
 
+  /** Configures generation with the selected OpenRouter language model. */
   public constructor(private readonly model: LanguageModel) {}
 
+  /** Generates one model response within its deadline and translates provider failures. */
   public async generate<Value>(request: ModelTransportRequest<Value>): Promise<TransportGeneration<Value>> {
     const instructions = request.messages.filter(({ role }) => role === 'system').map(({ content }) => content).join('\n\n');
     const common = {
@@ -89,13 +89,12 @@ class OpenRouterTransport implements ModelTransport {
       messages: request.messages.filter(({ role }) => role !== 'system').map(({ role, content }) => ({ role, content })),
       ...(instructions.length === 0 ? {} : { instructions }),
       maxRetries: 0,
-      maxOutputTokens: request.maxOutputTokens,
       abortSignal: AbortSignal.timeout(Math.max(1, request.deadlineAt - Date.now()))
     };
     try {
       if (request.outputMode === 'native_schema') {
         if (request.schema === undefined) throw new Error('Native structured generation requires a schema');
-        const inputJsonSchema = z.toJSONSchema(request.schema, { io: 'input' }) as unknown as Parameters<typeof jsonSchema>[0];
+        const inputJsonSchema = providerJsonSchema(z.toJSONSchema(request.schema, { io: 'input' })) as Parameters<typeof jsonSchema>[0];
         try {
           const result = await generateText({
             ...common,
@@ -147,12 +146,12 @@ export function createOpenRouterModelGateways(config: OpenRouterGatewayConfig): 
     extraBody: { provider: { allow_fallbacks: true, require_parameters: true } },
     ...(config.fetch === undefined ? {} : { fetch: config.fetch })
   });
-  const registry = new ModelRegistry();
-  const languageModel = { providerId: 'openrouter', modelId: config.generationModelId, nativeStructuredOutput: true };
-  registry.register('brief', languageModel);
-  registry.register('specialist', languageModel);
-  registry.register('compaction', languageModel);
-  registry.register('embedding', { providerId: 'openrouter', modelId: config.embeddingModelId });
+  const registry = createProviderModelRegistry({
+    providerId: 'openrouter',
+    generationModelId: config.generationModelId,
+    embeddingModelId: config.embeddingModelId,
+    nativeStructuredOutput: true
+  });
   return {
     modelGateway: createBudgetedModelGateway(new OpenRouterTransport(provider.chat(config.generationModelId)), undefined, config.attemptLedger),
     embeddingGateway: {

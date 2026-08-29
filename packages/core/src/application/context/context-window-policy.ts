@@ -15,23 +15,32 @@ const CHARS_PER_TOKEN = 4;
 const MAX_COMPACTION_INPUT_TOKENS = 16_384;
 const MAX_COMPACTION_OUTPUT_TOKENS = 2_048;
 
+/** Signals that required model context cannot fit within the configured budget. */
 export class ContextBudgetError extends Error {
+  /** Creates a context-budget error with an explanation for the rejected request. */
   public constructor(message: string) { super(message); this.name = 'ContextBudgetError'; }
 }
 
+/** Estimates the model tokens needed for a text value. */
 function estimateTokens(content: string): number { return Math.ceil(content.length / CHARS_PER_TOKEN); }
+/** Totals the estimated model tokens across a message sequence. */
 function messageTokens(messages: readonly ModelMessage[]): number { return messages.reduce((sum, message) => sum + estimateTokens(message.content), 0); }
+/** Keeps the leading text that fits within a token allowance. */
 function takeTokens(content: string, tokenLimit: number): string { return content.slice(0, Math.max(0, tokenLimit * CHARS_PER_TOKEN)); }
+/** Copies a model message without sharing its object identity. */
 function copy(message: ModelMessage): ModelMessage { return { role: message.role, content: message.content }; }
+/** Identifies repair feedback that must remain intact during rebudgeting. */
 function isRepairFeedback(message: ModelMessage): boolean {
   return message.content.includes('BEGIN_UNTRUSTED_INVALID_OUTPUT')
     && message.content.includes('END_UNTRUSTED_INVALID_OUTPUT');
 }
 
+/** Rejects required content that exceeds its assigned section budget. */
 function requireInvariant(label: string, content: string, budget: number): void {
   if (estimateTokens(content) > budget) throw new ContextBudgetError(`${label} invariant exceeds its section budget`);
 }
 
+/** Renders required evidence while preserving every citation identifier within budget. */
 function renderRequiredEvidence(sections: readonly ContextSection[], budget: number): string {
   const prefixes = sections.map((section) => `[evidence id=${section.id}]\n`);
   const requiredTokens = prefixes.reduce((total, prefix) => total + estimateTokens(prefix), 0);
@@ -52,6 +61,7 @@ function renderRequiredEvidence(sections: readonly ContextSection[], budget: num
   return rendered.join('\n');
 }
 
+/** Renders as much optional context as fits within its assigned budget. */
 function renderOptionalSections(label: string, sections: readonly ContextSection[], budget: number): string {
   let used = 0;
   const rendered: string[] = [];
@@ -67,12 +77,14 @@ function renderOptionalSections(label: string, sections: readonly ContextSection
   return rendered.join('\n');
 }
 
-/** Deterministic, model-free budgeting that separates required invariants from optional material. */
+/** Preserves required instructions, tasks, and evidence while fitting prompts into the model context window. */
 export class ContextWindowPolicy {
+  /** Creates the policy with the context capacity and section budgets it must enforce. */
   public constructor(private readonly settings: ContextWindowSettings) {
     if (settings.contextWindowTokens <= settings.reservedOutputTokens) throw new ContextBudgetError('Context window must exceed reserved output capacity');
   }
 
+  /** Builds a bounded prompt that prioritizes required context over optional material. */
   public prepare(input: ContextWindowInput): PreparedContext {
     const budgets = this.settings.sectionTokenBudgets;
     const availableTokens = this.settings.contextWindowTokens - this.settings.reservedOutputTokens;
@@ -132,6 +144,7 @@ export class ContextWindowPolicy {
     return result;
   }
 
+  /** Fits an existing message sequence into the context window without truncating repair feedback. */
   public rebudgetRaw(messages: readonly ModelMessage[]): readonly ModelMessage[] {
     const availableTokens = this.settings.contextWindowTokens - this.settings.reservedOutputTokens;
     if (messages.some(isRepairFeedback)) {
@@ -152,12 +165,14 @@ export class ContextWindowPolicy {
   }
 }
 
+/** Accepts only ordinary record-like objects for checkpoint validation. */
 function asPlainRecord(value: unknown): Record<string, unknown> | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null ? value as Record<string, unknown> : undefined;
 }
 
+/** Confirms that a checkpoint carries every non-empty binding used to authorize reuse. */
 function validBindings(value: unknown): value is ContextCheckpointBindings {
   const record = asPlainRecord(value);
   if (record === undefined) return false;
@@ -165,6 +180,7 @@ function validBindings(value: unknown): value is ContextCheckpointBindings {
     .every((key) => Object.prototype.hasOwnProperty.call(record, key) && typeof record[key] === 'string' && record[key].length > 0);
 }
 
+/** Rejects malformed, unvalidated, oversized, or incorrectly bound compaction checkpoints. */
 function assertCheckpoint(value: unknown, input: BoundedCompactionInput): asserts value is ContextCheckpoint {
   const record = asPlainRecord(value);
   if (record === undefined || !Object.prototype.hasOwnProperty.call(record, 'coveredMessageRange') || !Object.prototype.hasOwnProperty.call(record, 'summary') || !Object.prototype.hasOwnProperty.call(record, 'validationState')) throw new ContextBudgetError('Compactor returned a malformed checkpoint');
@@ -177,7 +193,7 @@ function assertCheckpoint(value: unknown, input: BoundedCompactionInput): assert
   if (!isContextCheckpointReusable(checkpoint, input.bindings)) throw new ContextBudgetError('Compactor checkpoint bindings do not match the request');
 }
 
-/** Bounded one-step compaction using a non-recursive gateway and validated checkpoints. */
+/** Creates a one-step history compactor that cannot recursively invoke itself. */
 export function createNonRecursiveContextCompactor(gateway: NonRecursiveCompactionGateway, policy: ContextWindowPolicy): ContextCompactor {
   return {
     async compact(input: BoundedCompactionInput): Promise<ContextCheckpoint> {

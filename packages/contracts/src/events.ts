@@ -71,8 +71,10 @@ const eventBase = {
   version: z.literal(1),
   timestamp: timestampSchema
 };
+/** Builds an unsequenced run-event contract with its type-specific payload. */
 const eventVariant = <T extends string, P extends z.ZodType>(type: T, payload: P) =>
   z.object({ ...eventBase, type: z.literal(type), payload }).strict();
+/** Builds a persisted run-event contract with a positive stream sequence. */
 const sequencedEventVariant = <T extends string, P extends z.ZodType>(type: T, payload: P) =>
   z.object({ ...eventBase, sequence: z.number().int().positive(), type: z.literal(type), payload }).strict();
 
@@ -203,6 +205,7 @@ const traceBase = {
   startedAt: timestampSchema,
   endedAt: timestampSchema.optional()
 };
+/** Builds a trace-span contract with its kind-specific diagnostic data. */
 const traceVariant = <T extends z.infer<typeof traceKindSchema>, P extends z.ZodType>(kind: T, data: P) =>
   z.object({ ...traceBase, kind: z.literal(kind), data }).strict();
 

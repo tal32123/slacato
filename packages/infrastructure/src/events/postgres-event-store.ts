@@ -54,6 +54,7 @@ type TraceRow = Readonly<{
 
 type WakeWaiter = Readonly<{ resolve: () => void; abort: () => void }>;
 
+/** Converts a persisted event row into the validated public event envelope. */
 function envelopeFromRow(row: EventRow): RunEventEnvelope {
   return runEventEnvelopeSchema.parse({
     id: row.id,
@@ -66,6 +67,7 @@ function envelopeFromRow(row: EventRow): RunEventEnvelope {
   }) as RunEventEnvelope;
 }
 
+/** Converts a persisted trace row into the validated public trace span. */
 function traceFromRow(row: TraceRow): TraceSpan {
   return traceSpanSchema.parse({
     traceId: row.trace_id,
@@ -89,12 +91,15 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
   private reconciliation: NodeJS.Timeout | undefined;
   private closed = false;
 
+  /** Configures event, subscription, and trace storage against the authoritative database. */
   public constructor(private readonly database: DatabaseClient) {}
 
+  /** Starts notification listening so subscriptions can receive prompt wake-ups. */
   public async start(): Promise<void> {
     await this.ensureListener();
   }
 
+  /** Stops notifications and releases every waiting subscription during shutdown. */
   public async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
@@ -103,12 +108,14 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     clearInterval(this.reconciliation);
     if (this.listener !== undefined) await (await this.listener).unlisten();
   }
+  /** Closes the store when its hosting module shuts down. */
   public async onModuleDestroy(): Promise<void> {
     await this.close();
   }
 
 
 
+  /** Appends an idempotent run event and wakes subscribers after the database commits it. */
   public async publish(input: RunEventToPublish): Promise<void> {
     const envelope = runEventToPublishSchema.parse(input);
     await this.database.sql.begin(async (sql) => {
@@ -128,10 +135,12 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     });
   }
 
+  /** Streams authorized run events after an optional durable cursor. */
   public subscribe(streamId: string, afterId?: string, signal?: AbortSignal, authorize?: () => Promise<boolean>): AsyncIterable<RunEventEnvelope> {
     return createRunEventSubscription(this, streamId, afterId, signal, authorize);
   }
 
+  /** Resolves a public event cursor to its ordered position or reports expiration. */
   public async resolveCursor(streamId: string, afterId: string | undefined): Promise<number> {
     await this.ensureListener();
     if (afterId === undefined) return 0;
@@ -140,6 +149,7 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     return row.sequence;
   }
 
+  /** Reads the next bounded page of events after a durable sequence. */
   public async readAfter(streamId: string, afterSequence: number): Promise<readonly RunEventEnvelope[]> {
     const rows = await this.database.sql<EventRow[]>`select id, run_id, sequence, type, version, payload, created_at
       from run_events where run_id = ${streamId} and sequence > ${afterSequence}
@@ -147,6 +157,7 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     return rows.map(envelopeFromRow);
   }
 
+  /** Waits until a notification, reconciliation tick, cancellation, or shutdown may make events available. */
   public waitForWake(streamId: string, signal: AbortSignal): Promise<void> {
     if (signal.aborted || this.closed) return Promise.resolve();
     const { promise, resolve } = Promise.withResolvers<void>();
@@ -169,6 +180,7 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     return promise;
   }
 
+  /** Persists one trace span idempotently without allowing conflicting reuse of its identifier. */
   public async appendTrace(input: TraceSpan): Promise<void> {
     const span = traceSpanSchema.parse(input);
     await this.database.sql.begin(async (sql) => {
@@ -184,12 +196,14 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     });
   }
 
+  /** Returns the ordered trace history for a run. */
   public async tracesForRun(runId: string): Promise<readonly TraceSpan[]> {
     const rows = await this.database.sql<TraceRow[]>`select trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at
       from trace_spans where run_id = ${runId} order by started_at, span_id`;
     return rows.map(traceFromRow);
   }
 
+  /** Confirms the run trace accounts for every required span and persisted approval action. */
   public async assertTraceComplete(runId: string): Promise<void> {
     const spans = await this.tracesForRun(runId);
     validateTraceComplete(runId, spans);
@@ -229,6 +243,7 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     }
   }
 
+  /** Maintains the database listener and periodic fallback that wake active subscriptions. */
   private async ensureListener(): Promise<void> {
     if (this.closed) throw new Error('Postgres event store is closed');
     this.listener ??= this.database.sql.listen(CHANNEL, (streamId) => this.wake(streamId));
@@ -239,6 +254,7 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
     await this.listener;
   }
 
+  /** Releases every subscriber currently waiting for a stream. */
   private wake(streamId: string): void {
     const streamWaiters = this.waiters.get(streamId);
     if (streamWaiters === undefined) return;
@@ -248,8 +264,10 @@ export class PostgresEventStore implements RunEventBus, RunEventSubscriptionSour
 
 /** Opaque run-level authorization and snapshot watermark query for the HTTP boundary. */
 export class PostgresRunEventQuery implements RunEventQuery {
+  /** Configures run authorization and snapshot queries against the authoritative database. */
   public constructor(private readonly database: DatabaseClient) {}
 
+  /** Returns the current run snapshot only when the actor can view or approve that run. */
   public async authorizeAndSnapshot(streamId: string, actorId: string): Promise<RunSnapshot | undefined> {
     const row = (await this.database.sql<{
       id: string;

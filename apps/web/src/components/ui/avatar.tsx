@@ -5,6 +5,7 @@ import { Avatar as AvatarPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Presents a person's identity with an image, fallback, and optional status treatment. */
 function Avatar({
   className,
   size = "default",
@@ -25,6 +26,7 @@ function Avatar({
   )
 }
 
+/** Displays the image associated with an avatar identity. */
 function AvatarImage({
   className,
   ...props
@@ -38,6 +40,7 @@ function AvatarImage({
   )
 }
 
+/** Provides a recognizable substitute when an avatar image is unavailable. */
 function AvatarFallback({
   className,
   ...props
@@ -54,6 +57,7 @@ function AvatarFallback({
   )
 }
 
+/** Adds a compact status indicator to an avatar. */
 function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
@@ -70,6 +74,7 @@ function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
   )
 }
 
+/** Arranges several avatars as a compact group. */
 function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -83,6 +88,7 @@ function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Summarizes additional people that do not fit in an avatar group. */
 function AvatarGroupCount({
   className,
   ...props

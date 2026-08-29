@@ -209,6 +209,25 @@ describe('PostgreSQL outbox and workflow leases', () => {
     }
   });
 
+  it('rejects incomplete completed-job recovery capabilities before claiming the outbox row', async () => {
+    const queueName = `slacato-workflow-incomplete-recovery-${suffix()}`;
+    const primary = new BullMqCommandQueue(redisUrl, queueName);
+    const worker = new Worker(queueName, async () => undefined, { connection: { url: redisUrl } });
+    await Promise.all([primary.queue.waitUntilReady(), worker.waitUntilReady()]);
+    try {
+      const seeded = await seedRun(); const next = command(seeded.runId);
+      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next, idempotencyKey: next.idempotencyKey, startRequestHash: `hash_${suffix()}` });
+      await new OutboxDispatcher(database, primary, primary).dispatchBatch();
+      await waitForCompletedJob(primary, next.id);
+
+      const incomplete = { state: primary.state.bind(primary) };
+      expect(() => new PostgresCommandReconciler(database, incomplete as never)).toThrow('state, reopenCompleted, and publish');
+      expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('published');
+    } finally {
+      await worker.close(); await primary.close();
+    }
+  });
+
   it('reopens a retained completed but unconsumed primary job and executes the stable command again', async () => {
     const queueName = `slacato-workflow-completed-unconsumed-${suffix()}`;
     const primary = new BullMqCommandQueue(redisUrl, queueName);
@@ -217,7 +236,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await Promise.all([primary.queue.waitUntilReady(), worker.waitUntilReady()]);
     try {
       const seeded = await seedRun(); const next = command(seeded.runId);
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next, idempotencyKey: next.idempotencyKey, startRequestHash: `hash_${suffix()}` });
       await new OutboxDispatcher(database, primary, primary).dispatchBatch();
       await waitForCompletedJob(primary, next.id);
       const executionsBeforeRecovery = executions;
@@ -241,7 +260,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await Promise.all([primary.queue.waitUntilReady(), worker.waitUntilReady()]);
     try {
       const seeded = await seedRun(); const next = command(seeded.runId);
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next, idempotencyKey: next.idempotencyKey, startRequestHash: `hash_${suffix()}` });
       await new OutboxDispatcher(database, primary, primary).dispatchBatch();
       await waitForCompletedJob(primary, next.id);
       const executionsBeforeRecovery = executions;
@@ -249,7 +268,8 @@ describe('PostgreSQL outbox and workflow leases', () => {
       const crashAfterRemoval = {
         inspect: primary.inspect.bind(primary),
         state: primary.state.bind(primary),
-        reopenCompleted: async (commandId: string) => { await primary.reopenCompleted(commandId); throw new Error('simulated crash after completed-job removal'); }
+        reopenCompleted: async (commandId: string) => { await primary.reopenCompleted(commandId); throw new Error('simulated crash after completed-job removal'); },
+        publish: primary.publish.bind(primary)
       };
       await expect(new PostgresCommandReconciler(database, crashAfterRemoval).reconcile()).rejects.toThrow('simulated crash after completed-job removal');
       expect(await primary.queue.getJob(next.id)).toBeUndefined();

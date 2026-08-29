@@ -1,5 +1,5 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { CANONICAL_FIXTURE_COMMIT } from '@slacato/core';
+import { CANONICAL_FIXTURE_COMMIT, dealBriefSchema } from '@slacato/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -22,6 +22,19 @@ const sectionIds = [
   'sourceEvidence',
   'confidenceAndReviewWarnings'
 ] as const;
+const workspaceDraftRunId = `deal-workspace-draft-${process.pid}`;
+const workspaceDraftSubjectId = `deal-workspace-draft-subject-${process.pid}`;
+const generatedDraft = dealBriefSchema.parse({
+  dealSnapshot: { accountName: 'Northstar Foods Cooperative', opportunityName: 'Global Access Renewal', stage: 'Order Review' },
+  executiveSummary: { narrative: 'A generated draft is ready for seller review.' },
+  buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
+  stakeholderMap: { stakeholders: [] },
+  negotiationState: { currentState: 'The negotiation remains active.', risks: [] },
+  recommendedNextActions: { actions: [] },
+  missingInformation: { items: [] },
+  sourceEvidence: { evidence: [] },
+  confidenceAndReviewWarnings: { overallConfidence: 0.5, warnings: [] }
+});
 
 async function authenticate(app: NestExpressApplication, userId: string) {
   const agent = request.agent(app.getHttpServer());
@@ -131,6 +144,41 @@ describe('authorized deal API projection', () => {
       citationLabel: 'source=slack/account_team_updates.tsv, update_id=SLK-1001-02',
       chunkId: 'slack:SLK-1001-02:0'
     });
+  });
+
+  it('models deterministic records as a source snapshot and keeps a generated draft with its producing run separate', async () => {
+    const maya = await authenticate(app, 'USR-5001');
+    const beforeGeneration = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
+    expect(beforeGeneration.body).toMatchObject({
+      sourceSnapshot: { type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: { status: 'source_backed' } },
+      generatedOutput: null
+    });
+
+    try {
+      await seedDatabase`insert into runs
+        (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
+        values (${workspaceDraftRunId}, 'OPP-1001', 'USR-5001', 'awaiting_approval', 'mock', 'draft-preview', ${'d'.repeat(64)}, 1)`;
+      await seedDatabase`insert into approval_subjects
+        (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
+        values (${workspaceDraftSubjectId}, ${workspaceDraftRunId}, 1, ${'e'.repeat(64)}, ${JSON.stringify(generatedDraft)}::jsonb,
+          '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'deal-brief-approval-v1')`;
+
+      const response = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
+      expect(response.body).toMatchObject({
+        sourceSnapshot: { type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: { status: 'source_backed' } },
+        generatedOutput: {
+          type: 'generated_output',
+          lifecycle: 'draft',
+          producingRun: { id: workspaceDraftRunId, status: 'awaiting_approval' },
+          content: { status: 'generated' }
+        },
+        brief: { status: 'generated' }
+      });
+      expect(response.body.generatedOutput.producingRun.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    } finally {
+      await seedDatabase`delete from approval_subjects where id = ${workspaceDraftSubjectId}`;
+      await seedDatabase`delete from runs where id = ${workspaceDraftRunId}`;
+    }
   });
 
   it('filters unauthorized source types and denies hidden opportunities with one opaque response', async () => {

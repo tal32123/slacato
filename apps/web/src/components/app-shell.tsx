@@ -9,6 +9,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+/** Frames protected pages with navigation, session controls, guided help, and accessible focus handling. */
 export function AppShell({ session, onLogout }: Readonly<{
   session: DemoSession;
   onLogout: () => Promise<void>;

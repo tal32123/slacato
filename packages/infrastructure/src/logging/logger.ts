@@ -9,6 +9,7 @@ const PINO_REDACTION_PATHS = [
   'req.headers.authorization', 'req.headers.cookie', 'req.headers.x-api-key'
 ] as const;
 
+/** Ensures child loggers sanitize their inherited bindings through the same allowlist. */
 function protectChildBindings<CustomLevels extends string = never, UseOnlyCustomLevels extends boolean = boolean>(
   instance: Logger<CustomLevels, UseOnlyCustomLevels>
 ): Logger<CustomLevels, UseOnlyCustomLevels> {

@@ -2,14 +2,41 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import postgres from 'postgres';
-import { buildEvidenceDocuments, CANONICAL_FIXTURE_COMMIT, chunkDocument, DEMO_APPROVAL_IDENTITIES, deriveApprovalAuthorities, deriveApprovalAuthority, parseFixtureSet } from '../packages/core/src/index.js';
+import {
+  buildEvidenceDocuments,
+  CANONICAL_FIXTURE_COMMIT,
+  chunkDocument,
+  DEMO_APPROVAL_IDENTITIES,
+  deriveApprovalAuthorities,
+  deriveApprovalAuthority,
+  parseFixtureSet
+} from '../packages/core/src/index.js';
 
 const DEFAULT_DATABASE_URL = 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
-type InsertCounts = Readonly<{ personas: number; grants: number; accounts: number; opportunities: number; contacts: number; documents: number; chunks: number }>;
-export type IngestionResult = Readonly<{ inserted: InsertCounts; totalDocuments: number; totalChunks: number }>;
-export type IngestionOptions = Readonly<{ root: string; databaseUrl: string }>;
+type InsertCounts = Readonly<{
+  personas: number;
+  grants: number;
+  accounts: number;
+  opportunities: number;
+  contacts: number;
+  documents: number;
+  chunks: number;
+}>;
 
+export type IngestionResult = Readonly<{
+  inserted: InsertCounts;
+  totalDocuments: number;
+  totalChunks: number;
+}>;
+
+export type IngestionOptions = Readonly<{
+  root: string;
+  databaseUrl: string;
+}>;
+
+/** Produces a stable fingerprint for canonical evidence content. */
 function sha256(value: string): string { return createHash('sha256').update(value).digest('hex'); }
+/** Maps fixture source categories to the permission categories stored for retrieval. */
 function permissionSources(sourceType: string): readonly string[] {
   if (sourceType === 'gong') return ['gong_summary', 'gong_transcript'];
   if (sourceType === 'policies') return ['policy'];
@@ -41,7 +68,9 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
       for (const opportunity of fixtures.opportunities) {
         const notes = fixtures.pricingNotes.filter((note) => note.opportunityId === opportunity.opportunityId);
         const discountPercent = Math.max(0, ...notes.map((note) => note.requestedDiscount));
-        const renewalUpliftPercent = Math.min(0, ...notes.map((note) => note.renewalUplift));
+        const renewalUpliftPercent = notes.length === 0
+          ? 0
+          : Math.min(...notes.map((note) => note.renewalUplift));
         const liabilityCapChanged = notes.some((note) => /liability language/i.test(note.pricingNotes));
         const restrictedLanguage = opportunity.restrictedAccess;
         await transaction`insert into opportunity_policy_facts
@@ -90,8 +119,18 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
         }
       }
       for (const identity of DEMO_APPROVAL_IDENTITIES) {
-        await transaction`insert into personas (id, display_name, role) values (${identity.userId}, ${identity.displayName}, ${identity.role})
-          on conflict (id) do update set display_name = excluded.display_name, role = excluded.role`;
+        const insertedPersona = await transaction`
+          insert into personas (id, display_name, role, source_commit)
+          values (${identity.userId}, ${identity.displayName}, ${identity.role}, ${CANONICAL_FIXTURE_COMMIT})
+          on conflict (id) do update
+          set display_name = excluded.display_name,
+            role = excluded.role,
+            source_commit = excluded.source_commit
+          where (personas.display_name, personas.role, personas.source_commit)
+            is distinct from (excluded.display_name, excluded.role, excluded.source_commit)
+          returning id
+        `;
+        counts.personas += insertedPersona.length;
         for (const authority of identity.authorities) {
           const authorityGrantId = `approval-authority:${identity.userId}:${identity.accountId}:${authority}`;
           authorityGrantIds.push(authorityGrantId);
@@ -148,6 +187,7 @@ export async function ingestFixtureRecords(options: IngestionOptions): Promise<I
   }
 }
 
+/** Runs the fixture-ingestion CLI and prints the ingestion result. */
 async function main(): Promise<void> {
   const result = await ingestFixtureRecords({
     root: resolve(process.cwd(), 'fixtures/cato'),

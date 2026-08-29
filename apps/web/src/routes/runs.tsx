@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { runsQueryOptions } from '@/features/runs/queries';
 import { throwProtectedLoaderError } from './loader-security';
 
+/** Loads the run history while preserving protected-session transition guarantees. */
 export async function runsLoader({ request }: LoaderFunctionArgs): Promise<RunListResponse | null> {
   try {
     const session = await queryClient.fetchQuery(sessionQueryOptions());
@@ -28,6 +29,7 @@ export async function runsLoader({ request }: LoaderFunctionArgs): Promise<RunLi
   }
 }
 
+/** Presents recent workflow runs with their status, timing, and destination. */
 export function RunsRoute(): React.JSX.Element {
   const response = useLoaderData() as RunListResponse;
   return (
@@ -71,6 +73,7 @@ export function RunsRoute(): React.JSX.Element {
   );
 }
 
+/** Converts a run state into the workflow label shown to users. */
 export function statusLabel(status: RunStatus): string {
   const labels: Record<RunStatus, string> = {
     created: 'Queued', retrieving: 'Retrieving evidence', specialists_running: 'Specialists running',
@@ -80,12 +83,14 @@ export function statusLabel(status: RunStatus): string {
   return labels[status];
 }
 
+/** Chooses the visual emphasis appropriate to a run state. */
 function badgeStatus(status: RunStatus): ProductStatus {
   if (status === 'completed') return 'ready';
   if (status === 'awaiting_approval' || status === 'rejected' || status === 'failed' || status === 'cancelled') return 'attention';
   return 'readonly';
 }
 
+/** Formats a run timestamp for the user's locale. */
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }

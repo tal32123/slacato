@@ -35,6 +35,7 @@ export type EditedPolicySignals = Readonly<Pick<ApprovalRequirementInput,
   'liabilityCapChanged' | 'dataRetentionLanguage' | 'restrictedResearchLanguage'
   | 'customerSpecificSecurityLanguage' | 'customerFacingConcessionLanguage'>>;
 
+/** Normalizes all brief prose for deterministic policy concept matching. */
 function semanticText(payload: DealBrief): string {
   const values: string[] = [];
   const visit = (value: unknown): void => {
@@ -46,11 +47,12 @@ function semanticText(payload: DealBrief): string {
   return values.join(' ').normalize('NFKC').toLocaleLowerCase('en-US').replaceAll(/[^a-z0-9]+/g, ' ');
 }
 
+/** Reports whether normalized brief prose contains any configured policy concept. */
 function containsConcept(text: string, concepts: readonly string[]): boolean {
   return concepts.some((concept) => text.includes(` ${concept} `));
 }
 
-/** Conservative deterministic semantic classification for approval-sensitive edited prose. */
+/** Classifies approval-sensitive concepts in edited brief prose using conservative deterministic rules. */
 export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySignals {
   const text = ` ${semanticText(payload)} `;
   const liabilitySubject = containsConcept(text, ['liability', 'liabilities', 'indemnity', 'indemnification', 'exposure', 'damages', 'risk allocation']);
@@ -93,6 +95,7 @@ export const DEMO_APPROVAL_IDENTITIES = Object.freeze([
   })
 ]);
 
+/** Builds one immutable approval requirement with its authorities and dependencies. */
 function entry(
   category: ApprovalCategory,
   eligibleAuthorities: readonly ApprovalAuthority[],
@@ -108,7 +111,7 @@ function entry(
   });
 }
 
-/** Canonical approval policy expressed as deterministic, provider-independent rules. */
+/** Determines the approvals required by the canonical provider-independent policy. */
 export function decideApprovalRequirement(input: ApprovalRequirementInput): ApprovalRequirement {
   if (![input.discountPercent, input.renewalUpliftPercent, input.overallConfidence].every(Number.isFinite)) {
     throw new TypeError('Approval policy numeric inputs must be finite');

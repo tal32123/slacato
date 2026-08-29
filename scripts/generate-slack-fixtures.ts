@@ -4,72 +4,17 @@ import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 import {
   generateSlackFixtures,
+  type BudgetedModelGateway,
   type FixtureGenerationGateway,
   type ProviderAttemptLedger,
-  type SlackGenerationCandidate,
   type SlackUpdate
 } from '../packages/core/src/index.js';
-import { createMockModelGateways } from '../packages/infrastructure/src/index.js';
+import { createOllamaModelGateways, createOpenRouterModelGateways } from '../packages/infrastructure/src/index.js';
 import { PINNED_COMMIT } from './fetch-fixtures.js';
 
-const REVIEWED_CANDIDATES: readonly SlackGenerationCandidate[] = [
-  {
-    updateId: 'SLK-1001-01', opportunityId: 'OPP-1001', accountId: 'ACC-2001', updateDate: '2026-04-25',
-    channel: 'account-northstar', authorRole: 'Account Owner', syntheticNotice: true, sourceAccessLevel: 'standard',
-    updateText: 'The account team confirmed that the final packet still centers on named migration owners and measurable exception reduction, reinforcing the latest buyer calls.',
-    contextKinds: ['reinforcing_fact']
-  },
-  {
-    updateId: 'SLK-1001-02', opportunityId: 'OPP-1001', accountId: 'ACC-2001', updateDate: '2026-04-26',
-    channel: 'account-northstar', authorRole: 'Deal Strategist', syntheticNotice: true, sourceAccessLevel: 'standard',
-    updateText: 'The written payment schedule has not yet been confirmed in the account-team thread, so the signature packet still has a documented information gap.',
-    contextKinds: ['missing_context']
-  },
-  {
-    updateId: 'SLK-1001-03', opportunityId: 'OPP-1001', accountId: 'ACC-2001', updateDate: '2026-04-27',
-    channel: 'account-northstar', authorRole: 'Solutions Lead', syntheticNotice: true, sourceAccessLevel: 'standard',
-    updateText: 'Regional stakeholders appear comfortable with weekly reporting, while executive support remains conditional on a credible exception plan; treat this as unresolved alignment, not approval.',
-    contextKinds: ['ambiguity_or_conflict']
-  },
-  {
-    updateId: 'SLK-1002-01', opportunityId: 'OPP-1002', accountId: 'ACC-2002', updateDate: '2026-04-26',
-    channel: 'account-meridian', authorRole: 'Account Owner', syntheticNotice: true, sourceAccessLevel: 'standard',
-    updateText: 'The team reiterated that the proof is directionally successful and that the technical champion remains supportive, matching the proof-closeout call.',
-    contextKinds: ['reinforcing_fact']
-  },
-  {
-    updateId: 'SLK-1002-02', opportunityId: 'OPP-1002', accountId: 'ACC-2002', updateDate: '2026-04-27',
-    channel: 'account-meridian', authorRole: 'Customer Success', syntheticNotice: true, sourceAccessLevel: 'standard',
-    updateText: 'No confirmed completion dates are recorded yet for the reporting-export retest or the incident-owner map, leaving the proof exit schedule incomplete.',
-    contextKinds: ['missing_context']
-  },
-  {
-    updateId: 'SLK-1002-03', opportunityId: 'OPP-1002', accountId: 'ACC-2002', updateDate: '2026-04-28',
-    channel: 'account-meridian', authorRole: 'Solutions Lead', syntheticNotice: true, sourceAccessLevel: 'standard',
-    updateText: 'Operations is treating both remediation items as proof-exit criteria, while the rollout team may view them as follow-up work; the stage interpretation needs confirmation.',
-    contextKinds: ['ambiguity_or_conflict']
-  },
-  {
-    updateId: 'SLK-1003-01', opportunityId: 'OPP-1003', accountId: 'ACC-2003', updateDate: '2026-04-28',
-    channel: 'restricted-eclipse', authorRole: 'Restricted Account Owner', syntheticNotice: true, sourceAccessLevel: 'restricted',
-    updateText: 'The restricted account team reaffirmed that discount, liability language, and restricted-source use each require approval before a recommendation is shared.',
-    contextKinds: ['reinforcing_fact']
-  },
-  {
-    updateId: 'SLK-1003-02', opportunityId: 'OPP-1003', accountId: 'ACC-2003', updateDate: '2026-04-29',
-    channel: 'restricted-eclipse', authorRole: 'Deal Strategist', syntheticNotice: true, sourceAccessLevel: 'restricted',
-    updateText: 'The thread does not contain an approved concession statement or a completed legal redline, so customer-facing language remains a missing input.',
-    contextKinds: ['missing_context']
-  },
-  {
-    updateId: 'SLK-1003-03', opportunityId: 'OPP-1003', accountId: 'ACC-2003', updateDate: '2026-04-30',
-    channel: 'restricted-eclipse', authorRole: 'Legal Liaison', syntheticNotice: true, sourceAccessLevel: 'restricted',
-    updateText: 'Procurement continues to request a written concession while legal has warned against informal language; preserve both signals and route the conflict for approval.',
-    contextKinds: ['ambiguity_or_conflict']
-  }
-];
-
+/** Produces a stable fingerprint for generated fixture material. */
 function sha256(value: string): string { return createHash('sha256').update(value).digest('hex'); }
+/** Loads tab-separated fixture rows into records keyed by their column names. */
 function parseRows(path: string): readonly Record<string, string>[] {
   const [headerLine, ...lines] = readFileSync(path, 'utf8').trimEnd().split(/\r?\n/);
   if (headerLine === undefined) throw new Error(`Missing TSV header: ${path}`);
@@ -77,6 +22,7 @@ function parseRows(path: string): readonly Record<string, string>[] {
   return lines.map((line) => Object.fromEntries(headers.map((header, index) => [header, line.split('\t')[index] ?? ''])));
 }
 
+/** Serializes validated Slack updates into the canonical tab-separated fixture format. */
 function tsv(updates: readonly SlackUpdate[]): string {
   const headers = ['update_id', 'opportunity_id', 'account_id', 'update_date', 'channel', 'author_role', 'synthetic_notice', 'source_access_level', 'update_text'] as const;
   const rows = updates.map((row) => [
@@ -89,17 +35,64 @@ function tsv(updates: readonly SlackUpdate[]): string {
   return `${headers.join('\t')}\n${rows.join('\n')}\n`;
 }
 
+type LiveFixtureProvider = Readonly<{
+  provider: 'ollama' | 'openrouter';
+  model: string;
+  modelGateway: BudgetedModelGateway;
+}>;
+
+/** Reads a non-empty provider setting without supplying a development fallback. */
+function requiredProviderSetting(environment: NodeJS.ProcessEnv, name: string): string {
+  const value = environment[name]?.trim();
+  if (value === undefined || value.length === 0) throw new Error(`Live Slack fixture generation requires ${name}`);
+  return value;
+}
+
+/** Composes the selected live provider adapter from explicit environment settings. */
+function createLiveFixtureProvider(environment: NodeJS.ProcessEnv, attemptLedger: ProviderAttemptLedger): LiveFixtureProvider {
+  const provider = requiredProviderSetting(environment, 'AI_PROVIDER');
+  if (provider === 'mock') throw new Error('Live Slack fixture generation does not allow AI_PROVIDER=mock');
+  if (provider === 'openrouter') {
+    const model = requiredProviderSetting(environment, 'OPENROUTER_CHAT_MODEL');
+    const gateways = createOpenRouterModelGateways({
+      apiKey: requiredProviderSetting(environment, 'OPENROUTER_API_KEY'),
+      generationModelId: model,
+      embeddingModelId: requiredProviderSetting(environment, 'OPENROUTER_EMBEDDING_MODEL'),
+      attemptLedger
+    });
+    return { provider, model, modelGateway: gateways.modelGateway };
+  }
+  if (provider === 'ollama') {
+    const model = requiredProviderSetting(environment, 'OLLAMA_CHAT_MODEL');
+    const gateways = createOllamaModelGateways({
+      baseURL: requiredProviderSetting(environment, 'OLLAMA_BASE_URL'),
+      apiKey: requiredProviderSetting(environment, 'OLLAMA_API_KEY'),
+      generationModelId: model,
+      embeddingModelId: requiredProviderSetting(environment, 'OLLAMA_EMBEDDING_MODEL'),
+      attemptLedger
+    }, { nativeStructuredOutput: false });
+    return { provider, model, modelGateway: gateways.modelGateway };
+  }
+  throw new Error(`Live Slack fixture generation does not support AI_PROVIDER=${provider}`);
+}
+
+/** Accounts for provider attempts locally while generation.json records the successful operation. */
 class GenerationMetadataLedger implements ProviderAttemptLedger {
   private ordinal = 0;
+  /** Creates local metadata for the next fixture-generation provider attempt. */
   public async beginAttempt(input: { requestedOutputTokens: number }) {
     this.ordinal += 1;
     return { reservationId: `fixture-reservation-${this.ordinal}`, attemptId: `fixture-attempt-${this.ordinal}`, ordinal: this.ordinal, grantedOutputTokens: input.requestedOutputTokens };
   }
+  /** Defers successful-attempt recording to the durable generation manifest. */
   public async settleAttempt(): Promise<void> { /* generation.json is the durable record for this one-time operation */ }
+  /** Leaves failed attempts unrecorded so they cannot replace reviewed fixtures. */
   public async releaseAttempt(): Promise<void> { /* failures are surfaced and do not replace reviewed fixtures */ }
 }
 
+/** Generates, validates, and records Slack fixtures using an explicitly configured live provider. */
 async function main(): Promise<void> {
+  const provider = createLiveFixtureProvider(process.env, new GenerationMetadataLedger());
   const root = resolve(process.cwd(), 'fixtures/cato');
   const opportunities = parseRows(join(root, 'salesforce/opportunities.tsv'));
   const summaries = parseRows(join(root, 'gong/gong_call_summaries.tsv'));
@@ -110,19 +103,14 @@ async function main(): Promise<void> {
     if (callDate > (latestByOpportunity.get(opportunityId) ?? '')) latestByOpportunity.set(opportunityId, callDate);
   }
   let promptMaterial = '';
-  const provider = createMockModelGateways({
-    attemptLedger: new GenerationMetadataLedger(),
-    resolve(request) {
-      promptMaterial = JSON.stringify(request.messages);
-      return { text: JSON.stringify(REVIEWED_CANDIDATES), usage: { inputTokens: 1_500, outputTokens: 1_200 } };
-    }
-  });
   const gateway: FixtureGenerationGateway = {
+    /** Sends the fixture prompt through the live gateway with bounded retries and durable attempt metadata. */
     async generateObject(request) {
+      promptMaterial = JSON.stringify(request.messages);
       return provider.modelGateway.generateObject({
         ...request,
-        durableAttempt: { runScope: 'fixture-generation-v1', provider: 'mock', model: 'mock-specialist' },
-        limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 30_000, maxInputTokens: 16_000, maxOutputTokens: 8_000 }
+        durableAttempt: { runScope: 'fixture-generation-v1', provider: provider.provider, model: provider.model },
+        limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 30_000 }
       });
     }
   };
@@ -138,22 +126,18 @@ async function main(): Promise<void> {
   const promptHash = sha256(promptMaterial);
   const outputHash = sha256(output);
   const generationPath = join(root, 'slack/generation.json');
-  let generatedAt = new Date().toISOString();
-  try {
-    const previous = JSON.parse(readFileSync(generationPath, 'utf8')) as { promptHash?: unknown; outputHash?: unknown; generatedAt?: unknown };
-    if (previous.promptHash === promptHash && previous.outputHash === outputHash && typeof previous.generatedAt === 'string') generatedAt = previous.generatedAt;
-  } catch { /* first reviewed generation */ }
-  writeFileSync(join(root, 'slack/account_team_updates.tsv'), output);
+  const generatedAt = new Date().toISOString();
   const coverage = Object.fromEntries(input.opportunities.map((opportunity) => [opportunity.opportunityId, {
     count: updates.filter((row) => row.opportunityId === opportunity.opportunityId).length,
     contextKinds: ['reinforcing_fact', 'missing_context', 'ambiguity_or_conflict'],
     chronologyValid: true
   }]));
+  writeFileSync(join(root, 'slack/account_team_updates.tsv'), output);
   writeFileSync(generationPath, `${JSON.stringify({
-    provider: 'mock', model: 'mock-specialist', sourceCommit: PINNED_COMMIT, promptHash, outputHash, generatedAt,
+    provider: provider.provider, model: provider.model, sourceCommit: PINNED_COMMIT, promptHash, outputHash, generatedAt,
     reviewStatus: 'reviewed', validation: { passed: true, syntheticNotices: true, coverage }
   }, null, 2)}\n`);
-  process.stdout.write(`Generated and validated ${updates.length} reviewed Slack fixtures with the deterministic mock gateway.\n`);
+  process.stdout.write(`Generated and validated ${updates.length} synthetic Slack fixtures with ${provider.provider}/${provider.model}.\n`);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

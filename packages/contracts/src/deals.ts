@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+/** Confirms that an ISO-formatted date identifies a real calendar day. */
 const isCalendarIsoDate = (value: string): boolean => {
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
@@ -104,9 +105,31 @@ export const dealBriefViewSchema = z.object({
   warnings: z.array(reviewWarningViewSchema).max(100)
 }).strict();
 
+/** Deterministic projection of currently authorized source records, never generated output. */
+export const sourceSnapshotViewSchema = z.object({
+  type: z.literal('source_snapshot'),
+  label: z.literal('Source snapshot'),
+  evidenceOverview: dealBriefViewSchema.extend({ status: z.literal('source_backed') }).strict()
+}).strict();
+
+/** A generated artifact that remains explicitly linked to the run that produced it. */
+export const generatedDealOutputViewSchema = z.object({
+  type: z.literal('generated_output'),
+  lifecycle: z.enum(['draft', 'finalized']),
+  producingRun: z.object({
+    id: z.string().min(1).max(256),
+    status: runStatusSchema,
+    updatedAt: isoDateTimeSchema
+  }).strict(),
+  content: dealBriefViewSchema.extend({ status: z.literal('generated') }).strict()
+}).strict();
+
 export const dealWorkspaceViewSchema = z.object({
   sessionVersion: z.string().min(1).max(256),
   deal: dealSummarySchema,
+  sourceSnapshot: sourceSnapshotViewSchema,
+  generatedOutput: generatedDealOutputViewSchema.nullable(),
+  /** @deprecated Use sourceSnapshot and generatedOutput, which do not conflate source records with generated content. */
   brief: dealBriefViewSchema,
   evidence: z.array(evidenceDetailSchema).max(500)
 }).strict();
@@ -115,6 +138,8 @@ export type DealListItem = z.infer<typeof dealListItemSchema>;
 export type DealListResponse = z.infer<typeof dealListResponseSchema>;
 export type DealWorkspaceView = z.infer<typeof dealWorkspaceViewSchema>;
 export type DealBriefView = z.infer<typeof dealBriefViewSchema>;
+export type SourceSnapshotView = z.infer<typeof sourceSnapshotViewSchema>;
+export type GeneratedDealOutputView = z.infer<typeof generatedDealOutputViewSchema>;
 export type BriefSectionView = z.infer<typeof briefSectionSchema>;
 export type EvidenceDetail = z.infer<typeof evidenceDetailSchema>;
 export type StakeholderView = z.infer<typeof stakeholderViewSchema>;

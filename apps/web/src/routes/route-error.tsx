@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { isRouteErrorResponse, useRevalidator, useRouteError } from 'react-router';
 import { Button } from '@/components/ui/button';
 
+/** Turns route failures into recoverable, permission-aware guidance for the user. */
 export function RouteErrorBoundary({ root = false }: Readonly<{ root?: boolean }>): React.JSX.Element {
   const error = useRouteError();
   const revalidator = useRevalidator();

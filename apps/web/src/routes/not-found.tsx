@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 
+/** Helps users recover when a requested product page does not exist. */
 export function NotFoundRoute(): React.JSX.Element {
   return (
     <section className="mx-auto max-w-2xl py-10" aria-labelledby="not-found-title">

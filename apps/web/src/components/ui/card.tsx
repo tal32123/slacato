@@ -2,6 +2,7 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/** Groups related content and actions in a distinct surface. */
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -15,6 +16,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Organizes a card's heading, description, and leading actions. */
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -28,6 +30,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Gives a card its primary heading. */
 function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -38,6 +41,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Provides supporting context beneath a card heading. */
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -48,6 +52,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Positions a card-level action alongside its heading content. */
 function CardAction({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -61,6 +66,7 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Holds the primary information or controls within a card. */
 function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -71,6 +77,7 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Organizes actions or supporting information at the end of a card. */
 function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div

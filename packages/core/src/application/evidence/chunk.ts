@@ -12,12 +12,18 @@ export type EvidenceChunk = Readonly<{
   eventDate?: string | undefined; reliability: string; classificationReason: string; policyHash: string; sourceLocator: string;
 }>;
 
+/** Builds overlapping transcript-turn windows while repeating the explicit transcript header and metadata blocks. */
 function transcriptWindows(content: string): string[] {
   const blocks = content.split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean);
-  const metadataEnd = blocks.findIndex((block) => /:\s/.test(block) && !block.startsWith('**'));
-  const header = metadataEnd <= 0 ? [] : blocks.slice(0, metadataEnd);
-  const turns = metadataEnd <= 0 ? blocks : blocks.slice(metadataEnd);
-  if (turns.length <= 6) return [content.trim()];
+  const hasTranscriptHeading = /^#{1,6}\s+Transcript(?:\s*:|\b)/i.test(blocks[0] ?? '');
+  const metadataCandidate = hasTranscriptHeading ? blocks[1] : undefined;
+  const hasTranscriptMetadata = metadataCandidate !== undefined
+    && ['Opportunity', 'Account', 'Date', 'Source access level']
+      .every((label) => new RegExp(`^\\*\\*${label}:\\*\\*\\s*\\S+`, 'mi').test(metadataCandidate));
+  const headerBlockCount = Number(hasTranscriptHeading) + Number(hasTranscriptMetadata);
+  const header = blocks.slice(0, headerBlockCount);
+  const turns = blocks.slice(headerBlockCount);
+  if (turns.length <= 6) return [[...header, ...turns].join('\n\n')];
   const windows: string[] = [];
   for (let start = 0; start < turns.length; start += 5) {
     const window = turns.slice(start, start + 6);
@@ -28,15 +34,11 @@ function transcriptWindows(content: string): string[] {
   return windows;
 }
 
-function policySections(content: string): string[] {
-  return content.split(/\n(?=#{1,6}\s)/).map((section) => section.trim()).filter(Boolean);
-}
-
 /** Deterministically chunks at source-semantic boundaries and preserves authorization metadata. */
 export function chunkDocument(document: EvidenceDocument): EvidenceChunk[] {
-  const contents = document.sourceType === 'gong_transcript' ? transcriptWindows(document.content)
-    : document.sourceType === 'policy' ? policySections(document.content)
-      : [document.content.trim()];
+  const contents = document.sourceType === 'gong_transcript'
+    ? transcriptWindows(document.content)
+    : [document.content.trim()];
   return contents.map((content, chunkIndex) => ({
     id: `${document.sourceType}:${document.externalId}:${chunkIndex}`,
     documentExternalId: document.externalId,
@@ -54,6 +56,7 @@ export function chunkDocument(document: EvidenceDocument): EvidenceChunk[] {
   }));
 }
 
+/** Converts a structured fixture row into readable evidence text. */
 function recordContent(record: Readonly<Record<string, unknown>>): string {
   return Object.entries(record).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`).join('\n');
 }
@@ -114,7 +117,13 @@ export function buildEvidenceDocuments(fixtures: FixtureSet): EvidenceDocument[]
       externalId: note.pricingNoteId, sourceType: 'pricing', accountId: opportunity.accountId,
       opportunityId: note.opportunityId, reliability: 'authoritative_system',
       sourceLocator: `pricing/pricing_notes.tsv#${note.pricingNoteId}`, content: recordContent(note)
-    }, { sourceType: 'pricing' }, opportunity);
+    }, {
+      sourceType: 'pricing',
+      requestedDiscount: note.requestedDiscount,
+      renewalUplift: note.renewalUplift,
+      approvalStatus: note.approvalStatus,
+      pricingNotes: note.pricingNotes
+    }, opportunity);
   }
   for (const update of fixtures.slackUpdates) add({
     externalId: update.updateId, sourceType: 'slack', accountId: update.accountId,

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDealAmount } from './deal-format';
 
+/** Presents the active persona's authorized deals and clear routes into each workspace. */
 export function DealList({ deals }: Readonly<{ deals: readonly DealListItem[] }>): React.JSX.Element {
   if (deals.length === 0) return (
     <section data-tour="deal-list" className="rounded-xl border border-dashed px-6 py-12 text-center" aria-labelledby="empty-deals-title">
@@ -38,6 +39,7 @@ export function DealList({ deals }: Readonly<{ deals: readonly DealListItem[] }>
   );
 }
 
+/** Presents one authorized deal as a desktop table row. */
 function DealRow({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Element {
   return (
     <TableRow>
@@ -51,6 +53,7 @@ function DealRow({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Element 
   );
 }
 
+/** Presents one authorized deal as a mobile-friendly record. */
 function DealRecord({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Element {
   const facts = [
     ['Opportunity', deal.opportunityName], ['Account', deal.accountName], ['Stage', deal.stage], ['Owner', deal.owner ?? 'Not recorded'],
@@ -67,4 +70,5 @@ function DealRecord({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Eleme
   );
 }
 
+/** Converts a stored risk label into the capitalized wording shown to the seller. */
 function title(value: string): string { return `${value.charAt(0).toUpperCase()}${value.slice(1)}`; }

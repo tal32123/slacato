@@ -1,4 +1,4 @@
-import type { PermissionGrant } from '@slacato/core';
+import type { DealBrief, PermissionGrant, RunStatus } from '@slacato/core';
 
 export const DEALS_OPTIONS = Symbol('DEALS_OPTIONS');
 
@@ -7,28 +7,40 @@ export type DealQuerySession = Readonly<{
   persona: Readonly<{ userId: string; displayName: string; role: string; grants: readonly PermissionGrant[] }>;
 }>;
 
-export type AuthorizedDealRow = Readonly<{
-  opportunity_id: string;
-  opportunity_name: string;
-  account_id: string;
-  account_name: string;
-  restricted: boolean;
-  created_at: Date | string;
-  record_content: string | null;
-  latest_run_status: string | null;
-  latest_run_updated_at: Date | string | null;
+export type DealRunSummary = Readonly<{
+  status: RunStatus;
+  updatedAt: Date | string;
 }>;
 
-export type LatestRunRow = Readonly<{ status: string; updated_at: Date | string }>;
+export type AuthorizedDeal = Readonly<{
+  opportunityId: string;
+  opportunityName: string;
+  accountId: string;
+  accountName: string;
+  restricted: boolean;
+  createdAt: Date | string;
+  recordContent: string | null;
+  latestRun: DealRunSummary | null;
+}>;
 
-export type EvidenceRow = Readonly<{
+export type GeneratedDealOutput = Readonly<{
+  lifecycle: 'draft' | 'finalized';
+  brief: DealBrief;
+}>;
+
+export type LatestDealRun = DealRunSummary & Readonly<{
+  runId: string;
+  generatedOutput: GeneratedDealOutput | null;
+}>;
+
+export type DealEvidence = Readonly<{
   id: string;
-  source_type: string;
+  sourceType: string;
   sensitivity: string;
-  event_date: string | null;
-  source_locator: string | null;
+  eventDate: string | null;
+  sourceLocator: string | null;
   content: string;
-  created_at: Date | string;
+  createdAt: Date | string;
 }>;
 
 export type EvidenceCategory = 'opportunity' | 'stakeholders' | 'supplemental';
@@ -41,14 +53,14 @@ export type EvidenceScope = Readonly<{
 }>;
 
 export interface DealQueryRepository {
-  listAuthorizedDeals(
-    personaId: string,
-    accountIds: readonly string[],
-    restrictedAccountIds: readonly string[]
-  ): Promise<readonly AuthorizedDealRow[]>;
-  findAuthorizedDeal(opportunityId: string, accountIds: readonly string[], restrictedAccountIds: readonly string[]): Promise<AuthorizedDealRow | undefined>;
-  findLatestRun(opportunityId: string): Promise<LatestRunRow | undefined>;
-  listEvidence(scope: EvidenceScope, category: EvidenceCategory): Promise<readonly EvidenceRow[]>;
+  /** Lists deals authorized by a live Salesforce source grant for the persona. */
+  listAuthorizedDeals(personaId: string): Promise<readonly AuthorizedDeal[]>;
+  /** Finds one deal authorized by a live Salesforce source grant for the persona. */
+  findAuthorizedDeal(personaId: string, opportunityId: string): Promise<AuthorizedDeal | undefined>;
+  /** Finds the latest authorized run and its generated draft or finalized output, when present. */
+  findLatestRun(personaId: string, opportunityId: string): Promise<LatestDealRun | undefined>;
+  /** Lists source-specific authorized evidence for one deal workspace category. */
+  listEvidence(scope: EvidenceScope, category: EvidenceCategory): Promise<readonly DealEvidence[]>;
 }
 
 export type DealsModuleOptions = Readonly<{ repository: DealQueryRepository }>;

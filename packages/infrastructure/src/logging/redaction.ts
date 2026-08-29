@@ -24,6 +24,7 @@ const eventPattern = /^[a-z][a-z0-9_]{0,127}$/;
 const statusPattern = /^[a-z][a-z0-9_]{0,63}$/;
 const errorCodePattern = /^[A-Z][A-Z0-9_]{0,127}$/;
 
+/** Keeps only identifier-safe text for an approved telemetry field. */
 function safeString(field: SafeField, value: unknown): string | typeof REDACTED {
   if (typeof value !== 'string') return REDACTED;
   const pattern = field === 'event' ? eventPattern
@@ -33,10 +34,12 @@ function safeString(field: SafeField, value: unknown): string | typeof REDACTED 
   return pattern.test(value) ? value : REDACTED;
 }
 
+/** Keeps only nonnegative integer measurements for telemetry. */
 function safeNumber(value: unknown): number | typeof REDACTED {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : REDACTED;
 }
 
+/** Applies the approved sanitizer for one telemetry field. */
 function sanitizeField(field: SafeField, value: unknown): SafeLogPayload {
   if (field === 'durationMs' || field === 'retryCount' || field === 'inputTokens' || field === 'outputTokens') {
     return safeNumber(value);
@@ -44,13 +47,11 @@ function sanitizeField(field: SafeField, value: unknown): SafeLogPayload {
   return safeString(field, value);
 }
 
+/** Distinguishes plain stored values from accessors that must never be invoked during logging. */
 const isDataDescriptor = (descriptor: PropertyDescriptor): descriptor is PropertyDescriptor & { value: unknown } =>
   Object.prototype.hasOwnProperty.call(descriptor, 'value');
 
-/**
- * Projects an arbitrary value onto the documented telemetry allowlist.
- * Unknown keys and every container value are redacted without traversal.
- */
+/** Projects arbitrary input onto the telemetry allowlist without traversing untrusted containers. */
 export function redactLogPayload(value: unknown): SafeLogPayload {
   try {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) return REDACTED;

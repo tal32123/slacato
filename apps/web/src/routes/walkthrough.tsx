@@ -94,6 +94,7 @@ const steps: readonly WalkthroughStep[] = [
   }
 ];
 
+/** Guides users through the product workflow and records which learning steps they complete. */
 export function WalkthroughRoute(): React.JSX.Element {
   const [completed, setCompleted] = useState<ReadonlySet<string>>(readProgress);
   const completedCount = completed.size;
@@ -198,10 +199,12 @@ export function WalkthroughRoute(): React.JSX.Element {
   );
 }
 
+/** Displays one labeled product concept in the walkthrough. */
 function GuideFact({ label, value }: Readonly<{ label: string; value: string }>): React.JSX.Element {
   return <div><h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</h3><p className="mt-2 text-sm leading-6">{value}</p></div>;
 }
 
+/** Restores the user's completed walkthrough steps from this browser. */
 function readProgress(): ReadonlySet<string> {
   try {
     const value = JSON.parse(window.localStorage.getItem(PROGRESS_KEY) ?? '[]') as unknown;
@@ -213,6 +216,7 @@ function readProgress(): ReadonlySet<string> {
   }
 }
 
+/** Saves the user's completed walkthrough steps in this browser. */
 function persistProgress(progress: ReadonlySet<string>): void {
   try {
     window.localStorage.setItem(PROGRESS_KEY, JSON.stringify([...progress]));

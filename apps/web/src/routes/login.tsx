@@ -23,6 +23,7 @@ type LoginState =
   | Readonly<{ status: 'ready'; personas: readonly Persona[]; csrfToken: string }>
   | Readonly<{ status: 'error' }>;
 
+/** Presents persona-based sign-in choices and guides the user into the protected workspace. */
 export function LoginRoute(): React.JSX.Element {
   const [state, setState] = useState<LoginState>({ status: 'loading' });
   const [submitting, setSubmitting] = useState<string>();
@@ -135,14 +136,17 @@ export function LoginRoute(): React.JSX.Element {
   );
 }
 
+/** Displays one trust statement about the product's data and access model. */
 function TrustItem({ icon: Icon, label }: Readonly<{ icon: typeof Database; label: string }>): React.JSX.Element {
   return <li className="flex items-center gap-3"><Icon className="size-4 text-brand-mint" /><span>{label}</span></li>;
 }
 
+/** Shows a stable loading state while the available personas are retrieved. */
 function LoadingState(): React.JSX.Element {
   return <div className="grid min-h-52 place-items-center rounded-xl border bg-card"><div className="flex items-center gap-3 text-sm text-muted-foreground"><LoaderCircle className="animate-spin text-primary" />Loading canonical personas…</div></div>;
 }
 
+/** Produces a compact avatar label from a person's name. */
 function initials(name: string): string {
   return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 }

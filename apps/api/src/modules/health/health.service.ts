@@ -1,6 +1,7 @@
 export type ReadinessProbeResult = boolean | 'unconfigured';
 
 export interface ReadinessCheck {
+  /** Reports whether the dependency is ready, unavailable, or not configured. */
   isReady(): Promise<ReadinessProbeResult>;
 }
 
@@ -34,10 +35,12 @@ export interface UnconfiguredHealth {
 
 export type ReadinessHealth = ReadyHealth | NotReadyHealth | UnconfiguredHealth;
 
-/** Coordinates replaceable readiness probes without constructing real infrastructure. */
+/** Reports whether required services are ready for the API to serve traffic. */
 export class HealthService {
+  /** Creates a health service backed by the supplied readiness checks. */
   public constructor(private readonly dependencies: ReadinessDependencies) {}
 
+  /** Summarizes dependency readiness for the application's health endpoint. */
   public async readiness(): Promise<ReadinessHealth> {
     const entries = await Promise.all(
       (Object.entries(this.dependencies) as Array<[ReadinessCheckName, ReadinessCheck]>).map(async ([name, check]) => {

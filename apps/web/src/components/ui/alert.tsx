@@ -19,6 +19,7 @@ const alertVariants = cva(
   }
 )
 
+/** Presents an important message with styling appropriate to its urgency. */
 function Alert({
   className,
   variant,
@@ -34,6 +35,7 @@ function Alert({
   )
 }
 
+/** Gives an alert a concise heading that is easy to scan. */
 function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -47,6 +49,7 @@ function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Provides the explanatory detail associated with an alert. */
 function AlertDescription({
   className,
   ...props

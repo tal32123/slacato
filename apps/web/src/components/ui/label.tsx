@@ -5,6 +5,7 @@ import { Label as LabelPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Provides an accessible, consistently styled label for a form control. */
 function Label({
   className,
   ...props

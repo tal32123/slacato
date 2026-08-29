@@ -7,21 +7,25 @@ type MarkdownContext = {
   readonly citations: ReadonlyMap<string, Citation>;
 };
 
+/** Escapes brief text so Markdown exports preserve its literal content. */
 function escapeMarkdown(value: string): string {
   return value.replace(/\r\n?/g, '\n').replaceAll('&', '&amp;').replace(/[\\`*_{}[\]()<>#+.!|~-]/g, '\\$&');
 }
 
+/** Renders one optional labeled value as a Markdown list item. */
 function valueLine(label: string, value: string | number | undefined): string | undefined {
   if (value === undefined) return undefined;
   return `- **${label}:** ${escapeMarkdown(String(value))}`;
 }
 
+/** Renders a labeled collection with an explicit empty state. */
 function listLines(label: string, values: readonly string[]): string[] {
   return values.length === 0
     ? [`### ${label}`, '- None']
     : [`### ${label}`, ...values.map((value) => `- ${escapeMarkdown(value)}`)];
 }
 
+/** Renders claims with confidence scores and validated citation labels. */
 function claimLines(claims: readonly Claim[] | undefined, context: MarkdownContext, heading = '### Claims'): string[] {
   if (claims === undefined || claims.length === 0) return [];
   const lines = [heading];
@@ -35,6 +39,7 @@ function claimLines(claims: readonly Claim[] | undefined, context: MarkdownConte
   return lines;
 }
 
+/** Builds a conflict-free citation registry from every claim in the brief. */
 function citationLabels(brief: DealBrief): ReadonlyMap<string, Citation> {
   const claims: readonly Claim[] = [
     ...(brief.dealSnapshot.claims ?? []),
@@ -59,10 +64,12 @@ function citationLabels(brief: DealBrief): ReadonlyMap<string, Citation> {
   return citations;
 }
 
+/** Removes absent lines before assembling a Markdown section. */
 function compact(lines: readonly (string | undefined)[]): string[] {
   return lines.filter((line): line is string => line !== undefined);
 }
 
+/** Renders the canonical nine-section brief and its citation labels as Markdown. */
 function renderMarkdown(brief: DealBrief, citations: ReadonlyMap<string, Citation>): string {
   const context: MarkdownContext = { citations };
   const lines: string[] = [

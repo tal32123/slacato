@@ -22,6 +22,7 @@ export interface RunStreamSource {
 
 type ConnectionState = 'connected' | 'reconnecting';
 
+/** Applies a valid new run event to the detail shown in the interface. */
 export function applyRunEvent(
   current: RunDetailResponse,
   candidate: unknown,
@@ -60,6 +61,7 @@ export function applyRunEvent(
   });
 }
 
+/** Streams live run updates while preserving session boundaries and requesting resync when needed. */
 export function openRunEventStream(input: Readonly<{
   detail: RunDetailResponse;
   generation: number;
@@ -104,6 +106,7 @@ export function openRunEventStream(input: Readonly<{
   };
 }
 
+/** Derives the run status the interface should show for an event. */
 function statusForEvent(event: RunEventEnvelope, fallback: RunStatus): RunStatus {
   if ('status' in event.payload && typeof event.payload.status === 'string') {
     const parsed = runStatusSchema.safeParse(event.payload.status);
@@ -129,6 +132,7 @@ function statusForEvent(event: RunEventEnvelope, fallback: RunStatus): RunStatus
   return statuses[event.type] ?? fallback;
 }
 
+/** Provides the user-facing timeline label for a run event. */
 export function labelForEvent(type: RunEventEnvelope['type']): string {
   const labels: Partial<Record<RunEventEnvelope['type'], string>> = {
     run_created: 'Run created',

@@ -26,17 +26,21 @@ export type MockGenerationResolver = <Value>(request: ModelTransportRequest<Valu
 /** Construction options for the deterministic development/demo provider. */
 export type MockModelGatewayOptions = Readonly<{ resolve: MockGenerationResolver; attemptLedger: ProviderAttemptLedger }>;
 
+/** Supplies deterministic model responses for development and demonstration workflows. */
 class MockTransport implements ModelTransport {
   public readonly capabilities = { nativeStructuredOutput: false } as const;
 
+  /** Configures the transport with the caller's deterministic response resolver. */
   public constructor(private readonly resolve: MockGenerationResolver) {}
 
+  /** Produces the scripted response and marks it as mock-provider output. */
   public async generate<Value>(request: ModelTransportRequest<Value>): Promise<TransportGeneration<Value>> {
     const response = await this.resolve(request);
     return { ...response, warnings: [...(response.warnings ?? []), 'mock_provider'] };
   }
 }
 
+/** Derives a stable numeric fingerprint for an embedding token. */
 function tokenHash(token: string): number {
   let hash = 0x811c9dc5;
   for (let index = 0; index < token.length; index += 1) {
@@ -46,6 +50,7 @@ function tokenHash(token: string): number {
   return hash >>> 0;
 }
 
+/** Produces a deterministic normalized embedding for development and demonstrations. */
 function embeddingFor(value: string): number[] {
   const vector = Array<number>(MOCK_EMBEDDING_DIMENSION).fill(0);
   const tokens = value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [];
@@ -57,10 +62,7 @@ function embeddingFor(value: string): number[] {
   return magnitude === 0 ? vector : vector.map((entry) => entry / magnitude);
 }
 
-/**
- * Creates a deterministic non-network provider for development and demos.
- * Its output is intentionally generic; callers script it through `resolve`.
- */
+/** Creates deterministic model and embedding gateways for development and demonstrations. */
 export function createMockModelGateways(options: MockModelGatewayOptions): Readonly<{
   modelGateway: BudgetedModelGateway;
   embeddingGateway: EmbeddingGateway;

@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { approvalDetailQueryOptions } from '@/features/approvals/queries';
 import { throwProtectedLoaderError } from './loader-security';
 
+/** Loads the requested approval while preserving protected-session transition guarantees. */
 export async function approvalLoader({ request, params }: LoaderFunctionArgs): Promise<ApprovalDetailResponse | null> {
   const subjectId = params.subjectId;
   if (!subjectId) throw new Response('Invalid approval route', { status: 400 });
@@ -43,6 +44,7 @@ export async function approvalLoader({ request, params }: LoaderFunctionArgs): P
   }
 }
 
+/** Presents the requested approval and keeps its server-backed detail current. */
 export function ApprovalRoute(): React.JSX.Element {
   const initial = useLoaderData() as ApprovalDetailResponse;
   const session = useRouteLoaderData('protected-root') as DemoSession;
@@ -50,6 +52,7 @@ export function ApprovalRoute(): React.JSX.Element {
   return <ApprovalDecisionPage key={query.data.approvalSubjectId} detail={query.data} session={session} refetch={() => query.refetch()} />;
 }
 
+/** Lets an authorized reviewer inspect, edit, approve, or reject a validated brief. */
 function ApprovalDecisionPage({ detail, session, refetch }: Readonly<{
   detail: ApprovalDetailResponse;
   session: DemoSession;
@@ -281,18 +284,25 @@ function ApprovalDecisionPage({ detail, session, refetch }: Readonly<{
   );
 }
 
+/** Displays one labeled fact from the approval brief. */
 function BriefFact({ label: factLabel, value }: Readonly<{ label: string; value: string }>): React.JSX.Element {
   return <div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{factLabel}</dt><dd className="mt-1 break-words">{value}</dd></div>;
 }
+/** Presents a titled list from the approval brief with a meaningful empty state. */
 function BriefList({ title, values, empty }: Readonly<{ title: string; values: readonly string[]; empty: string }>): React.JSX.Element {
   return <div className="mt-4"><h4 className="text-sm font-medium">{title}</h4>{values.length === 0 ? <EmptyState>{empty}</EmptyState> : <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{values.map((value) => <li key={value}>{value}</li>)}</ul>}</div>;
 }
+/** Explains when an approval-brief section has no recorded content. */
 function EmptyState({ children }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
   return <p className="mt-2 text-sm text-muted-foreground">{children}</p>;
 }
+/** Groups a related portion of the approval subject under a clear heading. */
 function SubjectSection({ title, children }: Readonly<{ title: string; children: React.ReactNode }>): React.JSX.Element { return <section className="rounded-xl border bg-card p-5"><h3 className="font-semibold">{title}</h3><div className="mt-3">{children}</div></section>; }
+/** Reuses one idempotency key for repeated attempts at the same approval action. */
 function operationKey(keys: Map<ApprovalAction, string>, action: ApprovalAction): string { const existing = keys.get(action); if (existing !== undefined) return existing; const created = crypto.randomUUID(); keys.set(action, created); return created; }
+/** Converts an internal approval value into a user-facing label. */
 function label(value: string): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+/** Maps an approval outcome to its user-facing status presentation. */
 function approvalStatus(status: ApprovalDetailResponse['status']): { status: ProductStatus; label: string } {
   if (status === 'completed') return { status: 'ready', label: 'Completed' };
   if (status === 'rejected') return { status: 'attention', label: 'Rejected' };
@@ -301,4 +311,5 @@ function approvalStatus(status: ApprovalDetailResponse['status']): { status: Pro
   if (status === 'awaiting_approval') return { status: 'attention', label: 'Approval review' };
   return { status: 'readonly', label: label(status) };
 }
+/** Formats an approval timestamp for the user's locale. */
 function formatTime(value: string): string { return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); }

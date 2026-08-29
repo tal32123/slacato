@@ -4,24 +4,28 @@ import { Select as SelectPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Coordinates an accessible single-choice selection control. */
 function Select({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root data-slot="select" {...props} />
 }
 
+/** Keeps related selection choices together for navigation and semantics. */
 function SelectGroup({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Group>) {
   return <SelectPrimitive.Group data-slot="select-group" {...props} />
 }
 
+/** Displays the currently selected value or its placeholder. */
 function SelectValue({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Value>) {
   return <SelectPrimitive.Value data-slot="select-value" {...props} />
 }
 
+/** Opens the available choices and summarizes the current selection. */
 function SelectTrigger({
   className,
   size = "default",
@@ -48,6 +52,7 @@ function SelectTrigger({
   )
 }
 
+/** Presents the available choices in a positioned, scrollable surface. */
 function SelectContent({
   className,
   children,
@@ -85,6 +90,7 @@ function SelectContent({
   )
 }
 
+/** Gives a group of selection choices a descriptive heading. */
 function SelectLabel({
   className,
   ...props
@@ -98,6 +104,7 @@ function SelectLabel({
   )
 }
 
+/** Provides one available value within a selection control. */
 function SelectItem({
   className,
   children,
@@ -125,6 +132,7 @@ function SelectItem({
   )
 }
 
+/** Visually separates related groups of selection choices. */
 function SelectSeparator({
   className,
   ...props
@@ -138,6 +146,7 @@ function SelectSeparator({
   )
 }
 
+/** Lets users reveal earlier choices in a constrained selection list. */
 function SelectScrollUpButton({
   className,
   ...props
@@ -156,6 +165,7 @@ function SelectScrollUpButton({
   )
 }
 
+/** Lets users reveal later choices in a constrained selection list. */
 function SelectScrollDownButton({
   className,
   ...props

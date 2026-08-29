@@ -1,24 +1,93 @@
-import { CANONICAL_FIXTURE_COMMIT } from '@slacato/core';
+import { CANONICAL_FIXTURE_COMMIT, dealBriefSchema, runStatusSchema } from '@slacato/core';
 import type { DatabaseClient } from '@slacato/infrastructure';
 import type {
-  AuthorizedDealRow,
+  AuthorizedDeal,
+  DealEvidence,
   DealQueryRepository,
   EvidenceCategory,
-  EvidenceRow,
   EvidenceScope,
-  LatestRunRow
+  LatestDealRun
 } from './contracts.js';
 
+type AuthorizedDealSqlRow = Readonly<{
+  opportunity_id: string;
+  opportunity_name: string;
+  account_id: string;
+  account_name: string;
+  restricted: boolean;
+  created_at: Date | string;
+  record_content: string | null;
+  latest_run_status: string | null;
+  latest_run_updated_at: Date | string | null;
+}>;
+
+type LatestDealRunSqlRow = Readonly<{
+  id: string;
+  status: string;
+  updated_at: Date | string;
+  generated_output_lifecycle: 'draft' | 'finalized' | null;
+  generated_output_payload: unknown | null;
+}>;
+
+type DealEvidenceSqlRow = Readonly<{
+  id: string;
+  source_type: string;
+  sensitivity: string;
+  event_date: string | null;
+  source_locator: string | null;
+  content: string;
+  created_at: Date | string;
+}>;
+
+/** Converts an authorized SQL projection into the camelCase deal query model. */
+function mapAuthorizedDealSqlRow(row: AuthorizedDealSqlRow): AuthorizedDeal {
+  const latestRun = row.latest_run_status === null || row.latest_run_updated_at === null
+    ? null
+    : { status: runStatusSchema.parse(row.latest_run_status), updatedAt: row.latest_run_updated_at };
+  return {
+    opportunityId: row.opportunity_id,
+    opportunityName: row.opportunity_name,
+    accountId: row.account_id,
+    accountName: row.account_name,
+    restricted: row.restricted,
+    createdAt: row.created_at,
+    recordContent: row.record_content,
+    latestRun
+  };
+}
+
+/** Converts the latest authorized run projection and validates any generated canonical payload. */
+function mapLatestDealRunSqlRow(row: LatestDealRunSqlRow): LatestDealRun {
+  return {
+    runId: row.id,
+    status: runStatusSchema.parse(row.status),
+    updatedAt: row.updated_at,
+    generatedOutput: row.generated_output_lifecycle === null || row.generated_output_payload === null
+      ? null
+      : { lifecycle: row.generated_output_lifecycle, brief: dealBriefSchema.parse(row.generated_output_payload) }
+  };
+}
+
+/** Converts an authorized SQL evidence projection into the camelCase evidence query model. */
+function mapDealEvidenceSqlRow(row: DealEvidenceSqlRow): DealEvidence {
+  return {
+    id: row.id,
+    sourceType: row.source_type,
+    sensitivity: row.sensitivity,
+    eventDate: row.event_date,
+    sourceLocator: row.source_locator,
+    content: row.content,
+    createdAt: row.created_at
+  };
+}
+
+/** Reads deal workspaces only through live persona-scoped source grants and returns application models. */
 export class PostgresDealQueryRepository implements DealQueryRepository {
   public constructor(private readonly database: DatabaseClient) {}
 
-  public async listAuthorizedDeals(
-    personaId: string,
-    accountIds: readonly string[],
-    restrictedAccountIds: readonly string[]
-  ): Promise<readonly AuthorizedDealRow[]> {
-    if (accountIds.length === 0) return [];
-    return this.database.sql<AuthorizedDealRow[]>`
+  /** Lists deals whose account metadata is currently readable through a Salesforce source grant. */
+  public async listAuthorizedDeals(personaId: string): Promise<readonly AuthorizedDeal[]> {
+    const rows = await this.database.sql<AuthorizedDealSqlRow[]>`
       select opportunity.id as opportunity_id, opportunity.name as opportunity_name,
         opportunity.account_id, account.name as account_name, opportunity.restricted,
         opportunity.created_at, opportunity_record.content as record_content,
@@ -47,19 +116,23 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
         where run.opportunity_id = opportunity.id
         order by run.updated_at desc, run.id desc limit 1
       ) latest_run on true
-      where opportunity.account_id = any(${accountIds}::text[])
-        and (opportunity.restricted = false or opportunity.account_id = any(${restrictedAccountIds}::text[]))
+      where exists (
+        select 1 from permission_grants source_grant
+        where source_grant.persona_id = ${personaId}
+          and source_grant.account_id = opportunity.account_id
+          and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+          and source_grant.source_type = 'salesforce'
+          and source_grant.can_read = true
+          and (opportunity.restricted = false or source_grant.can_read_restricted = true)
+      )
       order by opportunity.id
     `;
+    return rows.map(mapAuthorizedDealSqlRow);
   }
 
-  public async findAuthorizedDeal(
-    opportunityId: string,
-    accountIds: readonly string[],
-    restrictedAccountIds: readonly string[]
-  ): Promise<AuthorizedDealRow | undefined> {
-    if (accountIds.length === 0) return undefined;
-    const rows = await this.database.sql<AuthorizedDealRow[]>`
+  /** Finds one deal only when a live Salesforce source grant authorizes its metadata. */
+  public async findAuthorizedDeal(personaId: string, opportunityId: string): Promise<AuthorizedDeal | undefined> {
+    const rows = await this.database.sql<AuthorizedDealSqlRow[]>`
       select opportunity.id as opportunity_id, opportunity.name as opportunity_name,
         opportunity.account_id, account.name as account_name, opportunity.restricted,
         opportunity.created_at, null::text as record_content,
@@ -67,23 +140,64 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
       from opportunities opportunity
       join accounts account on account.id = opportunity.account_id
       where opportunity.id = ${opportunityId}
-        and opportunity.account_id = any(${accountIds}::text[])
-        and (opportunity.restricted = false or opportunity.account_id = any(${restrictedAccountIds}::text[]))
+        and exists (
+          select 1 from permission_grants source_grant
+          where source_grant.persona_id = ${personaId}
+            and source_grant.account_id = opportunity.account_id
+            and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+            and source_grant.source_type = 'salesforce'
+            and source_grant.can_read = true
+            and (opportunity.restricted = false or source_grant.can_read_restricted = true)
+        )
       limit 1
     `;
-    return rows[0];
+    return rows[0] === undefined ? undefined : mapAuthorizedDealSqlRow(rows[0]);
   }
 
-  public async findLatestRun(opportunityId: string): Promise<LatestRunRow | undefined> {
-    const rows = await this.database.sql<LatestRunRow[]>`
-      select status, updated_at from runs where opportunity_id = ${opportunityId}
-      order by updated_at desc, id desc limit 1
+  /** Loads the latest run and any generated draft or finalized payload while its deal remains authorized. */
+  public async findLatestRun(personaId: string, opportunityId: string): Promise<LatestDealRun | undefined> {
+    const rows = await this.database.sql<LatestDealRunSqlRow[]>`
+      select run.id, run.status, run.updated_at,
+        case when finalized_brief.payload is not null then 'finalized'
+          when generated_draft.payload is not null then 'draft' else null end as generated_output_lifecycle,
+        coalesce(finalized_brief.payload, generated_draft.payload) as generated_output_payload
+      from runs run
+      join opportunities opportunity on opportunity.id = run.opportunity_id
+      left join lateral (
+        select brief.payload
+        from briefs brief
+        where brief.run_id = run.id
+          and brief.finalized_at is not null
+        order by brief.draft_version desc
+        limit 1
+      ) finalized_brief on true
+      left join lateral (
+        select subject.payload
+        from approval_subjects subject
+        where subject.run_id = run.id
+          and subject.payload is not null
+        order by subject.draft_version desc, subject.created_at desc
+        limit 1
+      ) generated_draft on true
+      where run.opportunity_id = ${opportunityId}
+        and exists (
+          select 1 from permission_grants source_grant
+          where source_grant.persona_id = ${personaId}
+            and source_grant.account_id = opportunity.account_id
+            and source_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+            and source_grant.source_type = 'salesforce'
+            and source_grant.can_read = true
+            and (opportunity.restricted = false or source_grant.can_read_restricted = true)
+        )
+      order by run.updated_at desc, run.id desc
+      limit 1
     `;
-    return rows[0];
+    return rows[0] === undefined ? undefined : mapLatestDealRunSqlRow(rows[0]);
   }
 
-  public async listEvidence(scope: EvidenceScope, category: EvidenceCategory): Promise<readonly EvidenceRow[]> {
-    return this.database.sql<EvidenceRow[]>`
+  /** Lists evidence whose source-specific live grant authorizes the requested workspace category. */
+  public async listEvidence(scope: EvidenceScope, category: EvidenceCategory): Promise<readonly DealEvidence[]> {
+    const rows = await this.database.sql<DealEvidenceSqlRow[]>`
       select evidence.id, evidence.source_type, evidence.sensitivity, evidence.event_date::text,
         evidence.source_locator, evidence.content, evidence.created_at
       from evidence_versions evidence
@@ -115,5 +229,6 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
         )
       order by evidence.event_date desc nulls last, evidence.source_type, evidence.id
     `;
+    return rows.map(mapDealEvidenceSqlRow);
   }
 }

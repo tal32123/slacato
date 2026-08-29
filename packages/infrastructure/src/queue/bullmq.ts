@@ -14,6 +14,7 @@ export type CommandInspection = Readonly<{
 export class BullMqCommandQueue implements CommandQueue {
   public readonly queue: Queue<WorkflowCommand, void, 'workflow-command'>;
 
+  /** Connects the command transport to Redis with bounded retry and retained terminal jobs. */
   public constructor(redisUrl: string, queueName = WORKFLOW_QUEUE_NAME) {
     this.queue = new Queue<WorkflowCommand, void, 'workflow-command'>(queueName, {
       connection: { url: redisUrl },
@@ -26,6 +27,7 @@ export class BullMqCommandQueue implements CommandQueue {
     });
   }
 
+  /** Publishes a command under its stable identifier without duplicating existing jobs. */
   public async publish(command: WorkflowCommand): Promise<void> {
     if (/^\d+$/.test(command.id) || command.id.includes(':')) throw new Error('Command ID is not a valid BullMQ job ID');
     const existing = await this.queue.getJob(command.id);
@@ -38,6 +40,7 @@ export class BullMqCommandQueue implements CommandQueue {
     await this.queue.add('workflow-command', command, options);
   }
 
+  /** Reports whether a command is active, terminal, exhausted, or absent. */
   public async inspect(commandId: string): Promise<CommandInspection> {
     const job = await this.queue.getJob(commandId);
     if (job === undefined) return { state: 'missing', attemptsMade: 0, maxAttempts: 0, exhausted: false };
@@ -52,6 +55,7 @@ export class BullMqCommandQueue implements CommandQueue {
     return { state: 'completed', attemptsMade, maxAttempts, exhausted: false };
   }
 
+  /** Returns the command's current delivery state. */
   public async state(commandId: string): Promise<CommandInspection['state']> { return (await this.inspect(commandId)).state; }
 
   /** Removes only a retained completed job so its stable ID can be delivered again. */
@@ -60,7 +64,9 @@ export class BullMqCommandQueue implements CommandQueue {
     if (job !== undefined && await job.getState() === 'completed') await job.remove();
   }
 
+  /** Reports whether the command is still eligible for worker delivery. */
   public async isLive(commandId: string): Promise<boolean> { return (await this.state(commandId)) === 'live'; }
 
+  /** Releases the underlying BullMQ connection. */
   public close(): Promise<void> { return this.queue.close(); }
 }

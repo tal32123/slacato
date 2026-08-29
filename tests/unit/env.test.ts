@@ -41,6 +41,7 @@ describe('envSchema', () => {
     })).toMatchObject({
       AI_PROVIDER: 'openrouter',
       OPENROUTER_CHAT_MODEL: 'openai/gpt-5.6-luna',
+      OPENROUTER_MAX_OUTPUT_TOKENS_PER_ATTEMPT: 65_536,
       OPENROUTER_EMBEDDING_MODEL: 'openai/text-embedding-3-small'
     });
   });

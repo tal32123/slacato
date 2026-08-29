@@ -70,6 +70,7 @@ const tourSteps: readonly TourStep[] = [
 type PersistedTour = Readonly<{ active: boolean; stepIndex: number }>;
 type TargetBox = Readonly<{ top: number; left: number; width: number; height: number }>;
 
+/** Guides users through an interactive tour anchored to the product controls they need next. */
 export function GuidedTour(): React.JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
@@ -268,6 +269,7 @@ export function GuidedTour(): React.JSX.Element {
   );
 }
 
+/** Dims the page around the current tour target so the next interaction is visually clear. */
 function Spotlight({ box }: Readonly<{ box: TargetBox }>): React.JSX.Element {
   const shadow = 'pointer-events-auto bg-brand-forest/75 backdrop-blur-[1px]';
   return (
@@ -281,6 +283,7 @@ function Spotlight({ box }: Readonly<{ box: TargetBox }>): React.JSX.Element {
   );
 }
 
+/** Advances an active tour after a successful sign-in and reports whether it changed. */
 export function advanceGuidedTourFromLogin(): boolean {
   const state = readTourState();
   if (!state.active || state.stepIndex !== 0) return false;
@@ -288,6 +291,7 @@ export function advanceGuidedTourFromLogin(): boolean {
   return true;
 }
 
+/** Restores a valid guided-tour position from this browser. */
 function readTourState(): PersistedTour {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<PersistedTour> | null;
@@ -298,6 +302,7 @@ function readTourState(): PersistedTour {
   }
 }
 
+/** Saves the current guided-tour position in this browser when storage is available. */
 function persistTourState(state: PersistedTour): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));

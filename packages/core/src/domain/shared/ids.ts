@@ -5,6 +5,7 @@ export const MAX_ID_LENGTH = 128;
 
 const opaqueIdSuffix = '[A-Za-z0-9][A-Za-z0-9_-]*';
 
+/** Builds a bounded schema for opaque and canonical business identifiers. */
 function prefixedIdSchema<Brand extends string>(prefix: string, canonicalPrefix?: string) {
   const pattern = canonicalPrefix === undefined
     ? `^${prefix}_${opaqueIdSuffix}$`
@@ -25,7 +26,14 @@ export const opportunityIdSchema = prefixedIdSchema<'OpportunityId'>('opportunit
 /** Runtime-validated identifier for a persisted workflow run. */
 export const runIdSchema = prefixedIdSchema<'RunId'>('run');
 /** Runtime-validated identifier for an immutable evidence version. */
-export const evidenceIdSchema = prefixedIdSchema<'EvidenceId'>('evidence');
+export const evidenceIdSchema = z.string()
+  .min(3)
+  .max(MAX_ID_LENGTH)
+  .regex(
+    new RegExp(`^(?:evidence_${opaqueIdSuffix}|${opaqueIdSuffix}(?::${opaqueIdSuffix})+)$`),
+    'Expected an evidence_ opaque identifier or a canonical colon-delimited evidence identifier'
+  )
+  .brand<'EvidenceId'>();
 /** Runtime-validated identifier for a stable evidence citation. */
 export const citationIdSchema = prefixedIdSchema<'CitationId'>('citation');
 /** Runtime-validated identifier for a generated factual claim. */

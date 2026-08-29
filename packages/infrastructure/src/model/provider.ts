@@ -26,11 +26,7 @@ export type MockCompositionOptions = Readonly<{ attemptLedger: PostgresProviderA
 export type OllamaCompositionOptions = Readonly<{ attemptLedger: PostgresProviderAttemptLedger; mock?: undefined; ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'> }>;
 export type OpenRouterCompositionOptions = Readonly<{ attemptLedger: PostgresProviderAttemptLedger; mock?: undefined; ollamaCapabilities?: never }>;
 
-/**
- * Selects the configured infrastructure adapter at composition time. Ollama
- * starts in prompted-JSON mode until its separate live capability gate proves
- * native structured output; mock selection never represents live compatibility.
- */
+/** Selects the configured model provider while keeping every run within its durable budget and verified capabilities. */
 export function createConfiguredModelGateways(environment: Env & Readonly<{ AI_PROVIDER: 'mock' }>, options: MockCompositionOptions): ConfiguredModelGateways;
 export function createConfiguredModelGateways(environment: Env & Readonly<{ AI_PROVIDER: 'ollama' }>, options: OllamaCompositionOptions): ConfiguredModelGateways;
 export function createConfiguredModelGateways(environment: Env & Readonly<{ AI_PROVIDER: 'openrouter' }>, options: OpenRouterCompositionOptions): ConfiguredModelGateways;

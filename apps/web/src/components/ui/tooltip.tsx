@@ -5,6 +5,7 @@ import { Tooltip as TooltipPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/** Establishes shared timing behavior for contextual tooltip help. */
 function TooltipProvider({
   delayDuration = 0,
   ...props
@@ -18,18 +19,21 @@ function TooltipProvider({
   )
 }
 
+/** Coordinates contextual help that appears for an associated control or value. */
 function Tooltip({
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
 }
 
+/** Identifies the control or value that reveals associated tooltip help. */
 function TooltipTrigger({
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
   return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
 }
 
+/** Presents concise contextual help near its associated trigger. */
 function TooltipContent({
   className,
   sideOffset = 0,

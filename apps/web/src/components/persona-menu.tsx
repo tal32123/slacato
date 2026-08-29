@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 
+/** Shows the active persona and provides access to settings or secure sign-out. */
 export function PersonaMenu({ session, onLogout }: Readonly<{
   session: DemoSession;
   onLogout: () => Promise<void>;
@@ -71,6 +72,7 @@ export function PersonaMenu({ session, onLogout }: Readonly<{
   );
 }
 
+/** Produces a compact avatar label from a persona's name. */
 function initials(name: string): string {
   return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 }

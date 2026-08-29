@@ -33,7 +33,9 @@ export type ProviderAttemptFailure = Readonly<{
   diagnosticCode?: string | undefined;
 }>;
 
+/** Signals that a provider attempt was finalized with conflicting outcome data. */
 export class ProviderAttemptFinalizationConflict extends Error {
+  /** Creates the conflict error with a caller-visible explanation. */
   public constructor(message = 'Provider attempt was already finalized differently') {
     super(message);
     this.name = 'ProviderAttemptFinalizationConflict';

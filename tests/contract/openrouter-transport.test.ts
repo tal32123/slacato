@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { type ProviderAttemptLedger } from '@slacato/core';
-import { createOpenRouterModelGateways } from '@slacato/infrastructure';
+import { createOpenRouterModelGateways, providerJsonSchema } from '../../packages/infrastructure/src/model/openrouter.ts';
+import { openRouterDiagnosticCode } from '../../packages/infrastructure/src/model/openrouter-diagnostics.ts';
 
 const ledger: ProviderAttemptLedger = {
   async beginAttempt() {
@@ -12,6 +13,14 @@ const ledger: ProviderAttemptLedger = {
 };
 
 describe('OpenRouter transport', () => {
+  it('preserves a safe provider error code for actionable diagnostics', () => {
+    expect(openRouterDiagnosticCode(400, JSON.stringify({
+      error: { code: 400, message: 'Provider returned error', metadata: {
+        raw: JSON.stringify({ error: { message: 'Invalid JSON schema: unsupported format' } })
+      } }
+    }))).toBe('openrouter_400_invalid_json_schema_unsupported_format');
+  });
+
   it('uses strict JSON schema generation and the embeddings endpoint through one provider', async () => {
     const requests: Array<{ url: string; body: Record<string, unknown>; headers: Headers }> = [];
     const fakeFetch: typeof fetch = async (input, init) => {
@@ -65,11 +74,44 @@ describe('OpenRouter transport', () => {
         provider: { allow_fallbacks: true, require_parameters: true }
       }
     });
+    expect(requests[0]?.body).not.toHaveProperty('max_tokens');
     expect(requests[0]?.headers.get('x-openrouter-title')).toBe('SlaCato');
     expect(requests[1]).toMatchObject({
       url: 'https://openrouter.ai/api/v1/embeddings',
       body: { model: 'openai/text-embedding-3-small', input: ['first', 'second'] }
     });
+  });
+
+  it('omits JSON Schema string constraints unsupported by Gemini while retaining local validation', async () => {
+    expect(JSON.stringify(providerJsonSchema(z.toJSONSchema(
+      z.object({ code: z.string().min(2).max(8).regex(/^[A-Z]+$/) }).strict(), { io: 'input' }
+    )))).not.toContain('minLength');
+    let body: Record<string, unknown> = {};
+    const fakeFetch: typeof fetch = async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({
+        id: 'generation-schema', object: 'chat.completion', created: 1, model: 'google/gemini-3.5-flash-lite',
+        choices: [{ index: 0, message: { role: 'assistant', content: '{"code":"ABC"}' }, finish_reason: 'stop', logprobs: null }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+      });
+    };
+    const gateways = createOpenRouterModelGateways({
+      apiKey: 'secret', generationModelId: 'google/gemini-3.5-flash-lite',
+      embeddingModelId: 'openai/text-embedding-3-small', attemptLedger: ledger, fetch: fakeFetch
+    });
+
+    await gateways.modelGateway.generateObject({
+      schema: z.object({ code: z.string().min(2).max(8).regex(/^[A-Z]+$/) }).strict(),
+      messages: [{ role: 'user', content: 'Return a code.' }], operation: 'gemini-schema-probe',
+      durableAttempt: { runScope: 'gemini-schema-probe', provider: 'openrouter', model: 'google/gemini-3.5-flash-lite' },
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000 }
+    });
+
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain('minLength');
+    expect(serialized).not.toContain('maxLength');
+    expect(serialized).not.toContain('pattern');
+    expect(serialized).not.toContain('maxItems');
   });
 
   it('repairs a reasoning-only length response instead of hiding it as unknown', async () => {

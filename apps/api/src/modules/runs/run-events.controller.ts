@@ -8,7 +8,8 @@ import {
   type RunEventEnvelope
 } from '@slacato/contracts';
 import { CursorExpiredError, type RunEventBus, type RunEventQuery } from '@slacato/core';
-import type { AuthenticatedRequest } from '../auth/guard.js';
+import type { AuthenticatedPrincipal } from '../auth/contracts.js';
+import { CurrentPrincipal } from '../auth/current-principal.decorator.js';
 import { AuthService } from '../auth/auth.service.js';
 import { ZodParam, ZodQuery, ZodResponse } from '../../common/wire/zod.decorators.js';
 import { RUN_EVENT_BUS, RUN_EVENT_HEARTBEAT_MS, RUN_EVENT_QUERY } from './contracts.js';
@@ -21,10 +22,12 @@ const TERMINAL_EVENT_TYPES: Readonly<Record<string, true>> = { complete: true, f
 const MAX_STREAMS_PER_ACTOR = 4;
 const MAX_STREAMS_PER_ACTOR_RUN = 2;
 
+/** Hides whether a requested run exists or is merely inaccessible. */
 function opaqueNotFound(): never {
   throw new NotFoundException({ code: 'NOT_FOUND', message: 'The requested resource was not found.' });
 }
 
+/** Reads and validates an SSE resume cursor from the request headers. */
 function headerCursor(request: Request): string | undefined {
   const raw = request.headers['last-event-id'];
   if (raw === undefined) return undefined;
@@ -34,17 +37,20 @@ function headerCursor(request: Request): string | undefined {
   return parsed.data;
 }
 
+/** Serializes SSE frames while respecting response backpressure. */
 class SerializedSseWriter {
   private tail = Promise.resolve();
 
   public constructor(private readonly response: Response) {}
 
+  /** Enqueues one SSE frame for ordered delivery. */
   public write(frame: string): Promise<void> {
     const written = this.tail.then(() => this.writeNow(frame));
     this.tail = written.catch(() => undefined);
     return written;
   }
 
+  /** Writes a frame once the preceding write has completed. */
   private async writeNow(frame: string): Promise<void> {
     if (this.response.writableEnded || this.response.destroyed) return;
     if (this.response.write(frame)) return;
@@ -63,11 +69,13 @@ class SerializedSseWriter {
   }
 }
 
+/** Encodes a run event as an SSE frame. */
 function eventFrame(event: RunEventEnvelope): string {
   const safe = runEventCursorSchema.parse(event.id);
   return `id: ${safe}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
+/** Serves authorized run snapshots and resumable event streams. */
 @Controller('api/runs')
 export class RunEventsController {
   private readonly actorStreams = new Map<string, number>();
@@ -80,27 +88,31 @@ export class RunEventsController {
     private readonly auth: AuthService
   ) {}
 
+  /** Returns the caller-authorized snapshot for a run. */
   @Get(':runId')
   @ZodResponse(runSnapshotSchema)
-  public async snapshot(@ZodParam(paramsSchema) params: RunParams, @Req() request: AuthenticatedRequest) {
-    const actorId = request.auth?.persona.userId;
-    if (actorId === undefined) throw new Error('Authenticated request identity was not installed');
+  public async snapshot(
+    @ZodParam(paramsSchema) params: RunParams,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal
+  ) {
+    const actorId = principal.persona.userId;
     const snapshot = await this.query.authorizeAndSnapshot(params.runId, actorId);
     if (snapshot === undefined) return opaqueNotFound();
     return snapshot;
   }
 
+  /** Streams authorized run events while continuously revalidating the session. */
   @Get(':runId/events')
   @ZodResponse(z.undefined())
   public async events(
     @ZodParam(paramsSchema) params: RunParams,
     @ZodQuery(querySchema) query: EventsQuery,
-    @Req() request: AuthenticatedRequest,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: Request,
     @Res() response: Response
   ): Promise<undefined> {
-    const actorId = request.auth?.persona.userId;
-    const sessionVersion = request.auth?.claims.version;
-    if (actorId === undefined || sessionVersion === undefined) throw new Error('Authenticated request identity was not installed');
+    const actorId = principal.persona.userId;
+    const sessionVersion = principal.claims.version;
     const authorize = async (): Promise<boolean> =>
       await this.auth.isSessionActive(sessionVersion, actorId)
       && await this.query.authorizeAndSnapshot(params.runId, actorId) !== undefined;
@@ -179,6 +191,7 @@ export class RunEventsController {
     return undefined;
   }
 
+  /** Reserves one actor/run stream slot and returns an idempotent release callback. */
   private acquireStream(actorId: string, runId: string): () => void {
     const actorRunKey = `${actorId}\u0000${runId}`;
     const actorCount = this.actorStreams.get(actorId) ?? 0;

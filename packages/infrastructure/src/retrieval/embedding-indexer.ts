@@ -1,12 +1,17 @@
 import type { EmbeddingGateway, EmbeddingProfile } from '@slacato/core';
+import type { Sql, TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../db/client.js';
 
 type ProfileRow = Readonly<{
   provider: string; model: string; dimension: number; profile: string; version: string; normalization: string;
 }>;
 type ChunkRow = Readonly<{ id: string; content: string }>;
+type PreparedChunk = ChunkRow & Readonly<{ embedding: readonly number[] }>;
+type SqlExecutor = Sql | TransactionSql;
 
+/** Formats an embedding for PostgreSQL vector storage. */
 function vectorLiteral(values: readonly number[]): string { return `[${values.join(',')}]`; }
+/** Produces a stable identity for an embedding profile. */
 function profileKey(profile: EmbeddingProfile): string {
   return [profile.provider, profile.model, profile.dimension, profile.profile, profile.version, profile.normalization].join('\u001f');
 }
@@ -17,11 +22,12 @@ export type EmbeddingCorpusScope = Readonly<{
   requireCompleteProvenance: boolean;
 }>;
 
-/** One-time, profile-safe embedding writer for immutable evidence versions. */
+/** Prepares embeddings in bounded batches, then atomically activates one profile for the selected evidence corpus. */
 export class EmbeddingIndexer {
   private readonly batchSize: number;
   private readonly corpus: EmbeddingCorpusScope | undefined;
 
+  /** Configures the embedding profile, batch size, and evidence corpus to index. */
   public constructor(
     private readonly database: DatabaseClient,
     private readonly gateway: EmbeddingGateway,
@@ -40,95 +46,113 @@ export class EmbeddingIndexer {
     }
   }
 
+  /** Indexes the selected corpus without exposing partial or mixed profile writes. */
   public async index(): Promise<EmbeddingIndexResult> {
-    if (this.corpus?.requireCompleteProvenance === true) {
-      const incomplete = await this.database.sql<{ count: number }[]>`
-        select count(*)::integer as count from evidence_versions evidence
-        join document_versions document on document.id = evidence.document_version_id
-        where ${this.corpusCandidatePredicate()} and not (${this.completeProvenancePredicate()})
-      `;
-      if ((incomplete[0]?.count ?? 0) > 0) throw new Error('Canonical embedding corpus provenance is incomplete');
-    }
-    const existing = await this.database.sql<ProfileRow[]>`
-      select distinct embedding_provider as provider, embedding_model as model, embedding_dimension as dimension,
-        embedding_profile as profile, embedding_version as version, embedding_normalization as normalization
-      from evidence_versions evidence join document_versions document on document.id = evidence.document_version_id
-      where evidence.embedding is not null ${this.corpusPredicate()}
-    `;
-    if (existing.some((entry) => profileKey(entry) !== profileKey(this.profile))) {
-      throw new Error('Refusing mixed embedding profiles; re-embedding requires an explicit deployment migration');
-    }
-    const totals = await this.database.sql<{ total: number; pending: number }[]>`
-      select count(*)::integer as total, count(*) filter (where evidence.embedding is null)::integer as pending
-      from evidence_versions evidence join document_versions document on document.id = evidence.document_version_id
-      where true ${this.corpusPredicate()}
-    `;
-    const skipped = (totals[0]?.total ?? 0) - (totals[0]?.pending ?? 0);
-    let indexed = 0;
+    await this.assertCompatibleCorpus(this.database.sql);
+    const prepared: PreparedChunk[] = [];
     let batches = 0;
+    let cursor: string | undefined;
     while (true) {
+      const cursorPredicate = cursor === undefined ? this.database.sql`` : this.database.sql`and evidence.id > ${cursor}`;
       const chunks = await this.database.sql<ChunkRow[]>`
         select evidence.id, evidence.content from evidence_versions evidence
         join document_versions document on document.id = evidence.document_version_id
-        where evidence.embedding is null ${this.corpusPredicate()} order by evidence.id asc limit ${this.batchSize}
+        where evidence.embedding is null ${this.corpusPredicate(this.database.sql)} ${cursorPredicate}
+        order by evidence.id asc limit ${this.batchSize}
       `;
       if (chunks.length === 0) break;
       const embeddings = await this.gateway.embed(chunks.map((chunk) => chunk.content));
       if (embeddings.length !== chunks.length) throw new Error('Embedding provider returned the wrong batch cardinality');
       embeddings.forEach((embedding, index) => this.assertEmbedding(embedding, chunks[index]!.id));
-      const updated = await this.database.sql.begin(async (transaction) => {
-        let count = 0;
-        for (let index = 0; index < chunks.length; index += 1) {
-          const rows = await transaction`update evidence_versions set
-              embedding = ${vectorLiteral(embeddings[index]!)}::vector,
-              embedding_provider = ${this.profile.provider}, embedding_model = ${this.profile.model},
-              embedding_dimension = ${this.profile.dimension}, embedding_profile = ${this.profile.profile},
-              embedding_version = ${this.profile.version}, embedding_normalization = ${this.profile.normalization},
-              embedding_content_hash = content_hash
-            where id = ${chunks[index]!.id} and embedding is null returning id`;
-          count += rows.length;
-        }
-        return count;
-      });
-      indexed += updated;
+      prepared.push(...chunks.map((chunk, index) => ({ ...chunk, embedding: embeddings[index]! })));
       batches += 1;
-      if (updated === 0) {
-        const winnerProfiles = await this.database.sql<ProfileRow[]>`
-          select distinct embedding_provider as provider, embedding_model as model, embedding_dimension as dimension,
-            embedding_profile as profile, embedding_version as version, embedding_normalization as normalization
-          from evidence_versions where id = any(${chunks.map((chunk) => chunk.id)}::text[]) and embedding is not null
-        `;
-        if (winnerProfiles.length !== 1 || profileKey(winnerProfiles[0]!) !== profileKey(this.profile)) {
-          throw new Error('Refusing mixed embedding profiles; a different profile won the concurrent write');
-        }
-      }
+      cursor = chunks[chunks.length - 1]!.id;
     }
-    return { indexed, skipped, batches };
+
+    const preparedIds = new Set(prepared.map((chunk) => chunk.id));
+    return this.database.sql.begin(async (transaction) => {
+      await transaction`select pg_advisory_xact_lock(hashtext(${'embedding-index:evidence-versions'}))`;
+      await this.assertCompatibleCorpus(transaction);
+      const pending = await transaction<ChunkRow[]>`
+        select evidence.id, evidence.content from evidence_versions evidence
+        join document_versions document on document.id = evidence.document_version_id
+        where evidence.embedding is null ${this.corpusPredicate(transaction)}
+        order by evidence.id asc
+      `;
+      if (pending.some((chunk) => !preparedIds.has(chunk.id))) {
+        throw new Error('Evidence corpus changed while embeddings were prepared; rerun indexing');
+      }
+
+      let indexed = 0;
+      for (const chunk of prepared) {
+        const rows = await transaction`update evidence_versions set
+            embedding = ${vectorLiteral(chunk.embedding)}::vector,
+            embedding_provider = ${this.profile.provider}, embedding_model = ${this.profile.model},
+            embedding_dimension = ${this.profile.dimension}, embedding_profile = ${this.profile.profile},
+            embedding_version = ${this.profile.version}, embedding_normalization = ${this.profile.normalization},
+            embedding_content_hash = content_hash
+          where id = ${chunk.id} and embedding is null returning id`;
+        indexed += rows.length;
+      }
+      const totals = await transaction<{ total: number; pending: number }[]>`
+        select count(*)::integer as total, count(*) filter (where evidence.embedding is null)::integer as pending
+        from evidence_versions evidence join document_versions document on document.id = evidence.document_version_id
+        where true ${this.corpusPredicate(transaction)}
+      `;
+      if ((totals[0]?.pending ?? 0) !== 0) throw new Error('Evidence corpus changed while embeddings were activated; rerun indexing');
+      await this.assertCompatibleCorpus(transaction);
+      return { indexed, skipped: (totals[0]?.total ?? 0) - indexed, batches };
+    });
   }
 
-  private corpusPredicate() {
-    if (this.corpus === undefined) return this.database.sql``;
+  /** Rejects incomplete provenance or any active profile other than the requested one. */
+  private async assertCompatibleCorpus(sql: SqlExecutor): Promise<void> {
+    if (this.corpus?.requireCompleteProvenance === true) {
+      const incomplete = await sql<{ count: number }[]>`
+        select count(*)::integer as count from evidence_versions evidence
+        join document_versions document on document.id = evidence.document_version_id
+        where ${this.corpusCandidatePredicate(sql)} and not (${this.completeProvenancePredicate(sql)})
+      `;
+      if ((incomplete[0]?.count ?? 0) > 0) throw new Error('Canonical embedding corpus provenance is incomplete');
+    }
+    const existing = await sql<ProfileRow[]>`
+      select distinct embedding_provider as provider, embedding_model as model, embedding_dimension as dimension,
+        embedding_profile as profile, embedding_version as version, embedding_normalization as normalization
+      from evidence_versions evidence join document_versions document on document.id = evidence.document_version_id
+      where evidence.embedding is not null ${this.corpusPredicate(sql)}
+    `;
+    if (existing.some((entry) => profileKey(entry) !== profileKey(this.profile))) {
+      throw new Error('Refusing mixed embedding profiles; re-embedding requires an explicit deployment migration');
+    }
+  }
+
+  /** Builds the SQL restriction for the configured evidence corpus. */
+  private corpusPredicate(sql: SqlExecutor) {
+    if (this.corpus === undefined) return sql``;
     const provenance = this.corpus.requireCompleteProvenance
-      ? this.database.sql`and ${this.corpusCandidatePredicate()} and ${this.completeProvenancePredicate()}`
-      : this.database.sql`and ${this.corpusCandidatePredicate()}`;
+      ? sql`and ${this.corpusCandidatePredicate(sql)} and ${this.completeProvenancePredicate(sql)}`
+      : sql`and ${this.corpusCandidatePredicate(sql)}`;
     return provenance;
   }
 
-  private corpusCandidatePredicate() {
-    if (this.corpus === undefined) return this.database.sql`true`;
+  /** Matches evidence or parent documents within the configured locator prefixes. */
+  private corpusCandidatePredicate(sql: SqlExecutor) {
+    if (this.corpus === undefined) return sql`true`;
     const prefixes = this.corpus.sourceLocatorPrefixes.map((prefix) => `${prefix}%`);
-    return this.database.sql`(evidence.source_locator like any(${prefixes}::text[]) or document.source_locator like any(${prefixes}::text[]))`;
+    return sql`(evidence.source_locator like any(${prefixes}::text[]) or document.source_locator like any(${prefixes}::text[]))`;
   }
 
-  private completeProvenancePredicate() {
+  /** Requires complete and consistent provenance on both a chunk and its parent document. */
+  private completeProvenancePredicate(sql: SqlExecutor) {
     const prefixes = this.corpus?.sourceLocatorPrefixes.map((prefix) => `${prefix}%`) ?? [];
-    return this.database.sql`evidence.reliability_class is not null and evidence.classification_reason is not null
+    return sql`evidence.reliability_class is not null and evidence.classification_reason is not null
       and evidence.policy_hash ~ '^[0-9a-f]{64}$' and evidence.source_locator like any(${prefixes}::text[])
       and document.reliability_class is not null and document.classification_reason is not null
       and document.policy_hash = evidence.policy_hash and document.source_locator like any(${prefixes}::text[])
       and document.source_type = evidence.source_type`;
   }
 
+  /** Rejects provider embeddings that cannot safely join the active search index. */
   private assertEmbedding(embedding: readonly number[], evidenceId: string): void {
     if (embedding.length !== this.profile.dimension) throw new Error(`Embedding dimension mismatch for ${evidenceId}`);
     const norm = Math.sqrt(embedding.reduce((sum, value) => {

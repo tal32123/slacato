@@ -3,6 +3,7 @@ import type { AccessScope, AuthorizedSourceType } from '../../domain/permissions
 
 type AllowedScope = Extract<AccessScope, { allowed: true }> & Readonly<{ personaId: string }>;
 
+/** Serializes authorization facts deterministically for stable scope hashes. */
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (value !== null && typeof value === 'object') {

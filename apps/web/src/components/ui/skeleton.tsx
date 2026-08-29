@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils"
 
+/** Reserves content space with a loading placeholder while data is unavailable. */
 function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div

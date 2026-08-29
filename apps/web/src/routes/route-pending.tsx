@@ -1,5 +1,6 @@
 import { LoaderCircle, ShieldCheck } from 'lucide-react';
 
+/** Shows a full-page loading state while the next route is prepared. */
 export function RoutePending(): React.JSX.Element {
   return (
     <main className="grid min-h-dvh place-items-center bg-background px-5">

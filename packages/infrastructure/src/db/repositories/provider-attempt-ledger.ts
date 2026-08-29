@@ -4,7 +4,7 @@ import type { TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../client.js';
 import { logger } from '../../logging/logger.js';
 
-type BudgetRow = Readonly<{ run_id: string; max_calls: number; max_input_tokens: number; max_output_tokens: number; deadline_ms: number | null; deadline_at: string | Date; used_calls: number; used_input_tokens: number; used_output_tokens: number; reserved_output_tokens: number }>;
+type BudgetRow = Readonly<{ run_id: string; max_calls: number; deadline_ms: number | null; deadline_at: string | Date; used_calls: number; used_input_tokens: number; used_output_tokens: number; reserved_output_tokens: number }>;
 type ReservationRow = Readonly<{
   id: string; attempt_id: string; run_id: string; granted_output_tokens: number; reserved_input_tokens: number;
   status: 'reserved' | 'settled' | 'released' | 'possible_duplicate'; actual_input_tokens: number | null; actual_output_tokens: number | null;
@@ -14,20 +14,17 @@ type AttemptLogRow = Readonly<{ run_id: string; provider: string; model: string;
 type QuerySql = DatabaseClient['sql'] | TransactionSql;
 
 function same(left: string | number | null | undefined, right: string | number | null | undefined): boolean { return (left ?? null) === (right ?? null); }
-/** PostgreSQL is the sole durable authority for provider-call attempts and run budgets. */
+/** PostgreSQL is the sole durable authority for provider-call attempts and execution safeguards. */
 export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
   public constructor(private readonly database: DatabaseClient) {}
 
-  /** Verifies the atomically-created workflow budget before exposing a run gateway. */
-  public async assertRunBudget(input: Pick<RunBudgetLimits, 'scope' | 'maxCalls' | 'maxInputTokens' | 'maxOutputTokens' | 'deadlineMs'>): Promise<void> {
+  /** Verifies the atomically-created call/deadline safeguards before exposing a run gateway. */
+  public async assertRunBudget(input: RunBudgetLimits): Promise<void> {
     await this.database.sql`update run_budgets set deadline_ms = ${input.deadlineMs}
-      where run_id = ${input.scope} and deadline_ms is null and max_calls = ${input.maxCalls}
-        and max_input_tokens = ${input.maxInputTokens} and max_output_tokens = ${input.maxOutputTokens}`;
-    const budget = (await this.database.sql<Pick<BudgetRow, 'max_calls' | 'max_input_tokens' | 'max_output_tokens' | 'deadline_ms' | 'deadline_at'>[]>`select max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at from run_budgets
+      where run_id = ${input.scope} and deadline_ms is null and max_calls = ${input.maxCalls}`;
+    const budget = (await this.database.sql<Pick<BudgetRow, 'max_calls' | 'deadline_ms' | 'deadline_at'>[]>`select max_calls, deadline_ms, deadline_at from run_budgets
       where run_id = ${input.scope}
         and max_calls = ${input.maxCalls}
-        and max_input_tokens = ${input.maxInputTokens}
-        and max_output_tokens = ${input.maxOutputTokens}
         and deadline_ms = ${input.deadlineMs}`)[0];
     if (budget === undefined) {
       const exists = await this.database.sql<{ exists: boolean }[]>`select exists(select 1 from run_budgets where run_id = ${input.scope}) as exists`;
@@ -49,7 +46,7 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
   public async beginAttempt(input: Parameters<ProviderAttemptLedger['beginAttempt']>[0]): Promise<ProviderAttemptReservation> {
     const outcome = await this.database.sql.begin(async (sql) => {
       const logicalGenerationId = input.logicalGenerationId ?? `generation_${createHash('sha256').update(`${input.runScope}\u0000${input.operation}`).digest('hex')}`;
-      const budget = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
+      const budget = (await sql<BudgetRow[]>`select run_id, max_calls, deadline_ms, deadline_at, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
       if (budget === undefined) throw new Error('Run budget does not exist');
       if (new Date(budget.deadline_at).getTime() <= Date.now()) throw new Error('Shared run deadline reached');
       const abandoned = await sql<ReservationRow[]>`select id, attempt_id, run_id, granted_output_tokens, reserved_input_tokens, status, actual_input_tokens, actual_output_tokens, request_id, response_id, failure_category, failure_code
@@ -65,10 +62,9 @@ export class PostgresProviderAttemptLedger implements ProviderAttemptLedger {
       if (ordinalRow === undefined) throw new Error('Could not allocate provider attempt ordinal');
       const ordinal = ordinalRow.ordinal;
 
-      const refreshed = (await sql<BudgetRow[]>`select run_id, max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
-      if (refreshed === undefined || refreshed.used_calls >= refreshed.max_calls || refreshed.used_input_tokens + input.inputTokens > refreshed.max_input_tokens) throw new Error('Run budget is exhausted');
-      const grant = Math.min(input.requestedOutputTokens, refreshed.max_output_tokens - refreshed.used_output_tokens - refreshed.reserved_output_tokens);
-      if (grant <= 0) throw new Error('Run output budget is exhausted');
+      const refreshed = (await sql<BudgetRow[]>`select run_id, max_calls, deadline_ms, deadline_at, used_calls, used_input_tokens, used_output_tokens, reserved_output_tokens from run_budgets where run_id = ${input.runScope} for update`)[0];
+      if (refreshed === undefined || refreshed.used_calls >= refreshed.max_calls) throw new Error('Run call limit is exhausted');
+      const grant = 1;
       const attemptId = crypto.randomUUID();
       const reservationId = crypto.randomUUID();
       await sql`insert into generation_attempts (id, run_id, invocation_id, logical_generation_id, operation, ordinal, status, provider, model)

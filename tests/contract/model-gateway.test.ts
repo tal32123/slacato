@@ -93,7 +93,31 @@ describe('BudgetedModelGateway', () => {
     });
 
     expect(result.value).toEqual({ stakeholders: [] });
-    expect(events).toEqual(['begin:1', 'transport:100', 'settle:reservation-1', 'begin:2', 'transport:100', 'settle:reservation-2']);
+    expect(events).toEqual(['begin:1', 'transport:undefined', 'settle:reservation-1', 'begin:2', 'transport:undefined', 'settle:reservation-2']);
+  });
+
+  it('allows repair and re-repair independently for each structured-output request', async () => {
+    const attemptsByOperation = new Map<string, number>();
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: true },
+      async generate(request) {
+        const attempt = (attemptsByOperation.get(request.operation) ?? 0) + 1;
+        attemptsByOperation.set(request.operation, attempt);
+        const output = attempt < 3 ? { stakeholders: [{ role: 'buyer' }] } : { stakeholders: [] };
+        return { text: JSON.stringify(output), output };
+      }
+    };
+    const gateway = createTestGateway(transport);
+    const request = (operation: string) => ({
+      schema,
+      messages: [{ role: 'user' as const, content: 'Extract.' }],
+      operation,
+      limits: { maxCalls: 3, maxSchemaRepairs: 2, maxTransportRetries: 0, deadlineMs: 1_000 }
+    });
+
+    await expect(gateway.generateObject(request('specialist-one'))).resolves.toMatchObject({ value: { stakeholders: [] } });
+    await expect(gateway.generateObject(request('specialist-two'))).resolves.toMatchObject({ value: { stakeholders: [] } });
+    expect(attemptsByOperation).toEqual(new Map([['specialist-one', 3], ['specialist-two', 3]]));
   });
 
   it('releases only trusted not-sent failures and conservatively charges ambiguous transport failures', async () => {
@@ -244,6 +268,40 @@ describe('BudgetedModelGateway', () => {
     expect(requests[1]).toContain('END_OF_FAILED_OUTPUT');
   });
 
+  it('records rejected identifier values in validation diagnostics', async () => {
+    const identifierSchema = z.object({ evidenceId: z.string().regex(/^evidence_/) }).strict();
+    const recorded: Array<readonly { path: string; code: string; message: string }[]> = [];
+    let ordinal = 0;
+    const ledger: ProviderAttemptLedger = {
+      async beginAttempt(input) {
+        ordinal += 1;
+        return { reservationId: `identifier-${ordinal}`, attemptId: `identifier-${ordinal}`, ordinal, grantedOutputTokens: input.requestedOutputTokens };
+      },
+      async settleAttempt() {},
+      async releaseAttempt() {},
+      async recordAttemptMetadata(input) { recorded.push(input.validationIssues); }
+    };
+    let call = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: true },
+      async generate() {
+        call += 1;
+        const output = call === 1 ? { evidenceId: 'document_wrong' } : { evidenceId: 'evidence_right' };
+        return { text: JSON.stringify(output), output };
+      }
+    };
+
+    await createBudgetedModelGateway(transport, undefined, ledger).generateObject({
+      schema: identifierSchema,
+      messages: [{ role: 'user', content: 'Select evidence.' }],
+      operation: 'identifier-diagnostics',
+      durableAttempt: { runScope: 'run-identifiers', provider: 'mock', model: 'mock-chat' },
+      limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 1_000 }
+    });
+
+    expect(recorded[0]?.[0]?.message).toContain('document_wrong');
+  });
+
   it('fails explicitly instead of truncating repair feedback that cannot fit the context window', async () => {
     let calls = 0;
     const transport: ModelTransport = {
@@ -280,7 +338,7 @@ describe('BudgetedModelGateway', () => {
     await expect(gateway.generateObject(request)).rejects.toThrow('call limit');
   });
 
-  it('reserves shared output capacity before concurrent provider calls', async () => {
+  it('does not impose an app-defined output-token ceiling on concurrent provider calls', async () => {
     const releases: Array<() => void> = [];
     let calls = 0;
     const transport: ModelTransport = {
@@ -299,11 +357,11 @@ describe('BudgetedModelGateway', () => {
     const second = gateway.generateObject(request);
     await Promise.resolve();
     await Promise.resolve();
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
     releases.forEach((release) => release());
 
     await expect(first).resolves.toMatchObject({ value: { stakeholders: [] } });
-    await expect(second).rejects.toThrow('output token budget');
+    await expect(second).resolves.toMatchObject({ value: { stakeholders: [] } });
   });
 
   it('releases output capacity after a transport failure while retaining the call charge', async () => {
@@ -344,7 +402,7 @@ describe('BudgetedModelGateway', () => {
     vi.useRealTimers();
   });
 
-  it('rejects provider-reported input usage that exceeds the reserved hard budget', async () => {
+  it('records provider input usage without imposing an app-defined token budget', async () => {
     const transport: ModelTransport = {
       capabilities: { nativeStructuredOutput: false },
       async generate() { return { text: '{"stakeholders":[]}', usage: { inputTokens: 2_000, outputTokens: 1 } }; }
@@ -353,7 +411,7 @@ describe('BudgetedModelGateway', () => {
     await expect(createTestGateway(transport).generateObject({
       schema, messages: [{ role: 'user', content: 'Extract.' }], operation: 'actual-input-budget',
       limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 1_000, maxOutputTokens: 100 }
-    })).rejects.toThrow('Input token budget');
+    })).resolves.toMatchObject({ usage: { inputTokens: 2_000 } });
   });
 
   it('retains context invariants when corrective feedback is added', async () => {

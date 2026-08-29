@@ -4,12 +4,14 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
+/** Coordinates a modal confirmation flow for consequential user actions. */
 function AlertDialog({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
   return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
 }
 
+/** Opens the associated confirmation dialog from an explicit user action. */
 function AlertDialogTrigger({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
@@ -18,6 +20,7 @@ function AlertDialogTrigger({
   )
 }
 
+/** Renders confirmation-dialog content in the appropriate document layer. */
 function AlertDialogPortal({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Portal>) {
@@ -26,6 +29,7 @@ function AlertDialogPortal({
   )
 }
 
+/** Dims and protects the page while a confirmation decision is required. */
 function AlertDialogOverlay({
   className,
   ...props
@@ -42,6 +46,7 @@ function AlertDialogOverlay({
   )
 }
 
+/** Presents the confirmation message and its available decisions in a focused modal. */
 function AlertDialogContent({
   className,
   size = "default",
@@ -65,6 +70,7 @@ function AlertDialogContent({
   )
 }
 
+/** Organizes the heading and explanation for a confirmation dialog. */
 function AlertDialogHeader({
   className,
   ...props
@@ -81,6 +87,7 @@ function AlertDialogHeader({
   )
 }
 
+/** Arranges the available confirmation and cancellation actions. */
 function AlertDialogFooter({
   className,
   ...props
@@ -97,6 +104,7 @@ function AlertDialogFooter({
   )
 }
 
+/** States the decision a confirmation dialog is asking the user to make. */
 function AlertDialogTitle({
   className,
   ...props
@@ -113,6 +121,7 @@ function AlertDialogTitle({
   )
 }
 
+/** Explains the consequences or context of a requested confirmation. */
 function AlertDialogDescription({
   className,
   ...props
@@ -126,6 +135,7 @@ function AlertDialogDescription({
   )
 }
 
+/** Reserves a prominent visual area for confirmation-dialog context. */
 function AlertDialogMedia({
   className,
   ...props
@@ -142,6 +152,7 @@ function AlertDialogMedia({
   )
 }
 
+/** Provides the action that confirms the requested decision. */
 function AlertDialogAction({
   className,
   variant = "default",
@@ -160,6 +171,7 @@ function AlertDialogAction({
   )
 }
 
+/** Lets the user dismiss a confirmation without applying the requested action. */
 function AlertDialogCancel({
   className,
   variant = "outline",

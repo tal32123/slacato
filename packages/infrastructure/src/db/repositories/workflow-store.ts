@@ -5,9 +5,16 @@ import {
   type FinalizeRunInput, type RegenerateRunInput, type ReplaceApprovalSubjectInput, type SaveCheckpointInput, type StartRunInput,
   type StepLease, type WorkflowCommand, type WorkflowRun, type WorkflowStore
 } from '@slacato/core';
-import { runEventToPublishSchema, traceSpanSchema, type TraceSpan } from '@slacato/contracts';
+import { runEventToPublishSchema, traceSpanSchema } from '@slacato/contracts';
 import type { JSONValue, Sql, TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../client.js';
+import {
+  projectWorkflowTrace,
+  type PersistedGenerationAttempt,
+  type ProjectedTraceSpan,
+  type TraceParentReference,
+  type WorkflowTraceProjection
+} from './workflow-trace-projector.js';
 
 type RunRow = Readonly<{ id: string; opportunity_id: string; requested_by: string; status: WorkflowRun['status']; version: number; generation_provider: string; generation_model: string; start_request_hash?: string | undefined }>;
 type InvocationRow = Readonly<{ id: string; run_id: string; step: string; owner: string; lease_token: string; causal_command_id: string; lease_expires_at: string | Date; attempt: number }>;
@@ -33,50 +40,60 @@ async function insertCommand(sql: SqlExecutor, command: WorkflowCommand): Promis
   }
   await sql`insert into outbox_commands (id, run_id, type, payload, idempotency_key) values (${command.id}, ${command.runId}, ${command.type}, ${jsonText(command.payload)}::jsonb, ${command.idempotencyKey})`;
 }
-const traceId = (runId: string): string => `trace_${hashApprovalPayload(runId)}`;
-const traceSpanId = (runId: string, kind: TraceSpan['kind'], discriminator: string): string =>
-  `span_${hashApprovalPayload({ runId, kind, discriminator })}`;
-const failureOperations = {
-  conversation_unavailable: 'conversation',
-  stakeholder_unavailable: 'stakeholder',
-  commercial_unavailable: 'commercial',
-  strategy_unavailable: 'strategy',
-  commercial_specialist_failed: 'commercial',
-  strategy_generation_failed: 'strategy',
-  draft_validation_failed: 'strategy',
-  workflow_failed: 'strategy'
-} as const;
-type FailureReasonCode = keyof typeof failureOperations;
-function failureReasonCode(reason: string): FailureReasonCode {
-  return Object.hasOwn(failureOperations, reason) ? reason as FailureReasonCode : 'workflow_failed';
+type GenerationAttemptRow = Readonly<{
+  id: string;
+  logical_generation_id: string;
+  ordinal: number;
+  provider: string;
+  model: string;
+  output_mode: 'native_schema' | 'prompted_json' | null;
+  validation_attempts: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  status: string;
+  possible_duplicate: boolean;
+}>;
+
+/** Resolves a persistence-neutral trace parent reference against spans already stored for the run. */
+async function resolveTraceParent(
+  sql: SqlExecutor,
+  runId: string,
+  parent: TraceParentReference | undefined
+): Promise<string | undefined> {
+  if (parent === undefined) return undefined;
+  if (parent.type === 'direct') return parent.spanId;
+  if (parent.type === 'if_present') {
+    return (await sql<{ span_id: string }[]>`select span_id from trace_spans where span_id = ${parent.spanId}`)[0]?.span_id;
+  }
+  for (const candidate of parent.candidates) {
+    const spanId = candidate.step === undefined
+      ? (await sql<{ span_id: string }[]>`select span_id from trace_spans
+          where run_id = ${runId} and kind in ${sql(candidate.kinds)}
+          order by started_at desc, span_id desc limit 1`)[0]?.span_id
+      : (await sql<{ span_id: string }[]>`select span_id from trace_spans
+          where run_id = ${runId} and kind in ${sql(candidate.kinds)} and step = ${candidate.step}
+          order by started_at desc, span_id desc limit 1`)[0]?.span_id;
+    if (spanId !== undefined) return spanId;
+  }
+  return undefined;
 }
 
-async function appendTrace(
-  sql: SqlExecutor,
-  input: Readonly<{
-    runId: string;
-    kind: TraceSpan['kind'];
-    discriminator: string;
-    step: string;
-    attempt?: number;
-    status?: TraceSpan['status'];
-    parentSpanId?: string;
-    data: Readonly<Record<string, unknown>>;
-  }>
-): Promise<string> {
+/** Persists one projected trace span idempotently after resolving its parent inside the current transaction. */
+async function appendProjectedTrace(sql: SqlExecutor, projected: ProjectedTraceSpan): Promise<void> {
   const now = new Date().toISOString();
+  const parentSpanId = await resolveTraceParent(sql, projected.runId, projected.parent);
   const span = traceSpanSchema.parse({
-    traceId: traceId(input.runId),
-    spanId: traceSpanId(input.runId, input.kind, input.discriminator),
-    runId: input.runId,
-    ...(input.parentSpanId === undefined ? {} : { parentSpanId: input.parentSpanId }),
-    step: input.step,
-    attempt: input.attempt ?? 1,
-    kind: input.kind,
-    status: input.status ?? 'completed',
+    traceId: projected.traceId,
+    spanId: projected.spanId,
+    runId: projected.runId,
+    ...(parentSpanId === undefined ? {} : { parentSpanId }),
+    step: projected.step,
+    attempt: projected.attempt,
+    kind: projected.kind,
+    status: projected.status,
     startedAt: now,
     endedAt: now,
-    data: input.data
+    data: projected.data
   });
   const existing = (await sql<{
     trace_id: string; run_id: string; parent_id: string | null; step: string; attempt: number;
@@ -97,214 +114,66 @@ async function appendTrace(
     if (canonicalJson(persisted) !== canonicalJson(proposed)) {
       throw new DomainConflictError(`Trace span ID conflicts with different content: ${span.spanId}`);
     }
-    return span.spanId;
+    return;
   }
   await sql`insert into trace_spans (id, trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at)
     values (${span.spanId}, ${span.traceId}, ${span.spanId}, ${span.runId}, ${span.parentSpanId ?? null}, ${span.step}, ${span.attempt},
       ${span.kind}, ${span.status}, ${jsonText(span.data)}::jsonb, ${span.startedAt}::timestamptz, ${span.endedAt ?? null}::timestamptz)`;
-  return span.spanId;
 }
 
-async function appendGenerationTrace(sql: SqlExecutor, input: SaveCheckpointInput): Promise<void> {
-  if (input.logicalGenerationId === undefined || (!input.step.startsWith('specialist:') && !input.step.startsWith('strategy'))) return;
-  const operation = input.step.startsWith('specialist:') ? input.step.slice('specialist:'.length) : 'strategy';
-  const kind: TraceSpan['kind'] = input.step.startsWith('specialist:') ? 'specialist_attempt' : 'strategy_attempt';
-  const attemptStatus: TraceSpan['status'] = input.checkpoint.status === 'degraded' ? 'degraded' : input.checkpoint.status === 'failed' ? 'failed' : 'completed';
-  const retrievalSpanId = traceSpanId(input.runId, 'evidence_retrieval', 'retrieval');
-  const parentSpanId = await existingSpanId(sql, retrievalSpanId);
-  const attemptSpanId = await appendTrace(sql, {
-    runId: input.runId,
-    kind,
-    discriminator: input.step,
-    step: operation,
-    status: attemptStatus,
-    ...(parentSpanId === undefined ? {} : { parentSpanId }),
-    data: { operation, logicalGenerationId: input.logicalGenerationId }
-  });
-  const persistedAttempts = await sql<{
-    id: string;
-    logical_generation_id: string;
-    ordinal: number;
-    provider: string;
-    model: string;
-    output_mode: 'native_schema' | 'prompted_json' | null;
-    validation_attempts: number;
-    input_tokens: number | null;
-    output_tokens: number | null;
-    status: string;
-    possible_duplicate: boolean;
-  }[]>`select id, logical_generation_id, ordinal, provider, model, output_mode, validation_attempts,
-      input_tokens, output_tokens, status, possible_duplicate
-    from generation_attempts where run_id = ${input.runId} and logical_generation_id = ${input.logicalGenerationId}
-    order by ordinal`;
-  let attempts = [...persistedAttempts];
-  if (attempts.length === 0) {
-    const generation = input.checkpoint.generation !== null && typeof input.checkpoint.generation === 'object'
-      ? input.checkpoint.generation as Readonly<Record<string, unknown>>
-      : {};
-    const provider = typeof generation.provider === 'string' ? generation.provider : 'unknown';
-    const model = typeof generation.model === 'string' ? generation.model : 'unknown';
-    const attemptId = `attempt_${hashApprovalPayload({ runId: input.runId, logicalGenerationId: input.logicalGenerationId, operation, ordinal: 1 })}`;
-    const possibleDuplicate = generation.possibleDuplicate === true;
+/** Persists a complete pure trace projection without leaving the caller's workflow transaction. */
+async function persistTraceProjection(sql: SqlExecutor, projection: WorkflowTraceProjection): Promise<void> {
+  const attempt = projection.generationAttempt;
+  if (attempt !== undefined) {
     await sql`insert into generation_attempts
       (id, run_id, invocation_id, logical_generation_id, operation, ordinal, status, provider, model,
         output_mode, validation_attempts, possible_duplicate, input_tokens, output_tokens, completed_at)
-      values (${attemptId}, ${input.runId}, ${input.invocationId}, ${input.logicalGenerationId}, ${operation}, 1,
-        ${attemptStatus === 'failed' ? 'failed' : 'completed'}, ${provider}, ${model}, null, 0,
-        ${possibleDuplicate}, 0, 0, now())`;
-    attempts = [{
-      id: attemptId,
-      logical_generation_id: input.logicalGenerationId,
-      ordinal: 1,
-      provider,
-      model,
-      output_mode: null,
-      validation_attempts: 0,
-      input_tokens: 0,
-      output_tokens: 0,
-      status: attemptStatus === 'failed' ? 'failed' : 'completed',
-      possible_duplicate: possibleDuplicate
-    }];
+      values (${attempt.id}, ${attempt.runId}, ${attempt.invocationId}, ${attempt.logicalGenerationId}, ${attempt.operation}, ${attempt.ordinal},
+        ${attempt.status}, ${attempt.provider}, ${attempt.model}, ${attempt.outputMode}, ${attempt.validationAttempts},
+        ${attempt.possibleDuplicate}, ${attempt.inputTokens}, ${attempt.outputTokens}, now())`;
   }
-  for (const attempt of attempts) {
-    const failed = attempt.status === 'failed';
-    const modelSpanId = await appendTrace(sql, {
-      runId: input.runId,
-      kind: 'model_call',
-      discriminator: `${input.step}:model:${attempt.id}`,
-      step: operation,
-      attempt: attempt.ordinal,
-      status: failed ? 'failed' : 'completed',
-      parentSpanId: attemptSpanId,
-      data: {
-        durableAttemptId: attempt.id,
-        logicalGenerationId: attempt.logical_generation_id,
-        ordinal: attempt.ordinal,
-        provider: attempt.provider,
-        model: attempt.model,
-        parametersHash: hashApprovalPayload({
-          provider: attempt.provider, model: attempt.model, operation, outputMode: attempt.output_mode
-        }),
-        outputMode: attempt.output_mode,
-        possibleDuplicate: attempt.possible_duplicate
-      }
-    });
-    await appendTrace(sql, {
-      runId: input.runId,
-      kind: 'validation',
-      discriminator: `${input.step}:validation:${attempt.id}`,
-      step: operation,
-      attempt: attempt.ordinal,
-      status: failed ? 'failed' : 'completed',
-      parentSpanId: modelSpanId,
-      data: { decision: failed ? 'rejected' : 'accepted', validationAttempts: attempt.validation_attempts }
-    });
-    await appendTrace(sql, {
-      runId: input.runId,
-      kind: 'guardrail',
-      discriminator: `${input.step}:guardrail:${attempt.id}`,
-      step: operation,
-      attempt: attempt.ordinal,
-      status: 'completed',
-      parentSpanId: modelSpanId,
-      data: { decision: failed ? 'blocked' : 'passed' }
-    });
-    await appendTrace(sql, {
-      runId: input.runId,
-      kind: 'usage',
-      discriminator: `${input.step}:usage:${attempt.id}`,
-      step: operation,
-      attempt: attempt.ordinal,
-      parentSpanId: modelSpanId,
-      data: { inputTokens: attempt.input_tokens ?? 0, outputTokens: attempt.output_tokens ?? 0 }
-    });
-    if (attempt.validation_attempts > 0) {
-      await appendTrace(sql, {
-        runId: input.runId,
-        kind: 'repair',
-        discriminator: `${input.step}:repair:${attempt.id}`,
-        step: operation,
-        attempt: attempt.ordinal,
-        parentSpanId: modelSpanId,
-        data: { attempts: attempt.validation_attempts, decision: 'validated' }
-      });
-    }
-  }
-  if (attemptStatus === 'degraded') {
-    await appendTrace(sql, {
-      runId: input.runId,
-      kind: 'partial_failure',
-      discriminator: `${input.step}:partial`,
-      step: operation,
-      status: 'degraded',
-      parentSpanId: attemptSpanId,
-      data: { decision: 'partial', reasonCode: `${operation}_unavailable` }
-    });
-  }
-}
-async function existingSpanId(sql: SqlExecutor, spanId: string): Promise<string | undefined> {
-  return (await sql<{ span_id: string }[]>`select span_id from trace_spans where span_id = ${spanId}`)[0]?.span_id;
+  for (const span of projection.spans) await appendProjectedTrace(sql, span);
 }
 
-async function latestSpanId(sql: SqlExecutor, runId: string, kinds: readonly TraceSpan['kind'][]): Promise<string | undefined> {
-  return (await sql<{ span_id: string }[]>`select span_id from trace_spans
-    where run_id = ${runId} and kind in ${sql(kinds)}
-    order by started_at desc, span_id desc limit 1`)[0]?.span_id;
-}
-
-async function appendRetrievalTrace(sql: SqlExecutor, runId: string, checkpoint: Readonly<Record<string, unknown>>): Promise<void> {
-  const value = checkpoint.value !== null && typeof checkpoint.value === 'object'
-    ? checkpoint.value as Readonly<Record<string, unknown>>
-    : {};
-  const evidence = Array.isArray(value.evidence) ? value.evidence : [];
-  const resultIds: string[] = [];
-  const scores: number[] = [];
-  for (const candidate of evidence) {
-    if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
-    const record = candidate as Readonly<Record<string, unknown>>;
-    if (typeof record.evidenceId === 'string') resultIds.push(record.evidenceId);
-    if (typeof record.score === 'number' && Number.isFinite(record.score)) scores.push(record.score);
-  }
-  const authorizationSpanId = await existingSpanId(sql, traceSpanId(runId, 'authorization_lookup', 'start'));
-  await appendTrace(sql, {
-    runId,
-    kind: 'evidence_retrieval',
-    discriminator: 'retrieval',
-    step: 'retrieval',
-    ...(authorizationSpanId === undefined ? {} : { parentSpanId: authorizationSpanId }),
-    data: { resultIds, scores, evidenceCount: resultIds.length }
-  });
-}
-
-async function appendPolicyAndRecommendations(
+/** Loads durable model attempts and maps storage column names to the projector's typed boundary. */
+async function generationAttempts(
   sql: SqlExecutor,
-  input: Readonly<{
-    runId: string;
-    discriminator: string;
-    subjectHash: string;
-    recommendationIds: readonly string[];
-    decision: string;
-    policyHash: string;
-  }>
-): Promise<string> {
-  const parentSpanId = await latestSpanId(sql, input.runId, ['strategy_attempt']);
-  const policySpanId = await appendTrace(sql, {
+  runId: string,
+  logicalGenerationId: string
+): Promise<readonly PersistedGenerationAttempt[]> {
+  const rows = await sql<GenerationAttemptRow[]>`select id, logical_generation_id, ordinal, provider, model, output_mode, validation_attempts,
+      input_tokens, output_tokens, status, possible_duplicate
+    from generation_attempts where run_id = ${runId} and logical_generation_id = ${logicalGenerationId}
+    order by ordinal`;
+  return rows.map((attempt) => ({
+    id: attempt.id,
+    logicalGenerationId: attempt.logical_generation_id,
+    ordinal: attempt.ordinal,
+    provider: attempt.provider,
+    model: attempt.model,
+    outputMode: attempt.output_mode,
+    validationAttempts: attempt.validation_attempts,
+    inputTokens: attempt.input_tokens,
+    outputTokens: attempt.output_tokens,
+    status: attempt.status,
+    possibleDuplicate: attempt.possible_duplicate
+  }));
+}
+
+/** Projects and persists generation trace spans from a saved checkpoint and its durable attempts. */
+async function appendGenerationTrace(sql: SqlExecutor, input: SaveCheckpointInput): Promise<void> {
+  const attempts = input.logicalGenerationId === undefined
+    ? []
+    : await generationAttempts(sql, input.runId, input.logicalGenerationId);
+  await persistTraceProjection(sql, projectWorkflowTrace({
+    type: 'generation_checkpoint',
     runId: input.runId,
-    kind: 'policy_decision',
-    discriminator: `${input.discriminator}:policy`,
-    step: 'policy',
-    ...(parentSpanId === undefined ? {} : { parentSpanId }),
-    data: { decision: input.decision, policyHash: input.policyHash, subjectHash: input.subjectHash }
-  });
-  await appendTrace(sql, {
-    runId: input.runId,
-    kind: 'recommendation',
-    discriminator: `${input.discriminator}:recommendations`,
-    step: 'recommendation',
-    ...(parentSpanId === undefined ? {} : { parentSpanId }),
-    data: { recommendationIds: input.recommendationIds }
-  });
-  return policySpanId;
+    step: input.step,
+    invocationId: input.invocationId,
+    ...(input.logicalGenerationId === undefined ? {} : { logicalGenerationId: input.logicalGenerationId }),
+    checkpoint: input.checkpoint,
+    persistedAttempts: attempts
+  }));
 }
 
 
@@ -435,6 +304,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     });
   }
 
+  /** Creates a workflow run and its initial authorization trace atomically with the first command. */
   public async startRun(input: StartRunInput): Promise<WorkflowRun> {
     if (input.command.runId !== input.id || input.budget.scope !== input.id) throw new DomainConflictError('Run, command, and budget scopes do not match');
     return this.database.sql.begin(async (sql) => {
@@ -452,20 +322,14 @@ export class PostgresWorkflowStore implements WorkflowStore {
         values (${input.id}, ${input.opportunityId}, ${input.requestedBy}, ${input.status}, ${input.generationProvider}, ${input.generationModel}, ${input.idempotencyKey}, ${input.startRequestHash}, 0)
         returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash`;
       const row = rows[0]; if (row === undefined) throw new DomainConflictError('Unable to create run');
-      await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens, deadline_ms, deadline_at) values
-        (${input.id}, ${input.budget.maxCalls}, ${input.budget.maxInputTokens}, ${input.budget.maxOutputTokens}, ${input.budget.deadlineMs}, now() + (${input.budget.deadlineMs}::text || ' milliseconds')::interval)`;
-      await appendTrace(sql, {
+      await sql`insert into run_budgets (run_id, max_calls, deadline_ms, deadline_at) values
+        (${input.id}, ${input.budget.maxCalls}, ${input.budget.deadlineMs}, now() + (${input.budget.deadlineMs}::text || ' milliseconds')::interval)`;
+      await persistTraceProjection(sql, projectWorkflowTrace({
+        type: 'run_started',
         runId: input.id,
-        kind: 'authorization_lookup',
-        discriminator: 'start',
-        step: 'authorization',
-        data: {
-          decision: 'allowed',
-          correlationHash: hashApprovalPayload({ runId: input.id, opportunityId: input.opportunityId, requestedBy: input.requestedBy }),
-          readKinds: ['opportunity', 'account', 'requester', 'permissions'],
-          readCount: 4
-        }
-      });
+        opportunityId: input.opportunityId,
+        requestedBy: input.requestedBy
+      }));
       await insertCommand(sql, input.command);
       await appendEvent(sql, input.id, 'run_created', { status: input.status, deadlineMs: input.budget.deadlineMs });
       return asRun(row);
@@ -519,6 +383,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     });
   }
 
+  /** Commits a workflow step, its trace projection, and the next command in one transaction. */
   public async commitStepAndEnqueueNext(input: CommitStepInput): Promise<WorkflowRun> {
     if (input.nextCommand.runId !== input.runId) throw new DomainConflictError('Outbox command run does not match workflow run');
     return this.database.sql.begin(async (sql) => {
@@ -533,21 +398,20 @@ export class PostgresWorkflowStore implements WorkflowStore {
           (${input.artifact.id}, ${input.runId}, ${input.artifact.kind}, ${input.artifact.logicalGenerationId ?? null}, ${jsonText(input.artifact.generationMetadata ?? {})}::jsonb,
           ${input.artifact.evidenceManifestId ?? null}, ${jsonText(input.artifact.content)}::jsonb, ${contentHash})`;
       }
-      if (input.event === 'retrieval_completed') await appendRetrievalTrace(sql, input.runId, input.checkpoint);
-      if (input.event === 'validation_completed') {
-        const parsed = dealBriefSchema.safeParse(input.checkpoint.payload);
-        const recommendationIds = parsed.success
-          ? parsed.data.recommendedNextActions.actions.map((action, index) => `recommendation:${index}:${hashApprovalPayload(action).slice(0, 16)}`)
-          : [];
-        const subjectHash = typeof input.checkpoint.subjectHash === 'string' ? input.checkpoint.subjectHash : hashApprovalPayload(input.checkpoint);
-        await appendPolicyAndRecommendations(sql, {
+      if (input.event === 'retrieval_completed') {
+        await persistTraceProjection(sql, projectWorkflowTrace({
+          type: 'retrieval_completed',
           runId: input.runId,
-          discriminator: `validation:${row.version}`,
-          subjectHash,
-          recommendationIds,
-          decision: 'no_approval_required',
-          policyHash: hashApprovalPayload({ decision: 'no_approval_required', subjectHash })
-        });
+          checkpoint: input.checkpoint
+        }));
+      }
+      if (input.event === 'validation_completed') {
+        await persistTraceProjection(sql, projectWorkflowTrace({
+          type: 'validation_completed',
+          runId: input.runId,
+          version: row.version,
+          checkpoint: input.checkpoint
+        }));
       }
       await appendEvent(sql, input.runId, input.event, { version: row.version, status: nextStatus });
       await insertCommand(sql, input.nextCommand);
@@ -555,6 +419,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     });
   }
 
+  /** Moves a run to approval while storing its subject, requirements, and trace projection atomically. */
   public async awaitApproval(input: AwaitApprovalInput): Promise<WorkflowRun> {
     if (hashApprovalPayload(input.subject.payload) !== input.subject.subjectHash) throw new DomainConflictError('Approval subject hash does not match its payload');
     return this.database.sql.begin(async (sql) => {
@@ -569,30 +434,11 @@ export class PostgresWorkflowStore implements WorkflowStore {
         values (${entry.id}, ${input.subject.id}, ${entry.category}, ${jsonText(entry.eligibleAuthorities)}::jsonb, ${jsonText(entry.policyTriggers)}::jsonb, ${jsonText(entry.dependsOn)}::jsonb, ${ordinal})`;
       await sql`update approval_subjects set superseded_by_subject_id = ${input.subject.id}
         where run_id = ${input.runId} and id <> ${input.subject.id} and superseded_by_subject_id is null`;
-      const policySpanId = await appendPolicyAndRecommendations(sql, {
+      await persistTraceProjection(sql, projectWorkflowTrace({
+        type: 'approval_required',
         runId: input.runId,
-        discriminator: input.subject.id,
-        subjectHash: input.subject.subjectHash,
-        recommendationIds: input.subject.recommendationIds,
-        decision: 'approval_required',
-        policyHash: hashApprovalPayload({ policyTriggers: input.subject.policyTriggers, quorumVersion: input.subject.quorumVersion })
-      });
-      for (const entry of input.subject.entries) {
-        await appendTrace(sql, {
-          runId: input.runId,
-          kind: 'approval_requirement',
-          discriminator: `${input.subject.id}:${entry.id}`,
-          step: 'approval',
-          parentSpanId: policySpanId,
-          data: {
-            subjectHash: input.subject.subjectHash,
-            entryId: entry.id,
-            category: entry.category,
-            authorities: entry.eligibleAuthorities,
-            policyHash: hashApprovalPayload(entry.policyTriggers)
-          }
-        });
-      }
+        subject: input.subject
+      }));
       await appendEvent(sql, input.runId, 'awaiting_approval', { version: row.version, subjectHash: input.subject.subjectHash, quorumVersion: input.subject.quorumVersion });
       return asRun(row);
     });
@@ -622,6 +468,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
   public async findDecisionByIdempotencyKey(input: Parameters<WorkflowStore['findDecisionByIdempotencyKey']>[0]) {
     return replayDecision(this.database.sql, input);
   }
+  /** Records an approval decision and its trace before conditionally scheduling finalization. */
   public async recordDecisionAndEnqueueFinalization(input: ApprovalDecisionInput): Promise<ApprovalDecisionStoreResult> {
     return this.database.sql.begin(async (sql) => {
       const prior = (await sql<{ request_hash: string }[]>`select request_hash from approval_decisions where idempotency_key = ${input.idempotencyKey} for update`)[0];
@@ -662,28 +509,24 @@ export class PostgresWorkflowStore implements WorkflowStore {
           ${input.decision.diff === undefined ? null : jsonText(input.decision.diff)}::jsonb, ${current.version + 1}, ${status}, ${quorumSatisfied}, ${rejected}, ${input.decision.decidedAt}::timestamptz)`;
       const row = (await sql<RunRow[]>`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`)[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
-      const expectedRequirementSpanId = traceSpanId(input.runId, 'approval_requirement', `${input.approvalSubjectId}:${input.entryId}`);
-      const requirementSpanId = await existingSpanId(sql, expectedRequirementSpanId);
-      await appendTrace(sql, {
+      await persistTraceProjection(sql, projectWorkflowTrace({
+        type: 'approval_decided',
         runId: input.runId,
-        kind: 'approval_decision',
-        discriminator: `${input.approvalSubjectId}:${input.entryId}:${row.version}`,
-        step: 'approval',
-        ...(requirementSpanId === undefined ? {} : { parentSpanId: requirementSpanId }),
-        data: {
-          subjectHash: input.decision.approvedSubjectHash,
-          entryId: input.entryId,
-          category: input.category,
-          authority: input.authority,
-          decision: rejected ? 'rejected' : 'approved'
-        }
-      });
+        version: row.version,
+        approvalSubjectId: input.approvalSubjectId,
+        subjectHash: input.decision.approvedSubjectHash,
+        entryId: input.entryId,
+        category: input.category,
+        authority: input.authority,
+        decision: rejected ? 'rejected' : 'approved'
+      }));
       await appendEvent(sql, input.runId, event ?? 'approval_entry_recorded', { version: row.version, approvalSubjectId: input.approvalSubjectId, entryId: input.entryId, category: input.category, authority: input.authority, action: input.decision.action, approvedSubjectHash: input.decision.approvedSubjectHash });
       if (quorumSatisfied) await insertCommand(sql, input.finalizationCommand);
       return { run: asRun(row), quorumSatisfied, rejected, replayed: false, approvedSubjectHash: input.decision.approvedSubjectHash };
     });
   }
 
+  /** Replaces an approval subject and projects the edited decision and new requirements atomically. */
   public async replaceApprovalSubject(input: ReplaceApprovalSubjectInput): Promise<Readonly<{ run: WorkflowRun; subject: ApprovalSubject; replayed: boolean }>> {
     return this.database.sql.begin(async (sql) => {
       const prior = (await sql<{ request_hash: string }[]>`select request_hash from approval_decisions where idempotency_key = ${input.idempotencyKey} for update`)[0];
@@ -714,46 +557,19 @@ export class PostgresWorkflowStore implements WorkflowStore {
       const row = (await sql<RunRow[]>`update runs set version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion}
         returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash`)[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
-      const expectedOldRequirementSpanId = traceSpanId(input.runId, 'approval_requirement', `${input.priorSubjectId}:${input.priorDecision.entryId}`);
-      const oldRequirementSpanId = await existingSpanId(sql, expectedOldRequirementSpanId);
-      await appendTrace(sql, {
+      await persistTraceProjection(sql, projectWorkflowTrace({
+        type: 'approval_subject_replaced',
         runId: input.runId,
-        kind: 'approval_decision',
-        discriminator: `${input.priorSubjectId}:${input.priorDecision.entryId}:${row.version}`,
-        step: 'approval',
-        ...(oldRequirementSpanId === undefined ? {} : { parentSpanId: oldRequirementSpanId }),
-        data: {
+        version: row.version,
+        priorSubjectId: input.priorSubjectId,
+        priorDecision: {
           subjectHash: input.priorDecision.approvedSubjectHash,
           entryId: input.priorDecision.entryId,
           category: input.priorDecision.category,
-          authority: input.priorDecision.authority,
-          decision: 'edited'
-        }
-      });
-      const policySpanId = await appendPolicyAndRecommendations(sql, {
-        runId: input.runId,
-        discriminator: input.subject.id,
-        subjectHash: input.subject.subjectHash,
-        recommendationIds: input.subject.recommendationIds,
-        decision: 'approval_required',
-        policyHash: hashApprovalPayload({ policyTriggers: input.subject.policyTriggers, quorumVersion: input.subject.quorumVersion })
-      });
-      for (const entry of input.subject.entries) {
-        await appendTrace(sql, {
-          runId: input.runId,
-          kind: 'approval_requirement',
-          discriminator: `${input.subject.id}:${entry.id}`,
-          step: 'approval',
-          parentSpanId: policySpanId,
-          data: {
-            subjectHash: input.subject.subjectHash,
-            entryId: entry.id,
-            category: entry.category,
-            authorities: entry.eligibleAuthorities,
-            policyHash: hashApprovalPayload(entry.policyTriggers)
-          }
-        });
-      }
+          authority: input.priorDecision.authority
+        },
+        subject: input.subject
+      }));
       await appendEvent(sql, input.runId, 'approval_subject_replaced', { priorSubjectId: input.priorSubjectId, approvalSubjectId: input.subject.id, subjectHash: input.subject.subjectHash });
       return { run: asRun(row), subject: { ...input.subject, draftVersion: row.version, decisions: [] }, replayed: false };
     });
@@ -796,6 +612,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     });
   }
 
+  /** Finalizes the approved brief and records its completion trace in the same transaction. */
   public async finalizeRun(input: FinalizeRunInput): Promise<WorkflowRun> {
     if (hashApprovalPayload(input.payload) !== input.subjectHash) throw new DomainConflictError('Final brief hash does not match payload');
     return this.database.sql.begin(async (sql) => {
@@ -821,55 +638,33 @@ export class PostgresWorkflowStore implements WorkflowStore {
       const status = transitionRun(current.status, 'complete');
       const row = (await sql<RunRow[]>`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`)[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
-      const finalizationParent = await latestSpanId(sql, input.runId, ['approval_decision', 'strategy_attempt']);
-      await appendTrace(sql, {
+      await persistTraceProjection(sql, projectWorkflowTrace({
+        type: 'finalized',
         runId: input.runId,
-        kind: 'finalization',
-        discriminator: `${input.subjectHash}:${row.version}`,
-        step: 'finalization',
-        ...(finalizationParent === undefined ? {} : { parentSpanId: finalizationParent }),
-        data: { decision: 'completed', artifactHash: input.subjectHash }
-      });
+        version: row.version,
+        subjectHash: input.subjectHash
+      }));
       await appendEvent(sql, input.runId, 'complete', { version: row.version, subjectHash: input.subjectHash, deterministic: true });
       return asRun(row);
     });
   }
 
+  /** Fails a run and records its diagnostic trace before publishing the terminal event. */
   public async failRun(input: Readonly<{ runId: WorkflowRun['id']; expectedVersion: number; invocationId: string; invocationOwner: string; leaseToken: string; causalCommandId: string; reason: string }>): Promise<WorkflowRun> {
     return this.database.sql.begin(async (sql) => {
       const current = await runById(sql, input.runId, true); if (current === undefined) throw new DomainNotFoundError('run'); if (current.status === 'failed') return asRun(current); if (current.version !== input.expectedVersion) throw new DomainConflictError('Run version is stale');
       await completeLease(sql, input); const status = transitionRun(current.status, 'fail');
       const row = (await sql<RunRow[]>`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`)[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
-      const reasonCode = failureReasonCode(input.reason);
-      const operation = failureOperations[reasonCode];
-      const attemptKind: TraceSpan['kind'] = operation === 'strategy' ? 'strategy_attempt' : 'specialist_attempt';
-      const previousAttemptSpanId = (await sql<{ span_id: string }[]>`select span_id from trace_spans
-        where run_id = ${input.runId} and kind = ${attemptKind} and step = ${operation}
-        order by started_at desc, span_id desc limit 1`)[0]?.span_id;
-      const attemptParentSpanId = previousAttemptSpanId
-        ?? await latestSpanId(sql, input.runId, ['evidence_retrieval', 'authorization_lookup']);
-      const attemptSpanId = await appendTrace(sql, {
+      const failureProjection = projectWorkflowTrace({
+        type: 'failed',
         runId: input.runId,
-        kind: attemptKind,
-        discriminator: `${operation}:failed:${reasonCode}:${row.version}`,
-        step: operation,
-        status: 'failed',
-        ...(attemptParentSpanId === undefined ? {} : { parentSpanId: attemptParentSpanId }),
-        data: {
-          operation,
-          logicalGenerationId: `failed_${hashApprovalPayload({ runId: input.runId, operation, reasonCode, version: row.version })}`
-        }
+        version: row.version,
+        reason: input.reason
       });
-      await appendTrace(sql, {
-        runId: input.runId,
-        kind: 'fatal_failure',
-        discriminator: `${reasonCode}:${row.version}`,
-        step: operation,
-        status: 'failed',
-        parentSpanId: attemptSpanId,
-        data: { decision: 'fatal', reasonCode }
-      });
+      await persistTraceProjection(sql, failureProjection);
+      const reasonCode = failureProjection.failureReasonCode;
+      if (reasonCode === undefined) throw new DomainConflictError('Failure trace has no diagnostic code');
       await appendEvent(sql, input.runId, 'fail', { version: row.version, reasonCode });
       return asRun(row);
     });

@@ -15,6 +15,7 @@ type ColumnResizeSession = {
   startTableWidth: number
 }
 
+/** Captures the current column and table measurements needed to start a safe resize. */
 function prepareColumnResize(cell: HTMLTableCellElement) {
   const table = cell.closest("table")
   const row = cell.parentElement
@@ -46,6 +47,7 @@ function prepareColumnResize(cell: HTMLTableCellElement) {
   }
 }
 
+/** Applies a requested column width while keeping the overall table aligned. */
 function setColumnWidth(
   session: Pick<
     ColumnResizeSession,
@@ -62,6 +64,7 @@ function setColumnWidth(
   session.table.style.width = `${tableWidth}px`
 }
 
+/** Derives an accessible name for a column's resize control. */
 function getResizeHandleLabel(
   children: React.ReactNode,
   headerLabel: React.AriaAttributes["aria-label"]
@@ -74,6 +77,7 @@ function getResizeHandleLabel(
   return columnName ? `Resize ${columnName} column` : "Resize column"
 }
 
+/** Presents tabular information in a horizontally scrollable surface when space is limited. */
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
@@ -92,6 +96,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   )
 }
 
+/** Groups the headings that describe a table's columns. */
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
@@ -102,6 +107,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   )
 }
 
+/** Groups the primary data rows within a table. */
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   return (
     <tbody
@@ -112,6 +118,7 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   )
 }
 
+/** Groups summary rows at the end of a table. */
 function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   return (
     <tfoot
@@ -125,6 +132,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   )
 }
 
+/** Presents one table row with consistent selection and hover treatment. */
 function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   return (
     <tr
@@ -138,6 +146,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
+/** Presents a column heading and optionally lets users resize that column accessibly. */
 function TableHead({
   className,
   children,
@@ -271,12 +280,13 @@ function TableHead({
   )
 }
 
+/** Presents one data value within a table row. */
 function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   return (
     <td
       data-slot="table-cell"
       className={cn(
-        "overflow-hidden text-ellipsis whitespace-nowrap p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "overflow-hidden text-ellipsis whitespace-nowrap p-2 align-middle [&>*]:overflow-hidden [&>*]:text-ellipsis [&>*]:whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -284,6 +294,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   )
 }
 
+/** Provides a descriptive caption for the table. */
 function TableCaption({
   className,
   ...props

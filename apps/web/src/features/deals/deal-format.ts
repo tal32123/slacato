@@ -1,5 +1,6 @@
 import type { DealListItem } from '@slacato/contracts';
 
+/** Formats a deal amount for display while preserving missing currency or value information. */
 export function formatDealAmount(deal: Pick<DealListItem, 'amount' | 'currency'>): string {
   if (deal.amount === null) return 'Not recorded';
   const options: Intl.NumberFormatOptions = deal.currency === null

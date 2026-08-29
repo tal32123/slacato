@@ -3,6 +3,7 @@ import { LockKeyhole } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AccessState } from './unauthorized';
 
+/** Explains that the current persona lacks permission to open the requested page. */
 export function ForbiddenRoute(): React.JSX.Element {
   return (
     <AccessState

@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router';
 import { LogIn, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+/** Explains that sign-in is required and offers a safe route back into the product. */
 export function UnauthorizedRoute(): React.JSX.Element {
   const location = useLocation();
   const returnTo = new URLSearchParams(location.search).get('returnTo');
@@ -18,6 +19,7 @@ export function UnauthorizedRoute(): React.JSX.Element {
   );
 }
 
+/** Presents a consistent access-state message with its recommended next action. */
 export function AccessState({ eyebrow, title, detail, icon: Icon, action }: Readonly<{
   eyebrow: string; title: string; detail: string; icon: typeof LogIn; action: React.ReactNode;
 }>): React.JSX.Element {

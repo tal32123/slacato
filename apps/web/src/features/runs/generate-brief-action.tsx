@@ -6,8 +6,7 @@ import { startBrief } from '@/api/client';
 import { csrfQueryOptions, queryClient, queryKeys } from '@/api/session';
 import { Button } from '@/components/ui/button';
 
-const budget = { maxCalls: 24, maxInputTokens: 80_000, maxOutputTokens: 96_000, deadlineMs: 600_000 } as const;
-
+/** Lets a seller start a brief-generation run and opens the resulting run workspace. */
 export function GenerateBriefAction({ opportunityId, sessionVersion }: Readonly<{
   opportunityId: string;
   sessionVersion: string;
@@ -17,7 +16,7 @@ export function GenerateBriefAction({ opportunityId, sessionVersion }: Readonly<
   const mutation = useMutation({
     mutationFn: async () => {
       const csrfToken = await queryClient.ensureQueryData(csrfQueryOptions(sessionVersion));
-      return startBrief({ opportunityId, idempotencyKey: operationKey.current, budget }, csrfToken);
+      return startBrief({ opportunityId, idempotencyKey: operationKey.current }, csrfToken);
     },
     onSuccess: async ({ runId }) => {
       await Promise.all([

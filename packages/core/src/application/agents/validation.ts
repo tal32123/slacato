@@ -4,6 +4,7 @@ import {
   commercialArtifactSchema,
   conversationArtifactSchema,
   dealBriefSchema,
+  MAX_LIST_ITEMS,
   stakeholderArtifactSchema
 } from '../../domain/briefs/schema.js';
 import { DomainValidationError } from '../../domain/shared/errors.js';
@@ -14,18 +15,23 @@ import type { AgentContext, AgentEvidenceRecord } from './contracts.js';
 export type ClaimSupport = 'supported' | 'contradicted' | 'insufficient';
 export type ClaimSupportAssessment = Readonly<{ claimId: string; support: ClaimSupport; reason: string }>;
 
+/** Normalizes evidence text for deterministic, case-insensitive comparisons. */
 function normalize(value: string): string { return value.normalize('NFKC').toLocaleLowerCase('en-US'); }
 
+/** Rejects generated prose that resembles instructions or prompt-control markers. */
 function safeGeneratedProse(value: string): boolean {
   return !/(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|role\s*:/i.test(value);
 }
 
+/** Escapes literal evidence text before using it in a regular expression. */
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
+/** Checks whether a complete word or number appears in normalized evidence text. */
 function containsBounded(haystack: string, needle: string): boolean {
   return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(needle)}(?![\\p{L}\\p{N}])`, 'u').test(haystack);
 }
 
+/** Extracts material names, dates, amounts, quoted text, and business terms from a claim. */
 function materialAnchors(statement: string): readonly string[] {
   const patterns = [
     /\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z)?\b/gu,
@@ -51,6 +57,7 @@ const SUPPORT_STOP_WORDS = new Set([
   'of', 'on', 'or', 'that', 'the', 'their', 'this', 'to', 'was', 'were', 'will', 'with'
 ]);
 
+/** Reduces common word endings so related evidence terms compare consistently. */
 function stem(value: string): string {
   if (value.length > 5 && value.endsWith('ing')) return value.slice(0, -3);
   if (value.length > 4 && value.endsWith('ied')) return `${value.slice(0, -3)}y`;
@@ -60,6 +67,7 @@ function stem(value: string): string {
   return value;
 }
 
+/** Extracts the meaningful normalized terms used to relate a claim to evidence. */
 function supportTerms(value: string): ReadonlySet<string> {
   return new Set(normalize(value).match(/[\p{L}\p{N}]+/gu)?.filter((term) => term.length > 2 && !SUPPORT_STOP_WORDS.has(term)).map(stem) ?? []);
 }
@@ -82,10 +90,12 @@ const MATERIAL_PREDICATES = [
   { assertion: /\bsupport(?:s|ed)?\b/i, evidence: /\b(?:support(?:s|ed)?|need(?:s|ed)?|require(?:s|d)?)\b/i }
 ] as const;
 
+/** Normalizes a complete assertion while ignoring spacing and terminal punctuation. */
 function normalizedAssertion(value: string): string {
   return normalize(value).replace(/\s+/g, ' ').replace(/[.!?]+$/u, '').trim();
 }
 
+/** Recognizes the one supported transformation from budget control to economic-buyer status. */
 function explicitStakeholderClassificationSupported(assertion: string, support: string): boolean {
   const match = /^(.+?) is (?:the )?economic buyer with high influence$/u.exec(normalizedAssertion(assertion));
   if (match?.[1] === undefined) return false;
@@ -94,13 +104,28 @@ function explicitStakeholderClassificationSupported(assertion: string, support: 
     .test(normalizedAssertion(support));
 }
 
-/** Exact local assertion support plus a deliberately tiny subject-safe business transformation. */
+/** Removes a code-owned field label from structured fixture evidence. */
+function structuredFieldValue(value: string): string | undefined {
+  return /^[a-z][A-Za-z0-9]*:\s+(.+)$/us.exec(value.trim())?.[1];
+}
+
+/** Matches an assertion to structured fixture evidence while ignoring its code-owned label. */
+function structuredFieldAssertionSupported(assertion: string, support: string): boolean {
+  const fieldValue = structuredFieldValue(support);
+  if (fieldValue === undefined) return false;
+  const withoutLeadingArticle = (value: string): string => normalizedAssertion(value).replace(/^the\s+/u, '');
+  return withoutLeadingArticle(assertion) === withoutLeadingArticle(fieldValue);
+}
+
+/** Accepts exact local support plus one tightly bounded stakeholder-classification transformation. */
 function textAtomsSupported(assertion: string, support: string): boolean {
   if (!safeGeneratedProse(assertion)) return false;
   return normalizedAssertion(assertion) === normalizedAssertion(support)
+    || structuredFieldAssertionSupported(assertion, support)
     || explicitStakeholderClassificationSupported(assertion, support);
 }
 
+/** Extracts the subject terms that must connect an assertion to one evidence unit. */
 function relationTerms(assertion: string): ReadonlySet<string> {
   const withoutPredicates = MATERIAL_PREDICATES.reduce((value, predicate) => value.replace(predicate.assertion, ' '), assertion)
     .replace(POSITIVE_INTENT, ' ')
@@ -109,6 +134,7 @@ function relationTerms(assertion: string): ReadonlySet<string> {
   return supportTerms(withoutPredicates);
 }
 
+/** Confirms that one evidence unit contains every subject term from an assertion. */
 function unitRelatesToAssertion(assertion: string, unit: string): boolean {
   const terms = relationTerms(assertion);
   if (terms.size === 0) return materialAnchors(assertion).some((anchor) => containsBounded(normalize(unit), anchor));
@@ -116,10 +142,12 @@ function unitRelatesToAssertion(assertion: string, unit: string): boolean {
   return [...terms].every((term) => unitTerms.has(term));
 }
 
+/** Splits cited evidence into the individual statements used for support checks. */
 function evidenceUnits(evidence: readonly AgentEvidenceRecord[]): readonly string[] {
   return evidence.flatMap((record) => record.content.split(/\n+|(?<=[.!?])\s+/u).map((unit) => unit.trim()).filter(Boolean));
 }
 
+/** Detects whether nearby evidence language explicitly negates a material claim anchor. */
 function explicitlyNegates(content: string, anchor: string): boolean {
   const normalized = normalize(content);
   const match = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(anchor)}(?![\\p{L}\\p{N}])`, 'u').exec(normalized);
@@ -140,6 +168,7 @@ const POSITIVE_INTENT = /\b(?:need(?:s|ed)?|want(?:s|ed)?|support(?:s|ed)?|prefe
 const NEGATIVE_INTENT = /\b(?:oppos(?:e|es|ed)|reject(?:s|ed)?|refus(?:e|es|ed)|declin(?:e|es|ed)|object(?:s|ed)?|resist(?:s|ed)?|block(?:s|ed)?|den(?:y|ies|ied)|avoid(?:s|ed)?|cancel(?:s|led)?|prohibit(?:s|ed)?|exclude(?:s|d)?|disable(?:s|d)?)\b/i;
 const NEGATED_MATERIAL_PREDICATE = /\b(?:not|never|no longer|cannot|can't|won't|doesn't|didn't)\b(?:\s+\S+){0,3}\s+(?:need|want|support|prefer|accept|approve|agree|request|commit|allow|include|enable|require)\w*\b/i;
 
+/** Detects opposing intent or business predicates between a claim and its evidence. */
 function hasPredicateContradiction(statement: string, evidence: string): boolean {
   const normalizedStatement = normalize(statement);
   const normalizedEvidence = normalize(evidence);
@@ -159,6 +188,7 @@ function hasPredicateContradiction(statement: string, evidence: string): boolean
   );
 }
 
+/** Resolves every claim citation to its exact authorized evidence record. */
 function findEvidence(claim: Claim, evidenceById: ReadonlyMap<string, AgentEvidenceRecord>): readonly AgentEvidenceRecord[] {
   if (claim.citations.length === 0) return [];
   return claim.citations.map((citation) => {
@@ -170,7 +200,7 @@ function findEvidence(claim: Claim, evidenceById: ReadonlyMap<string, AgentEvide
   });
 }
 
-/** Deterministically validates material anchors against the exact prompt-visible evidence. */
+/** Determines whether a claim is supported, contradicted, or insufficiently grounded by its cited evidence. */
 export function assessClaimSupport(claim: Claim, evidenceById: ReadonlyMap<string, AgentEvidenceRecord>): ClaimSupportAssessment {
   if (!safeGeneratedProse(claim.statement)) return { claimId: claim.id, support: 'insufficient', reason: 'Claim contains unsafe instruction-like prose.' };
   const citedEvidence = findEvidence(claim, evidenceById);
@@ -188,6 +218,7 @@ export function assessClaimSupport(claim: Claim, evidenceById: ReadonlyMap<strin
   return { claimId: claim.id, support: 'supported', reason: 'All material anchors occur in authorized cited evidence.' };
 }
 
+/** Rejects generated artifacts that reuse a claim identifier. */
 function assertUniqueClaims(claimGroups: readonly (readonly Claim[])[]): void {
   const seen = new Set<string>();
   for (const claim of claimGroups.flat()) {
@@ -196,53 +227,111 @@ function assertUniqueClaims(claimGroups: readonly (readonly Claim[])[]): void {
   }
 }
 
-function pruneClaims(claims: readonly Claim[], evidenceById: ReadonlyMap<string, AgentEvidenceRecord>): Readonly<{ kept: readonly Claim[]; insufficient: readonly Claim[] }> {
+type RejectedClaim = Readonly<{ claim: Claim; assessment: ClaimSupportAssessment }>;
+
+/** Retains supported claims, rejects contradictions, and records claims that need review. */
+function pruneClaims(claims: readonly Claim[], evidenceById: ReadonlyMap<string, AgentEvidenceRecord>): Readonly<{ kept: readonly Claim[]; insufficient: readonly RejectedClaim[] }> {
   const kept: Claim[] = [];
-  const insufficient: Claim[] = [];
+  const insufficient: RejectedClaim[] = [];
   for (const claim of claims) {
     const assessment = assessClaimSupport(claim, evidenceById);
-    if (assessment.support === 'contradicted') throw new DomainValidationError('Contradicted claim in generated artifact', { claimId: claim.id });
+    if (assessment.support === 'contradicted') throw new DomainValidationError('Contradicted claim in generated artifact', {
+      claimId: claim.id,
+      reason: assessment.reason
+    });
     if (assessment.support === 'supported') kept.push({
       ...claim,
       citations: claim.citations.map((citation) => ({ id: citation.id, evidenceId: citation.evidenceId, locator: citation.locator }))
     });
-    else insufficient.push(claim);
+    else insufficient.push({ claim, assessment });
   }
   return { kept, insufficient };
 }
 
-function supportWarning(claims: readonly Claim[]): ReviewWarning | undefined {
-  if (claims.length === 0) return undefined;
-  return {
+/** Converts unsupported claim assessments into actionable review warnings. */
+function supportWarnings(claims: readonly RejectedClaim[]): readonly ReviewWarning[] {
+  return claims.map(({ assessment, claim }) => ({
     code: 'INSUFFICIENT_CLAIM_SUPPORT', severity: 'warning',
-    message: 'Unsupported material claims were removed and require verification.',
-    claimIds: claims.map((claim) => claim.id)
-  };
+    message: assessment.reason,
+    claimIds: [claim.id]
+  }));
 }
 
+/** Keeps generated warnings in order while adding required local warnings within schema limits. */
+function mergeReviewWarnings(
+  generated: readonly ReviewWarning[],
+  deterministic: readonly ReviewWarning[],
+  validClaimIds: ReadonlySet<string>
+): readonly ReviewWarning[] {
+  const merged: ReviewWarning[] = [];
+  const indexes = new Map<string, number>();
+  const deterministicKeys = new Set(deterministic.map((warning) =>
+    `${warning.code}\u0000${warning.severity}\u0000${warning.message}`));
+
+  for (const [warning, preserveRejectedClaimIds] of [
+    ...generated.filter((warning) => safeGeneratedProse(warning.message)).map((warning) => [warning, false] as const),
+    ...deterministic.map((warning) => [warning, true] as const)
+  ]) {
+    const key = `${warning.code}\u0000${warning.severity}\u0000${warning.message}`;
+    const claimIds = [...new Set(warning.claimIds.filter((claimId) => preserveRejectedClaimIds || validClaimIds.has(claimId)))]
+      .slice(0, MAX_LIST_ITEMS);
+    const existingIndex = indexes.get(key);
+    if (existingIndex === undefined) {
+      indexes.set(key, merged.length);
+      merged.push({ ...warning, claimIds });
+      continue;
+    }
+
+    const existing = merged[existingIndex]!;
+    merged[existingIndex] = {
+      ...existing,
+      claimIds: [...new Set([...existing.claimIds, ...claimIds])].slice(0, MAX_LIST_ITEMS)
+    };
+  }
+
+  while (merged.length > MAX_LIST_ITEMS) {
+    let removableIndex = -1;
+    for (let index = merged.length - 1; index >= 0; index -= 1) {
+      const warning = merged[index]!;
+      const key = `${warning.code}\u0000${warning.severity}\u0000${warning.message}`;
+      if (!deterministicKeys.has(key)) {
+        removableIndex = index;
+        break;
+      }
+    }
+    merged.splice(removableIndex < 0 ? merged.length - 1 : removableIndex, 1);
+  }
+  return merged;
+}
+
+/** Indexes authorized evidence by its stable evidence identifier. */
 function evidenceMap(evidence: readonly AgentEvidenceRecord[]): ReadonlyMap<string, AgentEvidenceRecord> {
   return new Map(evidence.map((record) => [record.evidenceId, record]));
 }
 
+/** Confirms that a complete assertion is supported by at least one retained claim. */
 function assertionSupported(assertion: string, claims: readonly Claim[]): boolean {
   return claims.some((claim) => textAtomsSupported(assertion, claim.statement));
 }
 
+/** Confirms that a generated field value appears in at least one retained claim. */
 function fieldSupported(value: string | number, claims: readonly Claim[]): boolean {
   const normalized = normalize(String(value));
   return safeGeneratedProse(String(value)) && claims.some((claim) => containsBounded(normalize(claim.statement), normalized));
 }
 
+/** Confirms that one retained claim supports every value in a generated record. */
 function tupleSupported(values: readonly (string | number)[], claims: readonly Claim[]): boolean {
   return claims.some((claim) => values.every((value) => fieldSupported(value, [claim])));
 }
 
+/** Recognizes approved language that explicitly communicates evidence uncertainty. */
 function isExplicitUncertainty(value: string): boolean {
   if (!safeGeneratedProse(value)) return false;
   return /^(?:unknown|unverified|not (?:available|known|verified)|requires? (?:review|verification)|hypothesis|no verified (?:summary|information) is available yet|insufficient verified information|insufficient (?:supported )?evidence is available(?: for (?:an executive summary|a negotiation-state assessment))?)\.?$/i.test(value.trim());
 }
 
-/** Missing-information fields are useful only when their grammar explicitly remains open/non-factual. */
+/** Accepts only bounded, non-factual questions for gathering missing deal information. */
 function safeInformationRequest(value: string): boolean {
   if (!safeGeneratedProse(value)) return false;
   const normalized = value.trim();
@@ -259,7 +348,7 @@ function safeInformationRequest(value: string): boolean {
     || reviewRequirement.test(normalized) || neutralIdentification.test(normalized);
 }
 
-/** Imperative workflow action, not customer-facing promise or factual assertion. */
+/** Accepts only bounded internal workflow actions that make no customer-facing promise. */
 function safeRecommendationAction(value: string): boolean {
   if (!safeGeneratedProse(value) || /\b(?:promise|guarantee|bypass|conceal|mislead|fabricate)\b/i.test(value)) return false;
   const normalized = value.trim();
@@ -272,16 +361,19 @@ function safeRecommendationAction(value: string): boolean {
     || safeInformationRequest(normalized);
 }
 
+/** Accepts only generic internal roles that do not require factual evidence. */
 function safeGenericOwner(value: string): boolean {
   return /^(?:account executive|sales engineer|legal|procurement|deal owner|unassigned)$/i.test(value.trim());
 }
 
-function withoutInsufficient<Value extends Readonly<{ insufficient: readonly Claim[] }>>(value: Value): Omit<Value, 'insufficient'> {
+/** Removes internal rejected-claim bookkeeping before returning a validated artifact. */
+function withoutInsufficient<Value extends Readonly<{ insufficient: readonly unknown[] }>>(value: Value): Omit<Value, 'insufficient'> {
   const { insufficient, ...copy } = value;
   void insufficient;
   return copy;
 }
 
+/** Removes unsupported conversation content without discarding valid model review warnings. */
 export function validateConversationArtifact(value: unknown, manifestId: string, evidence: readonly AgentEvidenceRecord[]): ConversationArtifact {
   const parsed = conversationArtifactSchema.parse(value);
   if (parsed.evidenceManifestId !== manifestId) throw new DomainValidationError('Conversation artifact evidence manifest does not match');
@@ -289,7 +381,8 @@ export function validateConversationArtifact(value: unknown, manifestId: string,
   const result = pruneClaims(parsed.claims, evidenceMap(evidence));
   const unsupportedAssertions = [parsed.goals, parsed.concerns, parsed.commitments, parsed.objections]
     .flat().filter((assertion) => !assertionSupported(assertion, result.kept));
-  const warning = supportWarning(result.insufficient);
+  const warnings = supportWarnings(result.insufficient);
+  const validClaimIds = new Set(result.kept.map((claim) => claim.id));
   return conversationArtifactSchema.parse({
     ...parsed,
     goals: parsed.goals.filter((assertion) => assertionSupported(assertion, result.kept)),
@@ -299,13 +392,18 @@ export function validateConversationArtifact(value: unknown, manifestId: string,
     claims: result.kept,
     missingContext: [
       ...parsed.missingContext.filter(safeInformationRequest),
-      ...result.insufficient.map((claim) => `Verify evidence for claim ${claim.id}.`),
+      ...result.insufficient.map(({ assessment }) => `Verify evidence for claim ${assessment.claimId}.`),
       ...(unsupportedAssertions.length === 0 ? [] : ['Verify unsupported conversation details.'])
     ],
-    reviewWarnings: warning === undefined ? [] : [warning]
+    reviewWarnings: mergeReviewWarnings(
+      parsed.reviewWarnings,
+      warnings,
+      validClaimIds
+    )
   });
 }
 
+/** Removes unsupported stakeholder content without discarding valid model review warnings. */
 export function validateStakeholderArtifact(value: unknown, manifestId: string, evidence: readonly AgentEvidenceRecord[]): StakeholderArtifact {
   const parsed = stakeholderArtifactSchema.parse(value);
   if (parsed.evidenceManifestId !== manifestId) throw new DomainValidationError('Stakeholder artifact evidence manifest does not match');
@@ -333,20 +431,29 @@ export function validateStakeholderArtifact(value: unknown, manifestId: string, 
   const supportedNames = new Set(supportedStakeholders.map((stakeholder) => stakeholder.name));
   const unsupportedStakeholders = stakeholders.filter((stakeholder) => !supportedNames.has(stakeholder.name));
   const insufficient = [...top.insufficient, ...stakeholders.flatMap((stakeholder) => stakeholder.insufficient)];
-  const warning = supportWarning(insufficient);
+  const warnings = supportWarnings(insufficient);
+  const validClaimIds = new Set([
+    ...top.kept,
+    ...supportedStakeholders.flatMap((stakeholder) => stakeholder.claims)
+  ].map((claim) => claim.id));
   return stakeholderArtifactSchema.parse({
     ...parsed,
     claims: top.kept,
     stakeholders: supportedStakeholders.map(withoutInsufficient),
     coverageGaps: [
       ...parsed.coverageGaps.filter(safeInformationRequest),
-      ...insufficient.map((claim) => `Verify evidence for claim ${claim.id}.`),
+      ...insufficient.map(({ assessment }) => `Verify evidence for claim ${assessment.claimId}.`),
       ...(unsupportedStakeholders.length === 0 ? [] : ['Verify unsupported stakeholder records.'])
     ],
-    reviewWarnings: warning === undefined ? [] : [warning]
+    reviewWarnings: mergeReviewWarnings(
+      parsed.reviewWarnings,
+      warnings,
+      validClaimIds
+    )
   });
 }
 
+/** Removes unsupported commercial content without discarding valid model review warnings. */
 export function validateCommercialArtifact(value: unknown, manifestId: string, evidence: readonly AgentEvidenceRecord[]): CommercialArtifact {
   const parsed = commercialArtifactSchema.parse(value);
   if (parsed.evidenceManifestId !== manifestId) throw new DomainValidationError('Commercial artifact evidence manifest does not match');
@@ -361,16 +468,22 @@ export function validateCommercialArtifact(value: unknown, manifestId: string, e
     && tupleSupported([term.term, term.detail, ...(term.status === 'unknown' ? [] : [term.status])], term.claims));
   const insufficient = [...top.insufficient, ...terms.flatMap((term) => term.insufficient)];
   const allSupportedClaims = [...top.kept, ...supportedTerms.flatMap((term) => term.claims)];
-  const warning = supportWarning(insufficient);
+  const warnings = supportWarnings(insufficient);
+  const validClaimIds = new Set(allSupportedClaims.map((claim) => claim.id));
   return commercialArtifactSchema.parse({
     ...parsed,
     claims: top.kept,
     commercialTerms: supportedTerms.map(withoutInsufficient),
     policyTriggers: parsed.policyTriggers.filter((trigger) => assertionSupported(trigger, allSupportedClaims)),
-    reviewWarnings: warning === undefined ? [] : [warning]
+    reviewWarnings: mergeReviewWarnings(
+      parsed.reviewWarnings,
+      warnings,
+      validClaimIds
+    )
   });
 }
 
+/** Collects every claim group that must have unique identifiers and authorized support. */
 function briefClaimGroups(brief: DealBrief): readonly (readonly Claim[])[] {
   return [
     brief.dealSnapshot.claims ?? [], brief.executiveSummary.claims ?? [], brief.buyerGoalsAndBusinessDrivers.claims ?? [],
@@ -380,11 +493,12 @@ function briefClaimGroups(brief: DealBrief): readonly (readonly Claim[])[] {
   ];
 }
 
+/** Produces a support-checked brief while retaining valid generated review signals. */
 export function validateDealBrief(value: unknown, evidence: readonly AgentEvidenceRecord[], context: Pick<AgentContext, 'account' | 'opportunity'>): DealBrief {
   const parsed = dealBriefSchema.parse(value);
   assertUniqueClaims(briefClaimGroups(parsed));
   const map = evidenceMap(evidence);
-  const insufficient: Claim[] = [];
+  const insufficient: RejectedClaim[] = [];
   const process = (claims: readonly Claim[] | undefined): readonly Claim[] | undefined => {
     if (claims === undefined) return undefined;
     const result = pruneClaims(claims, map); insufficient.push(...result.insufficient); return result.kept;
@@ -455,7 +569,17 @@ export function validateDealBrief(value: unknown, evidence: readonly AgentEviden
       ...(parsed.dealSnapshot.owner === undefined ? [] : [`owner ${parsed.dealSnapshot.owner}`])
     ] : [])
   ];
-  const warning = supportWarning(insufficient);
+  const warnings = supportWarnings(insufficient);
+  const validClaimIds = new Set([
+    ...snapshotClaims,
+    ...summaryClaims,
+    ...buyerClaims,
+    ...stakeholderSectionClaims,
+    ...negotiationClaims,
+    ...supportedStakeholders.flatMap((stakeholder) => stakeholder.claims),
+    ...actions.flatMap((action) => action.claims),
+    ...supportedEvidenceSummaries.flatMap((summary) => summary.claims)
+  ].map((claim) => claim.id));
   return dealBriefSchema.parse({
     ...parsed,
     dealSnapshot: {
@@ -510,9 +634,9 @@ export function validateDealBrief(value: unknown, evidence: readonly AgentEviden
           whyItMatters: 'Additional information is required before the deal team can act.',
           ...(item.owner === undefined || !safeGenericOwner(item.owner) ? {} : { owner: item.owner })
         })),
-        ...insufficient.map((claim) => ({
-          question: `Verify evidence for claim ${claim.id}.`,
-          whyItMatters: 'The generated claim did not satisfy deterministic evidence support checks.'
+        ...insufficient.map(({ assessment }) => ({
+          question: `Verify evidence for claim ${assessment.claimId}.`,
+          whyItMatters: assessment.reason
         })),
         ...(nakedAssertions.length === 0 ? [] : [{
           question: 'Verify unsupported generated assertions before use.',
@@ -525,7 +649,11 @@ export function validateDealBrief(value: unknown, evidence: readonly AgentEviden
     },
     confidenceAndReviewWarnings: {
       ...parsed.confidenceAndReviewWarnings,
-      warnings: warning === undefined ? [] : [warning]
+      warnings: mergeReviewWarnings(
+        parsed.confidenceAndReviewWarnings.warnings,
+        warnings,
+        validClaimIds
+      )
     }
   });
 }
@@ -580,6 +708,7 @@ export function assertAgentContextBindings(context: AgentContext): void {
   }
 }
 
+/** Collects the authorized evidence identifiers cited anywhere in a generated artifact. */
 export function collectArtifactCitationEvidenceIds(value: unknown): ReadonlySet<string> {
   const ids = new Set<string>();
   const visit = (current: unknown): void => {

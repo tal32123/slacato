@@ -2,18 +2,21 @@ import { queryOptions } from '@tanstack/react-query';
 import { fetchRunDetail, fetchRuns } from '@/api/client';
 import { queryKeys, sessionRuntime, SessionInvalidatedError } from '@/api/session';
 
+/** Defines session-aware loading for the run history visible to the active persona. */
 export const runsQueryOptions = (version: string) => scopedQuery(
   version,
   'runs',
   (signal) => fetchRuns(signal)
 );
 
+/** Defines session-aware loading for a selected run's latest detail. */
 export const runDetailQueryOptions = (version: string, runId: string) => scopedQuery(
   version,
   `run:${runId}`,
   (signal) => fetchRunDetail(runId, signal)
 );
 
+/** Builds a protected query that rejects responses from an outdated session. */
 function scopedQuery<T>(version: string, resource: string, query: (signal: AbortSignal) => Promise<T & { sessionVersion: string }>) {
   const generation = sessionRuntime.generation;
   const queryKey = queryKeys.scoped(version, resource);

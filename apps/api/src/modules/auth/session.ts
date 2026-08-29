@@ -15,10 +15,12 @@ export type BrowserRequestMetadata = Readonly<{
   secFetchSite: string | undefined;
 }>;
 
+/** Computes the SHA-256 message authentication code for a signed value. */
 function hmac(secret: string, value: string): Buffer {
   return createHmac('sha256', secret).update(value).digest();
 }
 
+/** Compares authentication codes without leaking which byte first differs. */
 function constantTimeEqual(left: Buffer, right: Buffer): boolean {
   const normalizedLeft = Buffer.alloc(32);
   const normalizedRight = Buffer.alloc(32);
@@ -29,11 +31,13 @@ function constantTimeEqual(left: Buffer, right: Buffer): boolean {
 
 /** Encodes short-lived, self-contained demo sessions with a constant-time MAC check. */
 export class DemoSessionCodec {
+  /** Configures session signing with a shared secret and clock. */
   public constructor(
     private readonly secret: string,
     private readonly now: () => number = Date.now
   ) {}
 
+  /** Creates a signed demo session for the requested user. */
   public sign(input: Readonly<{ userId: string; version?: string }>): string {
     const payload = signedSessionSchema.parse({
       userId: input.userId,
@@ -44,6 +48,7 @@ export class DemoSessionCodec {
     return `${encodedPayload}.${hmac(this.secret, encodedPayload).toString('base64url')}`;
   }
 
+  /** Validates a demo session token and returns its unexpired payload. */
   public verify(token: string | undefined): SignedDemoSession | undefined {
     if (!token) return undefined;
     const parts = token.split('.');
@@ -73,16 +78,20 @@ export class DemoSessionCodec {
 
 /** Issues a double-submit token bound to an HTTP-only seed and current session generation. */
 export class SessionCsrf {
+  /** Configures CSRF token protection with a shared secret. */
   public constructor(private readonly secret: string) {}
 
+  /** Creates a fresh browser seed for double-submit CSRF protection. */
   public createSeed(): string {
     return randomBytes(32).toString('base64url');
   }
 
+  /** Derives a CSRF token bound to a browser seed and session generation. */
   public issue(seed: string, sessionVersion: string | undefined): string {
     return hmac(this.secret, `${seed}.${sessionVersion ?? 'anonymous'}`).toString('base64url');
   }
 
+  /** Confirms that a CSRF token matches its browser seed and session generation. */
   public verify(token: string | undefined, seed: string | undefined, sessionVersion: string | undefined): boolean {
     if (!token || !seed) return false;
     let supplied: Buffer;
@@ -99,10 +108,12 @@ export class SessionCsrf {
 export class BrowserRequestPolicy {
   private readonly allowedOrigins: ReadonlySet<string>;
 
+  /** Configures the browser origins trusted to call authentication endpoints. */
   public constructor(origins: readonly string[]) {
     this.allowedOrigins = new Set(origins);
   }
 
+  /** Decides whether browser request metadata satisfies the authentication policy. */
   public evaluate(request: BrowserRequestMetadata):
     | Readonly<{ allowed: true; origin?: string }>
     | Readonly<{ allowed: false; reason: 'forbidden' }> {

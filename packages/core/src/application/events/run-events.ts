@@ -29,24 +29,25 @@ export interface TraceStore {
   assertTraceComplete(runId: string): Promise<void>;
 }
 
+/** Signals that a subscriber must restart because its event cursor is no longer retained. */
 export class CursorExpiredError extends Error {
+  /** Creates the stable cursor-expiration failure returned to event subscribers. */
   public constructor() {
     super('Run event cursor is no longer retained');
     this.name = 'CursorExpiredError';
   }
 }
 
+/** Signals that a run trace lacks required audit evidence or valid linkage. */
 export class TraceCompletenessError extends Error {
+  /** Creates a trace failure that identifies the missing or inconsistent evidence. */
   public constructor(message: string) {
     super(message);
     this.name = 'TraceCompletenessError';
   }
 }
 
-/**
- * Race-free replay loop shared by PostgreSQL and deterministic tests. A wakeup
- * is armed before every read; database rows, never notifications, remain the authority.
- */
+/** Streams authorized run events without losing database rows around wakeups. */
 export async function* createRunEventSubscription(
   source: RunEventSubscriptionSource,
   streamId: string,
@@ -100,21 +101,25 @@ export async function* createRunEventSubscription(
   }
 }
 
+/** Returns the required trace span or reports the missing audit evidence. */
 function requireSpan(spans: readonly TraceSpan[], kind: TraceSpan['kind'], description: string): TraceSpan {
   const found = spans.find((span) => span.kind === kind);
   if (found === undefined) throw new TraceCompletenessError(`Trace is missing ${description}`);
   return found;
 }
 
+/** Resolves a trace span's parent when the span declares one. */
 function parentOf(span: TraceSpan, byId: ReadonlyMap<string, TraceSpan>): TraceSpan | undefined {
   return span.parentSpanId === undefined ? undefined : byId.get(span.parentSpanId);
 }
 type TraceFor<K extends TraceSpan['kind']> = Extract<TraceSpan, { kind: K }>;
 
+/** Selects trace spans of one kind while preserving their specific data shape. */
 function spansOfKind<K extends TraceSpan['kind']>(spans: readonly TraceSpan[], kind: K): TraceFor<K>[] {
   return spans.filter((span) => span.kind === kind) as TraceFor<K>[];
 }
 
+/** Verifies that one agent attempt has model, validation, guardrail, usage, and repair evidence. */
 function assertAttemptEvidence(spans: readonly TraceSpan[], attempt: TraceSpan): void {
   const models = spansOfKind(spans, 'model_call').filter((span) => span.step === attempt.step && span.parentSpanId === attempt.spanId);
   if (models.length === 0) throw new TraceCompletenessError(`Trace is missing model call for ${attempt.step}`);

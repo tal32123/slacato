@@ -11,15 +11,11 @@ export type RetryLimits = Readonly<{
   maxSchemaRepairs: number;
   maxTransportRetries: number;
   deadlineMs: number;
-  maxInputTokens: number;
-  maxOutputTokens: number;
 }>;
 
 export type RunBudgetLimits = Readonly<{
   scope: string;
   maxCalls: number;
-  maxInputTokens: number;
-  maxOutputTokens: number;
   deadlineMs: number;
 }>;
 
@@ -99,7 +95,6 @@ export type ModelTransportRequest<Value> = Readonly<{
   operation: string;
   outputMode: OutputMode;
   schema?: z.ZodType<Value>;
-  maxOutputTokens: number;
   deadlineAt: number;
 }>;
 

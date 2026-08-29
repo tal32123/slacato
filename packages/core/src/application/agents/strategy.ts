@@ -13,10 +13,12 @@ import {
 const ALL_SOURCES = new Set<AgentEvidenceRecord['sourceType']>(['gong_summary', 'gong_transcript', 'policy', 'pricing', 'salesforce', 'slack']);
 const TASK = 'Synthesize the three validated specialist artifacts into the canonical nine-section deal brief. Use only citations already present in the validated artifacts. Prioritize negotiation state, concrete next actions, missing information, confidence, and review warnings. Return only the strict DealBrief.';
 
-/** Negotiation strategist receiving validated artifacts, never live specialist capabilities. */
+/** Combines validated specialist findings into the deal team’s negotiation brief. */
 export class StrategyAgent {
+  /** Creates the strategy analyst with the model gateway used to generate the brief. */
   public constructor(private readonly gateway: BudgetedModelGateway) {}
 
+  /** Produces a support-checked deal brief from validated specialist assessments. */
   public async run(context: AgentContext, artifacts: StrategyArtifacts): Promise<DealBrief> {
     const conversation = validateConversationArtifact(artifacts.conversation, context.manifest.id, context.evidence);
     const stakeholder = validateStakeholderArtifact(artifacts.stakeholder, context.manifest.id, context.evidence);

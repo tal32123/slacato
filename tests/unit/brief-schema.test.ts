@@ -39,7 +39,9 @@ describe('DealBrief schema', () => {
 
   it('validates prefixed opaque IDs at runtime', () => {
     expect(userIdSchema.parse('user_8g9rk')).toBe('user_8g9rk');
+    expect(evidenceIdSchema.parse('gong_transcript:CALL-008:transcript:0')).toBe('gong_transcript:CALL-008:transcript:0');
     expect(() => evidenceIdSchema.parse('user_8g9rk')).toThrow();
+    expect(() => evidenceIdSchema.parse('gong_transcript::0')).toThrow();
   });
 
   it('rejects a specialist artifact beyond the serialized-byte budget', () => {
