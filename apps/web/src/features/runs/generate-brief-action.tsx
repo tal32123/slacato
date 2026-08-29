@@ -6,7 +6,7 @@ import { startBrief } from '@/api/client';
 import { csrfQueryOptions, queryClient, queryKeys } from '@/api/session';
 import { Button } from '@/components/ui/button';
 
-const budget = { maxCalls: 24, maxInputTokens: 80_000, maxOutputTokens: 24_000, deadlineMs: 120_000 } as const;
+const budget = { maxCalls: 24, maxInputTokens: 80_000, maxOutputTokens: 96_000, deadlineMs: 600_000 } as const;
 
 export function GenerateBriefAction({ opportunityId, sessionVersion }: Readonly<{
   opportunityId: string;

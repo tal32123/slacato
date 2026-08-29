@@ -1,4 +1,7 @@
-import { APICallError, embedMany, generateText, jsonSchema, Output, type LanguageModel } from 'ai';
+import {
+  APICallError, embedMany, generateText, InvalidPromptError, jsonSchema, NoObjectGeneratedError,
+  NoOutputGeneratedError, Output, type LanguageModel
+} from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { z } from 'zod';
 import {
@@ -41,6 +44,28 @@ function categoryForApiCallError(error: InstanceType<typeof APICallError>): Mode
 /** Keeps provider response bodies and credentials behind the safe model error boundary. */
 export function normalizeOpenRouterTransportError(error: unknown): ModelGatewayTransportError {
   if (error instanceof ModelGatewayTransportError) return error;
+  if (InvalidPromptError.isInstance(error)) {
+    return new ModelGatewayTransportError({
+      category: 'deterministic_validation',
+      diagnosticCode: 'openrouter_invalid_prompt',
+      message: 'The model prompt does not satisfy the AI SDK contract'
+    });
+  }
+  if (NoOutputGeneratedError.isInstance(error)) {
+    return new ModelGatewayTransportError({
+      category: 'deterministic_validation',
+      diagnosticCode: 'openrouter_no_output',
+      message: 'OpenRouter returned no model output'
+    });
+  }
+  if (NoObjectGeneratedError.isInstance(error)) {
+    const finishReason = error.finishReason;
+    return new ModelGatewayTransportError({
+      category: finishReason === 'content-filter' ? 'content_filter' : 'deterministic_validation',
+      diagnosticCode: finishReason === 'length' ? 'openrouter_invalid_object_length' : 'openrouter_invalid_object',
+      message: 'OpenRouter returned output that did not satisfy the required schema'
+    });
+  }
   const generic = normalizeModelError(error).normalized;
   const apiError = APICallError.isInstance(error) ? error : undefined;
   const category = apiError === undefined ? generic.category : categoryForApiCallError(apiError);
@@ -58,9 +83,11 @@ class OpenRouterTransport implements ModelTransport {
   public constructor(private readonly model: LanguageModel) {}
 
   public async generate<Value>(request: ModelTransportRequest<Value>): Promise<TransportGeneration<Value>> {
+    const instructions = request.messages.filter(({ role }) => role === 'system').map(({ content }) => content).join('\n\n');
     const common = {
       model: this.model,
-      messages: request.messages.map(({ role, content }) => ({ role, content })),
+      messages: request.messages.filter(({ role }) => role !== 'system').map(({ role, content }) => ({ role, content })),
+      ...(instructions.length === 0 ? {} : { instructions }),
       maxRetries: 0,
       maxOutputTokens: request.maxOutputTokens,
       abortSignal: AbortSignal.timeout(Math.max(1, request.deadlineAt - Date.now()))

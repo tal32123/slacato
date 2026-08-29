@@ -17,7 +17,6 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.51",
     "@openrouter/ai-sdk-provider": "3.0.0",
     "@slacato/contracts": "workspace:*",
     "@slacato/core": "workspace:*",

@@ -170,8 +170,8 @@ export class ProcessDealBriefStep {
   }
   private async specialists(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand) {
     const context = valueOf(await this.store.getCheckpoint({ runId: run.id, step: 'retrieval' }), 'retrieval'); const names = ['conversation', 'stakeholder', 'commercial'] as const;
-    await Promise.all(names.map(async (name) => {
-      const step = `specialist:${name}`; const existing = await this.store.getCheckpoint({ runId: run.id, step }); if (existing !== undefined) return existing;
+    for (const name of names) {
+      const step = `specialist:${name}`; const existing = await this.store.getCheckpoint({ runId: run.id, step }); if (existing !== undefined) continue;
       const generationMetadata = generation(run, lease, name);
       let checkpoint: Readonly<Record<string, unknown>>;
       try {
@@ -180,8 +180,8 @@ export class ProcessDealBriefStep {
         if (name === 'commercial') throw new FatalDealBriefWorkflowError('commercial_specialist_failed', error);
         checkpoint = { status: 'degraded', value: { warnings: [`${name}_unavailable`], claims: [] }, warning: `${name} specialist unavailable; dependent claims removed`, generation: generationMetadata };
       }
-      return this.store.saveCheckpoint({ runId: run.id, step, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, logicalGenerationId: generationMetadata.logicalGenerationId, checkpoint });
-    }));
+      await this.store.saveCheckpoint({ runId: run.id, step, invocationId: lease.invocationId, invocationOwner: lease.owner, leaseToken: lease.leaseToken, logicalGenerationId: generationMetadata.logicalGenerationId, checkpoint });
+    }
     await this.advance(run, lease, causal, 'specialists_completed', 'specialists', { status: 'completed' }, 'synthesize');
   }
   private async synthesize(run: WorkflowRun, lease: StepLease, causal: WorkflowCommand) {

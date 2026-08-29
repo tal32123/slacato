@@ -4,7 +4,7 @@ import type { ProviderRunScope } from '../../packages/infrastructure/src/model/p
 import { PostgresDealBriefWorkflowServices } from '../../apps/worker/src/processors/deal-brief.processor.js';
 
 describe('worker generation limits', () => {
-  it('caps one generation call without shrinking the shared run output budget', async () => {
+  it('uses the configured output ceiling without imposing a hidden per-generation cap', async () => {
     let receivedScope: ProviderRunScope | undefined;
     const database = {
       sql: async () => [{ max_calls: 24, max_input_tokens: 80_000, max_output_tokens: 24_000, deadline_ms: 120_000 }]
@@ -31,7 +31,7 @@ describe('worker generation limits', () => {
 
     const result = await internals.agentContext(run, {}, 'invocation_generation_limits', 'commercial-policy');
 
-    expect(result.agentContext.generation.limits.maxOutputTokens).toBe(4_096);
+    expect(result.agentContext.generation.limits.maxOutputTokens).toBe(24_000);
     expect(receivedScope?.budget.maxOutputTokens).toBe(24_000);
   });
 });

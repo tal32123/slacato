@@ -220,6 +220,30 @@ describe('BudgetedModelGateway', () => {
     expect(result.outputMode).toBe('native_schema');
   });
 
+  it('sends native-schema validation issues and the complete failed output on repair', async () => {
+    const failedOutput = `${'x'.repeat(20 * 1024)}END_OF_FAILED_OUTPUT`;
+    const requests: string[] = [];
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: true },
+      async generate(request) {
+        requests.push(request.messages.at(-1)?.content ?? '');
+        return requests.length === 1
+          ? { text: failedOutput, output: { stakeholders: [{ role: 'buyer' }] }, usage: { outputTokens: 10 } }
+          : { text: '{"stakeholders":[]}', output: { stakeholders: [] }, usage: { outputTokens: 10 } };
+      }
+    };
+
+    const result = await createTestGateway(transport).generateObject({
+      schema, messages: [{ role: 'user', content: 'Extract.' }], operation: 'native-schema-repair',
+      limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 100_000, maxOutputTokens: 200 }
+    });
+
+    expect(result.value).toEqual({ stakeholders: [] });
+    expect(requests[1]).toContain('stakeholders.0.role');
+    expect(requests[1]).toContain(failedOutput);
+    expect(requests[1]).toContain('END_OF_FAILED_OUTPUT');
+  });
+
   it('enforces a shared budget across independent specialist calls', async () => {
     const transport: ModelTransport = {
       capabilities: { nativeStructuredOutput: false },
