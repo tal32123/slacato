@@ -80,6 +80,22 @@ export class PostgresBriefExportService implements BriefExportService {
                 and (not opportunity.restricted or permission.can_read_restricted)
             )
           order by brief.draft_version desc limit 1
+        ),
+        citation_refs as materialized (
+          select distinct citation.value ->> 'id' citation_id,
+            citation.value ->> 'evidenceId' evidence_version_id,
+            citation.value ->> 'locator' source_locator
+          from candidate
+          cross join lateral jsonb_path_query(candidate.payload, '$.**.citations[*]') as citation(value)
+        ),
+        evidence_refs as materialized (
+          select citation.evidence_version_id evidence_id from citation_refs citation
+          union
+          select source.value ->> 'evidenceId'
+          from candidate
+          cross join lateral jsonb_array_elements(
+            coalesce(candidate.payload #> '{sourceEvidence,evidence}', '[]'::jsonb)
+          ) as source(value)
         )
         select candidate.payload, candidate.opportunity_id,
           coalesce((
@@ -90,11 +106,13 @@ export class PostgresBriefExportService implements BriefExportService {
             ) order by entry.citation_id)
             from run_evidence_manifest_entries entry
             join run_evidence_manifests manifest on manifest.id = entry.manifest_id
+            join citation_refs citation on citation.citation_id = entry.citation_id
             where manifest.run_id = candidate.run_id
           ), '[]'::jsonb) manifest_entries,
           coalesce((
             select array_agg(evidence.id order by evidence.id)
-            from evidence_versions evidence
+            from evidence_refs reference
+            join evidence_versions evidence on evidence.id = reference.evidence_id
             join opportunities opportunity on opportunity.id = evidence.opportunity_id
             where evidence.opportunity_id = candidate.opportunity_id
               and evidence.account_id = opportunity.account_id

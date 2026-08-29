@@ -3,34 +3,21 @@ const REDACTED = '[REDACTED]' as const;
 export type SafeLogPrimitive = string | number | boolean | null;
 export type SafeLogPayload = SafeLogPrimitive | readonly SafeLogPayload[] | { readonly [key: string]: SafeLogPayload };
 
-type SafeField =
-  | 'event'
-  | 'correlationId'
-  | 'runId'
-  | 'attemptId'
-  | 'status'
-  | 'provider'
-  | 'model'
-  | 'durationMs'
-  | 'retryCount'
-  | 'inputTokens'
-  | 'outputTokens'
-  | 'errorCode';
-
-const safeFields: Readonly<Record<SafeField, true>> = {
-  event: true,
-  correlationId: true,
-  runId: true,
-  attemptId: true,
-  status: true,
-  provider: true,
-  model: true,
-  durationMs: true,
-  retryCount: true,
-  inputTokens: true,
-  outputTokens: true,
-  errorCode: true
-};
+const SAFE_FIELD_ORDER = [
+  'event',
+  'correlationId',
+  'runId',
+  'attemptId',
+  'status',
+  'provider',
+  'model',
+  'durationMs',
+  'retryCount',
+  'inputTokens',
+  'outputTokens',
+  'errorCode'
+] as const;
+type SafeField = typeof SAFE_FIELD_ORDER[number];
 
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$/;
 const eventPattern = /^[a-z][a-z0-9_]{0,127}$/;
@@ -57,9 +44,8 @@ function sanitizeField(field: SafeField, value: unknown): SafeLogPayload {
   return safeString(field, value);
 }
 
-function isSafeField(key: string): key is SafeField {
-  return Object.prototype.hasOwnProperty.call(safeFields, key);
-}
+const isDataDescriptor = (descriptor: PropertyDescriptor): descriptor is PropertyDescriptor & { value: unknown } =>
+  Object.prototype.hasOwnProperty.call(descriptor, 'value');
 
 /**
  * Projects an arbitrary value onto the documented telemetry allowlist.
@@ -68,17 +54,12 @@ function isSafeField(key: string): key is SafeField {
 export function redactLogPayload(value: unknown): SafeLogPayload {
   try {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) return REDACTED;
-    const keys = Object.keys(value);
     const output: Record<string, SafeLogPayload> = {};
-    for (const key of keys) {
-      let fieldValue: unknown;
-      try {
-        fieldValue = (value as Record<string, unknown>)[key];
-      } catch {
-        fieldValue = REDACTED;
-      }
-      const safeValue = isSafeField(key) ? sanitizeField(key, fieldValue) : REDACTED;
-      Object.defineProperty(output, key, { configurable: true, enumerable: true, value: safeValue, writable: true });
+    for (const field of SAFE_FIELD_ORDER) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, field);
+      if (descriptor === undefined) continue;
+      const fieldValue = isDataDescriptor(descriptor) ? descriptor.value : REDACTED;
+      output[field] = sanitizeField(field, fieldValue);
     }
     return output;
   } catch {

@@ -55,28 +55,7 @@ describe('safe structured logging', () => {
       durationMs: 14,
       retryCount: 1,
       inputTokens: 42,
-      outputTokens: 17,
-      authorization: REDACTED,
-      headers: REDACTED,
-      msg: REDACTED,
-      auth: REDACTED,
-      credentials: REDACTED,
-      requestAuth: REDACTED,
-      providerCredentials: REDACTED,
-      err: REDACTED,
-      error: REDACTED,
-      request: REDACTED,
-      result: REDACTED,
-      sourceBody: REDACTED,
-      sourceBodies: REDACTED,
-      sourceContents: REDACTED,
-      vendorEvidenceExcerpts: REDACTED,
-      evidence_excerpt: REDACTED,
-      secretKey: REDACTED,
-      apiKeyValue: REDACTED,
-      rawBody: REDACTED,
-      requestPayload: REDACTED,
-      neutralData: REDACTED
+      outputTokens: 17
     });
   });
 
@@ -86,11 +65,7 @@ describe('safe structured logging', () => {
     const cyclic: Record<string, unknown> = { runId: 'run_2', errors: [error] };
     cyclic.self = cyclic;
 
-    expect(redactLogPayload(cyclic)).toEqual({
-      runId: 'run_2',
-      errors: REDACTED,
-      self: REDACTED
-    });
+    expect(redactLogPayload(cyclic)).toEqual({ runId: 'run_2' });
   });
 
   it('redacts stack and cause fields on root and nested serialized errors', () => {
@@ -101,16 +76,8 @@ describe('safe structured logging', () => {
       cause: { message: 'SERIALIZED_CAUSE_SENTINEL' },
       code: 'SAFE_SERIALIZED_ERROR'
     };
-    const expected = {
-      name: REDACTED,
-      message: REDACTED,
-      stack: REDACTED,
-      cause: REDACTED,
-      code: REDACTED
-    };
-
-    expect(redactLogPayload(serialized)).toEqual(expected);
-    expect(redactLogPayload({ failure: serialized })).toEqual({ failure: REDACTED });
+    expect(redactLogPayload(serialized)).toEqual({});
+    expect(redactLogPayload({ failure: serialized })).toEqual({});
   });
 
   it('redacts nested child bindings before they become persistent Pino context', () => {
@@ -130,46 +97,66 @@ describe('safe structured logging', () => {
     log.flush();
 
     expect(output).not.toMatch(/CHILD_(?:AUTH|PROMPT)_SENTINEL/);
-    expect(JSON.parse(output)).toMatchObject({
+    const parsed = JSON.parse(output) as Record<string, unknown>;
+    expect(parsed).toMatchObject({
       runId: 'run_child',
-      context: REDACTED,
       event: 'workflow_command_started',
       status: 'started'
     });
+    expect(parsed).not.toHaveProperty('context');
   });
 
-  it('never throws while traversing hostile accessors, arrays, or reflection proxies', () => {
-    const values: unknown[] = [];
-    Object.defineProperty(values, '0', {
-      enumerable: true,
-      get() {
-        throw new Error('ARRAY_GETTER_SENTINEL');
+  it('never invokes accessors and fails closed on descriptor proxy traps', () => {
+    let getterCalls = 0;
+    const accessors = { event: 'provider_attempt_failed' } as Record<string, unknown>;
+    Object.defineProperties(accessors, {
+      requestPayload: {
+        enumerable: true,
+        get() {
+          getterCalls += 1;
+          return 'UNKNOWN_ACCESSOR_SENTINEL';
+        }
+      },
+      correlationId: {
+        enumerable: true,
+        get() {
+          getterCalls += 1;
+          throw new Error('KNOWN_ACCESSOR_SENTINEL');
+        }
       }
     });
-    values.length = 1;
-    const throwingKeys = new Proxy({}, {
-      ownKeys() {
-        throw new Error('OWN_KEYS_SENTINEL');
-      }
-    });
-    const throwingAccessor = { event: 'provider_attempt_failed' } as Record<string, unknown>;
-    Object.defineProperty(throwingAccessor, 'correlationId', {
-      enumerable: true,
-      get() {
-        throw new Error('ACCESSOR_SENTINEL');
+    const descriptorProxy = new Proxy({}, {
+      getOwnPropertyDescriptor() {
+        throw new Error('DESCRIPTOR_TRAP_SENTINEL');
       }
     });
 
-    expect(redactLogPayload({ event: 'provider_attempt_failed', values, throwingKeys })).toEqual({
-      event: 'provider_attempt_failed',
-      values: REDACTED,
-      throwingKeys: REDACTED
-    });
-    expect(redactLogPayload(throwingKeys)).toBe(REDACTED);
-    expect(redactLogPayload(throwingAccessor)).toEqual({
+    expect(redactLogPayload(accessors)).toEqual({
       event: 'provider_attempt_failed',
       correlationId: REDACTED
     });
+    expect(getterCalls).toBe(0);
+    expect(redactLogPayload(descriptorProxy)).toBe(REDACTED);
+  });
+
+  it('drops unknown and reserved names with a fixed ordered output bound', () => {
+    const payload: Record<string, unknown> = {
+      outputTokens: 2,
+      event: 'provider_attempt_completed',
+      level: 'LEVEL_COLLISION_SENTINEL',
+      time: 'TIME_COLLISION_SENTINEL',
+      msg: 'MSG_COLLISION_SENTINEL',
+      SECRET_IN_KEY_SENTINEL: true
+    };
+    for (let index = 0; index < 1_000; index += 1) {
+      payload[`LONG_UNKNOWN_KEY_${index}_${'x'.repeat(1_000)}`] = 'UNKNOWN_VALUE_SENTINEL';
+    }
+
+    const projected = redactLogPayload(payload);
+    expect(projected).toEqual({ event: 'provider_attempt_completed', outputTokens: 2 });
+    expect(Object.keys(projected as object)).toEqual(['event', 'outputTokens']);
+    expect(Object.keys(projected as object)).toHaveLength(2);
+    expect(JSON.stringify(projected)).not.toMatch(/SECRET_IN_KEY|LONG_UNKNOWN_KEY|COLLISION_SENTINEL/);
   });
 
   it('enforces redaction before Pino serializes log payloads', () => {
@@ -205,11 +192,16 @@ describe('safe structured logging', () => {
       rawBody: 'LOGGER_RAW_BODY_SENTINEL',
       requestPayload: 'LOGGER_REQUEST_PAYLOAD_SENTINEL',
       neutralData: ['LOGGER_NEUTRAL_ARRAY_SENTINEL'],
+      level: 'LOGGER_LEVEL_COLLISION_SENTINEL',
+      time: 'LOGGER_TIME_COLLISION_SENTINEL',
+      msg: 'LOGGER_MSG_COLLISION_SENTINEL',
+      LOGGER_SECRET_IN_KEY_SENTINEL: true,
     });
     log.flush();
 
-    expect(output).not.toMatch(/LOGGER_(?:API_KEY|PROMPT|SOURCE|EVIDENCE|ERROR|SECRET|RAW|REQUEST|NEUTRAL)_/);
-    expect(JSON.parse(output)).toMatchObject({
+    expect(output).not.toMatch(/LOGGER_(?:API_KEY|PROMPT|SOURCE|EVIDENCE|ERROR|SECRET|RAW|REQUEST|NEUTRAL|LEVEL|TIME|MSG)_/);
+    const parsed = JSON.parse(output) as Record<string, unknown>;
+    expect(parsed).toMatchObject({
       event: 'provider_attempt_failed',
       correlationId: 'correlation_3',
       runId: 'run_3',
@@ -221,16 +213,11 @@ describe('safe structured logging', () => {
       retryCount: 2,
       inputTokens: 50,
       outputTokens: 0,
-      errorCode: 'PROVIDER_UNAVAILABLE',
-      apiKey: REDACTED,
-      prompt: REDACTED,
-      sourceContent: REDACTED,
-      evidenceExcerpt: REDACTED,
-      secretKey: REDACTED,
-      apiKeyValue: REDACTED,
-      rawBody: REDACTED,
-      requestPayload: REDACTED,
-      neutralData: REDACTED
+      errorCode: 'PROVIDER_UNAVAILABLE'
     });
+    expect(parsed.level).toBe(30);
+    expect(parsed.time).toEqual(expect.any(String));
+    expect(parsed).not.toHaveProperty('msg');
+    expect(Object.keys(parsed)).toHaveLength(14);
   });
 });

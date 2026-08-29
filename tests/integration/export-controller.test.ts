@@ -263,7 +263,9 @@ describe.sequential('authorized finalized brief exports', () => {
       evidence_version_id: citation.evidenceId,
       source_locator: citation.locator
     }));
+    const authorizationStatements: string[] = [];
     const denialRows = [
+      { payload: null, opportunity_id: null, manifest_entries: [], readable_evidence_ids: [] },
       { payload: null, opportunity_id: null, manifest_entries: [], readable_evidence_ids: [] },
       { payload: brief, opportunity_id: ids.opportunity, manifest_entries: [], readable_evidence_ids: [] },
       {
@@ -280,6 +282,7 @@ describe.sequential('authorized finalized brief exports', () => {
         const statement = strings.join('?');
         if (statement.includes('with candidate as materialized')) {
           calls.push('authorization_pipeline');
+          authorizationStatements.push(statement);
           return [denialRow];
         }
         if (statement.includes("'brief_export_denied'")) {
@@ -300,6 +303,10 @@ describe.sequential('authorized finalized brief exports', () => {
       })).resolves.toBeUndefined();
       expect(calls).toEqual(['authorization_pipeline', 'denial_audit']);
     }
+    expect([...new Set(authorizationStatements)]).toHaveLength(1);
+    expect(authorizationStatements[0]).toContain('citation_refs as materialized');
+    expect(authorizationStatements[0]).toContain('evidence_refs as materialized');
+    expect(authorizationStatements[0]).toContain('from evidence_refs reference');
   });
 
   it('makes unauthorized, missing, citation-denied, and authority-only exports identically opaque', async () => {
