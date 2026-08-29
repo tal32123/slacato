@@ -1,5 +1,5 @@
 import { APICallError, embedMany, generateText, jsonSchema, Output, type LanguageModel } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { z } from 'zod';
 import {
   createBudgetedModelGateway,
@@ -88,31 +88,18 @@ class OpenRouterTransport implements ModelTransport {
   }
 }
 
-/** OpenRouter uses its OpenAI-compatible API while retaining its own provider identity. */
+/** Uses OpenRouter's AI SDK provider so routing, embeddings, and structured output share one native adapter. */
 export function createOpenRouterModelGateways(config: OpenRouterGatewayConfig): Readonly<{
   modelGateway: BudgetedModelGateway;
   embeddingGateway: EmbeddingGateway;
   registry: ModelRegistry;
 }> {
-  const transportFetch = config.fetch ?? globalThis.fetch;
-  const routedFetch: typeof globalThis.fetch = async (input, init) => {
-    const url = input.toString();
-    if (!url.endsWith('/chat/completions') || init?.body === undefined) return transportFetch(input, init);
-    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
-    return transportFetch(input, {
-      ...init,
-      body: JSON.stringify({
-        ...body,
-        provider: { allow_fallbacks: true, require_parameters: true }
-      })
-    });
-  };
-  const provider = createOpenAI({
-    name: 'openrouter',
-    baseURL: 'https://openrouter.ai/api/v1',
+  const provider = createOpenRouter({
     apiKey: config.apiKey,
-    headers: { 'X-Title': 'SlaCato' },
-    fetch: routedFetch
+    appName: 'SlaCato',
+    compatibility: 'strict',
+    extraBody: { provider: { allow_fallbacks: true, require_parameters: true } },
+    ...(config.fetch === undefined ? {} : { fetch: config.fetch })
   });
   const registry = new ModelRegistry();
   const languageModel = { providerId: 'openrouter', modelId: config.generationModelId, nativeStructuredOutput: true };
@@ -126,7 +113,7 @@ export function createOpenRouterModelGateways(config: OpenRouterGatewayConfig): 
       async embed(values: readonly string[]): Promise<number[][]> {
         if (values.length === 0) return [];
         try {
-          const result = await embedMany({ model: provider.embedding(config.embeddingModelId), values: [...values], maxRetries: 0 });
+        const result = await embedMany({ model: provider.textEmbeddingModel(config.embeddingModelId), values: [...values], maxRetries: 0 });
           return result.embeddings.map((embedding) => [...embedding]);
         } catch (error) {
           throw normalizeOpenRouterTransportError(error);
