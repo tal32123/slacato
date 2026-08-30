@@ -1,10 +1,8 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import postgres from 'postgres';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import {
   CANONICAL_FIXTURE_COMMIT, CancelDealBrief, DecideApproval, DomainConflictError, DomainValidationError, ProcessDealBriefStep,
   RegenerateDealBrief, StartDealBrief, dealBriefSchema, hashApprovalPayload, type DealBriefWorkflowServices
@@ -66,30 +64,6 @@ async function waitFor<T>(read: () => Promise<T | undefined>, attempts = 20_000)
   }
   throw new Error('Durable workflow state was not observed');
 }
-
-beforeAll(async () => {
-  const approvalCatalog = await admin<{ present: boolean }[]>`select to_regclass('approval_authority_grants') is not null present`;
-  if (approvalCatalog[0]?.present !== true) {
-    const migration = await readFile(resolve(process.cwd(), 'drizzle/0014_durable_brief_approvals.sql'), 'utf8');
-    await admin.unsafe(migration);
-  }
-  const replayCatalog = await admin<{ present: boolean }[]>`select exists (
-    select 1 from information_schema.columns
-    where table_schema = current_schema() and table_name = 'approval_decisions' and column_name = 'result_status'
-  ) present`;
-  if (replayCatalog[0]?.present !== true) {
-    const migration = await readFile(resolve(process.cwd(), 'drizzle/0015_immutable_approval_replays.sql'), 'utf8');
-    await admin.unsafe(migration);
-  }
-  const observabilityCatalog = await admin<{ present: boolean }[]>`select exists (
-    select 1 from information_schema.columns
-    where table_schema = current_schema() and table_name = 'trace_spans' and column_name = 'span_id'
-  ) present`;
-  if (observabilityCatalog[0]?.present !== true) {
-    const migration = await readFile(resolve(process.cwd(), 'drizzle/0016_append_only_run_observability.sql'), 'utf8');
-    await admin.unsafe(migration);
-  }
-});
 
 afterAll(async () => {
   if (loop !== undefined) await loop.stop();

@@ -329,8 +329,6 @@ export const runBudgets = pgTable(
       .primaryKey()
       .references(() => runs.id),
     maxCalls: integer('max_calls').notNull(),
-    maxInputTokens: integer('max_input_tokens'),
-    maxOutputTokens: integer('max_output_tokens'),
     deadlineMs: integer('deadline_ms'),
     deadlineAt: timestamp('deadline_at', { withTimezone: true })
       .notNull()
