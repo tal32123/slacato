@@ -22,6 +22,7 @@ export function AppShell({
   const navigation = useNavigation();
   const navigationType = useNavigationType();
   const mainRef = useRef<HTMLElement>(null);
+  const previouslyFocusedPathname = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const preferredRail = window.matchMedia('(min-width: 1280px)');
@@ -46,7 +47,9 @@ export function AppShell({
                 : 'Deals';
     document.title = `${title} | SlaCato`;
     const focusOwner = (location.state as { focusOwner?: unknown } | null)?.focusOwner;
-    if (navigationType !== 'POP' && focusOwner !== 'approval-status') {
+    const pathnameChanged = previouslyFocusedPathname.current !== location.pathname;
+    previouslyFocusedPathname.current = location.pathname;
+    if (pathnameChanged && navigationType !== 'POP' && focusOwner !== 'approval-status') {
       window.requestAnimationFrame(() => mainRef.current?.focus());
     }
   }, [location.pathname, location.state, navigationType]);

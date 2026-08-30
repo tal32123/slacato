@@ -343,7 +343,7 @@ export function GuidedTour(): React.JSX.Element {
         ref={launcherRef}
         type="button"
         variant="secondary"
-        className="fixed bottom-20 right-4 z-40 min-h-11 gap-2 rounded-full border border-primary/30 bg-card px-4 shadow-lg lg:bottom-5"
+        className="fixed bottom-20 right-4 z-40 min-h-11 min-w-11 gap-2 rounded-full border border-primary/30 bg-card px-4 shadow-lg lg:bottom-5"
         onClick={open}
         aria-label="Start guided tour"
         data-tour="tour-launcher"

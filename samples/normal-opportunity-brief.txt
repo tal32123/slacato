@@ -91,13 +91,13 @@ Insufficient supported evidence is available for a negotiation\-state assessment
 #### Claims
 - Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate\. (confidence: 1.00) [^citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800]
 ### Citation Labels
-[^citation_1f1f502b3907db41bb68e3fbc260d89a7de810d6]: Evidence `salesforce:CON-3004:OPP-1001:contact:0` — salesforce/contacts\.tsv\#CON\-3004/opportunity/OPP\-1001\#chunk\-0
-[^citation_24eef038997ced1746e5bea4a772beb4751b10ac]: Evidence `salesforce:CON-3002:OPP-1001:contact:0` — salesforce/contacts\.tsv\#CON\-3002/opportunity/OPP\-1001\#chunk\-0
-[^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]: Evidence `salesforce:ACC-2001:OPP-1001:account:0` — salesforce/accounts\.tsv\#ACC\-2001/opportunity/OPP\-1001\#chunk\-0
-[^citation_619fe5d577cbbf7d6ffdda1e2728d6ed295e6b6a]: Evidence `salesforce:CON-3003:OPP-1001:contact:0` — salesforce/contacts\.tsv\#CON\-3003/opportunity/OPP\-1001\#chunk\-0
-[^citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800]: Evidence `gong_transcript:CALL-008:transcript:1` — gong/transcripts/OPP\-1001\_CALL\-008\.md\#chunk\-1
-[^citation_6778a31e8b4cfabeecbb519bb254a7fceae98f09]: Evidence `salesforce:CON-3005:OPP-1001:contact:0` — salesforce/contacts\.tsv\#CON\-3005/opportunity/OPP\-1001\#chunk\-0
-[^citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6]: Evidence `slack:SLK-9002:0` — slack/account\_team\_updates\.tsv\#SLK\-9002\#chunk\-0
+[^citation_1f1f502b3907db41bb68e3fbc260d89a7de810d6]: source=salesforce/contacts.tsv, contact_id=CON-3004
+[^citation_24eef038997ced1746e5bea4a772beb4751b10ac]: source=salesforce/contacts.tsv, contact_id=CON-3002
+[^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]: source=salesforce/accounts.tsv, account_id=ACC-2001
+[^citation_619fe5d577cbbf7d6ffdda1e2728d6ed295e6b6a]: source=salesforce/contacts.tsv, contact_id=CON-3003
+[^citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800]: source=gong/transcripts/OPP-1001_CALL-008.md, call_id=CALL-008
+[^citation_6778a31e8b4cfabeecbb519bb254a7fceae98f09]: source=salesforce/contacts.tsv, contact_id=CON-3005
+[^citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6]: source=slack/account_team_updates.tsv, update_id=SLK-9002
 
 ## 9. Confidence and Review Warnings
 - **Overall confidence:** 1.00

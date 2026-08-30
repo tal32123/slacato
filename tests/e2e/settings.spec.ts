@@ -51,7 +51,7 @@ test('shows truthful read-only permission and runtime diagnostics with seller-as
   await expect(page.getByText('Pinned embedding model')).toBeVisible();
   await expect(page.getByText('Index health')).toBeVisible();
   await expect(page.getByText('Runtime readiness')).toBeVisible();
-  await expect(page.getByText('Runtime not configured')).toBeVisible();
+  await expect(page.getByText('Runtime not ready')).toBeVisible();
   const representativeSourceRow = sourceMatrix.getByRole('row', { name: /ACC-2001 Gong summary/ });
   await expect(representativeSourceRow.getByRole('cell')).toHaveText([
     'ACC-2001',

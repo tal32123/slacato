@@ -122,18 +122,18 @@ Executive stakeholders disagree on whether aggressive discounting or risk mitiga
 #### Claims
 - Priya Sato: That is the brief I need\. (confidence: 1.00) [^citation_cf7103413dcd968e2386cb206c0c6539a42ffb7e]
 ### Citation Labels
-[^citation_037a3e93d25952c35cb4c36cf8ef0bdf10ad9bfb]: Evidence `salesforce:CON-3012:OPP-1003:contact:0` — salesforce/contacts\.tsv\#CON\-3012/opportunity/OPP\-1003\#chunk\-0
-[^citation_18f25eb4db843e0752cd8e0ca0942ae0ff69e1f2]: Evidence `salesforce:CON-3013:OPP-1003:contact:0` — salesforce/contacts\.tsv\#CON\-3013/opportunity/OPP\-1003\#chunk\-0
-[^citation_3dd1f561cbe3147aa789b6fbe1b245146ea418b6]: Evidence `gong_transcript:CALL-023:transcript:5` — gong/transcripts/OPP\-1003\_CALL\-023\.md\#chunk\-5
-[^citation_562d62940b7a9e58b72aa9a247fa949078a2d062]: Evidence `salesforce:CON-3011:OPP-1003:contact:0` — salesforce/contacts\.tsv\#CON\-3011/opportunity/OPP\-1003\#chunk\-0
-[^citation_6c92da60ed5f7013cfaa5efedb62207b38a21764]: Evidence `gong_transcript:CALL-027:transcript:6` — gong/transcripts/OPP\-1003\_CALL\-027\.md\#chunk\-6
-[^citation_87d2200667472a2cabc00583f34852b41a1d0ebf]: Evidence `gong_transcript:CALL-027:transcript:3` — gong/transcripts/OPP\-1003\_CALL\-027\.md\#chunk\-3
-[^citation_95e304c3dd5876c8fc630a0739759d6fabfc455b]: Evidence `slack:SLK-9009:0` — slack/account\_team\_updates\.tsv\#SLK\-9009\#chunk\-0
-[^citation_9b269902be276d2215f2101ca0f3d54db5e552ad]: Evidence `salesforce:OPP-1003:0` — salesforce/opportunities\.tsv\#OPP\-1003\#chunk\-0
-[^citation_b311fde6ea0e071f4ae30069badf48f4c1ec4411]: Evidence `gong_transcript:CALL-027:transcript:5` — gong/transcripts/OPP\-1003\_CALL\-027\.md\#chunk\-5
-[^citation_c3a49b563a64fc9f46ce72afc4b6154a8d65b70a]: Evidence `salesforce:CON-3015:OPP-1003:contact:0` — salesforce/contacts\.tsv\#CON\-3015/opportunity/OPP\-1003\#chunk\-0
-[^citation_cf7103413dcd968e2386cb206c0c6539a42ffb7e]: Evidence `gong_transcript:CALL-023:transcript:4` — gong/transcripts/OPP\-1003\_CALL\-023\.md\#chunk\-4
-[^citation_d13bbeac0efb25a98a2a7b77f37cc8c7841afbce]: Evidence `salesforce:CON-3014:OPP-1003:contact:0` — salesforce/contacts\.tsv\#CON\-3014/opportunity/OPP\-1003\#chunk\-0
+[^citation_037a3e93d25952c35cb4c36cf8ef0bdf10ad9bfb]: source=salesforce/contacts.tsv, contact_id=CON-3012
+[^citation_18f25eb4db843e0752cd8e0ca0942ae0ff69e1f2]: source=salesforce/contacts.tsv, contact_id=CON-3013
+[^citation_3dd1f561cbe3147aa789b6fbe1b245146ea418b6]: source=gong/transcripts/OPP-1003_CALL-023.md, call_id=CALL-023
+[^citation_562d62940b7a9e58b72aa9a247fa949078a2d062]: source=salesforce/contacts.tsv, contact_id=CON-3011
+[^citation_6c92da60ed5f7013cfaa5efedb62207b38a21764]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
+[^citation_87d2200667472a2cabc00583f34852b41a1d0ebf]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
+[^citation_95e304c3dd5876c8fc630a0739759d6fabfc455b]: source=slack/account_team_updates.tsv, update_id=SLK-9009
+[^citation_9b269902be276d2215f2101ca0f3d54db5e552ad]: source=salesforce/opportunities.tsv, opportunity_id=OPP-1003
+[^citation_b311fde6ea0e071f4ae30069badf48f4c1ec4411]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
+[^citation_c3a49b563a64fc9f46ce72afc4b6154a8d65b70a]: source=salesforce/contacts.tsv, contact_id=CON-3015
+[^citation_cf7103413dcd968e2386cb206c0c6539a42ffb7e]: source=gong/transcripts/OPP-1003_CALL-023.md, call_id=CALL-023
+[^citation_d13bbeac0efb25a98a2a7b77f37cc8c7841afbce]: source=salesforce/contacts.tsv, contact_id=CON-3014
 
 ## 9. Confidence and Review Warnings
 - **Overall confidence:** 0.95
