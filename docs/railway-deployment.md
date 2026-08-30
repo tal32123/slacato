@@ -30,8 +30,15 @@ service therefore runs Caddy, which serves the built SPA and reverse-proxies
 - Start command: `pnpm --filter @slacato/api start` (that script sets
   `SLACATO_BOOTSTRAP=1`; without it `main.ts` never calls `bootstrap()` and the
   process exits silently)
-- Pre-deploy: `pnpm db:migrate && pnpm ingest:records && pnpm index:embeddings`
-  (all idempotent)
+- Pre-deploy: `pnpm db:migrate` **only**.
+
+  Railway does not honour shell chaining in `preDeployCommand`. A value of
+  `pnpm db:migrate && pnpm ingest:records && pnpm index:embeddings` runs the
+  migration, reports the deployment as SUCCESS, and **silently skips the rest** —
+  no ingestion output appears in the deploy logs and the database is left empty.
+  This is not visible from deployment status; the only signal is
+  `/api/health/ready` reporting `"index":"unavailable"`. Keep pre-deploy to the
+  single migration command and seed as a one-off (below).
 - Healthcheck path: `/api/health/live` — **not** `/api/health/ready`, which
   returns 503 until Postgres, Redis, and the model provider are all reachable and
   can deadlock a first deploy.
@@ -86,6 +93,26 @@ API_UPSTREAM=api.railway.internal:3000
 
 Set variables with `skipDeploys: true` while wiring references, then redeploy once.
 
+## Seeding (one-off)
+
+Fixture ingestion and embedding indexing are one-off steps, not pre-deploy steps.
+Postgres has no public endpoint, so open a temporary TCP proxy on the `postgres`
+service (application port 5432), run the two commands locally against it, then
+**delete the proxy**:
+
+```bash
+set -a; source .env; set +a
+export DATABASE_URL="postgresql://slacato:<password>@<proxy-host>:<proxy-port>/slacato"
+pnpm ingest:records      # -> {"totalDocuments":74,"totalChunks":137}
+pnpm index:embeddings    # -> {"indexed":137,"skipped":0,"batches":5}
+```
+
+Both are idempotent. Re-run `index:embeddings` after any change of
+`AI_PROVIDER` or embedding model — the readiness probe requires every
+`evidence_versions` row to carry an embedding matching the *currently
+configured* provider and model, and exactly one embedding profile across the
+table.
+
 ## Order of operations
 
 1. Create `postgres` and `redis` with their volumes; wait for both to be healthy.
@@ -94,7 +121,8 @@ Set variables with `skipDeploys: true` while wiring references, then redeploy on
 3. Create `web`, generate its domain.
 4. Set `WEB_ORIGIN` on `api` and `worker` to that domain, and `API_UPSTREAM` on
    `web`. Redeploy `api`, `worker`, and `web`.
-5. Verify: `GET https://<web-domain>/api/health/ready` returns `200 {"status":"ready"}`.
+5. Seed the database (see above).
+6. Verify: `GET https://<web-domain>/api/health/ready` returns `200 {"status":"ready"}`.
 
 The Caddy -> `api.railway.internal:3000` hop is the one link not exercised
 locally: Railway's private network is IPv6-only, and the local smoke test proxied
@@ -106,3 +134,24 @@ resolution there first.
 - Embeddings are provider-specific. Indexing under `mock` and serving under
   `openrouter` (or the reverse) requires a re-run of `pnpm index:embeddings`.
 - `SESSION_SECRET` should be generated fresh rather than reused from local `.env`.
+
+
+## Deployed instance
+
+Project `slacato` (`0c4e1716-9833-407e-8f67-ada276e864cc`), environment
+`production` (`82dd6cbe-c64b-4056-a986-de56c8191b37`).
+
+| Service | ID |
+|---|---|
+| postgres | `a1da2444-13a6-4d40-8847-ffc6ba315a21` |
+| redis | `c779a921-8e39-4461-bb41-c7381775fdf6` |
+| api | `efce6da0-9583-4027-a437-2634bff6c1bb` |
+| worker | `10f118e1-e3fc-44b7-89d9-f00fde9ef27f` |
+| web | `b5f9b9bb-1d1b-4e89-9422-6c53b35ae83f` |
+
+Public URL: <https://web-production-987e.up.railway.app>
+
+Verified end to end: `/` and client-side routes serve the SPA, `/api/*` proxies
+to the API over Railway's IPv6 private network, `/api/health/ready` reports all
+five checks ready, and a full CSRF -> persona login -> `/api/deals` flow returns
+persona-scoped data with `__Host-` cookies set over TLS.
