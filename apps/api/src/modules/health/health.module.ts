@@ -1,33 +1,62 @@
-import { Module } from '@nestjs/common';
+import {
+  type DynamicModule,
+  Module,
+  type OnApplicationShutdown,
+  type Provider
+} from '@nestjs/common';
+import type { ReadinessCheck, ReadinessDependencies } from '@slacato/core';
 import { HealthController } from './health.controller.js';
-import { HealthService, type ReadinessCheck } from './health.service.js';
+import { HealthService } from './health.service.js';
 
-/** Reports readiness as unconfigured when no infrastructure checks have been registered. */
-class UnconfiguredReadinessCheck implements ReadinessCheck {
-  /** Reports that readiness checks have not yet been configured. */
-  public async isReady(): Promise<'unconfigured'> {
-    return 'unconfigured';
+const unavailable: ReadinessCheck = { isReady: async () => false };
+const unavailableDependencies: ReadinessDependencies = {
+  database: unavailable,
+  migration: unavailable,
+  redis: unavailable,
+  index: unavailable,
+  model: unavailable
+};
+
+export type HealthModuleOptions = Readonly<{
+  readiness: ReadinessDependencies;
+  close?: () => Promise<void>;
+}>;
+
+/** Releases health-only infrastructure clients during application shutdown. */
+class ReadinessResourceShutdown implements OnApplicationShutdown {
+  public constructor(private readonly close: () => Promise<void>) {}
+
+  /** Closes resources owned by the health composition. */
+  public onApplicationShutdown(): Promise<void> {
+    return this.close();
   }
 }
 
-/** Configures the health endpoint and its default readiness service wiring. */
-@Module({
-  controllers: [HealthController],
-  providers: [
-    {
-      provide: HealthService,
-      useFactory: () => {
-        const unconfigured = new UnconfiguredReadinessCheck();
-        return new HealthService({
-          database: unconfigured,
-          migration: unconfigured,
-          redis: unconfigured,
-          index: unconfigured,
-          model: unconfigured
-        });
-      }
-    }
-  ],
-  exports: [HealthService]
-})
-export class HealthModule {}
+/** Configures the health endpoint with explicitly supplied readiness dependencies. */
+@Module({})
+export class HealthModule {
+  /** Registers concrete probes, defaulting to fail-closed checks for partial test compositions. */
+  public static register(options?: HealthModuleOptions): DynamicModule {
+    const providers: Provider[] = [
+      {
+        provide: HealthService,
+        useValue: new HealthService(options?.readiness ?? unavailableDependencies)
+      },
+      ...(options?.close === undefined
+        ? []
+        : [
+            {
+              provide: ReadinessResourceShutdown,
+              useValue: new ReadinessResourceShutdown(options.close)
+            }
+          ])
+    ];
+    return {
+      global: true,
+      module: HealthModule,
+      controllers: [HealthController],
+      providers,
+      exports: [HealthService]
+    };
+  }
+}

@@ -9,7 +9,8 @@ import {
   type RetrievalResult,
   type RunBudgetLimits
 } from '@slacato/core';
-import { type DatabaseClient, PostgresHybridEvidenceRetriever } from '@slacato/infrastructure';
+import type { DatabaseClient } from '../db/client.js';
+import { PostgresHybridEvidenceRetriever } from '../retrieval/postgres-retriever.js';
 
 type OpportunityContextRow = Readonly<{
   account_id: string;

@@ -18,6 +18,8 @@ export const MAX_LIST_ITEMS = 50;
 export const MAX_CITATIONS_PER_CLAIM = 10;
 /** Maximum ISO timestamp length, allowing precision while preventing unbounded fractional seconds. */
 export const MAX_TIMESTAMP_LENGTH = 64;
+/** Minimum grounded business sections required before a rich-evidence brief can enter approval. */
+export const MIN_SUBSTANTIVE_BRIEF_SECTIONS = 3;
 
 const shortTextSchema = z.string().min(1).max(MAX_SHORT_TEXT_LENGTH);
 const sectionTextSchema = z.string().min(1).max(MAX_SECTION_TEXT_LENGTH);
@@ -306,6 +308,27 @@ export type RecommendedAction = z.infer<typeof recommendedActionSchema>;
 export type EvidenceSummary = z.infer<typeof evidenceSummarySchema>;
 /** Immutable canonical DealBrief with all nine assignment sections. */
 export type DealBrief = z.infer<typeof dealBriefSchema>;
+
+/** Recognizes schema-valid prose that explicitly communicates evidence uncertainty. */
+export function isExplicitBriefUncertainty(value: string): boolean {
+  return /^(?:unknown|unverified|not (?:available|known|verified)|requires? (?:review|verification)|hypothesis|no verified (?:summary|information) is available yet|insufficient verified information|insufficient (?:supported )?evidence is available(?: for (?:an executive summary|a negotiation-state assessment))?)\.?$/i.test(
+    value.trim()
+  );
+}
+
+/** Counts grounded, user-visible business sections rather than schema-only placeholders. */
+export function countSubstantiveBriefSections(brief: DealBrief): number {
+  return [
+    !isExplicitBriefUncertainty(brief.executiveSummary.narrative),
+    brief.buyerGoalsAndBusinessDrivers.goals.length > 0 ||
+      brief.buyerGoalsAndBusinessDrivers.businessDrivers.length > 0,
+    brief.stakeholderMap.stakeholders.length > 0,
+    !isExplicitBriefUncertainty(brief.negotiationState.currentState),
+    brief.recommendedNextActions.actions.length > 0,
+    brief.missingInformation.items.length > 0,
+    brief.sourceEvidence.evidence.length > 0
+  ].filter(Boolean).length;
+}
 /** Immutable bounded conversation-specialist artifact. */
 export type ConversationArtifact = z.infer<typeof conversationArtifactSchema>;
 /** Immutable bounded stakeholder-specialist artifact. */

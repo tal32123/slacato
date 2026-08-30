@@ -8,7 +8,7 @@ import { PostgresEvidenceRepository } from '@slacato/infrastructure/db/repositor
 import { PostgresProviderAttemptLedger } from '@slacato/infrastructure/db/repositories/provider-attempt-ledger';
 import { logger } from '@slacato/infrastructure';
 import { PostgresWorkflowStore } from '@slacato/infrastructure/db/repositories/workflow-store';
-import { createBudgetedModelGateway, ProviderAttemptFinalizationConflict, type ModelTransport } from '@slacato/core';
+import { CANONICAL_FIXTURE_COMMIT, createBudgetedModelGateway, ProviderAttemptFinalizationConflict, type ModelTransport } from '@slacato/core';
 import { createWorkerCompositionModule, WorkerModelGatewayFactory } from '../../apps/worker/src/main';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
@@ -31,8 +31,8 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Gateway user', 'seller')`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Gateway account')`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Gateway opportunity')`;
-    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
-    await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 1, 100, 20)`;
+    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', ${'a'.repeat(64)}, 0)`;
+    await sql`insert into run_budgets (run_id, max_calls) values (${runId}, 1)`;
     const database = createDatabaseClient(databaseUrl, 1);
     const ledger = new PostgresProviderAttemptLedger(database);
     let startedBeforeTransport = false;
@@ -47,7 +47,7 @@ describe('PostgreSQL repository contract', () => {
     await createBudgetedModelGateway(transport, undefined, ledger).generateObject({
       schema: z.object({ items: z.array(z.string()) }).strict(), messages: [{ role: 'user', content: 'Return items.' }], operation: 'gateway-ledger',
       durableAttempt: { runScope: runId, provider: 'mock', model: 'mock-chat' },
-      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 20 }
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000 }
     });
     expect(startedBeforeTransport).toBe(true);
     await database.close();
@@ -64,7 +64,7 @@ describe('PostgreSQL repository contract', () => {
       id: runId as never, opportunityId: opportunityId as never, requestedBy: userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-brief',
       idempotencyKey: `composed_${id}`, startRequestHash: 'a'.repeat(64),
       command: { id: `command_composed_${id}`, runId: runId as never, type: 'process-step', payload: { step: 'start' }, idempotencyKey: `composed_${id}` },
-      budget: { scope: runId as never, maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 }
+      budget: { scope: runId as never, maxCalls: 2, deadlineMs: 1_000 }
     });
     const environment = envSchema.parse({
       NODE_ENV: 'test', DATABASE_URL: databaseUrl, SESSION_SECRET: 'a-session-secret-that-is-at-least-32-characters'
@@ -74,15 +74,15 @@ describe('PostgreSQL repository contract', () => {
     expect(() => factory.create()).toThrow('fixture resolver');
     const gateways = factory.create({ mockFixtureResolver: async () => ({ text: '{"items":[]}', usage: { inputTokens: 1, outputTokens: 2 } }) });
     expect('modelGateway' in gateways).toBe(false);
-    await expect(gateways.forRun({ runScope: `missing_${id}`, budget: { scope: `missing_${id}`, maxCalls: 1, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 } })).rejects.toThrow('Run budget does not exist');
-    const run = await gateways.forRun({ runScope: runId, budget: { scope: runId, maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 } });
+    await expect(gateways.forRun({ runScope: `missing_${id}`, budget: { scope: `missing_${id}`, maxCalls: 1, deadlineMs: 1_000 } })).rejects.toThrow('Run budget does not exist');
+    const run = await gateways.forRun({ runScope: runId, budget: { scope: runId, maxCalls: 2, deadlineMs: 1_000 } });
     await run.generateObject({
       schema: z.object({ items: z.array(z.string()) }).strict(), messages: [{ role: 'user', content: 'Return items.' }], operation: 'composed-specialist',
-      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 100, maxOutputTokens: 20 }
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000 }
     });
     const embeddings = await gateways.embeddingForRun({
       runScope: runId, logicalGenerationId: `retrieval_${id}`,
-      budget: { scope: runId, maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 }
+      budget: { scope: runId, maxCalls: 2, deadlineMs: 1_000 }
     });
     await embeddings.embed(['authorized retrieval query']);
     expect(await sql<{ operation: string; status: string }[]>`select operation, status from generation_attempts where run_id = ${runId} order by operation`).toEqual([
@@ -94,21 +94,21 @@ describe('PostgreSQL repository contract', () => {
 
   it('atomically creates the run and its budget, validates exact replay, and rolls both back on a command conflict', async () => {
     const sql = openDatabase(); const id = crypto.randomUUID().replaceAll('-', '');
-    const userId = `user_start_${id}`; const accountId = `account_start_${id}`; const opportunityId = `opportunity_start_${id}`; const runId = `run_start_${id}`; const rejectedRunId = `run_start_rejected_${id}`;
+    const userId = `user_start_${id}`; const accountId = `account_start_${id}`; const opportunityId = `opportunity_start_${id}`; const rejectedOpportunityId = `opportunity_start_rejected_${id}`; const runId = `run_start_${id}`; const rejectedRunId = `run_start_rejected_${id}`;
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Start user', 'seller')`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Start account')`;
-    await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Start opportunity')`;
+    await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Start opportunity'), (${rejectedOpportunityId}, ${accountId}, 'Rejected start opportunity')`;
     const database = createDatabaseClient(databaseUrl, 1); const store = new PostgresWorkflowStore(database);
-    const budget = { scope: runId as never, maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 };
+    const budget = { scope: runId as never, maxCalls: 2, deadlineMs: 1_000 };
     const command = { id: `command_start_${id}`, runId: runId as never, type: 'process-step', payload: { step: 'start' }, idempotencyKey: `start_${id}` };
-    const input = { id: runId as never, opportunityId: opportunityId as never, requestedBy: userId as never, status: 'created' as const, generationProvider: 'mock', generationModel: 'mock-chat', command, budget };
+    const input = { id: runId as never, opportunityId: opportunityId as never, requestedBy: userId as never, status: 'created' as const, generationProvider: 'mock', generationModel: 'mock-chat', idempotencyKey: `start_${id}`, startRequestHash: 'a'.repeat(64), command, budget };
     await store.startRun(input);
     await store.startRun(input);
     expect(await sql<{ run_id: string; max_calls: number; deadline_ms: number }[]>`select run_budgets.run_id, run_budgets.max_calls, run_budgets.deadline_ms from run_budgets where run_id = ${runId}`).toEqual([{ run_id: runId, max_calls: 2, deadline_ms: 1_000 }]);
     await expect(store.startRun({ ...input, budget: { ...budget, maxCalls: 3 } })).rejects.toThrow('budget limits');
     await expect(store.startRun({ ...input, budget: { ...budget, deadlineMs: 2_000 } })).rejects.toThrow('budget limits');
     const rejectedCommand = { ...command, runId: rejectedRunId as never };
-    await expect(store.startRun({ ...input, id: rejectedRunId as never, command: rejectedCommand, budget: { ...budget, scope: rejectedRunId as never } })).rejects.toThrow('Outbox idempotency');
+    await expect(store.startRun({ ...input, id: rejectedRunId as never, opportunityId: rejectedOpportunityId as never, idempotencyKey: `start_rejected_${id}`, command: rejectedCommand, budget: { ...budget, scope: rejectedRunId as never } })).rejects.toThrow('Outbox idempotency');
     expect(await sql<{ run_count: string; budget_count: string }[]>`select
       (select count(*)::text from runs where id = ${rejectedRunId}) as run_count,
       (select count(*)::text from run_budgets where run_id = ${rejectedRunId}) as budget_count`).toEqual([{ run_count: '0', budget_count: '0' }]);
@@ -127,8 +127,8 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Repository opportunity')`;
 
     await sql`
-      insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version)
-      values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)
+      insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
+      values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', ${'a'.repeat(64)}, 0)
     `;
 
     const runs = await sql<{ id: string; status: string }[]>`
@@ -179,7 +179,7 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Manifest user', 'seller')`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Manifest account')`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Manifest opportunity')`;
-    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
+    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', ${'a'.repeat(64)}, 0)`;
     await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content) values (${documentId}, ${documentId}, 1, 'crm', 'document-hash', 'immutable content')`;
     await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content) values (${evidenceId}, ${documentId}, ${accountId}, ${opportunityId}, 0, 'crm', 'internal', 'evidence-hash', 'immutable evidence')`;
     await sql`insert into run_evidence_manifests
@@ -202,7 +202,7 @@ describe('PostgreSQL repository contract', () => {
     const mismatchedId = `evidence_embedding_mismatch_${id}`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Embedding account')`;
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Embedding user', 'seller')`;
-    await sql`insert into permission_grants (id, persona_id, account_id, can_read, sensitive_pricing) values (${`grant_embedding_${id}`}, ${userId}, ${accountId}, true, false)`;
+    await sql`insert into permission_grants (id, persona_id, account_id, source_type, source_commit, can_read, sensitive_pricing) values (${`grant_embedding_${id}`}, ${userId}, ${accountId}, 'crm', ${CANONICAL_FIXTURE_COMMIT}, true, false)`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Embedding opportunity')`;
     await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content) values (${documentId}, ${documentId}, 1, 'crm', 'embedding-document-hash', 'search content')`;
     await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, embedding, embedding_provider, embedding_model, embedding_dimension, embedding_profile, embedding_version, embedding_normalization)
@@ -242,9 +242,9 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into accounts (id, name) values (${accountId}, 'Authorized account')`;
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Authorized user', 'seller')`;
     await sql`insert into opportunities (id, account_id, name, restricted) values (${opportunityId}, ${accountId}, 'Authorized opportunity', false), (${restrictedOpportunityId}, ${accountId}, 'Restricted opportunity', true)`;
-    await sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read, sensitive_pricing, can_read_restricted) values
-      (${`grant_authorized_a_${id}`}, ${userId}, ${accountId}, 'crm', true, false, false),
-      (${`grant_authorized_b_${id}`}, ${userId}, ${accountId}, 'crm', true, false, false)`;
+    await sql`insert into permission_grants (id, persona_id, account_id, source_type, source_commit, can_read, sensitive_pricing, can_read_restricted) values
+      (${`grant_authorized_a_${id}`}, ${userId}, ${accountId}, 'crm', ${CANONICAL_FIXTURE_COMMIT}, true, false, false),
+      (${`grant_authorized_b_${id}`}, ${userId}, ${accountId}, 'crm', ${CANONICAL_FIXTURE_COMMIT}, true, false, false)`;
     await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content) values (${documentId}, ${documentId}, 1, 'crm', 'authorized document hash', 'search content')`;
     await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, embedding, embedding_provider, embedding_model, embedding_dimension, embedding_profile, embedding_version, embedding_normalization) values
       (${firstId}, ${documentId}, ${accountId}, ${opportunityId}, 0, 'crm', 'internal', 'authorized-first', 'first', '[1,0]'::vector, 'mock', 'mock-embedding', 2, 'mock-profile', 'v1', 'l2'),
@@ -279,15 +279,15 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Attempt user', 'seller')`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Attempt account')`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Attempt opportunity')`;
-    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
-    await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 2, 20, 10)`;
+    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', ${'a'.repeat(64)}, 0)`;
+    await sql`insert into run_budgets (run_id, max_calls) values (${runId}, 1)`;
     const database = createDatabaseClient(databaseUrl, 1);
     const ledger = new PostgresProviderAttemptLedger(database);
     const reservation = await ledger.beginAttempt({ runScope: runId, operation: 'specialist', provider: 'mock', model: 'mock-chat', inputTokens: 5, requestedOutputTokens: 8 });
-    expect((await sql<{ status: string; reserved_output_tokens: number }[]>`select generation_attempts.status, run_budgets.reserved_output_tokens from generation_attempts join run_budgets on run_budgets.run_id = generation_attempts.run_id where generation_attempts.id = ${reservation.attemptId}`)[0]).toEqual({ status: 'attempt_started', reserved_output_tokens: 8 });
+    expect((await sql<{ status: string; reserved_output_tokens: number }[]>`select generation_attempts.status, run_budgets.reserved_output_tokens from generation_attempts join run_budgets on run_budgets.run_id = generation_attempts.run_id where generation_attempts.id = ${reservation.attemptId}`)[0]).toEqual({ status: 'attempt_started', reserved_output_tokens: 1 });
     await ledger.settleAttempt({ ...reservation, reservedInputTokens: 5, actualInputTokens: 7, actualOutputTokens: 12, requestId: 'provider-request', responseId: 'provider-response' });
     expect((await sql<{ status: string; possible_duplicate: boolean; input_tokens: number; output_tokens: number; used_input_tokens: number; used_output_tokens: number; reserved_output_tokens: number }[]>`select generation_attempts.status, generation_attempts.possible_duplicate, generation_attempts.input_tokens, generation_attempts.output_tokens, run_budgets.used_input_tokens, run_budgets.used_output_tokens, run_budgets.reserved_output_tokens from generation_attempts join run_budgets on run_budgets.run_id = generation_attempts.run_id where generation_attempts.id = ${reservation.attemptId}`)[0]).toEqual({ status: 'completed', possible_duplicate: false, input_tokens: 7, output_tokens: 12, used_input_tokens: 7, used_output_tokens: 12, reserved_output_tokens: 0 });
-    await expect(ledger.beginAttempt({ runScope: runId, operation: 'exhausted', provider: 'mock', model: 'mock-chat', inputTokens: 1, requestedOutputTokens: 1 })).rejects.toThrow('output budget');
+    await expect(ledger.beginAttempt({ runScope: runId, operation: 'exhausted', provider: 'mock', model: 'mock-chat', inputTokens: 1, requestedOutputTokens: 1 })).rejects.toThrow('Run call limit is exhausted');
     await ledger.settleAttempt({ ...reservation, reservedInputTokens: 5, actualInputTokens: 7, actualOutputTokens: 12, requestId: 'provider-request', responseId: 'provider-response' });
     await expect(ledger.settleAttempt({ ...reservation, reservedInputTokens: 5, actualInputTokens: 7, actualOutputTokens: 8, requestId: 'provider-request', responseId: 'provider-response' })).rejects.toBeInstanceOf(ProviderAttemptFinalizationConflict);
     await database.close();
@@ -299,14 +299,14 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into personas (id, display_name, role) values (${userId}, 'Restart user', 'seller')`;
     await sql`insert into accounts (id, name) values (${accountId}, 'Restart account')`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Restart opportunity')`;
-    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', 0)`;
-    await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 2, 1_000, 200)`;
+    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', ${'a'.repeat(64)}, 0)`;
+    await sql`insert into run_budgets (run_id, max_calls) values (${runId}, 2)`;
     const database = createDatabaseClient(databaseUrl, 1);
     const transport: ModelTransport = { capabilities: { nativeStructuredOutput: false }, async generate() { return { text: '{"items":[]}', usage: { inputTokens: 1, outputTokens: 1 } }; } };
     const request = {
       schema: z.object({ items: z.array(z.string()) }).strict(), messages: [{ role: 'user' as const, content: 'Return items.' }], operation: 'restarted-specialist',
       durableAttempt: { runScope: runId, provider: 'mock', model: 'mock-chat' },
-      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000, maxInputTokens: 1_000, maxOutputTokens: 200 }
+      limits: { maxCalls: 1, maxSchemaRepairs: 0, maxTransportRetries: 0, deadlineMs: 1_000 }
     };
     await createBudgetedModelGateway(transport, undefined, new PostgresProviderAttemptLedger(database)).generateObject(request);
     await createBudgetedModelGateway(transport, undefined, new PostgresProviderAttemptLedger(database)).generateObject(request);
@@ -321,31 +321,36 @@ describe('PostgreSQL repository contract', () => {
     await sql`insert into accounts (id, name) values (${accountId}, 'Budget account')`;
     await sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Budget opportunity')`;
     await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version) values (${runId}, ${opportunityId}, ${userId}, 'created', 'mock', 'mock-chat', ${'a'.repeat(64)}, 0)`;
-    await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values (${runId}, 3, 9, 20)`;
+    await sql`insert into run_budgets (run_id, max_calls) values (${runId}, 2)`;
     const infoLog = vi.spyOn(logger, 'info');
     const errorLog = vi.spyOn(logger, 'error');
     const firstDatabase = createDatabaseClient(databaseUrl, 1); const secondDatabase = createDatabaseClient(databaseUrl, 1);
-    const first = new PostgresProviderAttemptLedger(firstDatabase);
-    const second = new PostgresProviderAttemptLedger(secondDatabase);
-    const results = await Promise.allSettled([
-      first.beginAttempt({ runScope: runId, operation: `specialist_a_${id}`, provider: 'mock', model: 'mock-chat', inputTokens: 5, requestedOutputTokens: 8 }),
-      second.beginAttempt({ runScope: runId, operation: `specialist_b_${id}`, provider: 'mock', model: 'mock-chat', inputTokens: 5, requestedOutputTokens: 8 })
+    const operation = `specialist_${id}`;
+    await Promise.all([
+      new PostgresProviderAttemptLedger(firstDatabase).beginAttempt({ runScope: runId, operation, provider: 'mock', model: 'mock-chat', inputTokens: 5, requestedOutputTokens: 8 }),
+      new PostgresProviderAttemptLedger(secondDatabase).beginAttempt({ runScope: runId, operation, provider: 'mock', model: 'mock-chat', inputTokens: 5, requestedOutputTokens: 8 })
     ]);
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    const reservation = results.find((result): result is PromiseFulfilledResult<{ reservationId: string; attemptId: string; grantedOutputTokens: number }> => result.status === 'fulfilled')?.value;
-    if (reservation === undefined) throw new Error('Expected one reservation');
-    const outstanding = (await sql<{ invocation_id: string | null; operation: string }[]>`select invocation_id, operation from run_budget_reservations where id = ${reservation.reservationId}`)[0];
-    if (outstanding === undefined) throw new Error('Expected outstanding reservation');
-    await second.beginAttempt({ runScope: runId, ...(outstanding.invocation_id === null ? {} : { invocationId: outstanding.invocation_id }), operation: outstanding.operation, provider: 'mock', model: 'mock-chat', inputTokens: 1, requestedOutputTokens: 1 });
-    expect((await sql<{ status: string; possible_duplicate: boolean; actual_output_tokens: number }[]>`select run_budget_reservations.status, generation_attempts.possible_duplicate, run_budget_reservations.actual_output_tokens from run_budget_reservations join generation_attempts on generation_attempts.id = run_budget_reservations.attempt_id where run_budget_reservations.id = ${reservation.reservationId}`)[0]).toEqual({ status: 'possible_duplicate', possible_duplicate: true, actual_output_tokens: 8 });
+    const reservations = await sql<{ attempt_id: string; status: string; actual_output_tokens: number | null; possible_duplicate: boolean }[]>`
+      select reservation.attempt_id, reservation.status, reservation.actual_output_tokens, attempt.possible_duplicate
+      from run_budget_reservations reservation
+      join generation_attempts attempt on attempt.id = reservation.attempt_id
+      where reservation.run_id = ${runId}
+      order by reservation.ordinal
+    `;
+    expect(reservations).toEqual([
+      { attempt_id: expect.any(String), status: 'possible_duplicate', actual_output_tokens: 1, possible_duplicate: true },
+      { attempt_id: expect.any(String), status: 'reserved', actual_output_tokens: null, possible_duplicate: false }
+    ]);
+    const recoveredAttemptId = reservations[0]?.attempt_id;
+    if (recoveredAttemptId === undefined) throw new Error('Expected recovered reservation');
     const started = infoLog.mock.calls.map(([payload]) => payload).filter((payload) => (
       payload !== null && typeof payload === 'object'
-      && (payload as Record<string, unknown>).attemptId === reservation.attemptId
+      && (payload as Record<string, unknown>).attemptId === recoveredAttemptId
       && (payload as Record<string, unknown>).event === 'provider_attempt_started'
     ));
     const terminal = errorLog.mock.calls.map(([payload]) => payload).filter((payload) => (
       payload !== null && typeof payload === 'object'
-      && (payload as Record<string, unknown>).attemptId === reservation.attemptId
+      && (payload as Record<string, unknown>).attemptId === recoveredAttemptId
       && (payload as Record<string, unknown>).event === 'provider_attempt_failed'
     ));
     expect(started).toHaveLength(1);

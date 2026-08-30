@@ -1,56 +1,56 @@
 {
   "cases": [
     {
-      "id": "northstar-payment-schedule",
+      "id": "northstar-owner-matrix-success-metrics",
       "precisionAtK": 0.2,
       "recallAtK": 0.5,
       "leakedEvidence": 0,
       "retrieved": 5,
       "relevantEvidenceIds": [
-        "slack:SLK-1001-02:0",
+        "slack:SLK-9002:0",
         "gong_transcript:CALL-008:transcript:0"
       ],
       "retrievedEvidenceIds": [
-        "slack:SLK-1001-03:0",
-        "slack:SLK-1001-02:0",
+        "slack:SLK-9003:0",
+        "slack:SLK-9002:0",
         "gong_transcript:CALL-001:transcript:5",
         "salesforce:CON-3003:OPP-1001:contact:0",
         "policy:deal-desk-policy:OPP-1001:1"
       ]
     },
     {
-      "id": "meridian-proof-remediation",
+      "id": "meridian-night-shift-training",
       "precisionAtK": 0.2,
       "recallAtK": 0.5,
       "leakedEvidence": 0,
       "retrieved": 5,
       "relevantEvidenceIds": [
-        "slack:SLK-1002-02:0",
+        "slack:SLK-9005:0",
         "gong_transcript:CALL-018:transcript:0"
       ],
       "retrievedEvidenceIds": [
-        "slack:SLK-1002-03:0",
+        "slack:SLK-9006:0",
         "salesforce:CON-3010:OPP-1002:contact:0",
-        "slack:SLK-1002-02:0",
+        "slack:SLK-9005:0",
         "gong_summary:CALL-013:summary:0",
         "policy:deal-desk-policy:OPP-1002:1"
       ]
     },
     {
-      "id": "eclipse-approval-routing",
+      "id": "eclipse-discount-risk-routing",
       "precisionAtK": 0.4,
       "recallAtK": 1,
       "leakedEvidence": 0,
       "retrieved": 5,
       "relevantEvidenceIds": [
-        "slack:SLK-1003-01:0",
+        "slack:SLK-9009:0",
         "policy:deal-desk-policy:OPP-1003:1"
       ],
       "retrievedEvidenceIds": [
-        "slack:SLK-1003-03:0",
+        "slack:SLK-9009:0",
         "policy:deal-desk-policy:OPP-1003:1",
-        "slack:SLK-1003-01:0",
-        "slack:SLK-1003-02:0",
+        "slack:SLK-9007:0",
+        "slack:SLK-9008:0",
         "pricing:PN-4005:0"
       ]
     },

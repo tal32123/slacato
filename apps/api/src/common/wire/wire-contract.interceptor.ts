@@ -2,6 +2,7 @@ import {
   BadRequestException,
   type CallHandler,
   type ExecutionContext,
+  Inject,
   Injectable,
   InternalServerErrorException,
   type NestInterceptor
@@ -26,7 +27,7 @@ interface HttpRequestData {
 @Injectable()
 export class WireContractInterceptor implements NestInterceptor<unknown, unknown> {
   /** Creates an interceptor that reads each handler's declared wire contracts. */
-  public constructor(private readonly reflector: Reflector) {}
+  public constructor(@Inject(Reflector) private readonly reflector: Reflector) {}
 
   /** Validates request parts and emitted responses against the handler's wire contracts. */
   public intercept(context: ExecutionContext, next: CallHandler<unknown>): Observable<unknown> {

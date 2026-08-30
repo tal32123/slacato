@@ -111,7 +111,7 @@ export class RunEventsController {
     @Inject(RUN_EVENT_BUS) private readonly bus: RunEventBus,
     @Inject(RUN_EVENT_QUERY) private readonly query: RunEventQuery,
     @Inject(RUN_EVENT_HEARTBEAT_MS) private readonly heartbeatMs: number,
-    private readonly auth: AuthService
+    @Inject(AuthService) private readonly auth: AuthService
   ) {}
 
   /** Returns the caller-authorized snapshot for a run. */

@@ -5,11 +5,14 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import {
   CancelDealBrief,
   DecideApproval,
+  type ReadinessDependencies,
   RegenerateDealBrief,
   StartDealBrief
 } from '@slacato/core';
 import {
+  BullMqCommandQueue,
   createDatabaseClient,
+  createProductionReadinessChecks,
   type Env,
   loadRuntimeEnv,
   PostgresApprovalAuthorityQuery,
@@ -17,9 +20,11 @@ import {
   PostgresBriefExportService,
   PostgresCanonicalPersonaDirectory,
   PostgresDealBriefAccessControl,
+  PostgresDealQueryRepository,
   PostgresEventStore,
   PostgresRunEventQuery,
   PostgresRunQueryRepository,
+  PostgresSessionRegistry,
   PostgresWorkflowStore
 } from '@slacato/infrastructure';
 import type { ErrorRequestHandler } from 'express';
@@ -27,12 +32,11 @@ import { json } from 'express';
 import { AppModule } from './app.module.js';
 import { ApiWireBoundaryMiddleware } from './common/wire/api-wire-boundary.middleware.js';
 import { WireContractInterceptor } from './common/wire/wire-contract.interceptor.js';
-import { PostgresSessionRegistry } from './modules/auth/postgres-session-registry.js';
-import { PostgresDealQueryRepository } from './modules/deals/deals.repository.js';
 import type { ProviderRuntimeDescriptor } from './modules/diagnostics/contracts.js';
 
 export interface ApiApplicationOptions {
   environment?: NodeJS.ProcessEnv;
+  readiness?: ReadinessDependencies;
 }
 
 /** Resolves the configured model names at the provider-selection composition boundary. */
@@ -124,6 +128,24 @@ export async function createApiApplication(
   const env = loadRuntimeEnv(options.environment ?? process.env);
   const providerRuntime = configuredProviderRuntime(env);
   const database = createDatabaseClient(env.DATABASE_URL, 5);
+  const provider = {
+    provider: env.AI_PROVIDER,
+    generationModel: providerRuntime.pinnedGenerationModel,
+    embeddingModel: providerRuntime.pinnedEmbeddingModel,
+    ...(env.AI_PROVIDER === 'ollama'
+      ? { ollamaBaseUrl: env.OLLAMA_BASE_URL, apiKey: env.OLLAMA_API_KEY }
+      : env.AI_PROVIDER === 'openrouter'
+        ? { apiKey: env.OPENROUTER_API_KEY }
+        : {})
+  };
+  let redis: BullMqCommandQueue | undefined;
+  let readiness: ReadinessDependencies;
+  if (options.readiness === undefined) {
+    redis = new BullMqCommandQueue(env.REDIS_URL);
+    readiness = createProductionReadinessChecks({ database, redis, provider });
+  } else {
+    readiness = options.readiness;
+  }
   const personas = new PostgresCanonicalPersonaDirectory(database);
   const workflowStore = new PostgresWorkflowStore(database);
   const workflowAccess = new PostgresDealBriefAccessControl(database);
@@ -159,7 +181,11 @@ export async function createApiApplication(
       {
         repository: dealQueries
       },
-      new PostgresBriefExportService(database)
+      new PostgresBriefExportService(database),
+      {
+        readiness,
+        ...(redis === undefined ? {} : { close: () => redis.close() })
+      }
     ),
     { bodyParser: false }
   );

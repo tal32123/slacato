@@ -3,11 +3,11 @@ import {
   Get,
   Inject,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
   Res
 } from '@nestjs/common';
 import { opaqueIdSchema } from '@slacato/contracts';
-import { logger } from '@slacato/infrastructure';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { ZodParam, ZodResponse } from '../../common/wire/zod.decorators.js';
@@ -30,6 +30,7 @@ type ExportParams = z.infer<typeof exportParamsSchema>;
 /** Serves finalized run briefs as authenticated file downloads. */
 @Controller('api/runs')
 export class ExportsController {
+  private readonly logger = new Logger(ExportsController.name);
   /** Creates a controller backed by the brief export service. */
   public constructor(@Inject(BRIEF_EXPORT_SERVICE) private readonly exports: BriefExportService) {}
 
@@ -52,7 +53,7 @@ export class ExportsController {
         format: resolved.format
       });
     } catch (_error) {
-      logger.error({
+      this.logger.error({
         event: 'brief_export_failed',
         correlationId,
         runId: resolved.runId,
@@ -66,7 +67,7 @@ export class ExportsController {
       });
     }
     if (result === undefined) {
-      logger.warn({
+      this.logger.warn({
         event: 'brief_export_denied',
         correlationId,
         status: 'denied',
@@ -91,7 +92,7 @@ export class ExportsController {
       'X-Content-Type-Options': 'nosniff',
       'X-Correlation-Id': correlationId
     });
-    logger.info({
+    this.logger.log({
       event: 'brief_export_completed',
       correlationId,
       runId: resolved.runId,

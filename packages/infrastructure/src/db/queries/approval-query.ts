@@ -10,7 +10,11 @@ import {
   approvalInboxResponseSchema,
   approvalStructuredDiffSchema
 } from '@slacato/contracts';
-import { CANONICAL_FIXTURE_COMMIT } from '@slacato/core';
+import {
+  CANONICAL_FIXTURE_COMMIT,
+  collectDealBriefReferences,
+  dealBriefSchema
+} from '@slacato/core';
 import type { DatabaseClient } from '../client.js';
 
 type ApprovalRow = Readonly<{
@@ -26,6 +30,7 @@ type ApprovalRow = Readonly<{
   category: string;
   eligible_authorities: unknown;
   available_authority: string;
+  operable: boolean;
   subject_created_at: Date | string;
   run_updated_at: Date | string;
   superseded_by_subject_id: string | null;
@@ -81,7 +86,8 @@ export class PostgresApprovalQueryRepository {
       select subject.id approval_subject_id, run.id run_id, run.version run_version, run.status run_status,
         subject.subject_hash, opportunity.id opportunity_id, opportunity.name opportunity_name, account.name account_name,
         entry.id entry_id, entry.category, entry.eligible_authorities, available.authority available_authority,
-        subject.created_at subject_created_at, run.updated_at run_updated_at, subject.superseded_by_subject_id,
+        available.operable, subject.created_at subject_created_at, run.updated_at run_updated_at,
+        subject.superseded_by_subject_id,
         (select count(*)::integer from approval_requirement_entries required where required.approval_subject_id = subject.id) required_count,
         (select count(*)::integer from approval_decisions completed where completed.approval_subject_id = subject.id) completed_count,
         decision.action decision_action, decision.authority decision_authority, decision.rationale decision_rationale,
@@ -92,7 +98,8 @@ export class PostgresApprovalQueryRepository {
       join accounts account on account.id = opportunity.account_id
       join approval_requirement_entries entry on entry.approval_subject_id = subject.id
       join lateral (
-        select approval_grant.authority from authorized_run_approval_grants approval_grant
+        select approval_grant.authority, approval_grant.operable
+        from authorized_run_approval_grants approval_grant
         where approval_grant.persona_id = ${actorId}
           and approval_grant.run_id = run.id
           and approval_grant.approval_subject_id = subject.id
@@ -110,6 +117,7 @@ export class PostgresApprovalQueryRepository {
       pending: pairs
         .filter(
           ({ row }) =>
+            row.operable &&
             row.decision_action === null &&
             row.run_status === 'awaiting_approval' &&
             row.superseded_by_subject_id === null
@@ -145,10 +153,9 @@ export class PostgresApprovalQueryRepository {
     if (subject === undefined) return undefined;
 
     const persistedPayload = approvalBriefPayloadSchema.safeParse(subject.payload);
-    if (!persistedPayload.success) return undefined;
-    const payloadEvidenceIds = persistedPayload.data.sourceEvidence.evidence.map(
-      (evidence) => evidence.evidenceId
-    );
+    const canonicalPayload = dealBriefSchema.safeParse(subject.payload);
+    if (!persistedPayload.success || !canonicalPayload.success) return undefined;
+    const payloadEvidenceIds = collectDealBriefReferences(canonicalPayload.data).evidenceIds;
     const [
       entryRows,
       authorityRows,
@@ -196,10 +203,12 @@ export class PostgresApprovalQueryRepository {
     const decisions = decisionRows.map(mapDecision);
     const decidedEntries = new Set(decidedEntryRows.map((row) => row.entry_id));
     const readableEvidenceIds = new Set(readableEvidenceRows.map(({ id }) => id));
-    const visiblePayload = projectApprovalPayloadForReadableEvidence(
-      persistedPayload.data,
-      readableEvidenceIds
+    const readsAllPayloadEvidence = payloadEvidenceIds.every((evidenceId) =>
+      readableEvidenceIds.has(evidenceId)
     );
+    const visiblePayload = readsAllPayloadEvidence
+      ? persistedPayload.data
+      : projectApprovalPayloadForReadableEvidence(persistedPayload.data, readableEvidenceIds);
     if (visiblePayload === undefined) return undefined;
     return approvalDetailResponseSchema.parse({
       sessionVersion,
@@ -227,7 +236,8 @@ export class PostgresApprovalQueryRepository {
       quorum: { completed: decisions.length, required: entryRows.length },
       capabilities: {
         canReadDeal: readableDealRows.length > 0,
-        evidenceIds: visiblePayload.sourceEvidence.evidence.map((evidence) => evidence.evidenceId)
+        canEditPayload: readableDealRows.length > 0 && readsAllPayloadEvidence,
+        evidenceIds: [...readableEvidenceIds]
       },
       createdAt: toIsoTimestamp(subject.created_at),
       supersededBySubjectId: subject.superseded_by_subject_id
@@ -236,6 +246,10 @@ export class PostgresApprovalQueryRepository {
 }
 
 const REDACTED_APPROVAL_TEXT = 'Restricted pending evidence access';
+const CLAIMLESS_OPERATIONAL_WARNING_CODES = new Set([
+  'CONVERSATION_SPECIALIST_UNAVAILABLE',
+  'STAKEHOLDER_SPECIALIST_UNAVAILABLE'
+]);
 
 /**
  * Produces a schema-valid brief that replaces generated content unless its own claims are entirely readable.
@@ -288,7 +302,9 @@ function projectApprovalPayloadForReadableEvidence(
       ...(stakeholderMapClaims.complete && payload.stakeholderMap.coverageGaps !== undefined
         ? { coverageGaps: payload.stakeholderMap.coverageGaps }
         : {}),
-      claims: stakeholderMapClaims.claims
+      ...(payload.stakeholderMap.claims === undefined
+        ? {}
+        : { claims: stakeholderMapClaims.claims })
     },
     negotiationState: negotiationClaims.complete
       ? { ...payload.negotiationState, claims: negotiationClaims.claims }
@@ -314,14 +330,24 @@ function projectApprovalPayloadForReadableEvidence(
 
   const retainedClaimIds = new Set<string>();
   collectProjectedClaimIds(projectedWithoutWarnings.data, retainedClaimIds);
+  const originalClaimIds = new Set<string>();
+  collectProjectedClaimIds(payload, originalClaimIds);
+  const retainedAllClaims =
+    originalClaimIds.size > 0 &&
+    originalClaimIds.size === retainedClaimIds.size &&
+    [...originalClaimIds].every((claimId) => retainedClaimIds.has(claimId));
   const projectedPayload = approvalBriefPayloadSchema.safeParse({
     ...projectedWithoutWarnings.data,
     confidenceAndReviewWarnings: {
-      overallConfidence: 0,
+      overallConfidence: retainedAllClaims
+        ? payload.confidenceAndReviewWarnings.overallConfidence
+        : 0,
       warnings: payload.confidenceAndReviewWarnings.warnings.filter(
         (warning) =>
-          warning.claimIds.length > 0 &&
-          warning.claimIds.every((claimId) => retainedClaimIds.has(claimId))
+          (warning.claimIds.length === 0 &&
+            CLAIMLESS_OPERATIONAL_WARNING_CODES.has(warning.code)) ||
+          (warning.claimIds.length > 0 &&
+            warning.claimIds.every((claimId) => retainedClaimIds.has(claimId)))
       )
     }
   });

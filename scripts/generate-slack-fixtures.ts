@@ -2,12 +2,15 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 import {
   type BudgetedModelGateway,
   type FixtureGenerationGateway,
   generateSlackFixtures,
   type ProviderAttemptLedger,
-  type SlackUpdate
+  type SlackGenerationCandidate,
+  type SlackUpdate,
+  slackGenerationCandidateSchema
 } from '../packages/core/src/index.js';
 import {
   createOllamaModelGateways,
@@ -115,11 +118,27 @@ function createLiveFixtureProvider(
   throw new Error(`Live Slack fixture generation does not support AI_PROVIDER=${provider}`);
 }
 
-/** Accounts for provider attempts locally while generation.json records the successful operation. */
+type GenerationProvenance = Readonly<{
+  outputMode: 'native_schema' | 'prompted_json';
+  callCount: number;
+  repairCount: number;
+  usage: Readonly<{ inputTokens: number; outputTokens: number; totalTokens: number }>;
+  requestIds?: readonly string[];
+  responseIds?: readonly string[];
+}>;
+
+/** Collects truthful provider accounting for the generation manifest without external storage. */
 class GenerationMetadataLedger implements ProviderAttemptLedger {
   private ordinal = 0;
+  private inputTokens = 0;
+  private outputTokens = 0;
+  private outputMode: GenerationProvenance['outputMode'] | undefined;
+  private validationAttempts = 0;
+  private readonly requestIds: string[] = [];
+  private readonly responseIds: string[] = [];
+
   /** Creates local metadata for the next fixture-generation provider attempt. */
-  public async beginAttempt(input: { requestedOutputTokens: number }) {
+  public async beginAttempt(input: Parameters<ProviderAttemptLedger['beginAttempt']>[0]) {
     this.ordinal += 1;
     return {
       reservationId: `fixture-reservation-${this.ordinal}`,
@@ -128,19 +147,77 @@ class GenerationMetadataLedger implements ProviderAttemptLedger {
       grantedOutputTokens: input.requestedOutputTokens
     };
   }
-  /** Defers successful-attempt recording to the durable generation manifest. */
-  public async settleAttempt(): Promise<void> {
-    /* generation.json is the durable record for this one-time operation */
+
+  /** Aggregates provider-reported token usage and response identifiers after a completed call. */
+  public async settleAttempt(
+    input: Parameters<ProviderAttemptLedger['settleAttempt']>[0]
+  ): Promise<void> {
+    const { actualInputTokens, actualOutputTokens } = input;
+    if (
+      typeof actualInputTokens !== 'number' ||
+      !Number.isInteger(actualInputTokens) ||
+      actualInputTokens <= 0 ||
+      typeof actualOutputTokens !== 'number' ||
+      !Number.isInteger(actualOutputTokens) ||
+      actualOutputTokens <= 0
+    ) {
+      throw new Error(
+        'Live Slack fixture generation requires positive provider-reported token usage'
+      );
+    }
+    this.inputTokens += actualInputTokens;
+    this.outputTokens += actualOutputTokens;
+    if (input.requestId !== undefined && input.requestId.length > 0)
+      this.requestIds.push(input.requestId);
+    if (input.responseId !== undefined && input.responseId.length > 0)
+      this.responseIds.push(input.responseId);
   }
-  /** Leaves failed attempts unrecorded so they cannot replace reviewed fixtures. */
+
+  /** Leaves failed attempts counted but does not invent usage or provider identifiers for them. */
   public async releaseAttempt(): Promise<void> {
-    /* failures are surfaced and do not replace reviewed fixtures */
+    /* The surfaced provider failure prevents fixture and manifest replacement. */
+  }
+
+  /** Records the provider output mode and cumulative schema-validation attempt count. */
+  public async recordAttemptMetadata(
+    input: Parameters<NonNullable<ProviderAttemptLedger['recordAttemptMetadata']>>[0]
+  ): Promise<void> {
+    if (this.outputMode !== undefined && this.outputMode !== input.outputMode) {
+      throw new Error('Provider output mode changed during Slack fixture generation');
+    }
+    this.outputMode = input.outputMode;
+    this.validationAttempts = Math.max(this.validationAttempts, input.validationAttempts);
+  }
+
+  /** Returns complete live provenance only after a successful provider call and validation. */
+  public provenance(): GenerationProvenance {
+    if (
+      this.ordinal <= 0 ||
+      this.inputTokens <= 0 ||
+      this.outputTokens <= 0 ||
+      this.outputMode === undefined
+    ) {
+      throw new Error('Live Slack fixture generation did not produce complete provider provenance');
+    }
+    return {
+      outputMode: this.outputMode,
+      callCount: this.ordinal,
+      repairCount: Math.max(0, this.validationAttempts - 1),
+      usage: {
+        inputTokens: this.inputTokens,
+        outputTokens: this.outputTokens,
+        totalTokens: this.inputTokens + this.outputTokens
+      },
+      ...(this.requestIds.length === 0 ? {} : { requestIds: [...this.requestIds] }),
+      ...(this.responseIds.length === 0 ? {} : { responseIds: [...this.responseIds] })
+    };
   }
 }
 
 /** Generates, validates, and records Slack fixtures using an explicitly configured live provider. */
 async function main(): Promise<void> {
-  const provider = createLiveFixtureProvider(process.env, new GenerationMetadataLedger());
+  const attemptLedger = new GenerationMetadataLedger();
+  const provider = createLiveFixtureProvider(process.env, attemptLedger);
   const root = resolve(process.cwd(), 'fixtures/cato');
   const opportunities = parseRows(join(root, 'salesforce/opportunities.tsv'));
   const summaries = parseRows(join(root, 'gong/gong_call_summaries.tsv'));
@@ -152,11 +229,14 @@ async function main(): Promise<void> {
       latestByOpportunity.set(opportunityId, callDate);
   }
   let promptMaterial = '';
+  let schemaMaterial = '';
+  let validatedCandidates: readonly SlackGenerationCandidate[] = [];
   const gateway: FixtureGenerationGateway = {
     /** Sends the fixture prompt through the live gateway with bounded retries and durable attempt metadata. */
     async generateObject(request) {
       promptMaterial = JSON.stringify(request.messages);
-      return provider.modelGateway.generateObject({
+      schemaMaterial = JSON.stringify(z.toJSONSchema(request.schema, { io: 'input' }));
+      const result = await provider.modelGateway.generateObject({
         ...request,
         durableAttempt: {
           runScope: 'fixture-generation-v1',
@@ -165,6 +245,8 @@ async function main(): Promise<void> {
         },
         limits: { maxCalls: 2, maxSchemaRepairs: 1, maxTransportRetries: 0, deadlineMs: 30_000 }
       });
+      validatedCandidates = slackGenerationCandidateSchema.array().parse(result.value);
+      return result;
     }
   };
   const input = {
@@ -178,19 +260,37 @@ async function main(): Promise<void> {
   };
   const updates = await generateSlackFixtures(input, gateway);
   const output = tsv(updates);
+  const provenance = attemptLedger.provenance();
   const promptHash = sha256(promptMaterial);
+  const schemaHash = sha256(schemaMaterial);
+  const sourceHash = sha256(JSON.stringify(input));
   const outputHash = sha256(output);
   const generationPath = join(root, 'slack/generation.json');
   const generatedAt = new Date().toISOString();
+  const rowContextKinds: Record<string, SlackGenerationCandidate['contextKinds']> = {};
+  for (const candidate of validatedCandidates) {
+    if (Object.hasOwn(rowContextKinds, candidate.updateId)) {
+      throw new Error(`Generated Slack updates contain duplicate update ID ${candidate.updateId}`);
+    }
+    rowContextKinds[candidate.updateId] = candidate.contextKinds;
+  }
+  if (Object.keys(rowContextKinds).length !== updates.length) {
+    throw new Error('Generated Slack row-level context coverage is incomplete');
+  }
   const coverage = Object.fromEntries(
-    input.opportunities.map((opportunity) => [
-      opportunity.opportunityId,
-      {
-        count: updates.filter((row) => row.opportunityId === opportunity.opportunityId).length,
-        contextKinds: ['reinforcing_fact', 'missing_context', 'ambiguity_or_conflict'],
-        chronologyValid: true
-      }
-    ])
+    input.opportunities.map((opportunity) => {
+      const candidates = validatedCandidates.filter(
+        (candidate) => candidate.opportunityId === opportunity.opportunityId
+      );
+      return [
+        opportunity.opportunityId,
+        {
+          count: candidates.length,
+          contextKinds: [...new Set(candidates.flatMap((candidate) => candidate.contextKinds))],
+          chronologyValid: true
+        }
+      ];
+    })
   );
   writeFileSync(join(root, 'slack/account_team_updates.tsv'), output);
   writeFileSync(
@@ -201,7 +301,11 @@ async function main(): Promise<void> {
         model: provider.model,
         sourceCommit: PINNED_COMMIT,
         promptHash,
+        schemaHash,
+        sourceHash,
         outputHash,
+        ...provenance,
+        rowContextKinds,
         generatedAt,
         reviewStatus: 'reviewed',
         validation: { passed: true, syntheticNotices: true, coverage }

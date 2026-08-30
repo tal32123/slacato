@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import {
   type DealListResponse,
   type DealWorkspaceView,
@@ -18,7 +18,7 @@ const dealParamsSchema = z.object({ opportunityId: opaqueIdSchema }).strict();
 @Controller('api/deals')
 export class DealsController {
   /** Initializes deal routes with their application service. */
-  public constructor(private readonly deals: DealsService) {}
+  public constructor(@Inject(DealsService) private readonly deals: DealsService) {}
 
   /** Lists the deals visible to the current principal. */
   @Get()

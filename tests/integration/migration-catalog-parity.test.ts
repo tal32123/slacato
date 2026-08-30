@@ -2,8 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { execFile as execFileCallback } from 'node:child_process';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres, { type Sql } from 'postgres';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getTableConfig } from '../../packages/infrastructure/node_modules/drizzle-orm/pg-core/utils.js';
@@ -18,15 +16,29 @@ import {
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = Array.from({ length: 18 }, (_, index) =>
-  resolve(process.cwd(), 'drizzle', `${String(index).padStart(4, '0')}_${[
-    'initial', 'delivery_claim_leases', 'causal_command_consumption', 'approval_snapshot_linkage',
-    'persisted_run_budgets', 'active_causal_command', 'restricted_opportunity_grants',
-    'dead_letter_claim_recovery', 'provider_attempt_ledger', 'run_budget_deadline', 'evidence_provenance',
-    'persona_provenance', 'authorized_retrieval', 'manifest_replay', 'durable_brief_approvals',
-    'immutable_approval_replays', 'append_only_run_observability', 'canonical_grants_sessions'
-  ][index]}.sql`)
-);
+const migrationFiles = [
+  '0000_initial',
+  '0001_delivery_claim_leases',
+  '0002_causal_command_consumption',
+  '0003_approval_snapshot_linkage',
+  '0004_persisted_run_budgets',
+  '0005_active_causal_command',
+  '0006_restricted_opportunity_grants',
+  '0007_dead_letter_claim_recovery',
+  '0008_provider_attempt_ledger',
+  '0009_run_budget_deadline',
+  '0010_evidence_provenance',
+  '0011_persona_provenance',
+  '0012_authorized_retrieval',
+  '0013_manifest_replay',
+  '0014_durable_brief_approvals',
+  '0015_immutable_approval_replays',
+  '0016_append_only_run_observability',
+  '0017_canonical_grants_sessions',
+  '0018_run_cancellation',
+  '0019_remove_token_budgets',
+  '0020_canonical_authorization_views'
+].map((migration) => resolve(process.cwd(), 'drizzle', `${migration}.sql`));
 const temporaryDatabases: string[] = [];
 const execFile = promisify(execFileCallback);
 
@@ -130,7 +142,10 @@ describe('durable migration catalog', () => {
     try {
       await applyMigrations(clean, migrationFiles);
       await applyMigrations(upgrade, migrationFiles.slice(0, 8));
-      await migrate(drizzle(runner), { migrationsFolder: resolve(process.cwd(), 'drizzle') });
+      await execFile('pnpm', ['db:migrate'], {
+        cwd: process.cwd(),
+        env: { ...process.env, DATABASE_URL: urlForDatabase(runnerName) }
+      });
       await upgrade`insert into personas (id, display_name, role) values ('legacy-user', 'Legacy user', 'seller')`;
       await upgrade`insert into accounts (id, name) values ('legacy-account', 'Legacy account')`;
       await upgrade`insert into opportunities (id, account_id, name) values ('legacy-opportunity', 'legacy-account', 'Legacy opportunity')`;
@@ -150,6 +165,23 @@ describe('durable migration catalog', () => {
       ]);
       expect(cleanCatalog).toEqual(upgradeCatalog);
       expect(cleanCatalog).toEqual(runnerCatalog);
+      const tokenBudgetColumns = (cleanCatalog.columns as readonly {
+        table_name: string; column_name: string; nullable: boolean
+      }[]).filter((column) =>
+        column.table_name === 'run_budgets' &&
+        (column.column_name === 'max_input_tokens' || column.column_name === 'max_output_tokens')
+      );
+      expect(tokenBudgetColumns.map(({ column_name, nullable }) => ({ column_name, nullable }))).toEqual([
+        { column_name: 'max_input_tokens', nullable: true },
+        { column_name: 'max_output_tokens', nullable: true }
+      ]);
+      const tokenBudgetConstraints = (cleanCatalog.constraints as readonly {
+        table_name: string; definition: string
+      }[]).filter((constraint) => constraint.table_name === 'run_budgets')
+        .map((constraint) => constraint.definition)
+        .join(' ');
+      expect(tokenBudgetConstraints).not.toContain('max_input_tokens');
+      expect(tokenBudgetConstraints).not.toContain('max_output_tokens');
 
       expect((cleanCatalog.columns as readonly {
         table_name: string; column_name: string; type: string; typmod: number; default: string | null;
@@ -246,18 +278,18 @@ describe('durable migration catalog', () => {
       const secondDatabase = createDatabaseClient(url, 1);
       try {
         await expect(new PostgresProviderAttemptLedger(firstDatabase).assertRunBudget({
-          scope: 'legacy-deadline-run', maxCalls: 3, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 3_000
+          scope: 'legacy-deadline-run', maxCalls: 3, deadlineMs: 3_000
         })).rejects.toThrow('does not match');
         expect(await sql<{ deadline_ms: number | null }[]>`select deadline_ms from run_budgets where run_id = 'legacy-deadline-run'`).toEqual([{ deadline_ms: null }]);
 
         const attempts = await Promise.allSettled([
-          new PostgresProviderAttemptLedger(firstDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 1_000 }),
-          new PostgresProviderAttemptLedger(secondDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: 2_000 })
+          new PostgresProviderAttemptLedger(firstDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, deadlineMs: 1_000 }),
+          new PostgresProviderAttemptLedger(secondDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, deadlineMs: 2_000 })
         ]);
         expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1);
         const [{ deadline_ms: adoptedDeadline }] = await sql<{ deadline_ms: number }[]>`select deadline_ms from run_budgets where run_id = 'legacy-deadline-run'`;
         expect([1_000, 2_000]).toContain(adoptedDeadline);
-        await new PostgresProviderAttemptLedger(firstDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, maxInputTokens: 100, maxOutputTokens: 20, deadlineMs: adoptedDeadline });
+        await new PostgresProviderAttemptLedger(firstDatabase).assertRunBudget({ scope: 'legacy-deadline-run', maxCalls: 2, deadlineMs: adoptedDeadline });
       } finally {
         await Promise.all([firstDatabase.close(), secondDatabase.close()]);
       }
@@ -307,6 +339,8 @@ describe('durable migration catalog', () => {
     expect(runIndexes.find((entry) => entry.config.name === 'runs_idempotency_key_uq')?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['idempotency_key']);
     expect(runIndexes.find((entry) => entry.config.name === 'runs_one_active_opportunity_uq')?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['opportunity_id']);
     expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens', 'deadlineMs', 'deadlineAt']));
+    expect(runBudgets.maxInputTokens.notNull).toBe(false);
+    expect(runBudgets.maxOutputTokens.notNull).toBe(false);
     const reservationConstraint = getTableConfig(runBudgetReservations).uniqueConstraints.find((entry) => entry.name === 'run_budget_reservations_generation_operation_ordinal_uq');
     expect(reservationConstraint?.columns.map((column) => column.name)).toEqual(['run_id', 'logical_generation_id', 'operation', 'ordinal']);
     expect(Object.keys(runBudgetReservations)).toEqual(expect.arrayContaining([

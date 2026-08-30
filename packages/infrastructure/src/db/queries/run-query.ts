@@ -121,7 +121,7 @@ export class PostgresRunQueryRepository {
         >`select max((payload->>'evidenceCount')::integer) evidence_count from trace_spans where run_id = ${runId} and kind = 'evidence_retrieval'`,
         this.database.sql<
           { retry_count: number | null }[]
-        >`select coalesce(sum(greatest(validation_attempts - 1, 0)), 0)::integer retry_count from generation_attempts where run_id = ${runId}`,
+        >`select coalesce(sum(validation_attempts), 0)::integer retry_count from generation_attempts where run_id = ${runId}`,
         this.database.sql<{ present: boolean }[]>`select exists(
         select 1 from workflow_checkpoints where run_id = ${runId} and step like 'validation:%' and payload->>'status' = 'completed'
         union all select 1 from approval_subjects where run_id = ${runId}

@@ -1,11 +1,10 @@
-import { Controller, Inject, Post } from '@nestjs/common';
+import { Controller, Inject, Logger, Post } from '@nestjs/common';
 import {
   type ApprovalDecisionRequest,
   approvalDecisionRequestSchema,
   approvalDecisionResultSchema
 } from '@slacato/contracts';
 import type { DecideApproval } from '@slacato/core';
-import { logger } from '@slacato/infrastructure';
 import { toHttpError } from '../../common/http/to-http-error.js';
 import { ZodBody, ZodResponse } from '../../common/wire/zod.decorators.js';
 import type { AuthenticatedPrincipal } from '../auth/contracts.js';
@@ -19,6 +18,7 @@ type DecisionInput = ApprovalDecisionRequest;
 /** Executes authenticated approval decisions and emits their operational outcome. */
 @Controller('api/approvals')
 export class ApprovalsController {
+  private readonly logger = new Logger(ApprovalsController.name);
   /** Initializes the controller with the approval decision use case. */
   public constructor(@Inject(DECIDE_APPROVAL) private readonly decideApproval: DecideApproval) {}
 
@@ -34,7 +34,7 @@ export class ApprovalsController {
     const startedAt = Date.now();
     try {
       const result = await this.decideApproval.execute({ ...input, actorId });
-      logger.info({
+      this.logger.log({
         event: 'approval_decision_completed',
         correlationId,
         runId: input.runId,
@@ -50,7 +50,7 @@ export class ApprovalsController {
         typeof candidate.code === 'string' && /^[A-Z][A-Z0-9_]{0,127}$/.test(candidate.code)
           ? candidate.code
           : 'APPROVAL_DECISION_FAILED';
-      logger.error({
+      this.logger.error({
         event: 'approval_decision_failed',
         correlationId,
         runId: input.runId,
@@ -58,6 +58,7 @@ export class ApprovalsController {
         status: 'failed',
         durationMs: Date.now() - startedAt,
         retryCount: 0,
+        errorMessage: error instanceof Error ? error.message : 'Unknown approval decision error',
         errorCode
       });
       return toHttpError(error);

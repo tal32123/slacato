@@ -13,12 +13,35 @@ const ledger: ProviderAttemptLedger = {
 };
 
 describe('OpenRouter transport', () => {
-  it('preserves a safe provider error code for actionable diagnostics', () => {
-    expect(openRouterDiagnosticCode(400, JSON.stringify({
-      error: { code: 400, message: 'Provider returned error', metadata: {
-        raw: JSON.stringify({ error: { message: 'Invalid JSON schema: unsupported format' } })
-      } }
-    }))).toBe('openrouter_400_invalid_json_schema_unsupported_format');
+  it('keeps provider response text out of diagnostic codes', () => {
+    const responseBody = JSON.stringify({
+      error: {
+        code: 400,
+        message: 'Request rejected for customer_secret_123',
+        metadata: {
+          raw: JSON.stringify({
+            error: { message: 'Invalid customer_secret_123 JSON schema' }
+          })
+        }
+      }
+    });
+
+    const diagnosticCode = openRouterDiagnosticCode(400, responseBody);
+
+    expect(diagnosticCode).toBe('openrouter_client_error');
+    expect(diagnosticCode).not.toContain('customer_secret_123');
+  });
+
+  it.each([
+    [401, 'openrouter_authorization'],
+    [403, 'openrouter_authorization'],
+    [429, 'openrouter_rate_limited'],
+    [503, 'openrouter_server_error'],
+    [undefined, 'openrouter_api_error']
+  ] as const)('classifies status %s as %s', (statusCode, expectedCode) => {
+    expect(openRouterDiagnosticCode(statusCode, '{"error":{"message":"opaque"}}')).toBe(
+      expectedCode
+    );
   });
 
   it('uses strict JSON schema generation and the embeddings endpoint through one provider', async () => {

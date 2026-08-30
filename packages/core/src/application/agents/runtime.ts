@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_LIST_ITEMS } from '../../domain/briefs/schema.js';
 import { DomainValidationError } from '../../domain/shared/errors.js';
 import { buildAgentPrompt, pruneAgentEvidence } from '../briefs/prompts.js';
 import type { BudgetedModelGateway } from '../model/contracts.js';
@@ -66,6 +67,30 @@ function canonicalizeCodeOwnedFields<Value>(
   return canonical as Value;
 }
 
+/** Extracts bounded schema-owned review codes without retaining claims, evidence, or citations. */
+function artifactReviewWarningCodes(value: unknown): readonly string[] {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return [];
+  const artifact = value as Record<string, unknown>;
+  const confidence = artifact.confidenceAndReviewWarnings;
+  const warningCandidates: readonly unknown[] = Array.isArray(artifact.reviewWarnings)
+    ? artifact.reviewWarnings
+    : confidence !== null &&
+        typeof confidence === 'object' &&
+        !Array.isArray(confidence) &&
+        Array.isArray((confidence as Record<string, unknown>).warnings)
+      ? ((confidence as Record<string, unknown>).warnings as readonly unknown[])
+      : [];
+  const codes: string[] = [];
+  for (const candidate of warningCandidates) {
+    if (codes.length === MAX_LIST_ITEMS) break;
+    if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+    const code = (candidate as Record<string, unknown>).code;
+    if (typeof code === 'string' && code.length <= 128 && /^[A-Z][A-Z0-9_]*$/.test(code))
+      codes.push(code);
+  }
+  return codes;
+}
+
 /** Builds an evidence-bounded prompt, generates an artifact, and applies its deterministic validation. */
 export async function runAgent<Value>(
   input: Readonly<{
@@ -122,6 +147,7 @@ export async function runAgent<Value>(
   ) as z.ZodType<Value>;
   const generation = await input.gateway.generateObject({
     schema,
+    attemptWarnings: artifactReviewWarningCodes,
     messages: prompt.messages,
     operation: input.operation,
     limits: input.context.generation.limits,

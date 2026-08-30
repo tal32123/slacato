@@ -3,6 +3,7 @@ import {
   type ApprovalAuthority,
   type ApprovalRequirement,
   type ApprovalRequirementInput,
+  AuthorizationDeniedError,
   CANONICAL_FIXTURE_COMMIT,
   collectDealBriefReferences,
   type DealBrief,
@@ -83,7 +84,13 @@ export class PostgresDealBriefAccessControl implements DealBriefAccessControl {
 
   /** Validates an edited approval payload and determines its approval requirement. */
   public async validateApprovalEdit(
-    input: Readonly<{ actorId: string; opportunityId: string; runId: string; payload: DealBrief }>
+    input: Readonly<{
+      actorId: string;
+      opportunityId: string;
+      runId: string;
+      originalPayload: DealBrief;
+      payload: DealBrief;
+    }>
   ): Promise<ApprovalRequirement> {
     type EvidenceRow = Readonly<{
       citation_id: string;
@@ -131,6 +138,12 @@ export class PostgresDealBriefAccessControl implements DealBriefAccessControl {
     const manifestEvidenceByCitationId = new Map(
       readableManifestEvidence.map((entry) => [entry.citation_id, entry])
     );
+    const originalEvidenceIds = collectDealBriefReferences(input.originalPayload).evidenceIds;
+    const readableEvidenceIds = new Set(
+      readableManifestEvidence.map((entry) => entry.evidence_version_id)
+    );
+    if (originalEvidenceIds.some((evidenceId) => !readableEvidenceIds.has(evidenceId)))
+      throw new AuthorizationDeniedError('Approval edit denied');
     for (const citation of collectDealBriefReferences(input.payload).citations) {
       const manifestEntry = manifestEvidenceByCitationId.get(citation.id);
       if (

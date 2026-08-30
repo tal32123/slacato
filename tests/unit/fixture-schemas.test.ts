@@ -101,7 +101,14 @@ describe('canonical fixture schemas', () => {
     try {
       cpSync('fixtures/cato', root, { recursive: true });
       const slackPath = join(root, 'slack/account_team_updates.tsv');
-      const changedSlack = readFileSync(slackPath, 'utf8').replace('2026-04-25', '2026-04-01');
+      const [header, firstRow, ...remainingRows] = readFileSync(slackPath, 'utf8')
+        .trimEnd()
+        .split(/\r?\n/);
+      if (header === undefined || firstRow === undefined)
+        throw new Error('Slack chronology fixture is empty');
+      const fields = firstRow.split('\t');
+      fields[3] = '2020-01-01';
+      const changedSlack = `${[header, fields.join('\t'), ...remainingRows].join('\n')}\n`;
       writeFileSync(slackPath, changedSlack);
       const generationPath = join(root, 'slack/generation.json');
       const generation = JSON.parse(readFileSync(generationPath, 'utf8')) as Record<string, unknown>;
@@ -120,6 +127,53 @@ describe('canonical fixture schemas', () => {
       const generation = JSON.parse(readFileSync(generationPath, 'utf8')) as Record<string, unknown>;
       writeFileSync(generationPath, JSON.stringify({ ...generation, outputHash: '0'.repeat(64) }));
       expect(() => parseFixtureSet(root)).toThrow(/reviewed Slack fixture hash/i);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('validates live provider provenance and row-level context coverage', () => {
+    const root = mkdtempSync(join(tmpdir(), 'slacato-fixture-live-provenance-'));
+    try {
+      cpSync('fixtures/cato', root, { recursive: true });
+      const generationPath = join(root, 'slack/generation.json');
+      const generation = JSON.parse(readFileSync(generationPath, 'utf8')) as Record<string, unknown>;
+      const slackLines = readFileSync(join(root, 'slack/account_team_updates.tsv'), 'utf8').trim().split(/\r?\n/).slice(1);
+      const rowContextKinds = Object.fromEntries(slackLines.map((line) => [
+        line.split('\t')[0],
+        ['reinforcing_fact']
+      ]));
+      const liveGeneration = {
+        ...generation,
+        outputMode: 'native_schema',
+        callCount: 2,
+        repairCount: 1,
+        usage: { inputTokens: 120, outputTokens: 60, totalTokens: 180 },
+        requestIds: ['request-1'],
+        responseIds: ['response-1'],
+        schemaHash: '1'.repeat(64),
+        sourceHash: '2'.repeat(64),
+        rowContextKinds
+      };
+      writeFileSync(generationPath, JSON.stringify(liveGeneration));
+      expect(() => parseFixtureSet(root)).not.toThrow();
+
+      writeFileSync(generationPath, JSON.stringify({
+        ...liveGeneration,
+        usage: { inputTokens: 0, outputTokens: 60, totalTokens: 60 }
+      }));
+      expect(() => parseFixtureSet(root)).toThrow(/token/i);
+
+      const [firstUpdateId, ...remainingUpdateIds] = Object.keys(rowContextKinds);
+      expect(firstUpdateId).toBeDefined();
+      writeFileSync(generationPath, JSON.stringify({
+        ...liveGeneration,
+        rowContextKinds: Object.fromEntries(remainingUpdateIds.map((updateId) => [
+          updateId,
+          rowContextKinds[updateId]
+        ]))
+      }));
+      expect(() => parseFixtureSet(root)).toThrow(/row-level context/i);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

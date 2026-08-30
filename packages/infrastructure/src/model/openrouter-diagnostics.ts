@@ -1,33 +1,25 @@
-/** Extracts only a short identifier-safe provider reason; prompts and response bodies never cross the log boundary. */
+const OPENROUTER_DIAGNOSTIC_CODES = {
+  apiError: 'openrouter_api_error',
+  authorization: 'openrouter_authorization',
+  clientError: 'openrouter_client_error',
+  rateLimited: 'openrouter_rate_limited',
+  serverError: 'openrouter_server_error'
+} as const;
+
+/** Maps trusted HTTP status classes to locally owned codes; provider response text stays opaque. */
 export function openRouterDiagnosticCode(
   statusCode: number | undefined,
-  responseBody: string | undefined
+  _responseBody: string | undefined
 ): string {
-  let reason = 'api_error';
-  try {
-    const parsed = JSON.parse(responseBody ?? '') as {
-      error?: { message?: unknown; metadata?: { raw?: unknown } };
-    };
-    const raw = parsed.error?.metadata?.raw;
-    let nestedMessage: unknown;
-    if (typeof raw === 'string') {
-      try {
-        nestedMessage = (JSON.parse(raw) as { error?: { message?: unknown } }).error?.message;
-      } catch {
-        /* unstructured provider metadata is never logged */
-      }
-    }
-    const message = nestedMessage ?? parsed.error?.message;
-    if (typeof message === 'string') {
-      const slug = message
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '')
-        .slice(0, 96);
-      if (slug.length > 0) reason = slug;
-    }
-  } catch {
-    /* malformed provider bodies remain opaque */
+  if (statusCode === 401 || statusCode === 403) {
+    return OPENROUTER_DIAGNOSTIC_CODES.authorization;
   }
-  return `openrouter_${statusCode ?? 'unknown'}_${reason}`.slice(0, 128);
+  if (statusCode === 429) return OPENROUTER_DIAGNOSTIC_CODES.rateLimited;
+  if (statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
+    return OPENROUTER_DIAGNOSTIC_CODES.clientError;
+  }
+  if (statusCode !== undefined && statusCode >= 500 && statusCode < 600) {
+    return OPENROUTER_DIAGNOSTIC_CODES.serverError;
+  }
+  return OPENROUTER_DIAGNOSTIC_CODES.apiError;
 }

@@ -67,14 +67,14 @@ test('lists only the signed persona authorized deals and opens the source-snapsh
   await expect(page.getByRole('table', { name: 'Recommended actions' })).toBeVisible();
   await expect(page.getByText('Account-team update impact').first()).toBeVisible();
   await expect(page.getByRole('button', {
-    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-1001-02/
+    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
   }).first()).toBeVisible();
   const sourceEvidence = page.getByRole('heading', { name: 'Source Evidence', exact: true }).locator('..').locator('..');
-  await expect(sourceEvidence.getByText('source=slack/account_team_updates.tsv, update_id=SLK-1001-02', { exact: true })).toHaveCount(1);
+  await expect(sourceEvidence.getByText('source=slack/account_team_updates.tsv, update_id=SLK-9002', { exact: true })).toHaveCount(1);
   await expectNoHorizontalOverflow(page);
 
   const historyCitation = page.getByRole('button', {
-    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-1001-02/
+    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
   }).first();
   await openCitation(page, historyCitation);
   await page.getByRole('button', { name: 'Close evidence detail' }).click();
@@ -114,14 +114,14 @@ test('desktop evidence uses one non-modal complementary region with replace and 
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
 
   const first = page.getByRole('button', {
-    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-1001-02/
+    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
   }).first();
   await openCitation(page, first);
 
   const detail = page.getByRole('complementary', { name: 'Evidence detail' });
   await expect(detail).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(detail.getByText('slack:SLK-1001-02:0', { exact: true })).toBeVisible();
+  await expect(detail.getByText('slack:SLK-9002:0', { exact: true })).toBeVisible();
   await expect(detail.getByText('slack/account_team_updates.tsv', { exact: true })).toBeVisible();
   await expect(detail).toBeFocused();
   const detailBox = await detail.boundingBox();
@@ -165,7 +165,7 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
   await expect(page.getByRole('list', { name: 'Recommended actions' })).toBeVisible();
 
   const citation = page.getByRole('button', {
-    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-1001-02/
+    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
   }).first();
   await openCitation(page, citation);
   const sheet = page.getByRole('dialog', { name: 'Evidence detail' });
@@ -204,7 +204,7 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
   await expect(protectedShell).toHaveAttribute('inert', '');
   await protectedShell.evaluate((element) => { (element as HTMLElement).inert = false; });
 
-  await page.goto('/deals/OPP-1001?evidence=slack%3ASLK-1001-02%3A0');
+  await page.goto('/deals/OPP-1001?evidence=slack%3ASLK-9002%3A0');
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toHaveCount(0);
@@ -218,7 +218,7 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
 test('uses a modal rather than shrinking the main column when a desktop-width viewport cannot fit both regions', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
-  const citation = page.getByRole('button', { name: /source=slack\/account_team_updates\.tsv, update_id=SLK-1001-02/ }).first();
+  const citation = page.getByRole('button', { name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/ }).first();
   await citation.click();
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toHaveCount(0);
@@ -244,7 +244,7 @@ test('preserves complete responsive records at 320px and a short 200%-zoom equiv
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 640, height: 320 });
-  const citation = page.getByRole('button', { name: /source=slack\/account_team_updates\.tsv, update_id=SLK-1001-02/ }).first();
+  const citation = page.getByRole('button', { name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/ }).first();
   await citation.click();
   const sheet = page.getByRole('dialog', { name: 'Evidence detail' });
   await expect(sheet).toBeVisible();

@@ -3,13 +3,13 @@ import { generateSlackFixtures, type FixtureGenerationGateway, type SlackGenerat
 
 const candidates: SlackGenerationCandidate[] = [
   {
-    updateId: 'SLK-1001-A', opportunityId: 'OPP-1001', accountId: 'ACC-2001', updateDate: '2026-04-26',
+    updateId: 'SLK-TEST-A', opportunityId: 'OPP-1001', accountId: 'ACC-2001', updateDate: '2026-04-26',
     channel: 'account-northstar', authorRole: 'Account Owner', syntheticNotice: true, sourceAccessLevel: 'standard',
     updateText: 'The owner matrix now has named leads, but regional sign-off remains unclear.',
     contextKinds: ['reinforcing_fact', 'ambiguity_or_conflict']
   },
   {
-    updateId: 'SLK-1001-B', opportunityId: 'OPP-1001', accountId: 'ACC-2001', updateDate: '2026-04-27',
+    updateId: 'SLK-TEST-B', opportunityId: 'OPP-1001', accountId: 'ACC-2001', updateDate: '2026-04-27',
     channel: 'account-northstar', authorRole: 'Solutions Lead', syntheticNotice: true, sourceAccessLevel: 'standard',
     updateText: 'The team still needs a confirmed payment schedule before the signature packet.',
     contextKinds: ['missing_context']

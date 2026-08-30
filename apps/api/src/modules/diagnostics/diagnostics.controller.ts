@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import type { DemoDiagnosticsResponse } from '@slacato/contracts';
 import { demoDiagnosticsResponseSchema } from '@slacato/contracts';
 import { ZodResponse } from '../../common/wire/zod.decorators.js';
@@ -10,7 +10,9 @@ import { DiagnosticsService } from './diagnostics.service.js';
 @Controller('api/diagnostics')
 export class DiagnosticsController {
   /** Initializes the controller with its diagnostics service. */
-  public constructor(private readonly diagnostics: DiagnosticsService) {}
+  public constructor(
+    @Inject(DiagnosticsService) private readonly diagnostics: DiagnosticsService
+  ) {}
 
   /** Returns runtime health and approval authority diagnostics visible to the current principal. */
   @Get()

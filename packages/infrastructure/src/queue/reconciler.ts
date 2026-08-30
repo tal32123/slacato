@@ -1,5 +1,7 @@
-import type { CommandQueue, WorkflowCommand } from '@slacato/core';
+import { type CommandQueue, DomainConflictError, type WorkflowCommand } from '@slacato/core';
 import type { DatabaseClient } from '../db/client.js';
+import { persistTraceProjection } from '../db/repositories/workflow-store.js';
+import { projectWorkflowTrace } from '../db/repositories/workflow-trace-projector.js';
 import type { CommandInspection } from './bullmq.js';
 
 /** Queue capabilities needed to recover every live-command state without stranding a durable claim. */
@@ -205,9 +207,45 @@ export class PostgresCommandReconciler {
       idempotencyKey: row.id
     };
     await this.deadLetters.publish(command);
-    await this.database
-      .sql`update outbox_commands set status = 'dead_letter', claim_owner = null, claim_token = null, claim_expires_at = null
-      where id = ${row.id} and status = 'dead_letter_claimed' and claim_token = ${row.claim_token}`;
+    await this.acknowledgeDeadLetter(row);
+  }
+
+  /** Atomically acknowledges the dead letter and fails only the still-active run that owns it. */
+  private async acknowledgeDeadLetter(row: OutboxRow): Promise<void> {
+    await this.database.sql.begin(async (sql) => {
+      const acknowledged = await sql<
+        { run_id: string }[]
+      >`update outbox_commands set status = 'dead_letter', claim_owner = null, claim_token = null, claim_expires_at = null
+        where id = ${row.id} and status = 'dead_letter_claimed' and claim_token = ${row.claim_token}
+        returning run_id`;
+      const runId = acknowledged[0]?.run_id;
+      if (runId === undefined) return;
+      const failed = await sql<
+        { version: number }[]
+      >`update runs set status = 'failed', version = version + 1, updated_at = now()
+        where id = ${runId}
+          and status in ('created', 'retrieving', 'specialists_running', 'synthesizing', 'validating', 'awaiting_approval', 'finalizing')
+        returning version`;
+      const version = failed[0]?.version;
+      if (version === undefined) return;
+      const failureProjection = projectWorkflowTrace({
+        type: 'failed',
+        runId,
+        version,
+        reason: 'processor_attempts_exhausted'
+      });
+      await persistTraceProjection(sql, failureProjection);
+      const reasonCode = failureProjection.failureReasonCode;
+      if (reasonCode === undefined)
+        throw new DomainConflictError('Failure trace has no diagnostic code');
+      await sql`select pg_advisory_xact_lock(hashtext(${`run-events:${runId}`}))`;
+      const payload = JSON.stringify({ version, reasonCode, terminal: true });
+      await sql`insert into run_events (id, run_id, sequence, type, version, payload, created_at)
+        select ${`event_${crypto.randomUUID()}`}, ${runId}, coalesce(max(sequence), 0) + 1, 'fail', 1,
+          ${payload}::jsonb, now()
+        from run_events where run_id = ${runId}`;
+      await sql`select pg_notify('slacato_run_events', ${runId})`;
+    });
   }
 
   /** Called by the eventual command processor only after its idempotent business transition commits. */

@@ -2,31 +2,31 @@
   "version": 1,
   "cases": [
     {
-      "id": "northstar-payment-schedule",
+      "id": "northstar-owner-matrix-success-metrics",
       "userId": "USR-5001",
       "accountId": "ACC-2001",
       "opportunityId": "OPP-1001",
-      "query": "written payment schedule information gap signature packet",
+      "query": "final owner matrix success metrics client stakeholders",
       "limit": 5,
-      "relevantEvidenceIds": ["slack:SLK-1001-02:0", "gong_transcript:CALL-008:transcript:0"]
+      "relevantEvidenceIds": ["slack:SLK-9002:0", "gong_transcript:CALL-008:transcript:0"]
     },
     {
-      "id": "meridian-proof-remediation",
+      "id": "meridian-night-shift-training",
       "userId": "USR-5002",
       "accountId": "ACC-2002",
       "opportunityId": "OPP-1002",
-      "query": "reporting export retest incident owner map proof exit schedule",
+      "query": "training gaps night-shift staff troubleshooting workflows",
       "limit": 5,
-      "relevantEvidenceIds": ["slack:SLK-1002-02:0", "gong_transcript:CALL-018:transcript:0"]
+      "relevantEvidenceIds": ["slack:SLK-9005:0", "gong_transcript:CALL-018:transcript:0"]
     },
     {
-      "id": "eclipse-approval-routing",
+      "id": "eclipse-discount-risk-routing",
       "userId": "USR-5005",
       "accountId": "ACC-2003",
       "opportunityId": "OPP-1003",
-      "query": "discount liability restricted source approval before recommendation",
+      "query": "aggressive discounting risk mitigation final negotiations approval",
       "limit": 5,
-      "relevantEvidenceIds": ["slack:SLK-1003-01:0", "policy:deal-desk-policy:OPP-1003:1"]
+      "relevantEvidenceIds": ["slack:SLK-9009:0", "policy:deal-desk-policy:OPP-1003:1"]
     },
     {
       "id": "eclipse-unauthorized-no-leakage",

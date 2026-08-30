@@ -540,7 +540,12 @@ describe.sequential('authorized raw run SSE', () => {
     expect(spans.find(({ kind }) => kind === 'authorization_lookup')?.data).not.toHaveProperty('resultIds');
     expect(spans.filter(({ kind }) => kind === 'specialist_attempt').map(({ step }) => step).sort()).toEqual(['commercial', 'conversation', 'stakeholder']);
     expect(spans.filter(({ kind, step }) => kind === 'model_call' && step === 'strategy')).toHaveLength(2);
-    expect(spans).toContainEqual(expect.objectContaining({ kind: 'repair', step: 'strategy', attempt: 2 }));
+    expect(spans.filter(({ kind, step }) => kind === 'repair' && step === 'strategy')).toEqual([
+      expect.objectContaining({
+        attempt: 2,
+        data: expect.objectContaining({ attempts: 1, decision: 'validated' })
+      })
+    ]);
     const degradedAttempt = spans.find(({ kind, step }) => kind === 'specialist_attempt' && step === 'conversation');
     expect(degradedAttempt?.status).toBe('degraded');
     expect(spans).toContainEqual(expect.objectContaining({
@@ -686,7 +691,7 @@ describe.sequential('authorized raw run SSE', () => {
       data: expect.objectContaining({ decision: 'fatal', reasonCode: 'draft_validation_failed' })
     }));
   });
-  it('keeps denied attempts separate when the same start later becomes authorized', async () => {
+  it('keeps an opaque denial separate from a later authorized SSE stream', async () => {
     await database.sql`insert into accounts (id, name) values ('ACC-DENIAL', 'Denied Account')`;
     await database.sql`insert into opportunities (id, account_id, name) values ('OPP-DENIAL', 'ACC-DENIAL', 'Denied Opportunity')`;
     const start = new StartDealBrief(
@@ -699,32 +704,21 @@ describe.sequential('authorized raw run SSE', () => {
     await expect(start.execute({
       opportunityId: 'OPP-DENIAL',
       requestedBy: stranger.userId,
-      idempotencyKey: 'denied-trace',
-      budget: { maxCalls: 10, maxInputTokens: 1_000, maxOutputTokens: 500, deadlineMs: 30_000 }
+      idempotencyKey: 'denied-trace'
     })).rejects.toThrow('DealBrief start denied');
-    const [{ run_id: deniedTraceId }] = await database.sql<{ run_id: string }[]>`
-      select run_id from trace_spans where kind = 'authorization_lookup' and status = 'denied'
-      order by started_at desc limit 1`;
-
-    await expect(publisher.assertTraceComplete(deniedTraceId)).resolves.toBeUndefined();
-    const deniedSpans = await publisher.tracesForRun(deniedTraceId);
-    expect(deniedSpans).toEqual([
-      expect.objectContaining({
-        kind: 'authorization_lookup',
-        status: 'denied',
-        data: {
-          decision: 'denied',
-          correlationHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-          reasonCode: 'forbidden',
-          readKinds: ['opportunity', 'account', 'requester', 'permissions'],
-          readCount: 4
-        }
-      })
-    ]);
-    const [{ event_count: eventCount, run_count: runCount }] = await database.sql<{ event_count: number; run_count: number }[]>`
-      select (select count(*)::int from run_events where run_id = ${deniedTraceId}) event_count,
-        (select count(*)::int from runs where id = ${deniedTraceId}) run_count`;
-    expect({ eventCount, runCount }).toEqual({ eventCount: 0, runCount: 0 });
+    const [deniedPersistence] = await database.sql<{
+      trace_count: number;
+      run_count: number;
+      event_count: number;
+    }[]>`
+      select
+        (select count(*)::int from trace_spans) trace_count,
+        (select count(*)::int from runs where id not in ('run-sse', 'run-other')) run_count,
+        (select count(*)::int from run_events) event_count`;
+    expect(deniedPersistence).toEqual({ trace_count: 0, run_count: 0, event_count: 0 });
+    const denialAudit = await database.sql<{ actor_id: string | null; payload: unknown }[]>`
+      select actor_id, payload from audit_events where type = 'deal_brief_access_denied' order by created_at`;
+    expect(denialAudit).toEqual([{ actor_id: stranger.userId, payload: { reason: 'forbidden' } }]);
 
     await database.sql`insert into permission_grants
       (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
@@ -732,13 +726,38 @@ describe.sequential('authorized raw run SSE', () => {
     const allowedRunId = await start.execute({
       opportunityId: 'OPP-DENIAL',
       requestedBy: stranger.userId,
-      idempotencyKey: 'denied-trace',
-      budget: { maxCalls: 10, maxInputTokens: 1_000, maxOutputTokens: 500, deadlineMs: 30_000 }
+      idempotencyKey: 'denied-trace'
     });
-    expect(allowedRunId).not.toBe(deniedTraceId);
+    expect(allowedRunId).toMatch(/^run_/);
     const allowedSpans = await publisher.tracesForRun(allowedRunId);
     expect(allowedSpans).toEqual([
-      expect.objectContaining({ kind: 'authorization_lookup', status: 'completed', data: expect.objectContaining({ decision: 'allowed' }) })
+      expect.objectContaining({
+        kind: 'authorization_lookup',
+        status: 'completed',
+        data: expect.objectContaining({ decision: 'allowed' })
+      })
     ]);
+    expect(JSON.stringify(allowedSpans)).not.toContain('"decision":"denied"');
+    expect(JSON.stringify(allowedSpans)).not.toContain('"reasonCode":"forbidden"');
+
+    const snapshot = await request(app.getHttpServer()).get(`/api/runs/${allowedRunId}`)
+      .set('Cookie', strangerCookie).set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
+    expect(snapshot.body).toEqual(expect.objectContaining({
+      streamId: allowedRunId,
+      watermark: expect.any(String),
+      terminal: false
+    }));
+    const terminalEventId = 'evt-denial-retry-complete';
+    await publisher.publish(event(terminalEventId, allowedRunId, 'complete', { status: 'completed', terminal: true }));
+    const stream = await openStream(
+      baseUrl,
+      `/api/runs/${allowedRunId}/events?after=${snapshot.body.watermark as string}`,
+      strangerCookie
+    );
+    const body = await stream.ended;
+    expect(stream.response.statusCode).toBe(200);
+    expect(body).toContain(`id: ${terminalEventId}\nevent: complete\ndata: `);
+    expect(body).not.toContain('"decision":"denied"');
+    expect(body).not.toContain('"reason":"forbidden"');
   });
 });

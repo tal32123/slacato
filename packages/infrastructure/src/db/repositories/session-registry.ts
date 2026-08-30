@@ -1,8 +1,7 @@
-import type { DatabaseClient } from '@slacato/infrastructure';
-import type { SessionRegistry } from './contracts.js';
+import type { DatabaseClient } from '../client.js';
 
 /** Server-authoritative session lifecycle shared by every API replica. */
-export class PostgresSessionRegistry implements SessionRegistry {
+export class PostgresSessionRegistry {
   /** Creates a session registry backed by the provided database client. */
   public constructor(private readonly database: DatabaseClient) {}
 

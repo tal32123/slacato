@@ -312,6 +312,7 @@ export const approvalDetailResponseSchema = z
     capabilities: z
       .object({
         canReadDeal: z.boolean(),
+        canEditPayload: z.boolean(),
         evidenceIds: z.array(opaqueIdSchema).max(50)
       })
       .strict(),

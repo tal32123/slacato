@@ -1,10 +1,49 @@
 {
-  "provider": "mock",
-  "model": "mock-specialist",
+  "provider": "openrouter",
+  "model": "google/gemini-3.5-flash-lite",
   "sourceCommit": "076c659c3c7afd416f8d26729774b67042a55761",
-  "promptHash": "3a9084b1813d599aea9f975e24dab5f95e8ff21626d1b1e5dcb6dbaaf70a9fec",
-  "outputHash": "5ca1f41a5b995224de1eed0975705e1b3c210cf18c4142d0f893e10dff835cbd",
-  "generatedAt": "2026-08-28T19:24:24.552Z",
+  "promptHash": "e6727cd844bf56f5742fc200eba04a41fb8ae535074f77c29078ad92c941e9e1",
+  "schemaHash": "9fe317e88719575365f0dc2204a4803634138dcb4711af87a7f5c645852cafe6",
+  "sourceHash": "403c9b675d753dbc753d5580236469b3cf175b2ba8959eaf091b2f4d9865e291",
+  "outputHash": "30d685dc27f5d0d045dbe312fed6d2d56d6a628032f3f9842a3a0338912a5739",
+  "outputMode": "native_schema",
+  "callCount": 2,
+  "repairCount": 0,
+  "usage": {
+    "inputTokens": 3444,
+    "outputTokens": 2381,
+    "totalTokens": 5825
+  },
+  "rowContextKinds": {
+    "SLK-9001": [
+      "reinforcing_fact"
+    ],
+    "SLK-9002": [
+      "missing_context"
+    ],
+    "SLK-9003": [
+      "ambiguity_or_conflict"
+    ],
+    "SLK-9004": [
+      "reinforcing_fact"
+    ],
+    "SLK-9005": [
+      "missing_context"
+    ],
+    "SLK-9006": [
+      "ambiguity_or_conflict"
+    ],
+    "SLK-9007": [
+      "reinforcing_fact"
+    ],
+    "SLK-9008": [
+      "missing_context"
+    ],
+    "SLK-9009": [
+      "ambiguity_or_conflict"
+    ]
+  },
+  "generatedAt": "2026-08-29T22:54:42.071Z",
   "reviewStatus": "reviewed",
   "validation": {
     "passed": true,

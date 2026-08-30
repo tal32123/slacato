@@ -1,15 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ReadinessDependencies } from '@slacato/core';
+import {
+  createConfiguredModelReadinessCheck,
+  isRequiredMigrationApplied,
+  LATEST_DRIZZLE_MIGRATION_TIMESTAMP
+} from '@slacato/infrastructure';
 import { HealthController } from '../../apps/api/src/modules/health/health.controller';
 import { HealthService } from '../../apps/api/src/modules/health/health.service';
 import { createApiApplication } from '../../apps/api/src/main';
 
-const ready = {
+const ready: ReadinessDependencies = {
   database: { isReady: async () => true },
   migration: { isReady: async () => true },
   redis: { isReady: async () => true },
   index: { isReady: async () => true },
   model: { isReady: async () => true }
 };
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('HealthController', () => {
   it('reports process liveness without external dependencies', async () => {
@@ -25,26 +35,89 @@ describe('HealthController', () => {
     });
   });
 
-  it('reports absent readiness adapters as unconfigured rather than unavailable', async () => {
-    const app = await createApiApplication({ environment: validEnvironment });
+  it('serves ready when explicit application composition supplies healthy dependency probes', async () => {
+    const app = await createApiApplication({ environment: validEnvironment, readiness: ready });
+    await app.listen(0, '127.0.0.1');
+    try {
+      const response = await fetch(`${addressOf(app)}/api/health/ready`);
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({
+        status: 'ready',
+        checks: {
+          database: 'ready',
+          migration: 'ready',
+          redis: 'ready',
+          index: 'ready',
+          model: 'ready'
+        }
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('serves a structured 503 when an explicit dependency probe reports unavailable', async () => {
+    const app = await createApiApplication({
+      environment: validEnvironment,
+      readiness: { ...ready, redis: { isReady: async () => false } }
+    });
     await app.listen(0, '127.0.0.1');
     try {
       const response = await fetch(`${addressOf(app)}/api/health/ready`);
       expect(response.status).toBe(503);
       await expect(response.json()).resolves.toEqual({
-        status: 'unconfigured',
+        status: 'not_ready',
         checks: {
-          database: 'unconfigured',
-          migration: 'unconfigured',
-          redis: 'unconfigured',
-          index: 'unconfigured',
-          model: 'unconfigured'
+          database: 'ready',
+          migration: 'ready',
+          redis: 'unavailable',
+          index: 'ready',
+          model: 'ready'
         },
-        detail: { code: 'CHECKS_UNCONFIGURED', generation: 'disabled' }
+        detail: { code: 'DEPENDENCY_UNAVAILABLE', generation: 'disabled' }
       });
     } finally {
       await app.close();
     }
+  });
+
+  it('accepts the required migration level and forward-compatible applied migrations', () => {
+    expect(isRequiredMigrationApplied(String(LATEST_DRIZZLE_MIGRATION_TIMESTAMP))).toBe(true);
+    expect(isRequiredMigrationApplied(String(LATEST_DRIZZLE_MIGRATION_TIMESTAMP + 1))).toBe(true);
+    expect(isRequiredMigrationApplied(String(LATEST_DRIZZLE_MIGRATION_TIMESTAMP - 1))).toBe(false);
+  });
+
+  it('requires both configured OpenRouter models to advertise live endpoints', async () => {
+    const requested: string[] = [];
+    const signals: (AbortSignal | null | undefined)[] = [];
+    const fetchProbe = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+        const url = String(input);
+        requested.push(url);
+        signals.push(init?.signal);
+        const endpoints = url.includes('generation-model') ? [{ name: 'available' }] : [];
+        return new Response(JSON.stringify({ data: { endpoints } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+    );
+    vi.stubGlobal('fetch', fetchProbe);
+
+    const check = createConfiguredModelReadinessCheck({
+      provider: 'openrouter',
+      generationModel: 'openai/generation-model',
+      embeddingModel: 'openai/embedding-model',
+      apiKey: 'test-key'
+    });
+
+    await expect(check.isReady()).resolves.toBe(false);
+    expect(requested).toEqual([
+      'https://openrouter.ai/api/v1/models/openai/generation-model/endpoints',
+      'https://openrouter.ai/api/v1/models/openai/embedding-model/endpoints'
+    ]);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(signals[1]).toBe(signals[0]);
   });
 });
 

@@ -3,6 +3,7 @@ export { loadRuntimeEnv } from './config/runtime-env.js';
 export { createDatabaseClient, type DatabaseClient } from './db/client.js';
 export { PostgresApprovalAuthorityQuery } from './db/queries/approval-authority-query.js';
 export { PostgresApprovalQueryRepository } from './db/queries/approval-query.js';
+export { PostgresDealQueryRepository } from './db/queries/deal-query.js';
 export { PostgresRunQueryRepository } from './db/queries/run-query.js';
 export { PostgresBriefExportService } from './db/repositories/brief-export.js';
 export {
@@ -15,8 +16,16 @@ export {
   PostgresCanonicalPersonaDirectory
 } from './db/repositories/persona-directory.js';
 export { PostgresProviderAttemptLedger } from './db/repositories/provider-attempt-ledger.js';
+export { PostgresSessionRegistry } from './db/repositories/session-registry.js';
 export { PostgresWorkflowStore } from './db/repositories/workflow-store.js';
 export { PostgresEventStore, PostgresRunEventQuery } from './events/postgres-event-store.js';
+export {
+  createConfiguredModelReadinessCheck,
+  createProductionReadinessChecks,
+  isRequiredMigrationApplied,
+  LATEST_DRIZZLE_MIGRATION_TIMESTAMP,
+  type ProductionReadinessOptions
+} from './health/readiness-probes.js';
 export { createSafeLogger, logger } from './logging/logger.js';
 export {
   redactLogPayload,
@@ -61,3 +70,13 @@ export {
   PostgresCitationResolver,
   PostgresHybridEvidenceRetriever
 } from './retrieval/postgres-retriever.js';
+export {
+  DealBriefProcessor,
+  type DealBriefProcessorOptions
+} from './worker/deal-brief.processor.js';
+export {
+  type DealBriefContextRepository,
+  type DealBriefOpportunityContext,
+  PostgresDealBriefContextRepository
+} from './worker/postgres-deal-brief-context.repository.js';
+export { PostgresDealBriefWorkflowServices } from './worker/postgres-deal-brief-workflow-services.js';

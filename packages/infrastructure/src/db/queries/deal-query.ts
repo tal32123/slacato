@@ -1,13 +1,15 @@
-import { CANONICAL_FIXTURE_COMMIT, dealBriefSchema, runStatusSchema } from '@slacato/core';
-import type { DatabaseClient } from '@slacato/infrastructure';
-import type {
-  AuthorizedDeal,
-  DealEvidence,
-  DealQueryRepository,
-  EvidenceCategory,
-  EvidenceScope,
-  LatestDealRun
-} from './contracts.js';
+import {
+  type AuthorizedDeal,
+  CANONICAL_FIXTURE_COMMIT,
+  type DealEvidence,
+  type DealQueryRepository,
+  dealBriefSchema,
+  type EvidenceCategory,
+  type EvidenceScope,
+  type LatestDealRun,
+  runStatusSchema
+} from '@slacato/core';
+import type { DatabaseClient } from '../client.js';
 
 type AuthorizedDealSqlRow = Readonly<{
   opportunity_id: string;
@@ -101,15 +103,26 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
   /** Creates a deal query repository backed by the provided database client. */
   public constructor(private readonly database: DatabaseClient) {}
 
-  /** Lists deals whose account metadata is currently readable through a Salesforce source grant. */
+  /** Lists source-authorized deals and reveals CRM-derived metadata only through a live Salesforce grant. */
   public async listAuthorizedDeals(personaId: string): Promise<readonly AuthorizedDeal[]> {
     const rows = await this.database.sql<AuthorizedDealSqlRow[]>`
-      select opportunity.id as opportunity_id, opportunity.name as opportunity_name,
-        opportunity.account_id, account.name as account_name, opportunity.restricted,
-        opportunity.created_at, opportunity_record.content as record_content,
+      select opportunity.id as opportunity_id,
+        case when authorized.can_read_salesforce then opportunity.name else opportunity.id end as opportunity_name,
+        opportunity.account_id,
+        case when authorized.can_read_salesforce then account.name else opportunity.account_id end as account_name,
+        opportunity.restricted, opportunity.created_at, opportunity_record.content as record_content,
         latest_run.status as latest_run_status, latest_run.updated_at as latest_run_updated_at
       from opportunities opportunity
       join accounts account on account.id = opportunity.account_id
+      join lateral (
+        select bool_or(opportunity_grant.source_type = 'salesforce') as can_read_salesforce
+        from authorized_opportunity_grants opportunity_grant
+        where opportunity_grant.persona_id = ${personaId}
+          and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+          and opportunity_grant.opportunity_id = opportunity.id
+          and opportunity_grant.account_id = opportunity.account_id
+        having count(*) > 0
+      ) authorized on true
       left join lateral (
         select evidence.content from evidence_versions evidence
         where evidence.opportunity_id = opportunity.id
@@ -131,46 +144,41 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
         where run.opportunity_id = opportunity.id
         order by run.updated_at desc, run.id desc limit 1
       ) latest_run on true
-      where exists (
-        select 1 from authorized_opportunity_grants opportunity_grant
-        where opportunity_grant.persona_id = ${personaId}
-          and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-          and opportunity_grant.opportunity_id = opportunity.id
-          and opportunity_grant.account_id = opportunity.account_id
-          and opportunity_grant.source_type = 'salesforce'
-      )
       order by opportunity.id
     `;
     return rows.map(mapAuthorizedDealSqlRow);
   }
 
-  /** Finds one deal only when a live Salesforce source grant authorizes its metadata. */
+  /** Finds one deal through any live source grant while keeping CRM-derived names grant-scoped. */
   public async findAuthorizedDeal(
     personaId: string,
     opportunityId: string
   ): Promise<AuthorizedDeal | undefined> {
     const rows = await this.database.sql<AuthorizedDealSqlRow[]>`
-      select opportunity.id as opportunity_id, opportunity.name as opportunity_name,
-        opportunity.account_id, account.name as account_name, opportunity.restricted,
-        opportunity.created_at, null::text as record_content,
+      select opportunity.id as opportunity_id,
+        case when authorized.can_read_salesforce then opportunity.name else opportunity.id end as opportunity_name,
+        opportunity.account_id,
+        case when authorized.can_read_salesforce then account.name else opportunity.account_id end as account_name,
+        opportunity.restricted, opportunity.created_at, null::text as record_content,
         null::text as latest_run_status, null::timestamptz as latest_run_updated_at
       from opportunities opportunity
       join accounts account on account.id = opportunity.account_id
+      join lateral (
+        select bool_or(opportunity_grant.source_type = 'salesforce') as can_read_salesforce
+        from authorized_opportunity_grants opportunity_grant
+        where opportunity_grant.persona_id = ${personaId}
+          and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+          and opportunity_grant.opportunity_id = opportunity.id
+          and opportunity_grant.account_id = opportunity.account_id
+        having count(*) > 0
+      ) authorized on true
       where opportunity.id = ${opportunityId}
-        and exists (
-          select 1 from authorized_opportunity_grants opportunity_grant
-          where opportunity_grant.persona_id = ${personaId}
-            and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
-            and opportunity_grant.opportunity_id = opportunity.id
-            and opportunity_grant.account_id = opportunity.account_id
-            and opportunity_grant.source_type = 'salesforce'
-        )
       limit 1
     `;
     return rows[0] === undefined ? undefined : mapAuthorizedDealSqlRow(rows[0]);
   }
 
-  /** Loads the latest run and any generated draft or finalized payload while its deal remains authorized. */
+  /** Loads the latest run and generated output while the deal remains authorized through any live source grant. */
   public async findLatestRun(
     personaId: string,
     opportunityId: string
@@ -205,7 +213,6 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
             and opportunity_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
             and opportunity_grant.opportunity_id = opportunity.id
             and opportunity_grant.account_id = opportunity.account_id
-            and opportunity_grant.source_type = 'salesforce'
         )
       order by run.updated_at desc, run.id desc
       limit 1

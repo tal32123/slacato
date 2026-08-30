@@ -3,7 +3,6 @@ import type { BudgetedModelGateway } from '../model/contracts.js';
 import type { AgentContext, AgentEvidenceRecord, StrategyArtifacts } from './contracts.js';
 import { runAgent } from './runtime.js';
 import {
-  collectArtifactCitationEvidenceIds,
   validateCommercialArtifact,
   validateConversationArtifact,
   validateDealBrief,
@@ -19,7 +18,7 @@ const ALL_SOURCES = new Set<AgentEvidenceRecord['sourceType']>([
   'slack'
 ]);
 const TASK =
-  'Synthesize the three validated specialist artifacts into the canonical nine-section deal brief. Use only citations already present in the validated artifacts. Prioritize negotiation state, concrete next actions, missing information, confidence, and review warnings. Return only the strict DealBrief.';
+  'Synthesize the three validated specialist artifacts and the complete authorized evidence manifest into the canonical nine-section deal brief. Every factual claim must cite an authorized manifest record, including evidence not retained by a specialist when it directly supports the section. Every claim id must use the exact claim_<unique_suffix> format, be globally unique across all sections, nested stakeholders, actions, and source evidence, and never reuse an artifact claim id or an id from another section. Every review-warning code must be uppercase with underscores, and every review-warning claim id must name a claim emitted in the final brief. Ground section text conservatively: copy a complete evidence sentence into the claim statement, then make each narrative, goal, business driver, negotiation-state item, action rationale, and source summary exactly equal to one supporting claim statement instead of paraphrasing it. Set overallConfidence above zero whenever supported claims survive validation. When the manifest contains relevant evidence, provide grounded buyer goals, stakeholders, negotiation state, concrete safe next actions, missing information, and source summaries instead of empty placeholders. Return only the strict DealBrief.';
 
 /** Combines validated specialist findings into the deal team’s negotiation brief. */
 export class StrategyAgent {
@@ -43,21 +42,13 @@ export class StrategyAgent {
       context.manifest.id,
       context.evidence
     );
-    const validatedArtifacts: StrategyArtifacts = { conversation, stakeholder, commercial };
-    const citedIds = collectArtifactCitationEvidenceIds(validatedArtifacts);
-    const citedContext: AgentContext = {
-      ...context,
-      evidence: context.evidence.filter((record) => citedIds.has(record.evidenceId)),
-      manifestEntries: context.manifestEntries.filter((entry) => citedIds.has(entry.evidenceId))
-    };
     const result = await runAgent({
       gateway: this.gateway,
-      context: citedContext,
+      context,
       operation: 'negotiation-strategy',
       task: TASK,
       schema: dealBriefSchema,
       allowedSourceTypes: ALL_SOURCES,
-      citedIds,
       artifacts: [
         { id: 'conversation', value: conversation },
         { id: 'stakeholder', value: stakeholder },

@@ -11,7 +11,7 @@ const database = createDatabaseClient(databaseUrl, 3);
 function budgetedStore(client: typeof database): PostgresWorkflowStore {
   const store = new PostgresWorkflowStore(client);
   return new Proxy(store, { get(target, property, receiver) {
-    if (property === 'startRun') return (input: Omit<StartRunInput, 'budget'>) => target.startRun({ ...input, budget: { scope: input.id, maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 10_000, deadlineMs: 1_000 } });
+    if (property === 'startRun') return (input: Omit<StartRunInput, 'budget'>) => target.startRun({ ...input, budget: { scope: input.id, maxCalls: 10, deadlineMs: 1_000 } });
     return Reflect.get(target, property, receiver);
   } });
 }
@@ -60,12 +60,12 @@ describe('durable recovery regressions', () => {
 
   it('rejects a command that injects another run into startRun', async () => {
     const first = await seededRun(); const second = await seededRun();
-    await expect(store.startRun({ id: first.runId as never, opportunityId: first.opportunityId as never, requestedBy: first.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: command(second.runId) })).rejects.toThrow('run');
+    await expect(store.startRun({ id: first.runId as never, opportunityId: first.opportunityId as never, requestedBy: first.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', idempotencyKey: id('start'), startRequestHash: id('hash'), command: command(second.runId) })).rejects.toThrow('Run, command, and budget scopes do not match');
   });
 
   it('does not allow one published command to lease two different steps', async () => {
     const run = await seededRun(); const next = command(run.runId);
-    await store.startRun({ id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+    await store.startRun({ id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', idempotencyKey: next.idempotencyKey, startRequestHash: id('hash'), command: next });
     await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${next.id}`;
     const first = await store.claimStep({ runId: run.runId as never, step: 'retrieve', invocationId: id('invocation'), causalCommandId: next.id, owner: 'a', leaseMs: 10_000 });
     const second = await store.claimStep({ runId: run.runId as never, step: 'synthesize', invocationId: id('invocation'), causalCommandId: next.id, owner: 'b', leaseMs: 10_000 });
@@ -75,7 +75,7 @@ describe('durable recovery regressions', () => {
 
   it('consumes and completes the causal lease at the approval boundary', async () => {
     const run = await seededRun(); const next = command(run.runId);
-    await store.startRun({ id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+    await store.startRun({ id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', idempotencyKey: next.idempotencyKey, startRequestHash: id('hash'), command: next });
     await database.sql`update runs set status = 'validating' where id = ${run.runId}`;
     await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${next.id}`;
     const lease = await store.claimStep({ runId: run.runId as never, step: 'validate', invocationId: id('invocation'), causalCommandId: next.id, owner: 'worker', leaseMs: 10_000 });
@@ -97,7 +97,7 @@ describe('durable recovery regressions', () => {
 
   it('serializes concurrent idempotency-key replays without duplicate events', async () => {
     const run = await seededRun(); const stable = command(run.runId, id('command'));
-    const input = { id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created' as const, generationProvider: 'mock', generationModel: 'mock-chat', command: stable };
+    const input = { id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created' as const, generationProvider: 'mock', generationModel: 'mock-chat', idempotencyKey: stable.idempotencyKey, startRequestHash: id('hash'), command: stable };
     await Promise.all([store.startRun(input), store.startRun(input)]);
     expect((await database.sql<{ count: string }[]>`select count(*)::text as count from run_events where run_id = ${run.runId}`)[0]?.count).toBe('1');
   });

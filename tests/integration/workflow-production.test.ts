@@ -10,13 +10,12 @@ import {
   RegenerateDealBrief, StartDealBrief, dealBriefSchema, hashApprovalPayload, type DealBriefWorkflowServices
 } from '@slacato/core';
 import {
-  BullMqCommandQueue, OutboxDispatcher, OutboxDispatcherLoop, PostgresDealBriefAccessControl, PostgresWorkflowStore,
-  WORKFLOW_QUEUE_NAME, createDatabaseClient
+  BullMqCommandQueue, DealBriefProcessor, OutboxDispatcher, OutboxDispatcherLoop,
+  PostgresDealBriefAccessControl, PostgresDealBriefContextRepository, PostgresDealBriefPolicyFacts,
+  PostgresDealBriefWorkflowServices, PostgresWorkflowStore, WORKFLOW_QUEUE_NAME, createDatabaseClient
 } from '@slacato/infrastructure';
 import { AppModule } from '../../apps/api/src/app.module';
 import { configureApiApplication } from '../../apps/api/src/main';
-import { DealBriefProcessor } from '../../apps/worker/src/processors/deal-brief.processor';
-import { PostgresDealBriefWorkflowServices } from '../../apps/worker/src/processors/postgres-deal-brief-workflow-services';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:56379';
@@ -36,11 +35,26 @@ let queue: BullMqCommandQueue | undefined;
 
 function approvalBrief(label: string) {
   return dealBriefSchema.parse({
-    dealSnapshot: { accountName: label, opportunityName: `${label} Opportunity`, stage: 'Negotiate' },
-    executiveSummary: { narrative: 'Insufficient supported evidence is available for an executive summary.' },
-    buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] }, stakeholderMap: { stakeholders: [] },
-    negotiationState: { currentState: 'Insufficient supported evidence is available.', risks: [] },
-    recommendedNextActions: { actions: [] }, missingInformation: { items: [] }, sourceEvidence: { evidence: [] },
+    dealSnapshot: {
+      accountName: label,
+      opportunityName: `${label} Opportunity`,
+      stage: 'Negotiate'
+    },
+    executiveSummary: {
+      narrative: `${label} is preparing a reviewed renewal position.`
+    },
+    buyerGoalsAndBusinessDrivers: {
+      goals: ['Complete the renewal with approved commercial terms.'],
+      businessDrivers: []
+    },
+    stakeholderMap: { stakeholders: [] },
+    negotiationState: {
+      currentState: 'The commercial position is awaiting authorized approval.',
+      risks: ['Approval-required discount needs deal desk review.']
+    },
+    recommendedNextActions: { actions: [] },
+    missingInformation: { items: [] },
+    sourceEvidence: { evidence: [] },
     confidenceAndReviewWarnings: { overallConfidence: 0.9, warnings: [] }
   });
 }
@@ -110,13 +124,10 @@ describe('production DealBrief seams', () => {
         return { manifestId: `manifest_${suffix}` };
       },
       async conversation() { return { goals: [] }; }, async stakeholder() { return { stakeholders: [] }; }, async commercial() { return { terms: [] }; },
-      async strategy(run) { strategyCalls.set(run.id, (strategyCalls.get(run.id) ?? 0) + 1); return dealBriefSchema.parse({
-        dealSnapshot: { accountName: 'Workflow Account', opportunityName: 'Workflow Opportunity', stage: 'Negotiate' },
-        executiveSummary: { narrative: 'Insufficient supported evidence is available for an executive summary.' }, buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
-        stakeholderMap: { stakeholders: [] }, negotiationState: { currentState: 'Insufficient supported evidence is available.', risks: [] },
-        recommendedNextActions: { actions: [] }, missingInformation: { items: [] }, sourceEvidence: { evidence: [] },
-        confidenceAndReviewWarnings: { overallConfidence: 0.9, warnings: [] }
-      }); },
+      async strategy(run) {
+        strategyCalls.set(run.id, (strategyCalls.get(run.id) ?? 0) + 1);
+        return approvalBrief('Workflow Account');
+      },
       approvalInput() { return { discountPercent: 12, renewalUpliftPercent: 1, liabilityCapChanged: false, dataRetentionLanguage: false,
         restrictedResearchLanguage: false, customerSpecificSecurityLanguage: false, customerFacingConcessionLanguage: false,
         overallConfidence: 0.9, conflictingEvidence: false, missingMaterialEvidence: false }; },
@@ -140,7 +151,7 @@ describe('production DealBrief seams', () => {
     const bootstrap = await browser.get('/api/auth/csrf').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
     const selected = await browser.post('/api/auth/persona').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', bootstrap.body.csrfToken).send({ userId: requester }).expect(201);
     const started = await browser.post('/api/runs/deal-brief').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', selected.body.csrfToken)
-      .send({ opportunityId: opportunity, idempotencyKey: `start-${suffix}`, budget: { maxCalls: 12, maxInputTokens: 10000, maxOutputTokens: 2000, deadlineMs: 30000 } }).expect(201);
+      .send({ opportunityId: opportunity, idempotencyKey: `start-${suffix}` }).expect(201);
     const runId = started.body.runId as string;
     const waiting = await waitFor(async () => {
       const current = await store.getRun(runId as never);
@@ -148,6 +159,17 @@ describe('production DealBrief seams', () => {
       return current?.status === 'awaiting_approval' ? current : undefined;
     });
     expect(waiting.status).toBe('awaiting_approval'); expect(retrievalCalls.get(runId)).toBe(2); expect(strategyCalls.get(runId)).toBe(1); expect(await queue.queue.getJob(runId)).toBeUndefined();
+    const initialArtifacts = await admin<{ kind: string; draft_version: number }[]>`
+      select kind, draft_version from specialist_artifacts
+      where run_id = ${runId}
+      order by draft_version, kind
+    `;
+    expect(initialArtifacts).toEqual([
+      { kind: 'commercial', draft_version: 0 },
+      { kind: 'conversation', draft_version: 0 },
+      { kind: 'stakeholder', draft_version: 0 },
+      { kind: 'strategy', draft_version: 1 }
+    ]);
     const subject = await store.getApprovalSubject({ runId: runId as never }); const entry = subject?.entries[0];
     if (subject === undefined || entry === undefined) throw new Error('Approval subject not persisted');
     await admin`insert into run_evidence_manifests (id, run_id, scope_hash, policy_hash, query_hash, index_profile,
@@ -158,7 +180,11 @@ describe('production DealBrief seams', () => {
       ...subject.payload, executiveSummary: { narrative: 'we can offer a reduction' }
     });
     await expect(access.validateApprovalEdit({
-      actorId: requester, opportunityId: opportunity, runId, payload: unsupportedEdit
+      actorId: requester,
+      opportunityId: opportunity,
+      runId,
+      originalPayload: subject.payload,
+      payload: unsupportedEdit
     })).rejects.toBeInstanceOf(DomainValidationError);
     const regenerationResponse = await browser.post(`/api/runs/${runId}/regenerate`).set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
       .set('X-CSRF-Token', selected.body.csrfToken).send({ idempotencyKey: `regenerate-${suffix}` });
@@ -176,26 +202,27 @@ describe('production DealBrief seams', () => {
     expect(regeneratedSubject.id).not.toBe(subject.id);
     expect(strategyCalls.get(runId)).toBe(2);
     expect(await queue.queue.getJob(runId)).toBeUndefined();
+    const regeneratedArtifacts = await admin<{ kind: string; draft_version: number }[]>`
+      select kind, draft_version from specialist_artifacts
+      where run_id = ${runId}
+      order by draft_version, kind
+    `;
+    expect(regeneratedArtifacts).toEqual([
+      ...initialArtifacts,
+      { kind: 'strategy', draft_version: waiting.version + 1 }
+    ]);
     const switched = await browser.post('/api/auth/persona').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', selected.body.csrfToken).send({ userId: approver }).expect(201);
-    const editCommand = {
+    const approvalCommand = {
       runId, approvalSubjectId: regeneratedSubject.id, expectedRunVersion: regenerated.version,
       expectedSubjectHash: regeneratedSubject.subjectHash, entryId: regeneratedEntry.id, category: regeneratedEntry.category,
-      authority: 'deal_desk', action: 'edit_and_approve', rationale: 'Confirm the exact grounded snapshot.',
-      editedPayload: regeneratedSubject.payload, idempotencyKey: `edit-${suffix}`
+      authority: 'deal_desk', action: 'approve_unchanged', idempotencyKey: `approve-${suffix}`
     };
-    const editResult = await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
-      .set('X-CSRF-Token', switched.body.csrfToken).send(editCommand);
-    expect(editResult.status, JSON.stringify(editResult.body)).toBe(201);
-    const editReplay = await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
-      .set('X-CSRF-Token', switched.body.csrfToken).send(editCommand).expect(201);
-    expect(editReplay.body).toEqual({ ...editResult.body, replayed: true });
-    const replacement = await store.getApprovalSubject({ runId: runId as never }); const replacementEntry = replacement?.entries[0];
-    const editedRun = await store.getRun(runId as never);
-    if (replacement === undefined || replacementEntry === undefined || editedRun === undefined) throw new Error('Edited replacement subject not persisted');
-    await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', switched.body.csrfToken).send({
-      runId, approvalSubjectId: replacement.id, expectedRunVersion: editedRun.version, expectedSubjectHash: replacement.subjectHash,
-      entryId: replacementEntry.id, category: replacementEntry.category, authority: 'deal_desk', action: 'approve_unchanged', idempotencyKey: `approve-${suffix}`
-    }).expect(201);
+    const approvalResult = await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', switched.body.csrfToken).send(approvalCommand);
+    expect(approvalResult.status, JSON.stringify(approvalResult.body)).toBe(201);
+    const approvalReplay = await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', switched.body.csrfToken).send(approvalCommand).expect(201);
+    expect(approvalReplay.body).toEqual({ ...approvalResult.body, replayed: true });
     const completed = await waitFor(async () => (await store.getRun(runId as never))?.status === 'completed' ? store.getRun(runId as never) : undefined);
     expect(completed.status).toBe('completed'); expect(strategyCalls.get(runId)).toBe(2);
   }, 20_000);
@@ -207,10 +234,14 @@ describe('production DealBrief seams', () => {
     if (run === undefined) throw new Error('Workflow run fixture could not be loaded');
     await admin`update permission_grants set source_commit = ${'a'.repeat(40)} where id = ${`grant_${suffix}`}`;
     try {
-      const services = new PostgresDealBriefWorkflowServices(database, {
-        provider: 'mock',
-        registry: { resolve: () => ({ modelId: 'mock-brief' }) }
-      } as never);
+      const services = new PostgresDealBriefWorkflowServices(
+        new PostgresDealBriefContextRepository(database),
+        new PostgresDealBriefPolicyFacts(database),
+        {
+          provider: 'mock',
+          registry: { resolve: () => ({ modelId: 'mock-brief' }) }
+        } as never
+      );
       await expect(services.retrieve(run, `invocation-stale-${suffix}`))
         .rejects.toThrow('Authorized opportunity context is unavailable');
     } finally {
@@ -244,8 +275,8 @@ describe('production DealBrief seams', () => {
     await admin`insert into accounts (id, name) values (${replayAccount}, 'Replay Integrity Account')`;
     await admin`insert into opportunities (id, account_id, name, restricted)
       values (${replayOpportunity}, ${replayAccount}, 'Replay Integrity Opportunity', false)`;
-    await admin`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
-      values (${runId}, ${replayOpportunity}, ${replayRequester}, 'awaiting_approval', 'mock', 'mock-brief', ${'a'.repeat(64)}, 5)`;
+    await admin`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, idempotency_key, start_request_hash, version)
+      values (${runId}, ${replayOpportunity}, ${replayRequester}, 'awaiting_approval', 'mock', 'mock-brief', ${`start-replay-${replaySuffix}`}, ${'a'.repeat(64)}, 5)`;
     await admin`insert into approval_subjects
       (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
       values (${subjectId}, ${runId}, 5, ${subjectHash}, ${JSON.stringify(payload)}::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'replay-v1')`;
@@ -326,8 +357,8 @@ describe('production DealBrief seams', () => {
     await admin`insert into accounts (id, name) values (${replayAccount}, 'Rejected Replay Account')`;
     await admin`insert into opportunities (id, account_id, name, restricted)
       values (${replayOpportunity}, ${replayAccount}, 'Rejected Replay Opportunity', false)`;
-    await admin`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
-      values (${runId}, ${replayOpportunity}, ${replayRequester}, 'awaiting_approval', 'mock', 'mock-brief', ${'b'.repeat(64)}, 11)`;
+    await admin`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, idempotency_key, start_request_hash, version)
+      values (${runId}, ${replayOpportunity}, ${replayRequester}, 'awaiting_approval', 'mock', 'mock-brief', ${`start-rejected-replay-${replaySuffix}`}, ${'b'.repeat(64)}, 11)`;
     await admin`insert into approval_subjects
       (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
       values (${subjectId}, ${runId}, 11, ${subjectHash}, ${JSON.stringify(payload)}::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'replay-v1')`;

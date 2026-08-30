@@ -10,8 +10,11 @@ import type {
 import {
   commercialArtifactSchema,
   conversationArtifactSchema,
+  countSubstantiveBriefSections,
   dealBriefSchema,
+  isExplicitBriefUncertainty,
   MAX_LIST_ITEMS,
+  MIN_SUBSTANTIVE_BRIEF_SECTIONS,
   stakeholderArtifactSchema
 } from '../../domain/briefs/schema.js';
 import { DomainValidationError } from '../../domain/shared/errors.js';
@@ -26,9 +29,23 @@ export type ClaimSupportAssessment = Readonly<{
   reason: string;
 }>;
 
-/** Normalizes evidence text for deterministic, case-insensitive comparisons. */
+/** Canonicalizes one displayed number without changing its numeric value or percent semantics. */
+function canonicalNumber(value: string): string {
+  const percent = value.includes('%') ? '%' : '';
+  let numeric = value.replace(/[$€£%\s]/gu, '').replace(/[,.]+$/u, '');
+  if (/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/u.test(numeric)) numeric = numeric.replaceAll(',', '');
+  else if (/^\d{1,3}(?:\.\d{3}){2,}(?:,\d+)?$/u.test(numeric))
+    numeric = numeric.replaceAll('.', '').replace(',', '.');
+  else if (/^\d+,\d+$/u.test(numeric)) numeric = numeric.replace(',', '.');
+  return `${numeric}${percent}`;
+}
+
+/** Normalizes evidence text and numeric presentation for deterministic comparisons. */
 function normalize(value: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase('en-US');
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/(?:[$€£]\s*)?\b\d[\d,.]*(?:\s*%)?/gu, canonicalNumber);
 }
 
 /** Rejects generated prose that resembles instructions or prompt-control markers. */
@@ -64,7 +81,7 @@ function materialAnchors(statement: string): readonly string[] {
   const anchors = new Set<string>();
   for (const pattern of patterns) {
     for (const match of statement.matchAll(pattern)) {
-      const anchor = (match[1] ?? match[0]).trim();
+      const anchor = (match[1] ?? match[0]).trim().replace(/[.,!?]+$/u, '');
       if (anchor.length > 0) anchors.add(normalize(anchor));
     }
   }
@@ -125,6 +142,62 @@ function supportTerms(value: string): ReadonlySet<string> {
   );
 }
 
+const NEGATION_TERMS = new Set(['no', 'not', 'never', 'without', 'cannot', 'neither', 'nor']);
+const PARAPHRASE_FILLER_TERMS = new Set(['already', 'currently', 'explicitly', 'still', 'yet']);
+
+/** Extracts ordered terms while removing only modifiers that may be omitted by a faithful paraphrase. */
+function paraphraseTerms(value: string): readonly string[] {
+  return (
+    normalize(value)
+      .match(/[\p{L}\p{N}]+/gu)
+      ?.filter(
+        (term) =>
+          term.length > 2 && !SUPPORT_STOP_WORDS.has(term) && !PARAPHRASE_FILLER_TERMS.has(term)
+      )
+      .map(stem) ?? []
+  );
+}
+
+function faithfulSameUnitParaphraseSupported(assertion: string, support: string): boolean {
+  const assertionTerms = paraphraseTerms(assertion);
+  if (assertionTerms.length < 3) return false;
+  const evidenceTokens =
+    normalize(support)
+      .replace(/\b[\p{L}]+n['’]t\b/gu, ' not ')
+      .match(/[\p{L}\p{N}]+/gu) ?? [];
+  const evidenceTerms = evidenceTokens.flatMap((term, tokenIndex) =>
+    term.length > 2 && !SUPPORT_STOP_WORDS.has(term) && !PARAPHRASE_FILLER_TERMS.has(term)
+      ? [{ term: stem(term), tokenIndex }]
+      : []
+  );
+  let previous = -1;
+  let firstMatchedToken = -1;
+  let lastMatchedToken = -1;
+  let skipped = 0;
+  for (const term of assertionTerms) {
+    const at = evidenceTerms.findIndex(
+      (evidenceTerm, index) => index > previous && evidenceTerm.term === term
+    );
+    if (at < 0 || (previous >= 0 && at - previous - 1 > 4)) return false;
+    skipped += at - previous - 1;
+    if (skipped > Math.max(4, assertionTerms.length)) return false;
+    const matchedToken = evidenceTerms[at]?.tokenIndex;
+    if (matchedToken === undefined) return false;
+    if (firstMatchedToken < 0) firstMatchedToken = matchedToken;
+    lastMatchedToken = matchedToken;
+    previous = at;
+  }
+  const assertionTokens =
+    normalize(assertion)
+      .replace(/\b[\p{L}]+n['’]t\b/gu, ' not ')
+      .match(/[\p{L}\p{N}]+/gu) ?? [];
+  const assertionIsNegated = assertionTokens.some((term) => NEGATION_TERMS.has(term));
+  const supportIsNegated = evidenceTokens
+    .slice(Math.max(0, firstMatchedToken - 3), lastMatchedToken + 1)
+    .some((term) => NEGATION_TERMS.has(term));
+  return assertionIsNegated === supportIsNegated;
+}
+
 const MATERIAL_PREDICATES = [
   {
     assertion: /\beconomic buyer\b/i,
@@ -155,6 +228,13 @@ const MATERIAL_PREDICATES = [
   }
 ] as const;
 
+/** Requires every material assertion predicate to be present or explicitly mapped in its support. */
+function materialPredicatesSupported(assertion: string, support: string): boolean {
+  return MATERIAL_PREDICATES.every(
+    (predicate) => !predicate.assertion.test(assertion) || predicate.evidence.test(support)
+  );
+}
+
 /** Normalizes a complete assertion while ignoring spacing and terminal punctuation. */
 function normalizedAssertion(value: string): string {
   return normalize(value)
@@ -176,27 +256,65 @@ function explicitStakeholderClassificationSupported(assertion: string, support: 
   ).test(normalizedAssertion(support));
 }
 
-/** Removes a code-owned field label from structured fixture evidence. */
-function structuredFieldValue(value: string): string | undefined {
-  return /^[a-z][A-Za-z0-9]*:\s+(.+)$/su.exec(value.trim())?.[1];
+type StructuredField = Readonly<{ name: string; value: string }>;
+
+/** Converts a code-owned camelCase field name to its normalized display label. */
+function structuredFieldDisplayName(value: string): string {
+  return normalize(value.replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, '$1 $2'));
 }
 
-/** Matches an assertion to structured fixture evidence while ignoring its code-owned label. */
+/** Parses the complete structured fields contained in one evidence record or unit. */
+function structuredFields(value: string): readonly StructuredField[] {
+  return value.split('\n').flatMap((line) => {
+    const match = /^([a-z][A-Za-z0-9]*):\s+(.+)$/su.exec(line.trim());
+    return match?.[1] === undefined || match[2] === undefined
+      ? []
+      : [{ name: structuredFieldDisplayName(match[1]), value: match[2].trim() }];
+  });
+}
+
+/** Matches a structured field value with its optional camelCase or display label. */
 function structuredFieldAssertionSupported(assertion: string, support: string): boolean {
-  const fieldValue = structuredFieldValue(support);
-  if (fieldValue === undefined) return false;
-  const withoutLeadingArticle = (value: string): string =>
-    normalizedAssertion(value).replace(/^the\s+/u, '');
-  return withoutLeadingArticle(assertion) === withoutLeadingArticle(fieldValue);
+  const field = structuredFields(support).at(0);
+  if (field === undefined) return false;
+  const normalized = normalizedAssertion(assertion).replace(/^the\s+/u, '');
+  const value = normalizedAssertion(field.value).replace(/^the\s+/u, '');
+  return (
+    normalized === value ||
+    normalized === `${field.name} ${value}` ||
+    normalized === `${field.name} is ${value}`
+  );
 }
 
-/** Accepts exact local support plus one tightly bounded stakeholder-classification transformation. */
+/** Allows complete structured field values to be reordered only inside one evidence record. */
+function structuredRecordAssertionSupported(assertion: string, support: string): boolean {
+  const assertionTerms = paraphraseTerms(assertion);
+  const fields = structuredFields(support)
+    .map((field) => ({ ...field, terms: paraphraseTerms(field.value) }))
+    .filter((field) => field.terms.length > 0);
+  const matches = (offset: number, terms: readonly string[]): boolean =>
+    terms.every((term, index) => assertionTerms[offset + index] === term);
+  const visit = (offset: number, used: ReadonlySet<number>): boolean => {
+    if (offset === assertionTerms.length) return used.size >= 2;
+    for (const [index, field] of fields.entries()) {
+      if (used.has(index) || !matches(offset, field.terms)) continue;
+      const next = new Set(used);
+      next.add(index);
+      if (visit(offset + field.terms.length, next)) return true;
+    }
+    return false;
+  };
+  return assertionTerms.length > 0 && visit(0, new Set<number>());
+}
+
+/** Accepts exact local support plus tightly bounded, same-unit transformations. */
 function textAtomsSupported(assertion: string, support: string): boolean {
   if (!safeGeneratedProse(assertion)) return false;
   return (
     normalizedAssertion(assertion) === normalizedAssertion(support) ||
     structuredFieldAssertionSupported(assertion, support) ||
-    explicitStakeholderClassificationSupported(assertion, support)
+    explicitStakeholderClassificationSupported(assertion, support) ||
+    faithfulSameUnitParaphraseSupported(assertion, support)
   );
 }
 
@@ -370,7 +488,20 @@ export function assessClaimSupport(
       support: 'insufficient',
       reason: `Material anchors are absent: ${missing.join(', ')}`
     };
-  if (!units.some((unit) => textAtomsSupported(claim.statement, unit)))
+  const completeRelationSupported = (
+    support: string,
+    atomsSupported: (assertion: string, evidence: string) => boolean
+  ): boolean =>
+    anchors.every((anchor) => containsBounded(normalize(support), anchor)) &&
+    materialPredicatesSupported(claim.statement, support) &&
+    !hasPredicateContradiction(claim.statement, support) &&
+    atomsSupported(claim.statement, support);
+  if (
+    !units.some((unit) => completeRelationSupported(unit, textAtomsSupported)) &&
+    !citedEvidence.some((record) =>
+      completeRelationSupported(record.content, structuredRecordAssertionSupported)
+    )
+  )
     return {
       claimId: claim.id,
       support: 'insufficient',
@@ -494,6 +625,18 @@ function mergeReviewWarnings(
   return merged;
 }
 
+/** Preserves validator-added items ahead of generated tail items within schema list limits. */
+function boundedWithDeterministic<Value>(
+  generated: readonly Value[],
+  deterministic: readonly Value[]
+): readonly Value[] {
+  const retainedDeterministic = deterministic.slice(0, MAX_LIST_ITEMS);
+  return [
+    ...generated.slice(0, MAX_LIST_ITEMS - retainedDeterministic.length),
+    ...retainedDeterministic
+  ];
+}
+
 /** Indexes authorized evidence by its stable evidence identifier. */
 function evidenceMap(
   evidence: readonly AgentEvidenceRecord[]
@@ -520,12 +663,43 @@ function tupleSupported(values: readonly (string | number)[], claims: readonly C
   return claims.some((claim) => values.every((value) => fieldSupported(value, [claim])));
 }
 
+/** Returns claims independently supported by one exact immutable evidence record. */
+function claimsSupportedByEvidenceRecord(
+  claims: readonly Claim[],
+  evidenceId: string,
+  evidenceById: ReadonlyMap<string, AgentEvidenceRecord>
+): readonly Claim[] {
+  const evidence = evidenceById.get(evidenceId);
+  if (evidence === undefined) return [];
+  const localEvidence = new Map<string, AgentEvidenceRecord>([[evidenceId, evidence]]);
+  return claims.filter((claim) => {
+    const citations = claim.citations.filter((citation) => citation.evidenceId === evidenceId);
+    return (
+      citations.length > 0 &&
+      assessClaimSupport({ ...claim, citations }, localEvidence).support === 'supported'
+    );
+  });
+}
+
+/** Confirms separately claimed fields resolve to one record without unrelated extra citations joining records. */
+function tupleSupportedByOneEvidenceRecord(
+  values: readonly (string | number)[],
+  claims: readonly Claim[],
+  evidenceById: ReadonlyMap<string, AgentEvidenceRecord>
+): boolean {
+  const evidenceIds = new Set(
+    claims.flatMap((claim) => claim.citations.map((citation) => citation.evidenceId))
+  );
+  for (const evidenceId of evidenceIds) {
+    const localClaims = claimsSupportedByEvidenceRecord(claims, evidenceId, evidenceById);
+    if (values.every((value) => fieldSupported(value, localClaims))) return true;
+  }
+  return false;
+}
+
 /** Recognizes approved language that explicitly communicates evidence uncertainty. */
 function isExplicitUncertainty(value: string): boolean {
-  if (!safeGeneratedProse(value)) return false;
-  return /^(?:unknown|unverified|not (?:available|known|verified)|requires? (?:review|verification)|hypothesis|no verified (?:summary|information) is available yet|insufficient verified information|insufficient (?:supported )?evidence is available(?: for (?:an executive summary|a negotiation-state assessment))?)\.?$/i.test(
-    value.trim()
-  );
+  return safeGeneratedProse(value) && isExplicitBriefUncertainty(value);
 }
 
 /** Accepts only bounded, non-factual questions for gathering missing deal information. */
@@ -639,13 +813,12 @@ export function validateConversationArtifact(
     ),
     objections: parsed.objections.filter((assertion) => assertionSupported(assertion, result.kept)),
     claims: result.kept,
-    missingContext: [
-      ...parsed.missingContext.filter(safeInformationRequest),
+    missingContext: boundedWithDeterministic(parsed.missingContext.filter(safeInformationRequest), [
       ...result.insufficient.map(
         ({ assessment }) => `Verify evidence for claim ${assessment.claimId}.`
       ),
       ...(unsupportedAssertions.length === 0 ? [] : ['Verify unsupported conversation details.'])
-    ],
+    ]),
     reviewWarnings: mergeReviewWarnings(parsed.reviewWarnings, warnings, validClaimIds)
   });
 }
@@ -679,7 +852,11 @@ export function validateStakeholderArtifact(
       ...(stakeholder.title === undefined ? [] : [stakeholder.title]),
       ...(stakeholder.organization === undefined ? [] : [stakeholder.organization])
     ];
-    if (stakeholder.claims.length === 0 || !tupleSupported(identity, stakeholder.claims)) return [];
+    if (
+      stakeholder.claims.length === 0 ||
+      !tupleSupportedByOneEvidenceRecord(identity, stakeholder.claims, map)
+    )
+      return [];
     return [
       {
         ...stakeholder,
@@ -708,11 +885,10 @@ export function validateStakeholderArtifact(
     ...parsed,
     claims: top.kept,
     stakeholders: supportedStakeholders.map(withoutInsufficient),
-    coverageGaps: [
-      ...parsed.coverageGaps.filter(safeInformationRequest),
+    coverageGaps: boundedWithDeterministic(parsed.coverageGaps.filter(safeInformationRequest), [
       ...insufficient.map(({ assessment }) => `Verify evidence for claim ${assessment.claimId}.`),
       ...(unsupportedStakeholders.length === 0 ? [] : ['Verify unsupported stakeholder records.'])
-    ],
+    ]),
     reviewWarnings: mergeReviewWarnings(parsed.reviewWarnings, warnings, validClaimIds)
   });
 }
@@ -736,9 +912,10 @@ export function validateCommercialArtifact(
   const supportedTerms = terms.filter(
     (term) =>
       term.claims.length > 0 &&
-      tupleSupported(
+      tupleSupportedByOneEvidenceRecord(
         [term.term, term.detail, ...(term.status === 'unknown' ? [] : [term.status])],
-        term.claims
+        term.claims,
+        map
       )
   );
   const insufficient = [...top.insufficient, ...terms.flatMap((term) => term.insufficient)];
@@ -790,7 +967,6 @@ export function validateDealBrief(
     const result = pruneClaims(action.claims, map);
     insufficient.push(...result.insufficient);
     if (
-      result.insufficient.length > 0 ||
       result.kept.length === 0 ||
       !safeRecommendationAction(action.action) ||
       !assertionSupported(action.rationale, result.kept)
@@ -828,7 +1004,7 @@ export function validateDealBrief(
       ...(stakeholder.title === undefined ? [] : [stakeholder.title]),
       ...(stakeholder.organization === undefined ? [] : [stakeholder.organization])
     ];
-    if (claims.length === 0 || !tupleSupported(identity, claims)) return [];
+    if (claims.length === 0 || !tupleSupportedByOneEvidenceRecord(identity, claims, map)) return [];
     return [
       {
         ...stakeholder,
@@ -848,15 +1024,16 @@ export function validateDealBrief(
         : source.sourceType === 'gong_summary' || source.sourceType === 'gong_transcript'
           ? 'conversation'
           : source.sourceType;
+    const localClaims = claimsSupportedByEvidenceRecord(claims, summary.evidenceId, map);
     if (
-      claims.length === 0 ||
-      !assertionSupported(summary.summary, claims) ||
+      localClaims.length === 0 ||
+      !assertionSupported(summary.summary, localClaims) ||
       summary.sourceType !== expectedSourceType ||
       source.eventDate === undefined ||
       !summary.capturedAt.startsWith(source.eventDate)
     )
       return [];
-    return [{ ...summary, claims }];
+    return [{ ...summary, claims: localClaims }];
   });
   const summaryWasReplaced =
     !isExplicitUncertainty(parsed.executiveSummary.narrative) &&
@@ -910,7 +1087,7 @@ export function validateDealBrief(
       ...supportedEvidenceSummaries.flatMap((summary) => summary.claims)
     ].map((claim) => claim.id)
   );
-  return dealBriefSchema.parse({
+  const validated = dealBriefSchema.parse({
     ...parsed,
     dealSnapshot: {
       accountName: context.account.name,
@@ -959,12 +1136,12 @@ export function validateDealBrief(
       supportedStakeholders.length === parsed.stakeholderMap.stakeholders.length
         ? {}
         : {
-            coverageGaps: [
-              ...(parsed.stakeholderMap.coverageGaps?.filter(safeInformationRequest) ?? []),
-              ...(supportedStakeholders.length === parsed.stakeholderMap.stakeholders.length
+            coverageGaps: boundedWithDeterministic(
+              parsed.stakeholderMap.coverageGaps?.filter(safeInformationRequest) ?? [],
+              supportedStakeholders.length === parsed.stakeholderMap.stakeholders.length
                 ? []
-                : ['Verify unsupported stakeholder records.'])
-            ]
+                : ['Verify unsupported stakeholder records.']
+            )
           }),
       ...(stakeholderSectionClaims.length === 0 ? {} : { claims: stakeholderSectionClaims })
     },
@@ -986,8 +1163,8 @@ export function validateDealBrief(
     },
     recommendedNextActions: { actions },
     missingInformation: {
-      items: [
-        ...parsed.missingInformation.items
+      items: boundedWithDeterministic(
+        parsed.missingInformation.items
           .filter((item) => safeInformationRequest(item.question))
           .map((item) => ({
             question: item.question,
@@ -996,20 +1173,22 @@ export function validateDealBrief(
               ? {}
               : { owner: item.owner })
           })),
-        ...insufficient.map(({ assessment }) => ({
-          question: `Verify evidence for claim ${assessment.claimId}.`,
-          whyItMatters: assessment.reason
-        })),
-        ...(nakedAssertions.length === 0
-          ? []
-          : [
-              {
-                question: 'Verify unsupported generated assertions before use.',
-                whyItMatters:
-                  'The generated assertion lacks support in the authorized evidence manifest.'
-              }
-            ])
-      ]
+        [
+          ...insufficient.map(({ assessment }) => ({
+            question: `Verify evidence for claim ${assessment.claimId}.`,
+            whyItMatters: assessment.reason
+          })),
+          ...(nakedAssertions.length === 0
+            ? []
+            : [
+                {
+                  question: 'Verify unsupported generated assertions before use.',
+                  whyItMatters:
+                    'The generated assertion lacks support in the authorized evidence manifest.'
+                }
+              ])
+        ]
+      )
     },
     sourceEvidence: {
       evidence: supportedEvidenceSummaries
@@ -1023,6 +1202,20 @@ export function validateDealBrief(
       )
     }
   });
+  const sourceTypeCount = new Set(evidence.map((record) => record.sourceType)).size;
+  const richEvidence = evidence.length >= 5 || sourceTypeCount >= 3;
+  const substantiveSectionCount = countSubstantiveBriefSections(validated);
+  if (richEvidence && substantiveSectionCount < MIN_SUBSTANTIVE_BRIEF_SECTIONS)
+    throw new DomainValidationError(
+      'Deal brief lacks substantive coverage after grounding validation',
+      {
+        evidenceCount: evidence.length,
+        sourceTypeCount,
+        substantiveSectionCount,
+        requiredSubstantiveSections: MIN_SUBSTANTIVE_BRIEF_SECTIONS
+      }
+    );
+  return validated;
 }
 
 /** Fails closed before prompting if evidence escaped its immutable deal binding. */

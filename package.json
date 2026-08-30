@@ -27,11 +27,7 @@
     "fixtures:fetch": "tsx scripts/fetch-fixtures.ts",
     "fixtures:slack": "tsx scripts/generate-slack-fixtures.ts",
     "ingest:records": "tsx scripts/ingest.ts",
-    "index:embeddings": "tsx scripts/index-embeddings.ts",
-    "eval:deterministic": "promptfoo eval",
-    "eval:live": "promptfoo eval -c evals/promptfooconfig.yaml",
-    "demo:generate-live": "tsx scripts/generate-live-demo.ts",
-    "verify:live-artifacts": "tsx scripts/verify-live-artifacts.ts"
+    "index:embeddings": "tsx scripts/index-embeddings.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

@@ -1,16 +1,29 @@
+import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { CANONICAL_FIXTURE_COMMIT, dealBriefSchema } from '@slacato/core';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import postgres, { type Sql } from 'postgres';
 import { createApiApplication } from '../../apps/api/src/main';
+import { ingestFixtureRecords } from '../../scripts/ingest';
 
 const origin = 'http://127.0.0.1:4173';
 const browserHeaders = { Origin: origin, 'Sec-Fetch-Site': 'same-site' };
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const isoDateTime = z.iso.datetime({ offset: true });
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const sourceDatabaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const databaseName = `catohw_deals_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
+const databaseNamePattern = /^catohw_deals_[a-z0-9]{16}$/;
+function databaseUrlFor(name: string): string {
+  const url = new URL(sourceDatabaseUrl);
+  url.pathname = `/${name}`;
+  return url.toString();
+}
+const databaseUrl = databaseUrlFor(databaseName);
 const sectionIds = [
   'dealSnapshot',
   'executiveSummary',
@@ -32,7 +45,17 @@ const generatedDraft = dealBriefSchema.parse({
   negotiationState: { currentState: 'The negotiation remains active.', risks: [] },
   recommendedNextActions: { actions: [] },
   missingInformation: { items: [] },
-  sourceEvidence: { evidence: [] },
+  sourceEvidence: {
+    evidence: [
+      {
+        evidenceId: 'slack:SLK-9002:0',
+        sourceType: 'conversation',
+        summary: 'Private Slack summary.',
+        capturedAt: '2026-04-22T00:00:00.000Z',
+        claims: []
+      }
+    ]
+  },
   confidenceAndReviewWarnings: { overallConfidence: 0.5, warnings: [] }
 });
 
@@ -47,9 +70,16 @@ async function authenticate(app: NestExpressApplication, userId: string) {
 describe('authorized deal API projection', () => {
   let app: NestExpressApplication;
   let seedDatabase: Sql;
+  let admin: Sql;
 
   beforeAll(async () => {
+    if (!databaseNamePattern.test(databaseName))
+      throw new Error(`Refusing to create non-test database ${databaseName}`);
+    admin = postgres(databaseUrlFor('postgres'), { max: 1 });
+    await admin.unsafe(`create database "${databaseName}"`);
     seedDatabase = postgres(databaseUrl, { max: 1 });
+    await migrate(drizzle(seedDatabase), { migrationsFolder: resolve(process.cwd(), 'drizzle') });
+    await ingestFixtureRecords({ root: 'fixtures/cato', databaseUrl });
     await seedDatabase`insert into personas (id, display_name, role, source_commit) values
       ('USR-91201', 'Gong Only', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
       ('USR-91202', 'Mixed Restricted', 'Restricted Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
@@ -77,10 +107,14 @@ describe('authorized deal API projection', () => {
   });
 
   afterAll(async () => {
-    await app.close();
-    await seedDatabase`delete from permission_grants where persona_id in ('USR-91201', 'USR-91202', 'USR-91203')`;
-    await seedDatabase`delete from personas where id in ('USR-91201', 'USR-91202', 'USR-91203')`;
-    await seedDatabase.end({ timeout: 1 });
+    await app?.close();
+    await seedDatabase?.end({ timeout: 1 });
+    if (admin !== undefined) {
+      if (!databaseNamePattern.test(databaseName))
+        throw new Error(`Refusing to drop non-test database ${databaseName}`);
+      await admin.unsafe(`drop database if exists "${databaseName}" with (force)`);
+      await admin.end({ timeout: 1 });
+    }
   });
 
   it('lists only deals authorized at the query boundary with strict ISO response values', async () => {
@@ -138,48 +172,18 @@ describe('authorized deal API projection', () => {
       id: z.string(), sourceType: z.string(), sourcePath: z.string(), stableKey: z.string(), stableId: z.string(),
       citationLabel: z.string(), chunkId: z.string(), capturedAt: isoDateTime, content: z.string()
     }).strict()).parse(body.evidence);
-    const slack = evidence.find((item) => item.stableId === 'SLK-1001-02');
+    const slack = evidence.find((item) => item.sourceType === 'slack');
+    if (slack === undefined) throw new Error('Authorized Slack evidence is unavailable');
     expect(slack).toMatchObject({
-      sourcePath: 'slack/account_team_updates.tsv', stableKey: 'update_id',
-      citationLabel: 'source=slack/account_team_updates.tsv, update_id=SLK-1001-02',
-      chunkId: 'slack:SLK-1001-02:0'
+      sourcePath: 'slack/account_team_updates.tsv',
+      stableKey: 'update_id'
     });
+    expect(slack.citationLabel).toBe(
+      `source=slack/account_team_updates.tsv, update_id=${slack.stableId}`
+    );
+    expect(slack.chunkId).toBe(`slack:${slack.stableId}:0`);
   });
 
-  it('models deterministic records as a source snapshot and keeps a generated draft with its producing run separate', async () => {
-    const maya = await authenticate(app, 'USR-5001');
-    const beforeGeneration = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
-    expect(beforeGeneration.body).toMatchObject({
-      sourceSnapshot: { type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: { status: 'source_backed' } },
-      generatedOutput: null
-    });
-
-    try {
-      await seedDatabase`insert into runs
-        (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
-        values (${workspaceDraftRunId}, 'OPP-1001', 'USR-5001', 'awaiting_approval', 'mock', 'draft-preview', ${'d'.repeat(64)}, 1)`;
-      await seedDatabase`insert into approval_subjects
-        (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
-        values (${workspaceDraftSubjectId}, ${workspaceDraftRunId}, 1, ${'e'.repeat(64)}, ${JSON.stringify(generatedDraft)}::jsonb,
-          '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'deal-brief-approval-v1')`;
-
-      const response = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
-      expect(response.body).toMatchObject({
-        sourceSnapshot: { type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: { status: 'source_backed' } },
-        generatedOutput: {
-          type: 'generated_output',
-          lifecycle: 'draft',
-          producingRun: { id: workspaceDraftRunId, status: 'awaiting_approval' },
-          content: { status: 'generated' }
-        },
-        brief: { status: 'generated' }
-      });
-      expect(response.body.generatedOutput.producingRun.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    } finally {
-      await seedDatabase`delete from approval_subjects where id = ${workspaceDraftSubjectId}`;
-      await seedDatabase`delete from runs where id = ${workspaceDraftRunId}`;
-    }
-  });
 
   it('filters unauthorized source types and denies hidden opportunities with one opaque response', async () => {
     const harper = await authenticate(app, 'USR-5007');
@@ -201,9 +205,11 @@ describe('authorized deal API projection', () => {
     const gongOnly = await authenticate(app, 'USR-91201');
     const list = await gongOnly.get('/api/deals').set(browserHeaders).expect(200);
     expect(list.body.deals).toEqual([expect.objectContaining({
-      opportunityId: 'OPP-1001', stage: 'Stage unavailable', owner: null,
-      closeDate: null, amount: null, probability: null, riskLevel: 'unknown'
+      opportunityId: 'OPP-1001', opportunityName: 'OPP-1001', accountName: 'ACC-2001',
+      stage: 'Stage unavailable', owner: null, closeDate: null, amount: null,
+      probability: null, riskLevel: 'unknown'
     })]);
+    expect(JSON.stringify(list.body)).not.toMatch(/Global Access Renewal|Northstar Foods Cooperative|gong_summary|stale:/);
     const staleWorkspace = await gongOnly.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
     expect(staleWorkspace.body.evidence.every((item: { sourceType: string }) => item.sourceType === 'gong_summary')).toBe(true);
     expect(JSON.stringify(staleWorkspace.body)).not.toMatch(/account_team_updates|pricing_notes|salesforce\/opportunities/);
@@ -247,9 +253,11 @@ describe('authorized deal API projection', () => {
       on conflict do nothing`;
     const mixed = await authenticate(app, 'USR-91203');
     const workspace = await mixed.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
-    expect(workspace.body.evidence).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceType: 'slack', stableId: 'SLK-1001-01' })
-    ]));
+    expect(workspace.body.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceType: 'slack', stableId: expect.stringMatching(/^SLK-/) })
+      ])
+    );
     expect(JSON.stringify(workspace.body)).not.toContain('PRIVATE RESTRICTED SLACK ROW');
 
     await seedDatabase`insert into document_versions
@@ -289,5 +297,49 @@ describe('authorized deal API projection', () => {
       closeDate: '2026-05-17', amount: 4_217_500, probability: 78, riskLevel: 'medium'
     })]);
     expect(JSON.stringify(list.body)).not.toContain('SECRET');
+  });
+  it('models deterministic records as a source snapshot and keeps a generated draft with its producing run separate', async () => {
+    const maya = await authenticate(app, 'USR-5001');
+    const beforeGeneration = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
+    expect(beforeGeneration.body).toMatchObject({
+      sourceSnapshot: { type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: { status: 'source_backed' } },
+      generatedOutput: null
+    });
+
+    await seedDatabase`insert into runs
+      (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
+      values (${workspaceDraftRunId}, 'OPP-1001', 'USR-5001', 'awaiting_approval', 'mock', 'draft-preview', ${'d'.repeat(64)}, 1)`;
+    await seedDatabase`insert into approval_subjects
+      (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
+      values (${workspaceDraftSubjectId}, ${workspaceDraftRunId}, 1, ${'e'.repeat(64)}, ${JSON.stringify(generatedDraft)}::jsonb,
+        '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'deal-brief-approval-v1')`;
+
+    const response = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
+    expect(response.body).toMatchObject({
+      sourceSnapshot: { type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: { status: 'source_backed' } },
+      generatedOutput: {
+        type: 'generated_output',
+        lifecycle: 'draft',
+        producingRun: { id: workspaceDraftRunId, status: 'awaiting_approval' },
+        content: { status: 'generated' }
+      },
+      brief: { status: 'generated' }
+    });
+    expect(response.body.generatedOutput.producingRun.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    const partialReader = await authenticate(app, 'USR-5007');
+    const partialWorkspace = await partialReader
+      .get('/api/deals/OPP-1001')
+      .set(browserHeaders)
+      .expect(200);
+    expect(partialWorkspace.body).toMatchObject({
+      sourceSnapshot: {
+        type: 'source_snapshot',
+        evidenceOverview: { status: 'source_backed' }
+      },
+      generatedOutput: null,
+      brief: { status: 'source_backed' }
+    });
+    expect(JSON.stringify(partialWorkspace.body)).not.toContain('Private Slack summary.');
   });
 });

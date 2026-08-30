@@ -1,14 +1,14 @@
 import { resolve } from 'node:path';
+import { Logger } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { CANONICAL_FIXTURE_COMMIT, exportBrief, hashApprovalPayload } from '@slacato/core';
-import { logger, type DatabaseClient } from '@slacato/infrastructure';
+import { PostgresBriefExportService, type DatabaseClient } from '@slacato/infrastructure';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres, { type Sql } from 'postgres';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApiApplication } from '../../apps/api/src/main';
-import { PostgresBriefExportService } from '@slacato/infrastructure';
 
 const origin = 'http://127.0.0.1:4173';
 const browserHeaders = { Origin: origin, 'Sec-Fetch-Site': 'same-site' };
@@ -202,8 +202,12 @@ describe.sequential('authorized finalized brief exports', () => {
         : citation)
     }];
 
-    expect(() => exportBrief(conflicting, 'markdown')).toThrow('conflicting immutable evidence');
-    expect(() => exportBrief(conflicting, 'json')).toThrow('conflicting immutable evidence');
+    expect(() => exportBrief(conflicting, 'markdown')).toThrow(
+      'A citation ID is bound to conflicting evidence'
+    );
+    expect(() => exportBrief(conflicting, 'json')).toThrow(
+      'A citation ID is bound to conflicting evidence'
+    );
   });
 
   it('escapes named and numeric HTML entity text faithfully in Markdown', () => {
@@ -310,7 +314,7 @@ describe.sequential('authorized finalized brief exports', () => {
   });
 
   it('makes unauthorized, missing, citation-denied, and authority-only exports identically opaque', async () => {
-    const deniedLog = vi.spyOn(logger, 'warn');
+    const deniedLog = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const outsider = await authenticate(app, ids.outsider);
     const partial = await authenticate(app, ids.citationDenied);
     const authority = await authenticate(app, ids.authorityOnly);
@@ -334,8 +338,15 @@ describe.sequential('authorized finalized brief exports', () => {
     expect(deniedPayloads.every((payload) => (
       payload !== null && typeof payload === 'object' && !Object.hasOwn(payload, 'runId')
     ))).toBe(true);
-    expect(JSON.stringify(deniedPayloads)).not.toContain(ids.run);
-    expect(JSON.stringify(deniedPayloads)).not.toContain('run_missing_task14');
+    const deniedLogText = JSON.stringify(deniedPayloads);
+    expect(deniedLogText).not.toContain(ids.run);
+    expect(deniedLogText).not.toContain('run_missing_task14');
+    expect(deniedLogText).not.toContain('task-14-export-session-secret-long-enough');
+    expect(deniedLogText).not.toContain(claim.statement);
+    expect(deniedLogText).not.toContain(brief.executiveSummary.narrative);
+    expect(deniedLogText).not.toContain(ids.crmCitation);
+    expect(deniedLogText).not.toContain(ids.restrictedCitation);
+    expect(deniedLogText).not.toMatch(/RAW_(?:CRM|GONG)_(?:SOURCE|EVIDENCE)_SENTINEL/);
     deniedLog.mockRestore();
     for (const response of responses) {
       expect(response.headers['content-disposition']).toBeUndefined();

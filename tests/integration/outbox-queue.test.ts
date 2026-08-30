@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { UnrecoverableError, Worker } from 'bullmq';
-import type { CommandQueue, StartRunInput, WorkflowCommand } from '@slacato/core';
+import { dealBriefSchema, type CommandQueue, type StartRunInput, type WorkflowCommand } from '@slacato/core';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresWorkflowStore } from '@slacato/infrastructure/db/repositories/workflow-store';
 import { BullMqCommandQueue } from '@slacato/infrastructure/queue/bullmq';
@@ -21,23 +21,17 @@ function databaseUrlFor(name: string): string {
 const databaseUrl = databaseUrlFor(databaseName);
 const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:56379';
 const database = createDatabaseClient(databaseUrl, 4);
-function budgetedStore(client: typeof database): PostgresWorkflowStore {
-  const store = new PostgresWorkflowStore(client);
-  return new Proxy(store, { get(target, property, receiver) {
-    if (property === 'startRun') return (input: Omit<StartRunInput, 'budget'>) => target.startRun({ ...input, budget: { scope: input.id, maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 10_000, deadlineMs: 1_000 } });
-    return Reflect.get(target, property, receiver);
-  } });
-}
-const store = budgetedStore(database);
+const store = new PostgresWorkflowStore(database);
 const queue = new BullMqCommandQueue(redisUrl, `slacato-workflow-integration-${crypto.randomUUID()}`);
 const seededRunIds: string[] = [];
+type SeededRun = Readonly<{ userId: string; opportunityId: string; runId: string }>;
 
 function suffix(): string { return crypto.randomUUID().replaceAll('-', ''); }
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function command(runId: string, id = `command_${suffix()}`): WorkflowCommand {
   return { id, runId: runId as WorkflowCommand['runId'], type: 'process-step', payload: { step: 'start' }, idempotencyKey: id };
 }
-async function seedRun() {
+async function seedRun(): Promise<SeededRun> {
   const id = suffix();
   const userId = `user_outbox_${id}`;
   const accountId = `account_outbox_${id}`;
@@ -50,6 +44,35 @@ async function seedRun() {
   await raw.end({ timeout: 1 });
   seededRunIds.push(runId);
   return { userId, opportunityId, runId };
+}
+
+function startRunInput(seeded: SeededRun, next: WorkflowCommand): StartRunInput {
+  return {
+    id: seeded.runId as StartRunInput['id'],
+    opportunityId: seeded.opportunityId as StartRunInput['opportunityId'],
+    requestedBy: seeded.userId as StartRunInput['requestedBy'],
+    status: 'created',
+    generationProvider: 'mock',
+    generationModel: 'mock-chat',
+    command: next,
+    budget: { scope: seeded.runId, maxCalls: 10, deadlineMs: 1_000 },
+    idempotencyKey: next.idempotencyKey,
+    startRequestHash: `hash_${next.id}`
+  };
+}
+
+function approvalBrief(label: string) {
+  return dealBriefSchema.parse({
+    dealSnapshot: { accountName: label, opportunityName: `${label} Opportunity`, stage: 'Negotiate' },
+    executiveSummary: { narrative: 'Insufficient supported evidence is available for an executive summary.' },
+    buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
+    stakeholderMap: { stakeholders: [] },
+    negotiationState: { currentState: 'Insufficient supported evidence is available.', risks: [] },
+    recommendedNextActions: { actions: [] },
+    missingInformation: { items: [] },
+    sourceEvidence: { evidence: [] },
+    confidenceAndReviewWarnings: { overallConfidence: 0.9, warnings: [] }
+  });
 }
 
 async function createTemporaryDatabase(): Promise<void> {
@@ -126,14 +149,8 @@ describe('PostgreSQL outbox and workflow leases', () => {
   it('recovers a command committed before queue publication and suppresses duplicate BullMQ delivery', async () => {
     const seeded = await seedRun();
     const next = command(seeded.runId);
-    await store.startRun({
-      id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never,
-      status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next
-    });
-    await store.startRun({
-      id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never,
-      status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next
-    });
+    await store.startRun(startRunInput(seeded, next));
+    await store.startRun(startRunInput(seeded, next));
     expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('pending');
     expect((await database.sql<{ count: string }[]>`select count(*)::text as count from run_events where run_id = ${seeded.runId}`)[0]?.count).toBe('1');
 
@@ -151,7 +168,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await database.sql`update outbox_commands set consumed_at = now() where status = 'published'`;
     const seeded = await seedRun();
     const next = command(seeded.runId);
-    await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+    await store.startRun(startRunInput(seeded, next));
     await new OutboxDispatcher(database, queue, queue).dispatchBatch();
     await queue.queue.remove(next.id);
     const restored = await new PostgresCommandReconciler(database, queue).reconcile();
@@ -162,7 +179,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
   it('allows only expired leases to be taken over', async () => {
     const seeded = await seedRun();
     const start = command(seeded.runId);
-    await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: start });
+    await store.startRun(startRunInput(seeded, start));
     await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${start.id}`;
     const at = new Date('2026-08-28T12:00:00.000Z');
     const first = await store.claimStep({ runId: seeded.runId as never, step: 'llm', invocationId: `invocation_${suffix()}`, causalCommandId: start.id, owner: 'worker-a', leaseMs: 1000, now: at });
@@ -181,7 +198,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
   it('reclaims a dispatcher crash after database claim but before queue publication', async () => {
     const seeded = await seedRun();
     const next = command(seeded.runId);
-    await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+    await store.startRun(startRunInput(seeded, next));
     await database.sql`update outbox_commands set status = 'claimed', claim_owner = 'dead-dispatcher', claim_token = 'expired-claim', claim_expires_at = now() - interval '1 second' where id = ${next.id}`;
     const outcome = await new OutboxDispatcher(database, queue, queue).dispatchBatch();
     expect(outcome.published).toBeGreaterThanOrEqual(1);
@@ -196,7 +213,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     const seeded = await seedRun();
     const next = command(seeded.runId);
     try {
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await store.startRun(startRunInput(seeded, next));
       await new OutboxDispatcher(database, completedQueue, completedQueue).dispatchBatch();
       await waitForCompletedJob(completedQueue, next.id);
       await new PostgresCommandReconciler(database, completedQueue).markConsumed(next.id);
@@ -216,7 +233,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await Promise.all([primary.queue.waitUntilReady(), worker.waitUntilReady()]);
     try {
       const seeded = await seedRun(); const next = command(seeded.runId);
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next, idempotencyKey: next.idempotencyKey, startRequestHash: `hash_${suffix()}` });
+      await store.startRun(startRunInput(seeded, next));
       await new OutboxDispatcher(database, primary, primary).dispatchBatch();
       await waitForCompletedJob(primary, next.id);
 
@@ -236,7 +253,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await Promise.all([primary.queue.waitUntilReady(), worker.waitUntilReady()]);
     try {
       const seeded = await seedRun(); const next = command(seeded.runId);
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next, idempotencyKey: next.idempotencyKey, startRequestHash: `hash_${suffix()}` });
+      await store.startRun(startRunInput(seeded, next));
       await new OutboxDispatcher(database, primary, primary).dispatchBatch();
       await waitForCompletedJob(primary, next.id);
       const executionsBeforeRecovery = executions;
@@ -260,7 +277,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await Promise.all([primary.queue.waitUntilReady(), worker.waitUntilReady()]);
     try {
       const seeded = await seedRun(); const next = command(seeded.runId);
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next, idempotencyKey: next.idempotencyKey, startRequestHash: `hash_${suffix()}` });
+      await store.startRun(startRunInput(seeded, next));
       await new OutboxDispatcher(database, primary, primary).dispatchBatch();
       await waitForCompletedJob(primary, next.id);
       const executionsBeforeRecovery = executions;
@@ -288,20 +305,32 @@ describe('PostgreSQL outbox and workflow leases', () => {
     const second = await seedRun();
     const firstCommand = command(first.runId);
     const secondCommand = command(second.runId);
-    await store.startRun({ id: first.runId as never, opportunityId: first.opportunityId as never, requestedBy: first.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: firstCommand });
-    await store.startRun({ id: second.runId as never, opportunityId: second.opportunityId as never, requestedBy: second.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: secondCommand });
+    await store.startRun(startRunInput(first, firstCommand));
+    await store.startRun(startRunInput(second, secondCommand));
     const subjectId = `approval_subject_${suffix()}`;
+    const subjectHash = `hash_${suffix()}`;
+    const entryId = `approval_entry_${suffix()}`;
+    const requestHash = `request_${suffix()}`;
+    const payload = approvalBrief('Outbox approval');
     await database.sql`update runs set status = 'awaiting_approval', version = 5 where id in (${first.runId}, ${second.runId})`;
-    await database.sql`insert into approval_subjects (id, run_id, draft_version, subject_hash) values (${subjectId}, ${first.runId}, 5, ${`hash_${suffix()}`})`;
+    await database.sql`insert into approval_subjects (id, run_id, draft_version, subject_hash) values (${subjectId}, ${first.runId}, 5, ${subjectHash})`;
     await expect(store.recordDecisionAndEnqueueFinalization({
-      runId: second.runId as never, expectedVersion: 5, approvalSubjectId: subjectId, action: 'approve_unchanged', actorId: second.userId as never, finalizationCommand: command(second.runId)
+      runId: second.runId as never, expectedVersion: 5, approvalSubjectId: subjectId, expectedSubjectHash: subjectHash,
+      entryId, category: 'legal_terms', authority: 'legal_reviewer', actorId: second.userId as never,
+      idempotencyKey: `approval_${suffix()}`, requestHash,
+      decision: {
+        action: 'approve_unchanged', entryId, category: 'legal_terms', authority: 'legal_reviewer',
+        actorId: second.userId as never, originalPayload: payload, approvedPayload: payload,
+        approvedSubjectHash: subjectHash, requestHash, decidedAt: new Date().toISOString()
+      },
+      finalizationCommand: command(second.runId)
     })).rejects.toThrow('Approval subject');
   });
 
   it('moves exhausted delivery to a redacted inspectable dead-letter queue', async () => {
     const seeded = await seedRun();
     const next = command(seeded.runId);
-    await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+    await store.startRun(startRunInput(seeded, next));
     const deadLetters: WorkflowCommand[] = [];
     const failingQueue = { publish: async () => { throw new Error('redis unavailable'); }, inspect: async () => ({ state: 'missing' as const, attemptsMade: 0, maxAttempts: 0, exhausted: false }) };
     const deadLetterQueue: CommandQueue = { publish: async (entry) => { deadLetters.push(entry); } };
@@ -323,7 +352,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await primary.queue.waitUntilReady();
     try {
       const seeded = await seedRun(); const next = command(seeded.runId);
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await store.startRun(startRunInput(seeded, next));
 
       const outcome = await new OutboxDispatcher(database, acceptThenThrow, deadLetterQueue, 1).dispatchBatch();
 
@@ -338,7 +367,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
 
   it('leaves an ambiguous primary publication claim recoverable when inspection also fails', async () => {
     const seeded = await seedRun(); const next = command(seeded.runId);
-    await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+    await store.startRun(startRunInput(seeded, next));
     const deadLetters: WorkflowCommand[] = [];
     const unavailable = {
       publish: async () => { throw new Error('primary unavailable'); },
@@ -362,7 +391,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     }
   });
 
-  it('moves a real exhausted processor failure out of the primary outbox', async () => {
+  it('terminalizes an active run once when its processor attempts are exhausted', async () => {
     const queueName = `slacato-workflow-exhausted-${suffix()}`;
     const failedQueue = new BullMqCommandQueue(redisUrl, queueName);
     const deadLetters = new BullMqCommandQueue(redisUrl, `${queueName}-dead-letter`);
@@ -373,7 +402,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     try {
       const seeded = await seedRun();
       const next = { ...command(seeded.runId), payload: { providerSecret: 'secret-value', step: 'start' } };
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await store.startRun(startRunInput(seeded, next));
       await new OutboxDispatcher(database, failedQueue, failedQueue).dispatchBatch();
       await waitForFailedJob(failedQueue, next.id);
 
@@ -390,11 +419,135 @@ describe('PostgreSQL outbox and workflow leases', () => {
         payload: { commandId: next.id, type: 'process-step', reason: 'processor_attempts_exhausted', attemptsMade: 3, maxAttempts: 3 }
       });
       expect(JSON.stringify(record?.data)).not.toContain('secret-value');
+      expect(
+        (
+          await database.sql<{ status: string; version: number }[]>`
+            select status, version from runs where id = ${seeded.runId}
+          `
+        )[0]
+      ).toEqual({ status: 'failed', version: 1 });
+      expect(
+        (
+          await database.sql<{ type: string; payload: Record<string, unknown> }[]>`
+            select type, payload from run_events where run_id = ${seeded.runId} and type = 'fail'
+          `
+        )[0]
+      ).toEqual({
+        type: 'fail',
+        payload: { version: 1, reasonCode: 'workflow_failed', terminal: true }
+      });
+      expect(
+        (
+          await database.sql<{
+            kind: string;
+            status: string;
+            payload: Record<string, unknown>;
+          }[]>`
+            select kind, status, payload from trace_spans
+            where run_id = ${seeded.runId} and kind = 'fatal_failure'
+          `
+        )[0]
+      ).toEqual({
+        kind: 'fatal_failure',
+        status: 'failed',
+        payload: { decision: 'fatal', reasonCode: 'workflow_failed' }
+      });
+      expect(
+        JSON.stringify(
+          await database.sql`
+            select payload from run_events where run_id = ${seeded.runId}
+            union all
+            select payload from trace_spans where run_id = ${seeded.runId}
+          `
+        )
+      ).not.toContain('secret-value');
+
+      await new PostgresCommandReconciler(database, failedQueue, deadLetters).reconcile();
+      expect(
+        (
+          await database.sql<{
+            status: string;
+            version: number;
+            fail_events: number;
+            fatal_failures: number;
+          }[]>`
+            select run.status, run.version,
+              count(event.id) filter (where event.type = 'fail')::integer as fail_events,
+              (select count(*)::integer from trace_spans span
+                where span.run_id = run.id and span.kind = 'fatal_failure') as fatal_failures
+            from runs run left join run_events event on event.run_id = run.id
+            where run.id = ${seeded.runId}
+            group by run.id
+          `
+        )[0]
+      ).toEqual({ status: 'failed', version: 1, fail_events: 1, fatal_failures: 1 });
     } finally {
       await worker.close();
       await deadLetters.close();
       await failedQueue.close();
     }
+  });
+
+  it('acknowledges exhausted commands without overriding terminal runs', async () => {
+    const terminalStatuses = ['completed', 'rejected', 'failed', 'cancelled'] as const;
+    const seededRuns = await Promise.all(terminalStatuses.map(async (status) => {
+      const seeded = await seedRun();
+      const next = command(seeded.runId);
+      await store.startRun(startRunInput(seeded, next));
+      await database.sql`update runs set status = ${status}, version = 7 where id = ${seeded.runId}`;
+      await database.sql`update outbox_commands
+        set status = 'dead_letter_claimed', claim_owner = 'interrupted-reconciler',
+          claim_token = ${`dead_letter_${next.id}`}, claim_expires_at = null
+        where id = ${next.id}`;
+      return { runId: seeded.runId, commandId: next.id, status };
+    }));
+    const deadLetters: WorkflowCommand[] = [];
+    const exhaustedQueue = {
+      state: async () => 'failed' as const,
+      inspect: async () => ({
+        state: 'failed' as const,
+        attemptsMade: 3,
+        maxAttempts: 3,
+        exhausted: true
+      }),
+      reopenCompleted: async () => {},
+      publish: async () => {}
+    };
+    const deadLetterQueue: CommandQueue = {
+      publish: async (entry) => {
+        deadLetters.push(entry);
+      }
+    };
+    const reconciler = new PostgresCommandReconciler(database, exhaustedQueue, deadLetterQueue);
+
+    await reconciler.reconcile();
+    await reconciler.reconcile();
+
+    for (const seeded of seededRuns) {
+      expect(
+        (
+          await database.sql<{ status: string; version: number }[]>`
+            select status, version from runs where id = ${seeded.runId}
+          `
+        )[0]
+      ).toEqual({ status: seeded.status, version: 7 });
+      expect(
+        (
+          await database.sql<{ status: string }[]>`
+            select status from outbox_commands where id = ${seeded.commandId}
+          `
+        )[0]?.status
+      ).toBe('dead_letter');
+      expect(
+        (
+          await database.sql<{ count: number }[]>`
+            select count(*)::integer as count from run_events
+            where run_id = ${seeded.runId} and type = 'fail'
+          `
+        )[0]?.count
+      ).toBe(0);
+    }
+    expect(deadLetters).toHaveLength(terminalStatuses.length);
   });
 
   it('does not retry a BullMQ unrecoverable failure below its configured attempt limit', async () => {
@@ -408,7 +561,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     try {
       const seeded = await seedRun();
       const next = command(seeded.runId);
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await store.startRun(startRunInput(seeded, next));
       await new OutboxDispatcher(database, failedQueue, failedQueue).dispatchBatch();
       await waitForFailedJob(failedQueue, next.id);
 
@@ -431,7 +584,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await Promise.all([primary.queue.waitUntilReady(), deadLetters.queue.waitUntilReady(), worker.waitUntilReady()]);
     try {
       const seeded = await seedRun(); const next = command(seeded.runId);
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await store.startRun(startRunInput(seeded, next));
       await new OutboxDispatcher(database, primary, primary).dispatchBatch();
       await waitForFailedJob(primary, next.id);
       const crashBeforePublish: CommandQueue = { publish: async () => { throw new Error('simulated DLQ process crash'); } };
@@ -456,7 +609,7 @@ describe('PostgreSQL outbox and workflow leases', () => {
     await Promise.all([primary.queue.waitUntilReady(), deadLetters.queue.waitUntilReady(), worker.waitUntilReady()]);
     try {
       const seeded = await seedRun(); const next = command(seeded.runId);
-      await store.startRun({ id: seeded.runId as never, opportunityId: seeded.opportunityId as never, requestedBy: seeded.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next });
+      await store.startRun(startRunInput(seeded, next));
       await new OutboxDispatcher(database, primary, primary).dispatchBatch();
       await waitForFailedJob(primary, next.id);
       const crashAfterPublish: CommandQueue = { publish: async (entry) => { await deadLetters.publish(entry); throw new Error('simulated crash after accepted DLQ job'); } };
@@ -464,10 +617,36 @@ describe('PostgreSQL outbox and workflow leases', () => {
       await expect(new PostgresCommandReconciler(database, primary, crashAfterPublish).reconcile()).rejects.toThrow('simulated crash after accepted DLQ job');
       expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('dead_letter_claimed');
       expect(await deadLetters.queue.getJob(next.id)).toBeDefined();
+      expect(
+        (
+          await database.sql<{ status: string; version: number }[]>`
+            select status, version from runs where id = ${seeded.runId}
+          `
+        )[0]
+      ).toEqual({ status: 'created', version: 0 });
+      expect(
+        (
+          await database.sql<{ count: number }[]>`
+            select count(*)::integer as count from run_events
+            where run_id = ${seeded.runId} and type = 'fail'
+          `
+        )[0]?.count
+      ).toBe(0);
 
       await new PostgresCommandReconciler(database, primary, deadLetters).reconcile();
       expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('dead_letter');
       expect(await deadLetters.queue.getJobCountByTypes('waiting', 'active', 'delayed', 'completed', 'failed')).toBe(1);
+      expect(
+        (
+          await database.sql<{ status: string; version: number; fail_events: number }[]>`
+            select run.status, run.version,
+              count(event.id) filter (where event.type = 'fail')::integer as fail_events
+            from runs run left join run_events event on event.run_id = run.id
+            where run.id = ${seeded.runId}
+            group by run.id
+          `
+        )[0]
+      ).toEqual({ status: 'failed', version: 1, fail_events: 1 });
     } finally {
       await worker.close(); await deadLetters.close(); await primary.close();
     }

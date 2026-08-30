@@ -8,7 +8,7 @@ import type { DiagnosticsModuleOptions } from './modules/diagnostics/contracts.j
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module.js';
 import type { BriefExportService } from './modules/exports/contracts.js';
 import { ExportsModule } from './modules/exports/exports.module.js';
-import { HealthModule } from './modules/health/health.module.js';
+import { HealthModule, type HealthModuleOptions } from './modules/health/health.module.js';
 import type { WorkflowApiOptions } from './modules/runs/contracts.js';
 import { RunsModule } from './modules/runs/runs.module.js';
 
@@ -21,12 +21,13 @@ export class AppModule {
     workflowOptions?: WorkflowApiOptions,
     diagnosticsOptions?: DiagnosticsModuleOptions,
     dealsOptions?: DealsModuleOptions,
-    briefExportService?: BriefExportService
+    briefExportService?: BriefExportService,
+    healthOptions?: HealthModuleOptions
   ): DynamicModule {
     return {
       module: AppModule,
       imports: [
-        HealthModule,
+        HealthModule.register(healthOptions),
         AuthModule.register(authOptions),
         ...(diagnosticsOptions === undefined
           ? []

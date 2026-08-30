@@ -1,6 +1,10 @@
+import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { CANONICAL_FIXTURE_COMMIT, hashApprovalPayload } from '@slacato/core';
 import { approvalDetailResponseSchema, approvalInboxResponseSchema, runDetailResponseSchema, runListResponseSchema, runSnapshotSchema } from '@slacato/contracts';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres, { type Sql } from 'postgres';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -8,7 +12,15 @@ import { createApiApplication } from '../../apps/api/src/main';
 
 const origin = 'http://127.0.0.1:4173';
 const browserHeaders = { Origin: origin, 'Sec-Fetch-Site': 'same-site' };
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const sourceDatabaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const databaseName = `catohw_approval_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
+const databaseNamePattern = /^catohw_approval_[a-z0-9]{16}$/;
+function databaseUrlFor(name: string): string {
+  const url = new URL(sourceDatabaseUrl);
+  url.pathname = `/${name}`;
+  return url.toString();
+}
+const databaseUrl = databaseUrlFor(databaseName);
 const suffix = `task13_${process.pid}`;
 const personaBase = 9_000_000 + process.pid * 10;
 const ids = {
@@ -49,9 +61,53 @@ const subjectPayload = {
   confidenceAndReviewWarnings: { overallConfidence: 0.8, warnings: [] }
 };
 const subjectHash = hashApprovalPayload(subjectPayload);
+const replacementClaim = {
+  id: `claim_crm_${suffix}`,
+  statement: 'The renewal requires a legal review.',
+  confidence: 0.9,
+  citations: [
+    {
+      id: `citation_crm_${suffix}`,
+      evidenceId: ids.crmEvidence,
+      locator: 'salesforce/opportunities.tsv#task13:0'
+    }
+  ]
+};
+const replacementRestrictedClaim = {
+  id: `claim_restricted_${suffix}`,
+  statement: 'The restricted conversation requires legal review.',
+  confidence: 0.9,
+  citations: [
+    {
+      id: `citation_restricted_${suffix}`,
+      evidenceId: ids.restrictedConversationEvidence,
+      locator: 'gong/calls.json#task13:0'
+    }
+  ]
+};
 const replacementPayload = {
   ...subjectPayload,
-  confidenceAndReviewWarnings: { overallConfidence: 0.7, warnings: [] }
+  executiveSummary: {
+    narrative: 'A validated summary for approval.',
+    claims: [replacementClaim]
+  },
+  negotiationState: {
+    currentState: 'Legal terms require review.',
+    risks: ['Approval outstanding'],
+    claims: [replacementRestrictedClaim]
+  },
+  sourceEvidence: { evidence: [] },
+  confidenceAndReviewWarnings: {
+    overallConfidence: 0.7,
+    warnings: [
+      {
+        code: 'CONVERSATION_SPECIALIST_UNAVAILABLE',
+        severity: 'warning',
+        message: 'Conversation specialist was unavailable; conversation-derived claims were omitted.',
+        claimIds: []
+      }
+    ]
+  }
 };
 const replacementSubjectHash = hashApprovalPayload(replacementPayload);
 
@@ -74,9 +130,15 @@ async function authenticateWithCsrf(app: NestExpressApplication, userId: string)
 describe.sequential('run and approval query APIs', () => {
   let app: NestExpressApplication;
   let sql: Sql;
+  let admin: Sql;
 
   beforeAll(async () => {
+    if (!databaseNamePattern.test(databaseName))
+      throw new Error(`Refusing to create non-test database ${databaseName}`);
+    admin = postgres(databaseUrlFor('postgres'), { max: 1 });
+    await admin.unsafe(`create database "${databaseName}"`);
     sql = postgres(databaseUrl, { max: 1 });
+    await migrate(drizzle(sql), { migrationsFolder: resolve(process.cwd(), 'drizzle') });
     await sql`insert into accounts (id, name) values (${ids.account}, 'Task 13 Account'), (${ids.hiddenAccount}, 'Hidden Account')`;
     await sql`insert into opportunities (id, account_id, name, restricted) values
       (${ids.opportunity}, ${ids.account}, 'Task 13 Renewal', false),
@@ -120,17 +182,40 @@ describe.sequential('run and approval query APIs', () => {
       (${ids.run}, ${ids.opportunity}, ${ids.requester}, 'awaiting_approval', 'mock', 'mock-brief', ${'c'.repeat(64)}, 7),
       (${ids.hiddenRun}, ${ids.hiddenOpportunity}, ${ids.requester}, 'completed', 'mock', 'mock-brief', ${'d'.repeat(64)}, 4),
       (${ids.failedRun}, ${ids.opportunity}, ${ids.requester}, 'failed', 'mock', 'mock-brief', ${'e'.repeat(64)}, 3)`;
+    await sql`insert into run_evidence_manifests
+      (id, run_id, scope_hash, policy_hash, query_hash, index_profile, embedding_provider, embedding_model,
+        embedding_dimension, embedding_version, embedding_normalization, context_limit, diagnostics)
+      values (${`manifest-${suffix}`}, ${ids.run}, ${'f'.repeat(64)}, ${'a'.repeat(64)},
+        ${'b'.repeat(64)}, 'task-13', 'mock', 'mock-embedding', 3, 'v1', 'l2', 2000, '{}'::jsonb)`;
+    await sql`insert into run_evidence_manifest_entries
+      (manifest_id, evidence_version_id, citation_id, rank, query_rank, score, content_hash, source_locator,
+        source_type, sensitivity, classification_reason, policy_hash, lexical_rank, semantic_rank, fusion_score,
+        reliability_adjustment, recency_adjustment, included_characters)
+      values
+      (${`manifest-${suffix}`}, ${ids.crmEvidence}, ${replacementClaim.citations[0].id}, 1, 1, 1,
+        ${`evidence-crm-hash-${suffix}`}, 'salesforce/opportunities.tsv#task13:0', 'salesforce', 'standard',
+        'task13_test', ${'a'.repeat(64)}, 1, 1, 1, 1, 1, 1000),
+      (${`manifest-${suffix}`}, ${ids.restrictedConversationEvidence},
+        ${replacementRestrictedClaim.citations[0].id}, 2, 2, 1,
+        ${`evidence-conversation-hash-${suffix}`}, 'gong/calls.json#task13:0', 'gong_summary', 'restricted',
+        'task13_test', ${'a'.repeat(64)}, 2, 2, 1, 1, 1, 1000)`;
     await sql`insert into workflow_checkpoints (id, run_id, step, payload)
-      values (${`checkpoint-strategy-${suffix}`}, ${ids.failedRun}, 'strategy:1', ${sql.json({ status: 'completed', value: subjectPayload })})`;
+      values (${`checkpoint-strategy-${suffix}`}, ${ids.failedRun}, 'strategy:1',
+        ${JSON.stringify({ status: 'completed', value: subjectPayload })}::jsonb)`;
     await sql`insert into run_events (id, run_id, sequence, type, payload) values
-      (${`event-1-${suffix}`}, ${ids.run}, 1, 'run_created', ${sql.json({ status: 'created', deadlineMs: 60000 })}),
-      (${`event-2-${suffix}`}, ${ids.run}, 2, 'awaiting_approval', ${sql.json({ version: 7, subjectHash, quorumVersion: 'deal-brief-approval-v1' })})`;
+      (${`event-1-${suffix}`}, ${ids.run}, 1, 'run_created',
+        ${JSON.stringify({ status: 'created', deadlineMs: 60000 })}::jsonb),
+      (${`event-2-${suffix}`}, ${ids.run}, 2, 'awaiting_approval',
+        ${JSON.stringify({ version: 7, subjectHash, quorumVersion: 'deal-brief-approval-v1' })}::jsonb)`;
     await sql`insert into approval_subjects
       (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
-      values (${ids.subject}, ${ids.run}, 1, ${subjectHash}, ${sql.json(subjectPayload)}, ${sql.json(['section:executiveSummary'])}, ${sql.json([])}, ${sql.json([])}, ${sql.json(['legal_terms'])}, 'deal-brief-approval-v1')`;
+      values (${ids.subject}, ${ids.run}, 1, ${subjectHash}, ${JSON.stringify(subjectPayload)}::jsonb,
+        ${JSON.stringify(['section:executiveSummary'])}::jsonb, '[]'::jsonb, '[]'::jsonb,
+        ${JSON.stringify(['legal_terms'])}::jsonb, 'deal-brief-approval-v1')`;
     await sql`insert into approval_requirement_entries
       (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
-      values (${ids.entry}, ${ids.subject}, 'legal_terms', ${sql.json(['legal_reviewer'])}, ${sql.json(['legal_terms'])}, ${sql.json([])}, 0)`;
+      values (${ids.entry}, ${ids.subject}, 'legal_terms', ${JSON.stringify(['legal_reviewer'])}::jsonb,
+        ${JSON.stringify(['legal_terms'])}::jsonb, '[]'::jsonb, 0)`;
     app = await createApiApplication({ environment: {
       ...process.env, NODE_ENV: 'test', DATABASE_URL: databaseUrl,
       SESSION_SECRET: 'task-13-query-api-session-secret-long-enough', AI_PROVIDER: 'mock', WEB_ORIGIN: origin
@@ -139,8 +224,14 @@ describe.sequential('run and approval query APIs', () => {
   });
 
   afterAll(async () => {
-    await app.close();
-    await sql.end({ timeout: 1 });
+    await app?.close();
+    await sql?.end({ timeout: 1 });
+    if (admin !== undefined) {
+      if (!databaseNamePattern.test(databaseName))
+        throw new Error(`Refusing to drop non-test database ${databaseName}`);
+      await admin.unsafe(`drop database if exists "${databaseName}" with (force)`);
+      await admin.end({ timeout: 1 });
+    }
   });
 
   it('lists complete scoped runs and lets an authorized approval actor rejoin the persisted detail and watermark', async () => {
@@ -162,7 +253,6 @@ describe.sequential('run and approval query APIs', () => {
       .set('X-CSRF-Token', reader.csrfToken).send({
         opportunityId: ids.opportunity,
         idempotencyKey: `reader-start-${suffix}`,
-        budget: { maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 5_000, deadlineMs: 60_000 }
       }).expect(201);
     expect(start.body).toEqual({ runId: ids.run });
     expect((await reader.agent.get('/api/runs').set(browserHeaders).expect(200)).body.runs)
@@ -177,13 +267,11 @@ describe.sequential('run and approval query APIs', () => {
       .set('X-CSRF-Token', stale.csrfToken).send({
         opportunityId: ids.opportunity,
         idempotencyKey: `stale-start-${suffix}`,
-        budget: { maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 5_000, deadlineMs: 60_000 }
       }).expect(404);
     const missingStart = await stale.agent.post('/api/runs/deal-brief').set(browserHeaders)
       .set('X-CSRF-Token', stale.csrfToken).send({
         opportunityId: `OPP-missing-${suffix}`,
         idempotencyKey: `missing-start-${suffix}`,
-        budget: { maxCalls: 10, maxInputTokens: 10_000, maxOutputTokens: 5_000, deadlineMs: 60_000 }
       }).expect(404);
     expect(staleStart.body).toEqual(missingStart.body);
     expect((await stale.agent.get('/api/approvals').set(browserHeaders).expect(200)).body.pending).toEqual([]);
@@ -229,27 +317,121 @@ describe.sequential('run and approval query APIs', () => {
 
     await sql`insert into approval_subjects
       (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
-      values (${ids.replacementSubject}, ${ids.run}, 2, ${replacementSubjectHash}, ${sql.json(replacementPayload)},
-        ${sql.json(['section:executiveSummary'])}, ${sql.json([])}, ${sql.json([])}, ${sql.json(['legal_terms'])}, 'deal-brief-approval-v1')`;
+      values (${ids.replacementSubject}, ${ids.run}, 2, ${replacementSubjectHash},
+        ${JSON.stringify(replacementPayload)}::jsonb, ${JSON.stringify(['section:executiveSummary'])}::jsonb,
+        '[]'::jsonb, '[]'::jsonb, ${JSON.stringify(['legal_terms'])}::jsonb, 'deal-brief-approval-v1')`;
     await sql`update approval_subjects set superseded_by_subject_id = ${ids.replacementSubject} where id = ${ids.subject}`;
     await sql`insert into approval_requirement_entries
       (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
-      values (${ids.replacementEntry}, ${ids.replacementSubject}, 'legal_terms', ${sql.json(['legal_reviewer'])},
-        ${sql.json(['legal_terms'])}, ${sql.json([])}, 0)`;
+      values (${ids.replacementEntry}, ${ids.replacementSubject}, 'legal_terms',
+        ${JSON.stringify(['legal_reviewer'])}::jsonb, ${JSON.stringify(['legal_terms'])}::jsonb, '[]'::jsonb, 0)`;
     const afterEdit = approvalInboxResponseSchema.parse((await approver.get('/api/approvals').set(browserHeaders).expect(200)).body);
     expect(afterEdit.pending.map(({ approvalSubjectId, entryId }) => ({ approvalSubjectId, entryId }))).toEqual([{
       approvalSubjectId: ids.replacementSubject,
       entryId: ids.replacementEntry
     }]);
 
-    const detail = approvalDetailResponseSchema.parse((await approver.get(`/api/approvals/${ids.subject}`).set(browserHeaders).expect(200)).body);
-    expect(detail.entries).toEqual([expect.objectContaining({ entryId: ids.entry, availableAuthority: 'legal_reviewer', decided: false })]);
-    expect(detail.payload.executiveSummary.narrative).toBe('A validated summary for approval.');
-    expect(detail.capabilities).toEqual({ canReadDeal: true, evidenceIds: [ids.crmEvidence] });
+    const supersededDetail = approvalDetailResponseSchema.parse(
+      (
+        await approver
+          .get(`/api/approvals/${ids.subject}`)
+          .set(browserHeaders)
+          .expect(200)
+      ).body
+    );
+    expect(supersededDetail.supersededBySubjectId).toBe(ids.replacementSubject);
+    const detail = approvalDetailResponseSchema.parse(
+      (await approver.get(`/api/approvals/${ids.replacementSubject}`).set(browserHeaders).expect(200)).body
+    );
+    expect(detail.entries).toEqual([expect.objectContaining({
+      entryId: ids.replacementEntry, availableAuthority: 'legal_reviewer', decided: false
+    })]);
+    expect(detail.payload.executiveSummary.narrative).toBe(
+      replacementPayload.executiveSummary.narrative
+    );
+    expect(detail.payload.confidenceAndReviewWarnings.overallConfidence).toBe(0);
+    expect(detail.payload.confidenceAndReviewWarnings.warnings).toEqual(
+      replacementPayload.confidenceAndReviewWarnings.warnings
+    );
+    expect(detail.capabilities).toEqual({
+      canReadDeal: true,
+      canEditPayload: false,
+      evidenceIds: [ids.crmEvidence]
+    });
+    const editCsrf = await approver.get('/api/auth/csrf').set(browserHeaders).expect(200);
+    const readableCitation = replacementClaim.citations[0];
+    const readableClaim = (id: string) => ({
+      id,
+      statement: 'Readable CRM fixture',
+      confidence: 0.9,
+      citations: [readableCitation]
+    });
+    const unauthorizedEdit = {
+      ...replacementPayload,
+      dealSnapshot: {
+        ...replacementPayload.dealSnapshot,
+        claims: [readableClaim(`claim_edit_snapshot_${suffix}`)]
+      },
+      executiveSummary: {
+        narrative: 'Readable CRM fixture',
+        claims: [readableClaim(`claim_edit_summary_${suffix}`)]
+      },
+      buyerGoalsAndBusinessDrivers: {
+        goals: ['Readable CRM fixture'],
+        businessDrivers: [],
+        claims: [readableClaim(`claim_edit_goal_${suffix}`)]
+      },
+      negotiationState: {
+        currentState: 'Readable CRM fixture',
+        risks: [],
+        claims: [readableClaim(`claim_edit_negotiation_${suffix}`)]
+      },
+      sourceEvidence: {
+        evidence: [
+          {
+            evidenceId: ids.crmEvidence,
+            sourceType: 'crm',
+            summary: 'Readable CRM fixture',
+            capturedAt: '2026-08-29T00:00:00.000Z',
+            claims: [readableClaim(`claim_edit_source_${suffix}`)]
+          }
+        ]
+      }
+    };
+    await approver
+      .post('/api/approvals/decisions')
+      .set(browserHeaders)
+      .set('X-CSRF-Token', editCsrf.body.csrfToken as string)
+      .send({
+        runId: ids.run,
+        approvalSubjectId: ids.replacementSubject,
+        expectedRunVersion: 7,
+        expectedSubjectHash: replacementSubjectHash,
+        entryId: ids.replacementEntry,
+        category: 'legal_terms',
+        authority: 'legal_reviewer',
+        action: 'edit_and_approve',
+        rationale: 'Approve only the evidence currently visible to this actor.',
+        editedPayload: unauthorizedEdit,
+        idempotencyKey: `unauthorized-edit-${suffix}`
+      })
+      .expect(404);
+    await sql`update permission_grants set can_read_restricted = true
+      where id = ${`grant-approver-conversation-${suffix}`}`;
+    const fullyReadableDetail = approvalDetailResponseSchema.parse(
+      (
+        await approver
+          .get(`/api/approvals/${ids.replacementSubject}`)
+          .set(browserHeaders)
+          .expect(200)
+      ).body
+    );
+    expect(fullyReadableDetail.payload).toEqual(replacementPayload);
   });
   it('authorizes the exact current entry before exposing stale subject conflicts', async () => {
     const opaqueBody = { code: 'NOT_FOUND', message: 'The requested resource was not found.' };
     const wrongAuthority = await authenticateWithCsrf(app, ids.wrongAuthority);
+    await wrongAuthority.agent.get(`/api/approvals/${ids.replacementSubject}`).set(browserHeaders).expect(404);
     const wrongInput = {
       runId: ids.run,
       approvalSubjectId: ids.replacementSubject,
@@ -284,5 +466,47 @@ describe.sequential('run and approval query APIs', () => {
         authority: 'legal_reviewer',
         idempotencyKey: `authorized-stale-${suffix}`
       }).expect(409);
+  });
+  it('keeps authority-scoped approval history detail readable after its decision is no longer operable', async () => {
+    const authorized = await authenticateWithCsrf(app, ids.approver);
+    await authorized.agent
+      .post('/api/approvals/decisions')
+      .set(browserHeaders)
+      .set('X-CSRF-Token', authorized.csrfToken)
+      .send({
+        runId: ids.run,
+        approvalSubjectId: ids.replacementSubject,
+        expectedRunVersion: 7,
+        expectedSubjectHash: replacementSubjectHash,
+        entryId: ids.replacementEntry,
+        category: 'legal_terms',
+        authority: 'legal_reviewer',
+        action: 'approve_unchanged',
+        idempotencyKey: `authorized-complete-${suffix}`
+      })
+      .expect(201);
+
+    const history = approvalInboxResponseSchema.parse(
+      (await authorized.agent.get('/api/approvals').set(browserHeaders).expect(200)).body
+    );
+    expect(history.pending).toEqual([]);
+    expect(history.history).toEqual([
+      expect.objectContaining({ approvalSubjectId: ids.replacementSubject })
+    ]);
+    const detail = approvalDetailResponseSchema.parse(
+      (
+        await authorized.agent
+          .get(`/api/approvals/${ids.replacementSubject}`)
+          .set(browserHeaders)
+          .expect(200)
+      ).body
+    );
+    expect(detail.status).toBe('finalizing');
+
+    const wrongAuthority = await authenticate(app, ids.wrongAuthority);
+    await wrongAuthority
+      .get(`/api/approvals/${ids.replacementSubject}`)
+      .set(browserHeaders)
+      .expect(404);
   });
 });

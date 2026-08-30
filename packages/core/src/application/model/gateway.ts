@@ -333,7 +333,7 @@ export function createBudgetedModelGateway(
         controller.settleAttempt(reservation, response.usage?.outputTokens);
         controller.assertDeadline();
         controller.recordInputTokens(inputTokens, response.usage?.inputTokens);
-        const warnings = response.warnings ?? [];
+        const providerWarnings = response.warnings ?? [];
         const usage = response.usage ?? {};
         let candidate: unknown;
         const invalidText = response.text ?? '';
@@ -343,10 +343,15 @@ export function createBudgetedModelGateway(
           const validated = request.schema.safeParse(candidate);
           if (validated.success) {
             attempts.push({ outputMode, validationIssues: [] });
+            const transformedWarnings = request.attemptWarnings?.(validated.data) ?? [];
+            const warnings =
+              transformedWarnings.length === 0
+                ? providerWarnings
+                : [...providerWarnings, ...transformedWarnings];
             await attemptLedger.recordAttemptMetadata?.({
               attemptId: durableReservation.attemptId,
               outputMode,
-              validationAttempts: attempts.length,
+              validationAttempts: attempts.length - 1,
               validationIssues: [],
               warnings
             });
@@ -357,9 +362,9 @@ export function createBudgetedModelGateway(
           await attemptLedger.recordAttemptMetadata?.({
             attemptId: durableReservation.attemptId,
             outputMode,
-            validationAttempts: attempts.length,
+            validationAttempts: attempts.length - 1,
             validationIssues: issues,
-            warnings
+            warnings: providerWarnings
           });
           controller.recordSchemaRepair();
           prior = { text: invalidText, issues };
@@ -376,9 +381,9 @@ export function createBudgetedModelGateway(
           await attemptLedger.recordAttemptMetadata?.({
             attemptId: durableReservation.attemptId,
             outputMode,
-            validationAttempts: attempts.length,
+            validationAttempts: attempts.length - 1,
             validationIssues: issues,
-            warnings
+            warnings: providerWarnings
           });
           controller.recordSchemaRepair();
           prior = { text: invalidText, issues };

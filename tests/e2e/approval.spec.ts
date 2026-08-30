@@ -6,6 +6,7 @@ import postgres, { type Sql } from 'postgres';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const suffix = `task13e2e-${process.pid}-${Date.now()}`;
 const canonicalCommit = '076c659c3c7afd416f8d26729774b67042a55761';
+const approvalOpportunity = `OPP-approval-${suffix}`;
 const fixtures = {
   quorum: { opportunity: `OPP-quorum-${suffix}`, run: `run-quorum-${suffix}`, subject: `subject-quorum-${suffix}`, desk: `entry-desk-${suffix}`, leader: `entry-leader-${suffix}` },
   edit: { opportunity: `OPP-edit-${suffix}`, run: `run-edit-${suffix}`, subject: `subject-edit-${suffix}`, entry: `entry-edit-${suffix}` },
@@ -13,15 +14,68 @@ const fixtures = {
 } as const;
 const leaderId = `USR-${7_000_000 + process.pid}`;
 const leaderName = `Task 13 Sales Leader ${process.pid}`;
+const evidenceId = `evidence_approval_${suffix}`;
+const citationId = `citation_approval_${suffix}`;
+const sourceLocator = `salesforce/opportunities.tsv#${approvalOpportunity}`;
+const citation = { id: citationId, evidenceId, locator: sourceLocator };
 const payload = {
-  dealSnapshot: { accountName: 'Eclipse BioMaterials Ltd', opportunityName: 'Restricted Account Renewal', stage: 'Negotiation' },
-  executiveSummary: { narrative: 'Insufficient supported evidence is available for an executive summary.' },
-  buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
+  dealSnapshot: {
+    accountName: 'Eclipse BioMaterials Ltd',
+    opportunityName: 'Restricted Account Renewal',
+    stage: 'Negotiation',
+    claims: [{
+      id: `claim_snapshot_${suffix}`,
+      statement: 'The renewal is ready for a documented commercial review.',
+      confidence: 0.8,
+      citations: [citation]
+    }]
+  },
+  executiveSummary: {
+    narrative: 'The renewal is ready for a documented commercial review.',
+    claims: [{
+      id: `claim_summary_${suffix}`,
+      statement: 'The renewal is ready for a documented commercial review.',
+      confidence: 0.8,
+      citations: [citation]
+    }]
+  },
+  buyerGoalsAndBusinessDrivers: {
+    goals: ['Complete the renewal with reviewed commercial terms.'],
+    businessDrivers: [],
+    claims: [{
+      id: `claim_goal_${suffix}`,
+      statement: 'Complete the renewal with reviewed commercial terms.',
+      confidence: 0.8,
+      citations: [citation]
+    }]
+  },
   stakeholderMap: { stakeholders: [] },
-  negotiationState: { currentState: 'Insufficient supported evidence is available.', risks: [] },
+  negotiationState: {
+    currentState: 'The commercial position is awaiting authorized approval.',
+    risks: [],
+    claims: [{
+      id: `claim_negotiation_${suffix}`,
+      statement: 'The commercial position is awaiting authorized approval.',
+      confidence: 0.8,
+      citations: [citation]
+    }]
+  },
   recommendedNextActions: { actions: [] },
   missingInformation: { items: [] },
-  sourceEvidence: { evidence: [] },
+  sourceEvidence: {
+    evidence: [{
+      evidenceId,
+      sourceType: 'crm',
+      summary: 'The renewal is ready for a documented commercial review.',
+      capturedAt: '2026-08-29T00:00:00.000Z',
+      claims: [{
+        id: `claim_source_${suffix}`,
+        statement: 'The renewal is ready for a documented commercial review.',
+        confidence: 0.8,
+        citations: [citation]
+      }]
+    }]
+  },
   confidenceAndReviewWarnings: { overallConfidence: 0.8, warnings: [] }
 };
 function hashApprovalPayload(value: unknown): string {
@@ -47,12 +101,69 @@ async function loginAs(page: Page, name: string, returnTo: string): Promise<void
 }
 
 async function seedApproval(opportunityId: string, runId: string, subjectId: string, entries: readonly Readonly<{ id: string; authority: 'deal_desk' | 'sales_leader' }>[]): Promise<void> {
-  await sql`insert into opportunities (id, account_id, name, restricted) values (${opportunityId}, 'ACC-2003', 'Restricted Account Renewal', true)`;
+  const localEvidenceId = `${evidenceId}-${runId}`;
+  const localCitationId = `${citationId}-${runId}`;
+  const localSourceLocator = `salesforce/opportunities.tsv#${opportunityId}`;
+  const localCitation = {
+    id: localCitationId,
+    evidenceId: localEvidenceId,
+    locator: localSourceLocator
+  };
+  const localPayload = {
+    ...payload,
+    dealSnapshot: {
+      ...payload.dealSnapshot,
+      claims: payload.dealSnapshot.claims.map((claim) => ({
+        ...claim,
+        citations: [localCitation]
+      }))
+    },
+    executiveSummary: {
+      ...payload.executiveSummary,
+      claims: payload.executiveSummary.claims.map((claim) => ({
+        ...claim,
+        citations: [localCitation]
+      }))
+    },
+    buyerGoalsAndBusinessDrivers: {
+      ...payload.buyerGoalsAndBusinessDrivers,
+      claims: payload.buyerGoalsAndBusinessDrivers.claims.map((claim) => ({
+        ...claim,
+        citations: [localCitation]
+      }))
+    },
+    negotiationState: {
+      ...payload.negotiationState,
+      claims: payload.negotiationState.claims.map((claim) => ({
+        ...claim,
+        citations: [localCitation]
+      }))
+    },
+    sourceEvidence: {
+      evidence: payload.sourceEvidence.evidence.map((summary) => ({
+        ...summary,
+        evidenceId: localEvidenceId,
+        claims: summary.claims.map((claim) => ({ ...claim, citations: [localCitation] }))
+      }))
+    }
+  };
+  const localSubjectHash = hashApprovalPayload(localPayload);
+  await sql`insert into opportunities (id, account_id, name, restricted) values (${opportunityId}, 'ACC-2003', 'Restricted Account Renewal', true) on conflict (id) do nothing`;
   await sql`insert into opportunity_policy_facts
     (opportunity_id, discount_percent, renewal_uplift_percent, liability_cap_changed, data_retention_language,
       restricted_research_language, customer_specific_security_language, customer_facing_concession_language,
       conflicting_evidence, missing_material_evidence, source_commit)
-    values (${opportunityId}, 12, 0, false, false, false, false, false, false, false, 'task-13-e2e')`;
+    values (${opportunityId}, 12, 0, false, false, false, false, false, false, false, 'task-13-e2e') on conflict (opportunity_id) do nothing`;
+  await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content)
+    values (${`document-${runId}`}, ${`external-${runId}`}, 1, 'salesforce',
+      ${`document-hash-${runId}`}, 'The renewal is ready for a documented commercial review.')`;
+  await sql`insert into evidence_versions
+    (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash,
+      content, event_date, source_locator, reliability_class, classification_reason, policy_hash)
+    values (${localEvidenceId}, ${`document-${runId}`}, 'ACC-2003', ${opportunityId}, 0,
+      'salesforce', 'standard', ${`evidence-hash-${runId}`},
+      'The renewal is ready for a documented commercial review. Complete the renewal with reviewed commercial terms. The commercial position is awaiting authorized approval.',
+      '2026-08-29', ${localSourceLocator}, 'authoritative_system', 'task-13-e2e', ${'a'.repeat(64)})`;
   await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
     values (${runId}, ${opportunityId}, 'USR-5003', 'awaiting_approval', 'mock', 'mock-brief', ${hashApprovalPayload(runId)}, 5)`;
   await sql`insert into run_evidence_manifests
@@ -60,11 +171,17 @@ async function seedApproval(opportunityId: string, runId: string, subjectId: str
       embedding_dimension, embedding_version, embedding_normalization, context_limit, diagnostics)
     values (${`manifest-${runId}`}, ${runId}, ${'a'.repeat(64)}, ${'b'.repeat(64)}, ${'c'.repeat(64)}, 'task-13-e2e',
       'mock', 'mock-embedding', 3, 'v1', 'l2', 1000, '{}'::jsonb)`;
+  await sql`insert into run_evidence_manifest_entries
+    (manifest_id, evidence_version_id, citation_id, rank, query_rank, score, content_hash, source_locator,
+      source_type, sensitivity, classification_reason, policy_hash, lexical_rank, semantic_rank, fusion_score,
+      reliability_adjustment, recency_adjustment, included_characters)
+    values (${`manifest-${runId}`}, ${localEvidenceId}, ${localCitationId}, 1, 1, 1, ${`evidence-hash-${runId}`},
+      ${localSourceLocator}, 'salesforce', 'standard', 'task-13-e2e', ${'a'.repeat(64)}, 1, 1, 1, 1, 1, 1000)`;
   await sql`insert into run_events (id, run_id, sequence, type, payload) values
-    (${`event-${runId}`}, ${runId}, 1, 'awaiting_approval', ${sql.json({ version: 5, subjectHash, quorumVersion: 'deal-brief-approval-v1' })})`;
+    (${`event-${runId}`}, ${runId}, 1, 'awaiting_approval', ${sql.json({ version: 5, subjectHash: localSubjectHash, quorumVersion: 'deal-brief-approval-v1' })})`;
   await sql`insert into approval_subjects
     (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
-    values (${subjectId}, ${runId}, 1, ${subjectHash}, ${sql.json(payload)}, ${sql.json(['section:executiveSummary'])}, ${sql.json([])}, ${sql.json([])}, ${sql.json(['discount'])}, 'deal-brief-approval-v1')`;
+    values (${subjectId}, ${runId}, 1, ${localSubjectHash}, ${sql.json(localPayload)}, ${sql.json(['section:executiveSummary'])}, ${sql.json([])}, ${sql.json([localCitationId])}, ${sql.json(['discount'])}, 'deal-brief-approval-v1')`;
   for (const [ordinal, entry] of entries.entries()) {
     await sql`insert into approval_requirement_entries
       (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
@@ -159,6 +276,11 @@ test('edit and approve validates semantic fields, reflows at 320px and 200%-equi
     'Negotiation state', 'Recommended next actions', 'Missing information',
     'Authorized evidence summaries', 'Confidence and review warnings'
   ]) await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  await expect(page.getByText(payload.executiveSummary.narrative, { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText(payload.buyerGoalsAndBusinessDrivers.goals[0] ?? '', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText(payload.negotiationState.currentState, { exact: true })).toBeVisible();
   const edit = page.getByRole('button', { name: 'Edit and approve' });
   await edit.focus();
   await page.keyboard.press('Enter');

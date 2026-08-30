@@ -1,4 +1,4 @@
-import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Inject, Res } from '@nestjs/common';
 import { liveHealthSchema, readinessHealthSchema } from '@slacato/contracts';
 import type { Response } from 'express';
 import { NonBrowserPublic } from '../../common/security/access.metadata.js';
@@ -10,7 +10,7 @@ import { HealthService, type ReadinessHealth } from './health.service.js';
 @NonBrowserPublic()
 export class HealthController {
   /** Creates a health controller backed by the readiness health service. */
-  public constructor(private readonly health: HealthService) {}
+  public constructor(@Inject(HealthService) private readonly health: HealthService) {}
 
   /** Reports whether the API process is running. */
   @Get('live')

@@ -1,33 +1,51 @@
 import { dealListItemSchema } from '@slacato/contracts';
+import type { DealQueryRepository, EvidenceCategory } from '@slacato/core';
 import { describe, expect, it } from 'vitest';
 import { DealsService } from '../../apps/api/src/modules/deals/deals.service';
-import type { DealQueryRepository, EvidenceCategory } from '../../apps/api/src/modules/deals/contracts';
 
 const opportunity = {
-  opportunity_id: 'OPP-TEST', opportunity_name: 'Test opportunity', account_id: 'ACC-TEST',
-  account_name: 'Test account', restricted: false, created_at: new Date('2026-08-29T10:00:00.000Z'),
-  record_content: null, latest_run_status: null, latest_run_updated_at: null
+  opportunityId: 'OPP-TEST',
+  opportunityName: 'Test opportunity',
+  accountId: 'ACC-TEST',
+  accountName: 'Test account',
+  restricted: false,
+  createdAt: new Date('2026-08-29T10:00:00.000Z'),
+  recordContent: null,
+  latestRun: null
 } as const;
 const opportunityEvidence = {
-  id: 'salesforce:OPP-TEST:0', source_type: 'salesforce', sensitivity: 'standard', event_date: null,
-  source_locator: 'salesforce/opportunities.tsv#OPP-TEST#chunk-0', created_at: new Date('2026-08-29T10:00:00.000Z'),
-  content: 'opportunityId: OPP-TEST\nopportunityName: Test opportunity\naccountName: Test account\nstage: Discovery\nowner: Test Owner\ncloseDate: 2026-09-30\nacv: 1000\nprobability: 25\nriskLevel: low\nnextStep: Confirm discovery by 2026-09-01'
+  id: 'salesforce:OPP-TEST:0',
+  sourceType: 'salesforce',
+  sensitivity: 'standard',
+  eventDate: null,
+  sourceLocator: 'salesforce/opportunities.tsv#OPP-TEST#chunk-0',
+  createdAt: new Date('2026-08-29T10:00:00.000Z'),
+  content:
+    'opportunityId: OPP-TEST\nopportunityName: Test opportunity\naccountName: Test account\nstage: Discovery\nowner: Test Owner\ncloseDate: 2026-09-30\nacv: 1000\nprobability: 25\nriskLevel: low\nnextStep: Confirm discovery by 2026-09-01'
 } as const;
 const reinforcingSlackEvidence = {
-  id: 'slack:SLK-TEST:0', source_type: 'slack', sensitivity: 'standard', event_date: '2026-08-28',
-  source_locator: 'slack/account_team_updates.tsv#SLK-TEST#chunk-0', created_at: new Date('2026-08-28T10:00:00.000Z'),
-  content: 'updateId: SLK-TEST\nopportunityId: OPP-TEST\naccountId: ACC-TEST\nupdateDate: 2026-08-28\nupdateText: The account team reaffirmed the documented discovery plan and named owners.'
+  id: 'slack:SLK-TEST:0',
+  sourceType: 'slack',
+  sensitivity: 'standard',
+  eventDate: '2026-08-28',
+  sourceLocator: 'slack/account_team_updates.tsv#SLK-TEST#chunk-0',
+  createdAt: '2026-08-28T10:00:00.000Z',
+  content:
+    'updateId: SLK-TEST\nopportunityId: OPP-TEST\naccountId: ACC-TEST\nupdateDate: 2026-08-28\nupdateText: The account team reaffirmed the documented discovery plan and named owners.'
 } as const;
 const resolvingSlackEvidence = {
   ...reinforcingSlackEvidence,
   id: 'slack:SLK-RESOLVED:0',
-  source_locator: 'slack/account_team_updates.tsv#SLK-RESOLVED#chunk-0',
-  content: 'updateId: SLK-RESOLVED\nopportunityId: OPP-TEST\naccountId: ACC-TEST\nupdateDate: 2026-08-29\nupdateText: The previously missing payment schedule is now confirmed and the information gap is resolved.'
+  eventDate: '2026-08-29',
+  createdAt: '2026-08-29T10:00:00.000Z',
+  sourceLocator: 'slack/account_team_updates.tsv#SLK-RESOLVED#chunk-0',
+  content:
+    'updateId: SLK-RESOLVED\nopportunityId: OPP-TEST\naccountId: ACC-TEST\nupdateDate: 2026-08-29\nupdateText: The previously missing payment schedule is now confirmed and the information gap is resolved.'
 } as const;
 const unprovenancedEvidence = {
   ...reinforcingSlackEvidence,
   id: 'slack:legacy-null-provenance:0',
-  source_locator: null,
+  sourceLocator: null,
   content: 'updateText: private legacy row without a stable source record'
 } as const;
 const session = {
@@ -148,5 +166,99 @@ describe('DealsService workspace fan-out', () => {
     const workspace = await new DealsService({ repository }).getAuthorizedDealWorkspace(session, 'OPP-TEST');
     expect(workspace.deal.closeDate).toBeNull();
     expect(workspace.brief.actions[0]?.dueDate).toBeNull();
+  });
+
+  it('omits evidence with an impossible optional event date without creating citations', async () => {
+    const invalidDateEvidence = {
+      ...opportunityEvidence,
+      eventDate: '2026-02-31'
+    };
+    const repository: DealQueryRepository = {
+      listAuthorizedDeals: async () => [opportunity],
+      findAuthorizedDeal: async () => opportunity,
+      findLatestRun: async () => undefined,
+      listEvidence: async (_scope, category) =>
+        category === 'opportunity' ? [invalidDateEvidence] : []
+    };
+
+    const workspace = await new DealsService({ repository }).getAuthorizedDealWorkspace(
+      session,
+      'OPP-TEST'
+    );
+
+    expect(workspace.evidence).toEqual([]);
+    expect(JSON.stringify(workspace.brief)).not.toContain(invalidDateEvidence.id);
+  });
+
+  it('fails workspace mapping for an invalid required database date', async () => {
+    const invalidDateEvidence = {
+      ...opportunityEvidence,
+      createdAt: 'not-a-date'
+    };
+    const repository: DealQueryRepository = {
+      listAuthorizedDeals: async () => [opportunity],
+      findAuthorizedDeal: async () => opportunity,
+      findLatestRun: async () => undefined,
+      listEvidence: async (_scope, category) =>
+        category === 'opportunity' ? [invalidDateEvidence] : []
+    };
+
+    await expect(
+      new DealsService({ repository }).getAuthorizedDealWorkspace(session, 'OPP-TEST')
+    ).rejects.toThrow(RangeError);
+  });
+});
+
+describe('DealsService list date serialization', () => {
+  it('serializes valid Date and ISO string database values', async () => {
+    const repository: DealQueryRepository = {
+      listAuthorizedDeals: async () => [
+        {
+          ...opportunity,
+          latestRun: {
+            status: 'completed',
+            updatedAt: new Date('2026-08-30T11:00:00.000Z')
+          }
+        },
+        {
+          ...opportunity,
+          opportunityId: 'OPP-STRING-DATES',
+          createdAt: '2026-08-29T12:00:00.000Z',
+          latestRun: {
+            status: 'failed',
+            updatedAt: '2026-08-30T13:00:00.000Z'
+          }
+        }
+      ],
+      findAuthorizedDeal: async () => undefined,
+      findLatestRun: async () => undefined,
+      listEvidence: async () => []
+    };
+
+    const deals = await new DealsService({ repository }).listAuthorizedDeals(session);
+
+    expect(deals.map(({ createdAt, latestRun }) => ({ createdAt, latestRun }))).toEqual([
+      {
+        createdAt: '2026-08-29T10:00:00.000Z',
+        latestRun: { status: 'completed', updatedAt: '2026-08-30T11:00:00.000Z' }
+      },
+      {
+        createdAt: '2026-08-29T12:00:00.000Z',
+        latestRun: { status: 'failed', updatedAt: '2026-08-30T13:00:00.000Z' }
+      }
+    ]);
+  });
+
+  it('fails list mapping for an invalid required database date', async () => {
+    const repository: DealQueryRepository = {
+      listAuthorizedDeals: async () => [{ ...opportunity, createdAt: 'not-a-date' }],
+      findAuthorizedDeal: async () => undefined,
+      findLatestRun: async () => undefined,
+      listEvidence: async () => []
+    };
+
+    await expect(new DealsService({ repository }).listAuthorizedDeals(session)).rejects.toThrow(
+      RangeError
+    );
   });
 });

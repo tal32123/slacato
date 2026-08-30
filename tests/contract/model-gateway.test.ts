@@ -96,6 +96,83 @@ describe('BudgetedModelGateway', () => {
     expect(events).toEqual(['begin:1', 'transport:undefined', 'settle:reservation-1', 'begin:2', 'transport:undefined', 'settle:reservation-2']);
   });
 
+  it('persists only corrective schema repairs while preserving validation telemetry', async () => {
+    const metadata: Parameters<
+      NonNullable<ProviderAttemptLedger['recordAttemptMetadata']>
+    >[0][] = [];
+    let ordinal = 0;
+    const ledger: ProviderAttemptLedger = {
+      async beginAttempt() {
+        ordinal += 1;
+        return {
+          reservationId: `reservation-${ordinal}`,
+          attemptId: `attempt-${ordinal}`,
+          ordinal,
+          grantedOutputTokens: 100
+        };
+      },
+      async settleAttempt() {},
+      async releaseAttempt() {},
+      async recordAttemptMetadata(input) {
+        metadata.push(input);
+      }
+    };
+    const outputs = [
+      '{"stakeholders":[]}',
+      '{"stakeholders":[{"role":"buyer"}]}',
+      '{"stakeholders":[]}'
+    ];
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate() {
+        return { text: outputs.shift() ?? '' };
+      }
+    };
+    const gateway = createBudgetedModelGateway(transport, undefined, ledger);
+    const request = (
+      operation: string,
+      limits: Readonly<{ maxCalls: number; maxSchemaRepairs: number }>
+    ) =>
+      gateway.generateObject({
+        schema,
+        messages: [{ role: 'user', content: 'Extract.' }],
+        operation,
+        durableAttempt: {
+          runScope: 'run-repair-counts',
+          provider: 'mock',
+          model: 'mock-chat'
+        },
+        limits: {
+          ...limits,
+          maxTransportRetries: 0,
+          deadlineMs: 1_000,
+          maxInputTokens: 10_000,
+          maxOutputTokens: 200
+        }
+      });
+
+    await expect(
+      request('initial-success', { maxCalls: 1, maxSchemaRepairs: 0 })
+    ).resolves.toMatchObject({ attempts: [{ validationIssues: [] }] });
+    await expect(
+      request('corrected-success', { maxCalls: 2, maxSchemaRepairs: 1 })
+    ).resolves.toMatchObject({
+      attempts: [
+        { validationIssues: [expect.objectContaining({ path: 'stakeholders.0.role' })] },
+        { validationIssues: [] }
+      ]
+    });
+
+    expect(metadata.map(({ attemptId, validationAttempts }) => ({
+      attemptId,
+      validationAttempts
+    }))).toEqual([
+      { attemptId: 'attempt-1', validationAttempts: 0 },
+      { attemptId: 'attempt-2', validationAttempts: 0 },
+      { attemptId: 'attempt-3', validationAttempts: 1 }
+    ]);
+  });
+
   it('allows repair and re-repair independently for each structured-output request', async () => {
     const attemptsByOperation = new Map<string, number>();
     const transport: ModelTransport = {
@@ -300,6 +377,90 @@ describe('BudgetedModelGateway', () => {
     });
 
     expect(recorded[0]?.[0]?.message).toContain('document_wrong');
+  });
+
+  it('records safe warnings from a successfully transformed artifact without recording pruned content', async () => {
+    const rawClaim = 'The buyer approved a secret unsupported 47 percent discount.';
+    const rawEvidence = 'Confidential transcript text that does not support the claim.';
+    const reviewSchema = z
+      .object({
+        claims: z.array(z.string()),
+        evidence: z.string()
+      })
+      .strict()
+      .transform((value) => ({
+        claims: value.claims.filter((claim) => claim !== rawClaim),
+        reviewWarnings:
+          value.claims.includes(rawClaim)
+            ? [
+                {
+                  code: 'INSUFFICIENT_CLAIM_SUPPORT',
+                  message: 'Material anchors are absent.'
+                }
+              ]
+            : []
+      }));
+    const recordedWarnings: string[][] = [];
+    let ordinal = 0;
+    const ledger: ProviderAttemptLedger = {
+      async beginAttempt(input) {
+        ordinal += 1;
+        return {
+          reservationId: `review-${ordinal}`,
+          attemptId: `review-${ordinal}`,
+          ordinal,
+          grantedOutputTokens: input.requestedOutputTokens
+        };
+      },
+      async settleAttempt() {},
+      async releaseAttempt() {},
+      async recordAttemptMetadata(input) {
+        recordedWarnings.push([...input.warnings]);
+      }
+    };
+    const outputs = [
+      { claims: [rawClaim], evidence: rawEvidence },
+      { claims: [], evidence: rawEvidence }
+    ];
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: true },
+      async generate() {
+        const output = outputs.shift();
+        return { text: JSON.stringify(output), output };
+      }
+    };
+    const gateway = createBudgetedModelGateway(transport, undefined, ledger);
+    const generate = (operation: string) =>
+      gateway.generateObject({
+        schema: reviewSchema,
+        messages: [{ role: 'user', content: 'Review claims.' }],
+        operation,
+        durableAttempt: { runScope: 'run-review', provider: 'mock', model: 'mock-chat' },
+        limits: {
+          maxCalls: 1,
+          maxSchemaRepairs: 0,
+          maxTransportRetries: 0,
+          deadlineMs: 1_000
+        },
+        attemptWarnings: (value) => value.reviewWarnings.map((warning) => warning.code)
+      });
+
+    const degraded = await generate('unsupported-claim');
+    const unchanged = await generate('supported-claims');
+
+    expect(degraded.value).toEqual({
+      claims: [],
+      reviewWarnings: [
+        {
+          code: 'INSUFFICIENT_CLAIM_SUPPORT',
+          message: 'Material anchors are absent.'
+        }
+      ]
+    });
+    expect(recordedWarnings).toEqual([['INSUFFICIENT_CLAIM_SUPPORT'], []]);
+    expect(unchanged.warnings).toEqual([]);
+    expect(JSON.stringify(recordedWarnings)).not.toContain(rawClaim);
+    expect(JSON.stringify(recordedWarnings)).not.toContain(rawEvidence);
   });
 
   it('fails explicitly instead of truncating repair feedback that cannot fit the context window', async () => {

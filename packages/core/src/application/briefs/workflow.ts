@@ -11,8 +11,12 @@ import {
   type ConversationArtifact,
   commercialArtifactSchema,
   conversationArtifactSchema,
+  countSubstantiveBriefSections,
   type DealBrief,
   dealBriefSchema,
+  MAX_LIST_ITEMS,
+  MIN_SUBSTANTIVE_BRIEF_SECTIONS,
+  type ReviewWarning,
   type StakeholderArtifact,
   stakeholderArtifactSchema
 } from '../../domain/briefs/schema.js';
@@ -48,7 +52,13 @@ export interface DealBriefAccessControl {
     input: Readonly<{ actorId: string; opportunityId: string }>
   ): Promise<readonly ApprovalAuthority[]>;
   validateApprovalEdit(
-    input: Readonly<{ actorId: string; opportunityId: string; runId: string; payload: DealBrief }>
+    input: Readonly<{
+      actorId: string;
+      opportunityId: string;
+      runId: string;
+      originalPayload: DealBrief;
+      payload: DealBrief;
+    }>
   ): Promise<ApprovalRequirement>;
   recordOpaqueDenial(event: Readonly<Record<string, unknown>>): Promise<void>;
 }
@@ -247,6 +257,86 @@ function specialistArtifactOf(
   if (name === 'stakeholder') return stakeholderArtifactSchema.parse(value);
   return commercialArtifactSchema.parse(value);
 }
+
+/** Collects claim identifiers retained in the synthesized brief. */
+function retainedClaimIds(brief: DealBrief): ReadonlySet<string> {
+  const claimIds = new Set<string>();
+  const collect = (claims: readonly Readonly<{ id: string }>[] | undefined): void => {
+    if (claims === undefined) return;
+    for (const claim of claims) claimIds.add(claim.id);
+  };
+  collect(brief.dealSnapshot.claims);
+  collect(brief.executiveSummary.claims);
+  collect(brief.buyerGoalsAndBusinessDrivers.claims);
+  collect(brief.stakeholderMap.claims);
+  for (const stakeholder of brief.stakeholderMap.stakeholders) collect(stakeholder.claims);
+  collect(brief.negotiationState.claims);
+  for (const action of brief.recommendedNextActions.actions) collect(action.claims);
+  for (const evidence of brief.sourceEvidence.evidence) collect(evidence.claims);
+  return claimIds;
+}
+
+/** Adds validated specialist warnings without allowing model output to displace them. */
+function mergeSpecialistReviewWarnings(
+  brief: DealBrief,
+  artifacts: readonly Readonly<{ reviewWarnings?: readonly ReviewWarning[] }>[]
+): DealBrief {
+  const specialistWarnings = artifacts.flatMap((artifact) => artifact.reviewWarnings ?? []);
+  const validClaimIds = retainedClaimIds(brief);
+  const specialistKeys = new Set(
+    specialistWarnings.map(
+      (warning) => `${warning.code}\u0000${warning.severity}\u0000${warning.message}`
+    )
+  );
+  const warnings: ReviewWarning[] = [];
+  const indexes = new Map<string, number>();
+  for (const warning of [...brief.confidenceAndReviewWarnings.warnings, ...specialistWarnings]) {
+    const key = `${warning.code}\u0000${warning.severity}\u0000${warning.message}`;
+    const existingIndex = indexes.get(key);
+    if (existingIndex === undefined) {
+      indexes.set(key, warnings.length);
+      warnings.push({
+        ...warning,
+        claimIds: [...new Set(warning.claimIds.filter((claimId) => validClaimIds.has(claimId)))]
+      });
+      continue;
+    }
+    const existing = warnings[existingIndex];
+    if (existing === undefined)
+      throw new DomainValidationError('Merged review warning index is out of bounds');
+    warnings[existingIndex] = {
+      ...existing,
+      claimIds: [
+        ...new Set(
+          [...existing.claimIds, ...warning.claimIds].filter((claimId) =>
+            validClaimIds.has(claimId)
+          )
+        )
+      ].slice(0, MAX_LIST_ITEMS)
+    };
+  }
+  while (warnings.length > MAX_LIST_ITEMS) {
+    let removableIndex = -1;
+    for (let index = warnings.length - 1; index >= 0; index -= 1) {
+      const warning = warnings[index];
+      if (warning === undefined)
+        throw new DomainValidationError('Merged review warning index is out of bounds');
+      const key = `${warning.code}\u0000${warning.severity}\u0000${warning.message}`;
+      if (!specialistKeys.has(key)) {
+        removableIndex = index;
+        break;
+      }
+    }
+    warnings.splice(removableIndex < 0 ? warnings.length - 1 : removableIndex, 1);
+  }
+  return dealBriefSchema.parse({
+    ...brief,
+    confidenceAndReviewWarnings: {
+      ...brief.confidenceAndReviewWarnings,
+      warnings
+    }
+  });
+}
 /** Describes one model generation attempt for audit and duplicate detection. */
 function generation(run: WorkflowRun, lease: StepLease, operation: string) {
   return {
@@ -287,6 +377,14 @@ export function assertApprovableBrief(value: unknown): DealBrief {
   visit(parsed);
   if (unsupported.length > 0)
     throw new DomainValidationError('Approval payload contains a claim without citations');
+  const substantiveSectionCount = countSubstantiveBriefSections(parsed);
+  if (substantiveSectionCount < MIN_SUBSTANTIVE_BRIEF_SECTIONS)
+    throw new DomainValidationError('Approval payload lacks substantive grounded coverage', {
+      substantiveSectionCount,
+      requiredSubstantiveSections: MIN_SUBSTANTIVE_BRIEF_SECTIONS
+    });
+  if (parsed.confidenceAndReviewWarnings.overallConfidence === 0)
+    throw new DomainValidationError('Approval payload has zero confidence');
   const hasRetainedApprovalContent =
     collectDealBriefReferences(parsed).evidenceIds.length > 0 ||
     parsed.stakeholderMap.stakeholders.length > 0 ||
@@ -323,7 +421,6 @@ export class StartDealBrief {
       await this.access.recordOpaqueDenial({
         type: 'deal_brief_start_denied',
         actorId: input.requestedBy,
-        runId,
         reason: 'forbidden'
       });
       throw new AuthorizationDeniedError('DealBrief start denied');
@@ -697,7 +794,11 @@ export class ProcessDealBriefStep {
           { context, conversation, stakeholder, commercial },
           lease.invocationId
         ));
-      parsed = await this.services.validateDraft(value);
+      parsed = mergeSpecialistReviewWarnings(await this.services.validateDraft(value), [
+        conversation,
+        stakeholder,
+        commercial
+      ]);
     } catch (error) {
       throw new FatalDealBriefWorkflowError('strategy_generation_failed', error);
     }

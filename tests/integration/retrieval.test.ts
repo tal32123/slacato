@@ -4,7 +4,7 @@ import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AuthorizationDeniedError, buildEvidencePlan, type EmbeddingProfile } from '@slacato/core';
+import { AuthorizationDeniedError, buildEvidencePlan, CANONICAL_FIXTURE_COMMIT, type EmbeddingProfile } from '@slacato/core';
 import {
   EmbeddingIndexer,
   PostgresCitationResolver,
@@ -54,6 +54,21 @@ afterAll(async () => {
   await admin.end({ timeout: 1 });
 });
 
+const fixtureBudget = { maxCalls: 20, deadlineMs: 60_000 } as const;
+
+async function seedRun(input: Readonly<{
+  runId: string;
+  opportunityId: string;
+  requestedBy: string;
+  status?: 'retrieving' | 'completed';
+}>): Promise<void> {
+  await sql`insert into runs
+    (id, opportunity_id, requested_by, status, generation_provider, generation_model, idempotency_key, start_request_hash)
+    values (${input.runId}, ${input.opportunityId}, ${input.requestedBy}, ${input.status ?? 'retrieving'}, 'mock', 'mock-brief', ${`start:${input.runId}`}, ${'a'.repeat(64)})`;
+  await sql`insert into run_budgets (run_id, max_calls, deadline_ms, deadline_at)
+    values (${input.runId}, ${fixtureBudget.maxCalls}, ${fixtureBudget.deadlineMs}, now() + (${fixtureBudget.deadlineMs}::text || ' milliseconds')::interval)`;
+}
+
 async function seed(): Promise<Readonly<{ accountId: string; opportunityId: string; runId: string; userId: string; deniedUserId: string }>> {
   const suffix = randomUUID().replaceAll('-', '');
   const accountId = `account_retrieval_${suffix}`;
@@ -62,15 +77,16 @@ async function seed(): Promise<Readonly<{ accountId: string; opportunityId: stri
   const userId = `user_retrieval_${suffix}`;
   const deniedUserId = `user_retrieval_denied_${suffix}`;
   await sql`insert into accounts (id, name) values (${accountId}, 'Acme')`;
-  await sql`insert into personas (id, display_name, role) values (${userId}, 'Authorized', 'Account Owner'), (${deniedUserId}, 'Denied', 'Account Owner')`;
+  await sql`insert into personas (id, display_name, role, source_commit) values
+    (${userId}, 'Authorized', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT}),
+    (${deniedUserId}, 'Denied', 'Account Owner', ${CANONICAL_FIXTURE_COMMIT})`;
   await sql`insert into opportunities (id, account_id, name, restricted) values (${opportunityId}, ${accountId}, 'Renewal', false)`;
-  await sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read, sensitive_pricing)
-    values (${`grant_sf_${suffix}`}, ${userId}, ${accountId}, 'salesforce', true, false),
-      (${`grant_policy_${suffix}`}, ${userId}, ${accountId}, 'policy', true, false),
-      (${`grant_slack_${suffix}`}, ${userId}, ${accountId}, 'slack', true, false),
-      (${`grant_pricing_${suffix}`}, ${userId}, ${accountId}, 'pricing', true, false)`;
-  await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model)
-    values (${runId}, ${opportunityId}, ${userId}, 'retrieving', 'mock', 'mock-brief')`;
+  await sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read, sensitive_pricing, source_commit)
+    values (${`grant_sf_${suffix}`}, ${userId}, ${accountId}, 'salesforce', true, false, ${CANONICAL_FIXTURE_COMMIT}),
+      (${`grant_policy_${suffix}`}, ${userId}, ${accountId}, 'policy', true, false, ${CANONICAL_FIXTURE_COMMIT}),
+      (${`grant_slack_${suffix}`}, ${userId}, ${accountId}, 'slack', true, false, ${CANONICAL_FIXTURE_COMMIT}),
+      (${`grant_pricing_${suffix}`}, ${userId}, ${accountId}, 'pricing', true, false, ${CANONICAL_FIXTURE_COMMIT})`;
+  await seedRun({ runId, opportunityId, requestedBy: userId });
   const records = [
     ['sf', 'salesforce', 'standard', 'non-standard termination clause requested by buyer', '2026-08-20', 'authoritative_system'],
     ['policy', 'policy', 'standard', 'termination clauses require legal approval', '2020-01-01', 'authoritative_policy'],
@@ -262,7 +278,7 @@ describe('authorized hybrid retrieval and citations', () => {
     const rankedPrefix = `round2/ranked/${suffix}/`;
     for (const [sourceType, key] of [['gong_summary', 'summary'], ['gong_transcript', 'transcript']] as const) {
       const documentId = `document_ranked_${key}_${suffix}`; const evidenceId = `evidence_ranked_${key}_${suffix}`;
-      await sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read) values (${`grant_ranked_${key}_${suffix}`}, ${seeded.userId}, ${seeded.accountId}, ${sourceType}, true)`;
+      await sql`insert into permission_grants (id, persona_id, account_id, source_type, can_read, source_commit) values (${`grant_ranked_${key}_${suffix}`}, ${seeded.userId}, ${seeded.accountId}, ${sourceType}, true, ${CANONICAL_FIXTURE_COMMIT})`;
       await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
         values (${documentId}, ${documentId}, 1, ${sourceType}, ${`doc-ranked-${key}`}, 'termination ranked evidence', '2026-08-20', 'direct_conversation', ${`${rankedPrefix}${key}`}, 'ranked_test', ${'a'.repeat(64)})`;
       await sql`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content, event_date, reliability_class, source_locator, classification_reason, policy_hash)
@@ -455,8 +471,12 @@ describe('authorized hybrid retrieval and citations', () => {
   it('returns nothing when the caller has no effective evidence scope', async () => {
     const seeded = await seed();
     const deniedRunId = `${seeded.runId}_denied`;
-    await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model)
-      values (${deniedRunId}, ${seeded.opportunityId}, ${seeded.deniedUserId}, 'retrieving', 'mock', 'mock-brief')`;
+    await seedRun({
+      runId: deniedRunId,
+      opportunityId: seeded.opportunityId,
+      requestedBy: seeded.deniedUserId,
+      status: 'completed'
+    });
     await new EmbeddingIndexer(database, mock.embeddingGateway, profile, { corpus: seededFixtureCorpus }).index();
     const retriever = new PostgresHybridEvidenceRetriever(database, mock.embeddingGateway, profile);
     const result = await retriever.search({

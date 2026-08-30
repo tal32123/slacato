@@ -1,17 +1,4 @@
-export type ReadinessProbeResult = boolean | 'unconfigured';
-
-export interface ReadinessCheck {
-  /** Reports whether the dependency is ready, unavailable, or not configured. */
-  isReady(): Promise<ReadinessProbeResult>;
-}
-
-export interface ReadinessDependencies {
-  database: ReadinessCheck;
-  migration: ReadinessCheck;
-  redis: ReadinessCheck;
-  index: ReadinessCheck;
-  model: ReadinessCheck;
-}
+import type { ReadinessCheck, ReadinessDependencies } from '@slacato/core';
 
 export type ReadinessCheckName = keyof ReadinessDependencies;
 export type ReadinessCheckStatus = 'ready' | 'unavailable' | 'unconfigured';

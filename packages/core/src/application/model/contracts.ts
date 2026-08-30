@@ -64,6 +64,8 @@ export type GenerationResult<Value> = Readonly<{
 export type GenerateObjectRequest<Value> = Readonly<{
   schema: z.ZodType<Value>;
   messages: readonly ModelMessage[];
+  /** Derives bounded redacted warnings from a successfully validated, transformed value. */
+  attemptWarnings?: (value: Value) => readonly string[];
   operation: string;
   limits: RetryLimits;
   budget?: SharedRunBudget;

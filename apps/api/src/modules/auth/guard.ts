@@ -27,8 +27,8 @@ export class ApplicationSecurityGuard implements CanActivate {
   /** Initializes the guard with its authentication policy dependencies. */
   public constructor(
     @Inject(AUTH_OPTIONS) options: AuthModuleOptions,
-    private readonly reflector: Reflector,
-    private readonly auth: AuthService
+    @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(AuthService) private readonly auth: AuthService
   ) {
     this.policy = new BrowserRequestPolicy(options.allowedOrigins);
   }

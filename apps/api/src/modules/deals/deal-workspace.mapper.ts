@@ -11,14 +11,16 @@ import {
   type SourceSnapshotView,
   type StakeholderView
 } from '@slacato/contracts';
-import type { Claim, DealBrief, ReviewWarning } from '@slacato/core';
 import type {
   AuthorizedDeal,
+  Claim,
+  DealBrief,
   DealEvidence,
   DealRunSummary,
   GeneratedDealOutput,
-  LatestDealRun
-} from './contracts.js';
+  LatestDealRun,
+  ReviewWarning
+} from '@slacato/core';
 
 const sectionTitles = {
   dealSnapshot: 'Deal Snapshot',
@@ -91,7 +93,8 @@ export function mapAuthorizedEvidenceToDetail(evidence: DealEvidence): EvidenceD
   if (!sourcePath) return undefined;
   const stableIdentity = resolveStableEvidenceIdentity(sourcePath, fields, locator);
   if (stableIdentity === undefined || !stableIdentity.key || !stableIdentity.id) return undefined;
-  const eventDate = parseIsoDate(evidence.eventDate ?? undefined);
+  const eventDate = evidence.eventDate === null ? null : parseIsoDate(evidence.eventDate);
+  if (evidence.eventDate !== null && eventDate === null) return undefined;
   return {
     id: evidence.id,
     sourceType: evidence.sourceType as EvidenceDetail['sourceType'],
@@ -106,7 +109,7 @@ export function mapAuthorizedEvidenceToDetail(evidence: DealEvidence): EvidenceD
   };
 }
 
-/** Projects authorized repository evidence into renderable details while excluding rows without stable provenance. */
+/** Projects authorized repository evidence while excluding unstable provenance and invalid optional dates. */
 export function projectAuthorizedWorkspaceEvidence(
   opportunityRows: readonly DealEvidence[],
   stakeholderRows: readonly DealEvidence[],
@@ -149,6 +152,10 @@ export function renderGeneratedOutput(
   input: GeneratedOutputRenderingInput
 ): GeneratedDealOutputView | null {
   if (input.generatedOutput === null || input.producingRun === undefined) return null;
+  const brief = input.generatedOutput.brief;
+  const evidenceById = new Map(input.evidence.map((item) => [item.id, item]));
+  const claims = collectCanonicalBriefClaims(brief);
+  if (!canonicalEvidenceIsAuthorized(brief, claims, evidenceById)) return null;
   return {
     type: 'generated_output',
     lifecycle: input.generatedOutput.lifecycle,
@@ -157,7 +164,7 @@ export function renderGeneratedOutput(
       status: input.producingRun.status,
       updatedAt: serializeDateTime(input.producingRun.updatedAt)
     },
-    content: renderFinalizedDealBrief(input.generatedOutput.brief, input.evidence)
+    content: renderFinalizedDealBrief(brief, evidenceById, claims)
   };
 }
 
@@ -172,13 +179,10 @@ export function legacyBriefForWorkspace(
 /** Renders all nine canonical generated sections after proving every referenced evidence ID is authorized. */
 function renderFinalizedDealBrief(
   brief: DealBrief,
-  evidence: readonly EvidenceDetail[]
+  evidenceById: ReadonlyMap<string, EvidenceDetail>,
+  claims: readonly Claim[]
 ): GeneratedBriefView {
-  const evidenceById = new Map(evidence.map((item) => [item.id, item]));
-  const claims = collectCanonicalBriefClaims(brief);
   const claimsById = indexCanonicalClaimsById(claims);
-  assertCanonicalEvidenceIsAuthorized(brief, claims, evidenceById);
-
   const stakeholders = brief.stakeholderMap.stakeholders.map((stakeholder): StakeholderView => {
     const citationIds = collectClaimEvidenceIds(stakeholder.claims);
     return {
@@ -346,23 +350,17 @@ function indexCanonicalClaimsById(claims: readonly Claim[]): ReadonlyMap<string,
   return claimsById;
 }
 
-/** Fails closed unless every canonical citation and source summary references authorized evidence. */
-function assertCanonicalEvidenceIsAuthorized(
+/** Allows generated output only when every canonical citation and source summary is authorized. */
+function canonicalEvidenceIsAuthorized(
   brief: DealBrief,
   claims: readonly Claim[],
   evidenceById: ReadonlyMap<string, EvidenceDetail>
-): void {
+): boolean {
   const referencedEvidenceIds = uniqueEvidenceIds([
     ...claims.flatMap((claim) => claim.citations.map((citation) => citation.evidenceId)),
     ...brief.sourceEvidence.evidence.map((item) => item.evidenceId)
   ]);
-  for (const evidenceId of referencedEvidenceIds) {
-    if (!evidenceById.has(evidenceId)) {
-      throw new Error(
-        `Finalized brief references evidence ${evidenceId} outside the authorized workspace`
-      );
-    }
-  }
+  return referencedEvidenceIds.every((evidenceId) => evidenceById.has(evidenceId));
 }
 
 /** Resolves warning claim references into the authorized evidence IDs rendered by the workspace. */
@@ -766,6 +764,9 @@ function isUnresolvedAccountTeamUpdate(item: EvidenceDetail): boolean {
     /\bhas not yet been confirmed\b/i,
     /\bno confirmed\b[^.]*\b(?:yet|incomplete)\b/i,
     /\bdoes not contain\b[^.]*\b(?:missing input|information gap)\b/i,
+    /\b(?:still\s+)?lack(?:s|ing)?\b/i,
+    /\bstill\s+need\b/i,
+    /\bremains?\s+(?:absent|unknown|unconfirmed|unresolved|unaddressed|undocumented)\b/i,
     /\btreat this as unresolved\b/i
   ].some((pattern) => pattern.test(text));
 }

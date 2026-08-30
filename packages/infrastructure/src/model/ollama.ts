@@ -12,8 +12,8 @@ import {
 } from '@slacato/core';
 import {
   APICallError,
-  embedMany,
   type EmbedManyResult,
+  embedMany,
   generateText,
   jsonSchema,
   type LanguageModel,

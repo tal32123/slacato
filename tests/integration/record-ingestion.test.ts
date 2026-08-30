@@ -51,9 +51,21 @@ describe('record-only canonical ingestion', () => {
       where personas.id in ('USR-5001', 'USR-5004', 'USR-5005') and permission_grants.source_commit = ${CANONICAL_FIXTURE_COMMIT}
       group by personas.role order by personas.role
     `).resolves.toEqual([
-      { role: 'Account Owner', can_request_approval: true, can_approve: false },
+      { role: 'Account Owner', can_request_approval: true, can_approve: true },
       { role: 'Deal Desk Approver', can_request_approval: true, can_approve: true },
       { role: 'Sales Leader', can_request_approval: true, can_approve: true }
+    ]);
+    await expect(sql<{ role: string; authorities: string[] }[]>`
+      select personas.role, array_agg(distinct authority_grants.authority order by authority_grants.authority)::text[] as authorities
+      from personas
+      join approval_authority_grants authority_grants on authority_grants.persona_id = personas.id
+      where personas.id in ('USR-5001', 'USR-5004', 'USR-5005')
+        and authority_grants.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+      group by personas.role order by personas.role
+    `).resolves.toEqual([
+      { role: 'Account Owner', authorities: ['account_owner'] },
+      { role: 'Deal Desk Approver', authorities: ['deal_desk'] },
+      { role: 'Sales Leader', authorities: ['sales_leader'] }
     ]);
   });
 });

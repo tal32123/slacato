@@ -4,12 +4,8 @@ import {
   type DealWorkspaceView,
   dealWorkspaceViewSchema
 } from '@slacato/contracts';
-import {
-  DEALS_OPTIONS,
-  type DealQuerySession,
-  type DealsModuleOptions,
-  type EvidenceScope
-} from './contracts.js';
+import type { DealQuerySession, EvidenceScope } from '@slacato/core';
+import { DEALS_OPTIONS, type DealsModuleOptions } from './contracts.js';
 import {
   legacyBriefForWorkspace,
   mapAuthorizedDealToListItem,

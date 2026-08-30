@@ -15,7 +15,7 @@ import {
 export class DiagnosticsService {
   /** Initializes diagnostics with health, runtime, and approval-authority providers. */
   public constructor(
-    private readonly health: HealthService,
+    @Inject(HealthService) private readonly health: HealthService,
     @Inject(PROVIDER_RUNTIME_DESCRIPTOR) private readonly runtime: ProviderRuntimeDescriptor,
     @Inject(APPROVAL_AUTHORITY_QUERY) private readonly approvalAuthorities: ApprovalAuthorityQuery
   ) {}

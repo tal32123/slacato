@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { authorizeOpportunity, deriveApprovalAuthority, type AuthorizationSession } from '@slacato/core';
+import {
+  authorizeOpportunity,
+  deriveApprovalAuthorities,
+  deriveApprovalAuthority,
+  type AuthorizationSession
+} from '@slacato/core';
 
 const restrictedOpportunity = { accountId: 'ACC-2003', restricted: true } as const;
 
@@ -77,9 +82,11 @@ describe('authorizeOpportunity', () => {
 describe('deriveApprovalAuthority', () => {
   const policy = 'Discounts require Deal Desk approval. Discounts over 15 percent require sales leader approval.';
 
-  it('never turns an account owner request permission into approval authority', () => {
-    expect(deriveApprovalAuthority('Account Owner', policy)).toBe(false);
-    expect(deriveApprovalAuthority('Restricted Account Owner', policy)).toBe(false);
+  it('grants account owners only account-owner approval authority', () => {
+    expect(deriveApprovalAuthorities('Account Owner', policy)).toEqual(['account_owner']);
+    expect(deriveApprovalAuthorities('Restricted Account Owner', policy)).toEqual(['account_owner']);
+    expect(deriveApprovalAuthority('Account Owner', policy)).toBe(true);
+    expect(deriveApprovalAuthority('Restricted Account Owner', policy)).toBe(true);
   });
 
   it('recognizes only canonical approver roles documented by policy', () => {

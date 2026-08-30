@@ -18,10 +18,8 @@ import {
   StrategyAgent,
   type WorkflowRun
 } from '@slacato/core';
-import type {
-  ConfiguredModelGateways,
-  PostgresDealBriefPolicyFacts
-} from '@slacato/infrastructure';
+import type { PostgresDealBriefPolicyFacts } from '../db/repositories/deal-brief-access.js';
+import type { ConfiguredModelGateways } from '../model/provider.js';
 import type { DealBriefContextRepository } from './postgres-deal-brief-context.repository.js';
 
 type DurableDealBriefContext = Omit<AgentContext, 'generation'>;
@@ -322,7 +320,7 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
       (record) =>
         !currentScope.sourceTypes.includes(record.sourceType) ||
         (record.sourceType === 'pricing' &&
-          record.sensitivity === 'sensitive' &&
+          record.sensitivity === 'restricted' &&
           !currentScope.canViewSensitivePricing) ||
         (opportunity.restricted && !currentScope.canViewRestrictedAccounts)
     );

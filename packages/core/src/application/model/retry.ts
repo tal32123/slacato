@@ -134,10 +134,7 @@ export class RunBudgetLedger implements SharedRunBudget {
   }
 
   /** Accepts input usage without retaining unused aggregate token counters. */
-  public reconcileInputTokens(
-    _reservedTokens: number,
-    _consumedTokens: number | undefined
-  ): void {
+  public reconcileInputTokens(_reservedTokens: number, _consumedTokens: number | undefined): void {
     // Shared budgeting enforces reservations, calls, and deadlines rather than token totals.
   }
 

@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Strategic Deal Intelligence Assistant — Technical Overview</title>
+  <style>
+    :root {
+      --ink: #0A141D;
+      --teal: #158864;
+      --teal-dark: #0f6d51;
+      --teal-soft: #eaf6f1;
+      --paper: #ffffff;
+      --canvas: #f6f8f7;
+      --muted: #5c6870;
+      --line: #dce3df;
+      --line-strong: #b8c6bf;
+      --warning: #9a5a10;
+      --warning-soft: #fff7e8;
+      --danger: #9d342b;
+      --danger-soft: #fff0ee;
+      --shadow: 0 16px 50px rgba(10, 20, 29, .07);
+      --radius: 20px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 78px; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 17px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--teal-dark); text-underline-offset: .18em; }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(220, 227, 223, .9);
+      background: rgba(255, 255, 255, .92);
+      backdrop-filter: blur(18px) saturate(150%);
+    }
+    .nav-inner {
+      max-width: 1180px;
+      margin: auto;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav-inner::-webkit-scrollbar { display: none; }
+    .brand { font-weight: 760; color: var(--ink); white-space: nowrap; margin-right: auto; }
+    nav a { color: #425059; text-decoration: none; font-size: 13px; font-weight: 650; white-space: nowrap; }
+    nav a:hover { color: var(--teal); }
+    .hero {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 96px 24px 70px;
+    }
+    .eyebrow {
+      color: var(--teal-dark);
+      font-size: 13px;
+      font-weight: 760;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 880px;
+      margin: 18px 0 22px;
+      font-size: clamp(42px, 7vw, 78px);
+      line-height: 1.02;
+      letter-spacing: -.052em;
+      font-weight: 760;
+    }
+    .lede { max-width: 72ch; margin: 0; color: #3f4c54; font-size: clamp(19px, 2.3vw, 24px); line-height: 1.55; }
+    .hero-meta { margin-top: 36px; display: flex; flex-wrap: wrap; gap: 10px; }
+    .pill { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 7px 12px; color: #46535b; font-size: 13px; }
+    main { max-width: 1180px; margin: 0 auto 100px; padding: 0 24px; }
+    section {
+      margin: 26px 0;
+      padding: clamp(32px, 5vw, 66px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .section-number { color: var(--teal); font-size: 13px; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; }
+    h2 { margin: 8px 0 22px; font-size: clamp(30px, 4vw, 48px); line-height: 1.12; letter-spacing: -.035em; }
+    h3 { margin: 34px 0 10px; font-size: 22px; line-height: 1.25; letter-spacing: -.015em; }
+    h4 { margin: 0 0 6px; font-size: 17px; }
+    p, ul, ol { max-width: 75ch; }
+    p { margin: 0 0 18px; }
+    ul, ol { padding-left: 1.3em; }
+    li + li { margin-top: 8px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; background: #f0f3f2; padding: .1em .35em; border-radius: 5px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .card { padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: #fbfcfb; }
+    .card p { color: #4f5d65; font-size: 15px; margin-bottom: 0; }
+    .callout { margin: 26px 0; padding: 20px 22px; border-left: 4px solid var(--teal); border-radius: 0 12px 12px 0; background: var(--teal-soft); }
+    .callout.warning { border-left-color: var(--warning); background: var(--warning-soft); }
+    .callout.danger { border-left-color: var(--danger); background: var(--danger-soft); }
+    .callout p:last-child { margin-bottom: 0; }
+    .diagram { margin: 30px 0 8px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, #fff, #fbfcfb); overflow-x: auto; }
+    .diagram svg { display: block; width: 100%; min-width: 850px; height: auto; }
+    .diagram-note { color: var(--muted); font-size: 14px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 14px 0 0; color: var(--muted); font-size: 13px; }
+    .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 7px; border-radius: 3px; vertical-align: -1px; background: var(--teal-soft); border: 1px solid var(--teal); }
+    .legend .durable::before { background: #eef1f2; border-color: #65737b; }
+    .legend .future::before { background: #fff7e8; border-color: #9a5a10; border-style: dashed; }
+    .decision { display: grid; grid-template-columns: 210px 1fr; gap: 28px; padding: 25px 0; border-top: 1px solid var(--line); }
+    .decision:first-of-type { border-top: 0; }
+    .decision h3 { margin: 2px 0; font-size: 18px; }
+    .decision p { margin: 0; color: #46545c; }
+    table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 14px; }
+    th, td { padding: 13px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+    .status { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 760; text-transform: uppercase; letter-spacing: .05em; }
+    .status.now { background: var(--teal-soft); color: var(--teal-dark); }
+    .status.gap { background: var(--warning-soft); color: var(--warning); }
+    .status.no { background: var(--danger-soft); color: var(--danger); }
+    footer { max-width: 1180px; margin: -60px auto 60px; padding: 0 24px; color: var(--muted); font-size: 13px; }
+    @media (max-width: 800px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .decision { grid-template-columns: 1fr; gap: 6px; }
+      .hero { padding-top: 64px; }
+      section { padding: 28px 22px; }
+      .brand { margin-right: 6px; }
+    }
+    @media print {
+      nav { display: none; }
+      body { background: white; font-size: 14px; }
+      .hero { padding-top: 40px; }
+      section { box-shadow: none; break-inside: avoid; }
+      .diagram { overflow: visible; }
+    }
+  </style>
+</head>
+<body>
+  <nav aria-label="Page sections">
+    <div class="nav-inner">
+      <span class="brand">Deal Intelligence</span>
+      <a href="#context">Context</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#data">Data model</a>
+      <a href="#lifecycle">Lifecycle</a>
+      <a href="#decisions">Design</a>
+      <a href="#security">Security</a>
+      <a href="#production">Production</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="eyebrow">Technical overview · offline artifact</div>
+    <h1>Evidence-grounded negotiation preparation.</h1>
+    <p class="lede">A durable, permission-aware assistant that turns fragmented deal signals into a reviewable sales brief—without treating the model as an authorization system, a policy engine, or a source of truth.</p>
+    <div class="hero-meta">
+      <span class="pill">NestJS + React + BullMQ</span>
+      <span class="pill">PostgreSQL + pgvector</span>
+      <span class="pill">4 LLM-backed agents</span>
+      <span class="pill">9-section typed brief</span>
+      <span class="pill">Human approval gates</span>
+    </div>
+  </header>
+
+  <main>
+    <section id="context">
+      <div class="section-number">01 · Business context</div>
+      <h2>One brief for the moment before a negotiation.</h2>
+      <p>A seller preparing for a commercial negotiation has to reconcile CRM facts, recent calls, stakeholder dynamics, account-team updates, pricing notes, and deal-desk policy—often under time pressure and with different access rules for each source. The system accepts an opportunity and requester identity, assembles the evidence that person is allowed to use, and produces a concise preparation brief with traceable support.</p>
+      <p>The objective is not autonomous negotiation. It is decision support: surface the buyer’s goals, the current commercial state, risks, stakeholders, missing information, and next actions while making uncertainty visible. Pricing, legal, customer-facing concessions, and low-confidence material remain subject to deterministic policy and human authority.</p>
+      <div class="grid-3">
+        <div class="card"><h4>Reduce preparation time</h4><p>Fan out focused analysis across conversation, stakeholder, and commercial evidence, then synthesize one coherent brief.</p></div>
+        <div class="card"><h4>Keep evidence inspectable</h4><p>Claims link to immutable authorized evidence; API and UI render stable labels such as <code>source=&lt;file&gt;, id=&lt;value&gt;</code>.</p></div>
+        <div class="card"><h4>Keep people accountable</h4><p>Recommendations that cross policy thresholds cannot finalize until the required authority entries are decided.</p></div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="section-number">02 · Component architecture</div>
+      <h2>Thin apps around durable domain and infrastructure seams.</h2>
+      <p>The browser is the reviewer workspace; the API owns authenticated commands and read models; the worker advances durable workflow steps. <code>packages/core</code> contains provider-independent policy, agents, contracts, validation, and orchestration. <code>packages/infrastructure</code> implements PostgreSQL, Redis/BullMQ, retrieval, model adapters, and recovery.</p>
+
+      <div class="diagram" role="img" aria-label="Component architecture showing web, API, worker, core, infrastructure, PostgreSQL, Redis, and model providers">
+        <svg viewBox="0 0 1160 700" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker>
+            <filter id="shadowA" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0A141D" flood-opacity=".08"/></filter>
+          </defs>
+          <rect x="28" y="28" width="1104" height="644" rx="22" fill="#fbfcfb" stroke="#dce3df"/>
+          <text x="58" y="66" font-family="system-ui" font-size="13" font-weight="700" fill="#158864" letter-spacing="1.5">RUNTIME COMPONENTS</text>
+
+          <g filter="url(#shadowA)"><rect x="70" y="102" width="240" height="112" rx="16" fill="#fff" stroke="#158864" stroke-width="2"/><text x="190" y="144" text-anchor="middle" font-family="system-ui" font-size="20" font-weight="700" fill="#0A141D">apps/web</text><text x="190" y="172" text-anchor="middle" font-family="system-ui" font-size="14" fill="#52616a">React reviewer workspace</text><text x="190" y="193" text-anchor="middle" font-family="system-ui" font-size="12" fill="#6b7880">briefs · evidence · approvals</text></g>
+          <g filter="url(#shadowA)"><rect x="460" y="102" width="240" height="112" rx="16" fill="#fff" stroke="#158864" stroke-width="2"/><text x="580" y="144" text-anchor="middle" font-family="system-ui" font-size="20" font-weight="700" fill="#0A141D">apps/api</text><text x="580" y="172" text-anchor="middle" font-family="system-ui" font-size="14" fill="#52616a">NestJS HTTP boundary</text><text x="580" y="193" text-anchor="middle" font-family="system-ui" font-size="12" fill="#6b7880">sessions · commands · queries · SSE</text></g>
+          <g filter="url(#shadowA)"><rect x="850" y="102" width="240" height="112" rx="16" fill="#fff" stroke="#158864" stroke-width="2"/><text x="970" y="144" text-anchor="middle" font-family="system-ui" font-size="20" font-weight="700" fill="#0A141D">apps/worker</text><text x="970" y="172" text-anchor="middle" font-family="system-ui" font-size="14" fill="#52616a">Durable step processor</text><text x="970" y="193" text-anchor="middle" font-family="system-ui" font-size="12" fill="#6b7880">leases · retries · reconciliation</text></g>
+          <path d="M310 158H460" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/><text x="385" y="145" text-anchor="middle" font-family="system-ui" font-size="11" fill="#6b7880">HTTP / SSE</text>
+
+          <rect x="122" y="282" width="390" height="150" rx="18" fill="#eaf6f1" stroke="#158864" stroke-width="2"/><text x="317" y="321" text-anchor="middle" font-family="system-ui" font-size="19" font-weight="700" fill="#0A141D">packages/core</text><text x="317" y="350" text-anchor="middle" font-family="system-ui" font-size="13" fill="#36564b">domain policy · workflow · agents · validators</text><text x="317" y="378" text-anchor="middle" font-family="system-ui" font-size="13" fill="#36564b">typed brief and agent artifact contracts</text><text x="317" y="406" text-anchor="middle" font-family="system-ui" font-size="13" fill="#36564b">provider-independent ports</text>
+          <rect x="648" y="282" width="390" height="150" rx="18" fill="#eef1f2" stroke="#65737b" stroke-width="2"/><text x="843" y="321" text-anchor="middle" font-family="system-ui" font-size="19" font-weight="700" fill="#0A141D">packages/infrastructure</text><text x="843" y="350" text-anchor="middle" font-family="system-ui" font-size="13" fill="#4d5b63">Drizzle repositories · retrieval SQL · queues</text><text x="843" y="378" text-anchor="middle" font-family="system-ui" font-size="13" fill="#4d5b63">workflow persistence · trace projection</text><text x="843" y="406" text-anchor="middle" font-family="system-ui" font-size="13" fill="#4d5b63">OpenRouter · Ollama · mock adapters</text>
+          <path d="M580 214V250H317V282" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
+          <path d="M970 214V250H843V282" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
+          <path d="M512 357H648" stroke="#63727a" stroke-width="2" marker-start="url(#arrowA)" marker-end="url(#arrowA)"/><text x="580" y="344" text-anchor="middle" font-family="system-ui" font-size="11" fill="#6b7880">ports / adapters</text>
+
+          <rect x="70" y="516" width="260" height="106" rx="15" fill="#fff" stroke="#65737b"/><text x="200" y="554" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#0A141D">PostgreSQL + pgvector</text><text x="200" y="582" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">authoritative state · exact vectors</text><text x="200" y="602" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">FTS · manifests · traces</text>
+          <rect x="450" y="516" width="260" height="106" rx="15" fill="#fff" stroke="#65737b"/><text x="580" y="554" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#0A141D">Redis + BullMQ</text><text x="580" y="582" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">delivery and wake-up mechanism</text><text x="580" y="602" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">Postgres remains recovery source</text>
+          <rect x="830" y="496" width="260" height="146" rx="15" fill="#fff" stroke="#158864"/><text x="960" y="532" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#0A141D">Model gateway</text><text x="960" y="560" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">OpenRouter · Ollama · mock</text><line x1="860" y1="578" x2="1060" y2="578" stroke="#dce3df"/><text x="960" y="602" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">budgets · retries · schema repair</text><text x="960" y="622" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">usage / attempt ledger</text>
+          <path d="M760 432L300 516" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
+          <path d="M843 432L650 516" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
+          <path d="M920 432L950 496" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
+        </svg>
+      </div>
+      <p class="diagram-note">Redis transports work; PostgreSQL owns the resumable truth. The worker can reconstruct progress from runs, outbox commands, leases, checkpoints, attempts, and immutable artifacts after a restart.</p>
+    </section>
+
+    <section id="data">
+      <div class="section-number">03 · Persisted data model</div>
+      <h2>Actual Drizzle schema, grouped by responsibility.</h2>
+      <p>The ERD below uses table and column names from <code>packages/infrastructure/src/db/schema.ts</code> and migrations <code>drizzle/0000</code> through <code>0021</code>. It shows the key operational entities rather than every audit column. Arrows point from the foreign-key holder to its parent.</p>
+
+      <div class="diagram" role="img" aria-label="Entity relationship diagram of the actual Drizzle schema">
+        <svg viewBox="0 0 1320 1220" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrowE" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#88959b"/></marker></defs>
+          <rect width="1320" height="1220" fill="#fbfcfb"/>
+          <style>
+            .e-line{stroke:#a6b1b6;stroke-width:1.4;fill:none;marker-end:url(#arrowE)}
+            .e-box{fill:#fff;stroke:#b8c6bf;stroke-width:1.4}.e-head{fill:#eaf6f1;stroke:#158864;stroke-width:1.5}
+            .e-title{font:700 14px system-ui;fill:#0A141D}.e-text{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#435159}.e-pk{fill:#158864;font-weight:700}.e-fk{fill:#8a5a16}
+            .e-group{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}
+          </style>
+          <text x="38" y="34" class="e-group">IDENTITY &amp; DEALS</text><text x="38" y="326" class="e-group">EVIDENCE &amp; AUTHORIZED RETRIEVAL</text><text x="38" y="666" class="e-group">DURABLE WORKFLOW</text><text x="680" y="666" class="e-group">ARTIFACTS, APPROVAL &amp; OBSERVABILITY</text>
+
+          <!-- relationship lines behind entities -->
+          <path class="e-line" d="M300 170H250"/><path class="e-line" d="M300 250C250 250 260 120 250 120"/>
+          <path class="e-line" d="M640 125H590"/><path class="e-line" d="M640 242C590 242 610 125 590 125"/>
+          <path class="e-line" d="M980 128H930"/><path class="e-line" d="M980 242C940 242 950 125 930 125"/>
+          <path class="e-line" d="M300 452H250"/><path class="e-line" d="M300 492C270 492 280 240 250 240"/>
+          <path class="e-line" d="M640 430H590"/><path class="e-line" d="M640 470C610 470 620 135 590 135"/>
+          <path class="e-line" d="M980 440H930"/><path class="e-line" d="M980 490C950 490 950 455 930 455"/>
+          <path class="e-line" d="M300 800H250"/><path class="e-line" d="M300 880H250"/><path class="e-line" d="M300 1040H250"/>
+          <path class="e-line" d="M640 770H590"/><path class="e-line" d="M640 850H590"/><path class="e-line" d="M640 970H590"/>
+          <path class="e-line" d="M980 760H930"/><path class="e-line" d="M980 830H930"/><path class="e-line" d="M980 910H930"/>
+          <path class="e-line" d="M1240 750H1200"/><path class="e-line" d="M1240 860H1200"/><path class="e-line" d="M1240 1010H1200"/>
+          <path class="e-line" d="M800 580V650H760V700"/><path class="e-line" d="M460 590V650H770V700"/>
+
+          <!-- boxes helper pattern: header + body -->
+          <g transform="translate(40 58)"><rect class="e-box" width="210" height="128" rx="10"/><path class="e-head" d="M10 0H200A10 10 0 0 1 210 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">personas</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text">display_name · role</text><text x="14" y="91" class="e-text">source_commit</text><text x="14" y="110" class="e-text">created_at</text></g>
+          <g transform="translate(300 58)"><rect class="e-box" width="290" height="144" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">permission_grants</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK persona_id · account_id</text><text x="14" y="91" class="e-text">source_type · can_read</text><text x="14" y="110" class="e-text">can_read_restricted · sensitive_pricing</text><text x="14" y="129" class="e-text">can_request_approval · source_commit</text></g>
+          <g transform="translate(640 58)"><rect class="e-box" width="290" height="100" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">accounts</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text">name · created_at</text></g>
+          <g transform="translate(980 58)"><rect class="e-box" width="300" height="126" rx="10"/><path class="e-head" d="M10 0H290A10 10 0 0 1 300 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">opportunities</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK account_id</text><text x="14" y="91" class="e-text">name · restricted</text><text x="14" y="110" class="e-text">created_at</text></g>
+          <g transform="translate(640 208)"><rect class="e-box" width="290" height="100" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">contacts</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK account_id · name · email</text></g>
+          <g transform="translate(980 208)"><rect class="e-box" width="300" height="100" rx="10"/><path class="e-head" d="M10 0H290A10 10 0 0 1 300 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">auth_sessions</text><text x="14" y="53" class="e-text e-pk">PK version</text><text x="14" y="72" class="e-text e-fk">FK persona_id · expires_at · revoked_at</text></g>
+
+          <g transform="translate(40 350)"><rect class="e-box" width="210" height="150" rx="10"/><path class="e-head" d="M10 0H200A10 10 0 0 1 210 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">document_versions</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text">external_id · version</text><text x="14" y="91" class="e-text">source_type · content_hash</text><text x="14" y="110" class="e-text">content · source_locator</text><text x="14" y="129" class="e-text">event_date · policy_hash</text></g>
+          <g transform="translate(300 350)"><rect class="e-box" width="290" height="210" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">evidence_versions</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK document_version_id · account_id</text><text x="14" y="91" class="e-text e-fk">FK opportunity_id</text><text x="14" y="110" class="e-text">source_type · sensitivity · content_hash</text><text x="14" y="129" class="e-text">lexical_content · embedding</text><text x="14" y="148" class="e-text">embedding_provider · model · dimension</text><text x="14" y="167" class="e-text">embedding_profile · version · normalization</text><text x="14" y="186" class="e-text">reliability_class · classification_reason</text></g>
+          <g transform="translate(640 350)"><rect class="e-box" width="290" height="164" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">run_evidence_manifests</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id</text><text x="14" y="91" class="e-text">scope_hash · policy_hash · query_hash</text><text x="14" y="110" class="e-text">index_profile · embedding_* profile</text><text x="14" y="129" class="e-text">context_limit · diagnostics</text><text x="14" y="148" class="e-text">created_at</text></g>
+          <g transform="translate(980 350)"><rect class="e-box" width="300" height="210" rx="10"/><path class="e-head" d="M10 0H290A10 10 0 0 1 300 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">run_evidence_manifest_entries</text><text x="14" y="53" class="e-text e-pk">PK manifest_id + evidence_version_id</text><text x="14" y="72" class="e-text e-fk">FK manifest_id · evidence_version_id</text><text x="14" y="91" class="e-text">citation_id · source_locator</text><text x="14" y="110" class="e-text">source_type · sensitivity · policy_hash</text><text x="14" y="129" class="e-text">lexical_rank · semantic_rank · query_rank</text><text x="14" y="148" class="e-text">fusion_score · score</text><text x="14" y="167" class="e-text">reliability_adjustment · recency_adjustment</text><text x="14" y="186" class="e-text">included_characters · content_hash</text></g>
+
+          <g transform="translate(40 700)"><rect class="e-box" width="210" height="182" rx="10"/><path class="e-head" d="M10 0H200A10 10 0 0 1 210 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">runs</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK opportunity_id · requested_by</text><text x="14" y="91" class="e-text">status · version</text><text x="14" y="110" class="e-text">generation_provider · generation_model</text><text x="14" y="129" class="e-text">idempotency_key · start_request_hash</text><text x="14" y="148" class="e-text">created_at · updated_at</text></g>
+          <g transform="translate(300 700)"><rect class="e-box" width="290" height="126" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">outbox_commands</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id</text><text x="14" y="91" class="e-text">type · payload · idempotency_key</text><text x="14" y="110" class="e-text">status · claim_* · consumed_at</text></g>
+          <g transform="translate(300 850)"><rect class="e-box" width="290" height="142" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">step_invocations</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id · causal_command_id</text><text x="14" y="91" class="e-text">step · owner · lease_token</text><text x="14" y="110" class="e-text">lease_expires_at · attempt · status</text><text x="14" y="129" class="e-text">completed_at</text></g>
+          <g transform="translate(40 930)"><rect class="e-box" width="210" height="126" rx="10"/><path class="e-head" d="M10 0H200A10 10 0 0 1 210 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">workflow_checkpoints</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id · invocation_id</text><text x="14" y="91" class="e-text">step · logical_generation_id</text><text x="14" y="110" class="e-text">payload · created_at</text></g>
+          <g transform="translate(300 1020)"><rect class="e-box" width="290" height="160" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">generation_attempts</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id · invocation_id</text><text x="14" y="91" class="e-text">provider · model · operation · ordinal</text><text x="14" y="110" class="e-text">output_mode · validation_attempts</text><text x="14" y="129" class="e-text">input_tokens · output_tokens · status</text><text x="14" y="148" class="e-text">request_id · response_id</text></g>
+          <g transform="translate(640 700)"><rect class="e-box" width="290" height="142" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">specialist_artifacts</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id · evidence_manifest_id</text><text x="14" y="91" class="e-text">kind · draft_version · outcome</text><text x="14" y="110" class="e-text">content · content_hash · warnings</text><text x="14" y="129" class="e-text">generation_metadata</text></g>
+          <g transform="translate(640 870)"><rect class="e-box" width="290" height="112" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">claims → citations</text><text x="14" y="53" class="e-text e-pk">claims.PK id</text><text x="14" y="72" class="e-text e-fk">claims.FK run_id · artifact_id</text><text x="14" y="91" class="e-text e-fk">citations.FK claim_id · evidence_version_id</text></g>
+          <g transform="translate(980 700)"><rect class="e-box" width="220" height="150" rx="10"/><path class="e-head" d="M10 0H210A10 10 0 0 1 220 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">approval_subjects</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id</text><text x="14" y="91" class="e-text">draft_version · subject_hash</text><text x="14" y="110" class="e-text">payload · policy_triggers</text><text x="14" y="129" class="e-text">quorum_version · superseded_by</text></g>
+          <g transform="translate(980 880)"><rect class="e-box" width="220" height="142" rx="10"/><path class="e-head" d="M10 0H210A10 10 0 0 1 220 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">approval_requirement_entries</text><text x="14" y="53" class="e-text e-pk">PK approval_subject_id + id</text><text x="14" y="72" class="e-text">category · eligible_authorities</text><text x="14" y="91" class="e-text">policy_triggers · depends_on</text><text x="14" y="110" class="e-text">ordinal · created_at</text></g>
+          <g transform="translate(980 1050)"><rect class="e-box" width="220" height="130" rx="10"/><path class="e-head" d="M10 0H210A10 10 0 0 1 220 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">approval_decisions</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK subject + entry · actor_id</text><text x="14" y="91" class="e-text">action · authority · payload hashes</text><text x="14" y="110" class="e-text">result_status · quorum flags</text></g>
+          <g transform="translate(1240 700)"><rect class="e-box" width="70" height="122" rx="10"/><text x="35" y="28" text-anchor="middle" class="e-title">briefs</text><text x="8" y="54" class="e-text e-pk">PK id</text><text x="8" y="73" class="e-text e-fk">run_id</text><text x="8" y="92" class="e-text">payload</text><text x="8" y="111" class="e-text">finalized</text></g>
+          <g transform="translate(1240 850)"><rect class="e-box" width="70" height="122" rx="10"/><text x="35" y="25" text-anchor="middle" class="e-title">trace</text><text x="7" y="48" class="e-text e-pk">id</text><text x="7" y="67" class="e-text e-fk">run_id</text><text x="7" y="86" class="e-text">span_id</text><text x="7" y="105" class="e-text">kind</text></g>
+          <g transform="translate(1240 1000)"><rect class="e-box" width="70" height="122" rx="10"/><text x="35" y="25" text-anchor="middle" class="e-title">events</text><text x="7" y="48" class="e-text e-pk">id</text><text x="7" y="67" class="e-text e-fk">run_id</text><text x="7" y="86" class="e-text">sequence</text><text x="7" y="105" class="e-text">payload</text></g>
+        </svg>
+      </div>
+      <div class="callout"><p><strong>Immutability is part of the data model.</strong> Database triggers reject updates/deletes to source and evidence versions, manifests, approval decisions, and approval requirement entries; finalized briefs are immutable. Manifest entries preserve content hashes, citation IDs, locators, source/sensitivity, component ranks, adjustments, and included character counts.</p></div>
+      <p>Additional actual tables omitted from the drawing for legibility include <code>run_budgets</code>, <code>run_budget_reservations</code>, <code>context_checkpoints</code>, <code>approval_authority_grants</code>, <code>opportunity_policy_facts</code>, and <code>audit_events</code>. Authorization views <code>authorized_opportunity_grants</code>, <code>authorized_evidence_grants</code>, and <code>authorized_run_approval_grants</code> are security-barrier, security-invoker views.</p>
+    </section>
+
+    <section id="lifecycle">
+      <div class="section-number">04 · Request lifecycle</div>
+      <h2>Authorization surrounds retrieval and generation.</h2>
+      <p>The workflow is a durable state machine, not a free-running model graph. Every transition checkpoints state and enqueues the next idempotent command through the PostgreSQL outbox; BullMQ workers use leases, heartbeats, and reconciliation to resume safely.</p>
+      <div class="diagram" role="img" aria-label="Request lifecycle from opportunity and requester through permissions, retrieval, agents, validation, approval, and delivery">
+        <svg viewBox="0 0 1320 690" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrowL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#617078"/></marker></defs>
+          <rect width="1320" height="690" fill="#fbfcfb"/>
+          <style>.lb{fill:#fff;stroke:#b8c6bf;stroke-width:1.5}.lg{fill:#eaf6f1;stroke:#158864;stroke-width:2}.lw{fill:#fff7e8;stroke:#9a5a10;stroke-width:1.7}.lt{font:700 14px system-ui;fill:#0A141D}.ls{font:11px system-ui;fill:#52616a}.la{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowL)}.ld{stroke:#9a5a10;stroke-width:2;stroke-dasharray:6 5;fill:none;marker-end:url(#arrowL)}</style>
+          <g transform="translate(35 56)"><rect class="lb" width="170" height="92" rx="14"/><text x="85" y="34" text-anchor="middle" class="lt">Opportunity ID</text><text x="85" y="56" text-anchor="middle" class="lt">+ requester</text><text x="85" y="76" text-anchor="middle" class="ls">authenticated persona</text></g>
+          <path class="la" d="M205 102H250"/>
+          <g transform="translate(250 44)"><rect class="lg" width="190" height="116" rx="14"/><text x="95" y="30" text-anchor="middle" class="lt">Permission gate 1</text><text x="95" y="55" text-anchor="middle" class="ls">authorize run binding</text><text x="95" y="75" text-anchor="middle" class="ls">SQL-scoped account, source,</text><text x="95" y="94" text-anchor="middle" class="ls">opportunity &amp; sensitivity</text></g>
+          <path class="la" d="M440 102H485"/>
+          <g transform="translate(485 44)"><rect class="lb" width="190" height="116" rx="14"/><text x="95" y="30" text-anchor="middle" class="lt">Hybrid retrieval</text><text x="95" y="54" text-anchor="middle" class="ls">Postgres FTS + exact</text><text x="95" y="73" text-anchor="middle" class="ls">pgvector cosine → RRF</text><text x="95" y="93" text-anchor="middle" class="ls">recency + reliability</text></g>
+          <path class="la" d="M675 102H720"/>
+          <g transform="translate(720 44)"><rect class="lg" width="200" height="116" rx="14"/><text x="100" y="30" text-anchor="middle" class="lt">Permission gate 2</text><text x="100" y="55" text-anchor="middle" class="ls">assertAgentContextBindings</text><text x="100" y="75" text-anchor="middle" class="ls">recompute + compare</text><text x="100" y="94" text-anchor="middle" class="ls">scope hash before model call</text></g>
+          <path class="la" d="M920 102H965"/>
+          <g transform="translate(965 44)"><rect class="lb" width="320" height="116" rx="14"/><text x="160" y="28" text-anchor="middle" class="lt">Specialists in parallel</text><text x="55" y="62" text-anchor="middle" class="ls">Conversation</text><text x="160" y="62" text-anchor="middle" class="ls">Stakeholder</text><text x="265" y="62" text-anchor="middle" class="ls">Commercial</text><line x1="106" y1="45" x2="106" y2="95" stroke="#dce3df"/><line x1="213" y1="45" x2="213" y2="95" stroke="#dce3df"/><text x="160" y="92" text-anchor="middle" class="ls">Promise.allSettled + persisted outcomes</text></g>
+
+          <path class="la" d="M1125 160V224"/>
+          <g transform="translate(965 224)"><rect class="lb" width="320" height="100" rx="14"/><text x="160" y="35" text-anchor="middle" class="lt">StrategyAgent synthesis</text><text x="160" y="59" text-anchor="middle" class="ls">fan-in specialist artifacts + all</text><text x="160" y="79" text-anchor="middle" class="ls">authorized manifest excerpts</text></g>
+          <path class="la" d="M965 274H900"/>
+          <g transform="translate(640 218)"><rect class="lg" width="260" height="112" rx="14"/><text x="130" y="31" text-anchor="middle" class="lt">Claim / citation validation</text><text x="130" y="55" text-anchor="middle" class="ls">schema + citation tuple exists</text><text x="130" y="75" text-anchor="middle" class="ls">wording supported by cited unit</text><text x="130" y="95" text-anchor="middle" class="ls">unsafe prose rejected</text></g>
+          <path class="la" d="M640 274H575"/>
+          <g transform="translate(315 218)"><rect class="lw" width="260" height="112" rx="14"/><text x="130" y="31" text-anchor="middle" class="lt">Deterministic policy</text><text x="130" y="55" text-anchor="middle" class="ls">discount · legal · concession</text><text x="130" y="75" text-anchor="middle" class="ls">low confidence · conflict</text><text x="130" y="95" text-anchor="middle" class="ls">approval entries + dependencies</text></g>
+          <path class="la" d="M315 274H250"/>
+          <g transform="translate(35 218)"><rect class="lb" width="215" height="112" rx="14"/><text x="107" y="31" text-anchor="middle" class="lt">Approval required?</text><text x="107" y="58" text-anchor="middle" class="ls">no → finalization</text><text x="107" y="81" text-anchor="middle" class="ls">yes → await authorities</text></g>
+
+          <path class="ld" d="M142 330V410H348"/>
+          <g transform="translate(348 380)"><rect class="lw" width="290" height="106" rx="14"/><text x="145" y="30" text-anchor="middle" class="lt">Human-in-the-loop decisions</text><text x="145" y="54" text-anchor="middle" class="ls">membership + category authority</text><text x="145" y="74" text-anchor="middle" class="ls">quorum + dependencies + immutable diff</text><text x="145" y="93" text-anchor="middle" class="ls">approve · edit-and-approve · reject</text></g>
+          <path class="la" d="M638 433H720"/>
+          <g transform="translate(720 380)"><rect class="lg" width="225" height="106" rx="14"/><text x="112" y="31" text-anchor="middle" class="lt">Finalize</text><text x="112" y="57" text-anchor="middle" class="ls">verify subject hash</text><text x="112" y="78" text-anchor="middle" class="ls">persist immutable brief</text></g>
+          <path class="la" d="M945 433H1015"/>
+          <g transform="translate(1015 380)"><rect class="lb" width="270" height="106" rx="14"/><text x="135" y="31" text-anchor="middle" class="lt">Brief delivered</text><text x="135" y="55" text-anchor="middle" class="ls">9 sections · stable citations</text><text x="135" y="76" text-anchor="middle" class="ls">run timeline · evidence detail</text></g>
+          <path class="la" d="M142 330V433H720"/>
+
+          <rect x="35" y="545" width="1250" height="100" rx="14" fill="#eef1f2" stroke="#65737b"/><text x="60" y="575" class="lt">Durability underneath every arrow</text><text x="60" y="600" class="ls">runs · outbox_commands · step_invocations · workflow_checkpoints · generation_attempts · run_events · trace_spans</text><text x="60" y="622" class="ls">Idempotency keys, version checks, leases, causal command linkage, append-only events, and reconciliation make restart/replay behavior explicit.</text>
+          <text x="975" y="185" class="ls" fill="#9a5a10">Degradation boundary: conversation and stakeholder may degrade; commercial is fail-closed.</text>
+        </svg>
+      </div>
+      <div class="callout warning"><p><strong>Partial failure is intentionally asymmetric.</strong> Conversation and stakeholder failures become schema-valid degraded artifacts with warnings and omitted dependent claims. The commercial specialist is policy-critical; its failure stops the run rather than allowing pricing/legal analysis to disappear silently.</p></div>
+    </section>
+
+    <section id="decisions">
+      <div class="section-number">05 · How and why</div>
+      <h2>Models propose. Deterministic code governs.</h2>
+      <div class="decision"><h3>Durable workflow over model orchestration</h3><p>The fixed sequence—retrieve, specialists, synthesize, validate, finalize—is encoded in a Postgres-backed workflow/outbox with checkpoints and versioned transitions. This makes retries, recovery, idempotency, and operator inspection testable without asking a model to decide what should run next.</p></div>
+      <div class="decision"><h3>Two independent permission gates</h3><p>Authorized SQL relations and predicates restrict rows before lexical or vector search. Immediately before every LLM call, <code>assertAgentContextBindings</code> recomputes the binding and compares its scope hash to the immutable manifest, catching stale or substituted contexts.</p></div>
+      <div class="decision"><h3>Rule-based approval triggers</h3><p>Discount thresholds, renewal uplift, legal concepts, customer-facing concessions, confidence, conflict, and missing evidence are classified by provider-independent code. A model cannot self-declare that its recommendation is safe enough to skip approval.</p></div>
+      <div class="decision"><h3>Per-claim citation validation</h3><p>Generated citation tuples are canonicalized to code-owned manifest values. <code>assessClaimSupport</code> checks that referenced evidence exists and that the claim’s material names, amounts, dates, predicates, polarity, and bounded paraphrase are supported; unsupported claims are rejected or removed.</p></div>
+      <div class="decision"><h3>Hybrid RRF retrieval</h3><p>PostgreSQL full-text ranking and exact pgvector cosine ranking are fused by stable evidence ID with reciprocal-rank fusion (<code>k = 60</code>). Reliability and age adjustments are transparent and capped at ±0.02; mandatory policy and exact CRM grounding are packed separately so top-k competition cannot erase them.</p></div>
+      <div class="decision"><h3>Typed, schema-validated artifacts</h3><p>Conversation, stakeholder, commercial, and strategy outputs have strict Zod contracts, bounded arrays/text/serialized size, structured repair, and provider-neutral model interfaces. Strategy returns the canonical nine-section <code>DealBrief</code> rather than a second divergent format.</p></div>
+      <div class="callout"><p><strong>Citation shape, precisely:</strong> the brief contract has nine required top-level sections. Factual sections expose claims directly or through their typed child records (stakeholders, recommended actions, and evidence summaries). <code>missingInformation</code> is intentionally questions, not asserted claims; review warnings reference existing claim IDs. The renderer only exposes generated output after every referenced evidence ID is authorized.</p></div>
+
+      <h3>Retrieval details retained from the internal design notes</h3>
+      <ul>
+        <li>An immutable manifest binds the run, requester/deal scope hash, policy hash, full query/plan hash, embedding provider/model/dimension/version/normalization, context limit, and diagnostics.</li>
+        <li>Distinct per-source quotas prevent a high-volume source from consuming the candidate set. The plan runs the user query plus fixed section-oriented searches, then fuses their results.</li>
+        <li>Policy evidence reserves a result slot when authorized. Exact account, opportunity, and contact records are included as cited grounding without displacing the ranked quality set.</li>
+        <li>Context packing reserves at least eight characters for each ranked or mandatory grounding item; an impossible budget fails explicitly rather than silently dropping evidence.</li>
+        <li>Citation resolution reauthorizes the current evidence row and checks immutable manifest membership. Missing, stale, unauthorized, and out-of-manifest citations share one opaque denial.</li>
+      </ul>
+      <div class="callout warning"><p><strong>HNSW is planned, not shipped.</strong> The current operative semantic path is exact cosine over the authorized subset. The removed HNSW note described a gated future optimization: profile-specific projections and isolated, stable security domains would remain shadow-only until zero-leakage, policy-inclusion, citation-authorization, recall/overlap, underfill, latency, WAL/replica, rebuild, and recovery gates pass. Any future ANN adapter must return candidate IDs only, rejoin current authorization, rerank by exact cosine, preserve exact search as oracle/fallback/kill switch, and never use one global shared graph.</p></div>
+    </section>
+
+    <section id="security">
+      <div class="section-number">06 · Security notes</div>
+      <h2>Fail closed at the boundaries that matter.</h2>
+
+      <h3>Permission enforcement and opaque denial</h3>
+      <p>Canonical grants bind persona, account, source type, restricted-account access, sensitive-pricing access, and fixture provenance. Security-barrier views and query predicates apply those dimensions before returning text, locators, scores, counts, or vectors. The workflow also binds the run to the requested persona and opportunity. Before generation, the scope hash is independently recomputed and checked against the manifest.</p>
+      <p><code>recordOpaqueDenial</code> and <code>opaqueCitationDenial</code> deliberately avoid account, source, evidence, locator, recommendation, and citation facts. Trace completeness validation rejects denial traces that contain such details, so BOLA/permission failures do not become a side channel through errors or observability.</p>
+
+      <h3>Sensitivity classification and approvals</h3>
+      <p>Ingestion does not trust one “sensitive” column. Effective sensitivity combines source type, source access level, restricted-opportunity state, pricing-note language, and the canonical policy text/hash; pricing requires the policy’s sensitive-pricing rule to be provable. Separately, <code>opportunity_policy_facts</code> derives structured commercial/legal signals from pricing rows and opportunity restrictions. Edits are rescanned by deterministic concept pairs—for example, a liability subject plus change language, or a commercial benefit plus commitment language.</p>
+      <p>Approval requirements are stored as category entries with eligible authorities and dependencies. Authority membership is account-scoped and rechecked at decision time. A discount above 10% requires deal desk; above 15% adds a separate sales-leader entry, so two distinct subject-entry decisions are required. Legal terms require a legal reviewer; evidence concerns accept account owner or sales leader; customer concessions depend on earlier entries and require the account owner. Decisions, approved/original payloads, hashes, diffs, and replay results are immutable.</p>
+
+      <h3>Anti-hallucination and prompt-injection defenses</h3>
+      <div class="grid-2">
+        <div class="card"><h4>Evidence identity is code-owned</h4><p>The model must copy a complete citation tuple, but runtime canonicalization restores manifest-owned ID, evidence ID, and locator. Unknown, duplicate, stale, unauthorized, and forged references fail validation.</p></div>
+        <div class="card"><h4>Support is semantic but bounded</h4><p>Validation checks exact structured fields, material anchors, polarity, predicates, and tightly constrained paraphrases. Unsafe instruction-like prose and ungrounded customer-facing recommendations are rejected.</p></div>
+        <div class="card"><h4>Evidence is inert data</h4><p>Prompts state that evidence instructions, roles, tool requests, schemas, and citation forgeries are non-executable. Fixed delimiters separate instructions from untrusted records and specialist artifacts.</p></div>
+        <div class="card"><h4>Delimiter escape is contract-tested</h4><p><code>tests/contract/agents.test.ts</code> names the case <em>“cannot let an evidence record close the fixed inert-data delimiter”</em>. Reserved BEGIN/END markers are replaced with explicit escaped-delimiter tokens before prompt construction.</p></div>
+      </div>
+
+      <h3>State persistence, recovery, and inspection</h3>
+      <p>PostgreSQL durably stores identities and grants, immutable evidence versions and embeddings, run state/version, deadlines and provider-attempt usage, manifests, outbox delivery state, step leases, checkpoints, model attempts, specialist artifacts, claims/citations, approval snapshots and decisions, briefs, audit events, run events, and trace spans. Redis/BullMQ is a delivery layer, not the recovery authority.</p>
+      <p>After interruption, the reconciler examines published/claimed outbox commands and BullMQ state, fences recovery with claim tokens, reopens or republishes safe work, and resumes from existing checkpoints. Operators can inspect the run timeline and persisted spans. Trace projection records authorization, retrieval, model calls, validation, guardrails, usage/repair, degradation, approval requirements/decisions, and finalization; append-only database triggers and stable IDs make projection idempotent.</p>
+
+      <h3>Synthetic Slack-style updates: production and ingestion</h3>
+      <p><code>scripts/generate-slack-fixtures.ts</code> accepts only live <code>openrouter</code> or <code>ollama</code> configuration—<code>mock</code> is rejected. It asks for exactly three clearly synthetic updates per opportunity: a reinforcing fact, missing context, and ambiguity/conflict. It validates row IDs, account/opportunity bindings, chronology between the latest evidence date and close date, synthetic notices, access levels, control characters, and category coverage before replacing the TSV.</p>
+      <p>The checked-in <code>fixtures/cato/slack/generation.json</code> records an observed OpenRouter run using <code>google/gemini-3.5-flash-lite</code>, native-schema output, two calls, zero repairs, 3,444 input tokens, 2,381 output tokens, and 5,825 total tokens. It also records prompt/schema/source/output SHA-256 hashes, pinned source commit, generation time, reviewed status, and row-level context categories for all nine updates.</p>
+      <p><code>pnpm ingest:records</code> parses that provenance with the fixture set, verifies live-generation completeness and source/output binding, chunks the Slack records with their locators, provenance, effective classification, reliability, and policy hash, and upserts immutable documents/evidence. <code>pnpm index:embeddings</code> then embeds the canonical Slack locator prefix alongside the other sources. Regeneration therefore requires re-ingestion and re-indexing.</p>
+
+      <h3>Secrets and honest limitations</h3>
+      <p>Database, Redis, session, provider, and model configuration comes from validated server-side environment variables. <code>.env</code> and <code>.env.local</code> are gitignored, credentials are excluded from model diagnostics, and logging redaction suppresses common secret and authorization fields.</p>
+      <div class="callout danger"><p><strong>Not production-hardened:</strong> there is no provider cost/spend accounting beyond per-run call/token/deadline budgets and persisted token usage; no documented API/user/provider rate-limiting policy; no secrets-manager or automatic rotation integration; no enterprise identity provider; and no production-grade PII service. These are deployment gaps, not controls to infer from the current code.</p></div>
+    </section>
+
+    <section id="production">
+      <div class="section-number">07 · Production readiness</div>
+      <h2>A strong recovery core; an intentionally incomplete operating envelope.</h2>
+      <table>
+        <thead><tr><th>Area</th><th>Current design</th><th>Production deployment still needs</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Scalability</strong></td><td><span class="status now">Handled now</span><br>Stateless API/worker composition; Postgres outbox; BullMQ concurrency; per-source retrieval quotas; exact authorized-subset search; bounded contexts and model calls.</td><td><span class="status gap">Required</span><br>Load/soak tests, queue/backpressure SLOs, connection-pool sizing, database partition/retention strategy, and measured horizontal worker autoscaling. Consider gated HNSW only when authorized subsets make exact cosine a measured bottleneck.</td></tr>
+          <tr><td><strong>High availability</strong></td><td><span class="status now">Handled now</span><br>Idempotent commands, version checks, leases, heartbeats, outbox claims, dead letters, checkpoint replay, and Redis/Postgres reconciliation survive process restarts and at-least-once delivery.</td><td><span class="status gap">Required</span><br>Multi-AZ managed Postgres/Redis, tested failover and point-in-time restore, replica-lag policy, backup drills, schema rollout/rollback procedure, and regional disaster-recovery objectives.</td></tr>
+          <tr><td><strong>Monitoring</strong></td><td><span class="status now">Handled now</span><br>Persisted append-only spans/events cover authorization, retrieval, every model attempt, validation/guardrails, usage, approvals, failures, and finalization; live/readiness endpoints probe dependencies.</td><td><span class="status gap">Required</span><br>Export to a metrics/tracing platform, dashboards and alerts for latency/error/queue depth/dead letters/provider failures/budget exhaustion, retention/redaction policies, SLOs, and on-call runbooks.</td></tr>
+          <tr><td><strong>Secrets</strong></td><td><span class="status now">Handled now</span><br>Validated environment variables; server-only keys; gitignored local env files; safe provider diagnostics and log redaction.</td><td><span class="status no">Missing</span><br>Cloud secrets manager or workload identity, least-privilege database/provider credentials, automatic rotation, access audit, short-lived tokens, and breach-revocation playbooks.</td></tr>
+          <tr><td><strong>Operational support</strong></td><td><span class="status now">Handled now</span><br>Queryable runs, timelines, approvals, trace spans, deterministic diagnostic codes, dead-letter classification, cancellation, and explicit recovery paths.</td><td><span class="status gap">Required</span><br>Admin/support tooling with scoped access, replay/quarantine procedures, data-retention and deletion controls, escalation ownership, customer-support runbooks, and auditable break-glass operations.</td></tr>
+          <tr><td><strong>Safety &amp; governance</strong></td><td><span class="status now">Handled now</span><br>SQL authorization, opaque denials, citation support checks, deterministic approval policy, immutable provenance, synthetic fixture validation, and human review.</td><td><span class="status gap">Required</span><br>Threat modeling and penetration tests, provider/privacy/residency review, production PII detection with custom recognizers, adversarial prompt evaluations, formal policy ownership, and periodic grant/authority recertification.</td></tr>
+          <tr><td><strong>Cost &amp; capacity</strong></td><td><span class="status now">Partial</span><br>Per-run call, token, retry, schema-repair, output, context, and deadline limits plus persisted actual token usage.</td><td><span class="status no">Missing</span><br>Currency-level provider spend accounting, budgets by tenant/team, forecasts, anomaly alerts, chargeback, and model routing only after quality/latency/cost profiles are measured for every agent contract.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Deliberately deferred enhancements</h3>
+      <div class="grid-2">
+        <div class="card"><h4>Adaptive ANN / HNSW</h4><p>Future profile-specific, security-domain-isolated candidate search with exact authorization rejoin/rerank and strict activation gates. Exact authorized cosine remains the oracle and fallback.</p></div>
+        <div class="card"><h4>PII defense in depth</h4><p>A private, pinned detector such as Presidio could augment deterministic patterns and human review at ingestion and generated-evidence promotion; it must be evaluated on organization-specific labels and fail closed for risky paths.</p></div>
+        <div class="card"><h4>Cross-encoder reranking</h4><p>Prototype only if measured hybrid retrieval misses relevance goals, and accept it only when incremental quality justifies latency, cost, context exposure, and operational complexity.</p></div>
+        <div class="card"><h4>Synthetic labeled evaluations</h4><p>Add only with explicit label schemas, provenance, contamination controls, independent human review, and acceptance thresholds; generated labels must never silently become ground truth.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>Strategic Deal Intelligence Assistant · Technical overview generated from the current repository source and Drizzle migrations · 30 August 2026</footer>
+</body>
+</html>

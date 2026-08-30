@@ -142,6 +142,14 @@ export class DecideApproval {
       actorId: input.actorId,
       opportunityId: run.opportunityId
     });
+    if (!granted.includes(input.authority)) {
+      await this.access.recordOpaqueDenial({
+        type: 'approval_decision_denied',
+        actorId: input.actorId,
+        reason: 'forbidden'
+      });
+      throw new AuthorizationDeniedError('Approval decision denied');
+    }
     const subject = await this.store.getApprovalSubject({
       runId,
       approvalSubjectId: input.approvalSubjectId
@@ -149,10 +157,7 @@ export class DecideApproval {
     const entry = subject?.entries.find((candidate) => candidate.id === input.entryId);
     if (subject === undefined || entry === undefined)
       throw new DomainNotFoundError('approval subject');
-    if (
-      !granted.includes(input.authority) ||
-      !entry.eligibleAuthorities.includes(input.authority)
-    ) {
+    if (!entry.eligibleAuthorities.includes(input.authority)) {
       await this.access.recordOpaqueDenial({
         type: 'approval_decision_denied',
         actorId: input.actorId,
@@ -266,6 +271,7 @@ export class DecideApproval {
             actorId: input.actorId,
             opportunityId: run.opportunityId,
             runId: run.id,
+            originalPayload,
             payload: approvedPayload
           })
         : undefined;

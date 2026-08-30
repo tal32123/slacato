@@ -609,6 +609,12 @@ function ApprovalDecisionPage({
             The decision uses the current run version and subject hash. A partial quorum remains
             awaiting approval.
           </p>
+          {!detail.capabilities.canEditPayload && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Editing requires current access to every cited deal-evidence record. You can still
+              approve the immutable brief unchanged or reject it.
+            </p>
+          )}
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Button
               type="button"
@@ -621,7 +627,7 @@ function ApprovalDecisionPage({
             <Button
               type="button"
               variant="outline"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || !detail.capabilities.canEditPayload}
               aria-expanded={mode === 'edit'}
               aria-controls="edit-decision-fields"
               onClick={() => setMode(mode === 'edit' ? null : 'edit')}

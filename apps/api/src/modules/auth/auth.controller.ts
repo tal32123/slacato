@@ -21,7 +21,7 @@ import { applyCorsHeaders } from './guard.js';
 export class AuthController {
   /** Creates the authentication controller with its service and allowed-origin configuration. */
   public constructor(
-    private readonly auth: AuthService,
+    @Inject(AuthService) private readonly auth: AuthService,
     @Inject(AUTH_OPTIONS) private readonly options: AuthModuleOptions
   ) {}
 

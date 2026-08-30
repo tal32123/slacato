@@ -8,6 +8,7 @@ import {
   createConfiguredModelGateways,
   createDatabaseClient,
   type DatabaseClient,
+  DealBriefProcessor,
   type Env,
   loadRuntimeEnv,
   type MockGenerationResolver,
@@ -15,15 +16,14 @@ import {
   OutboxDispatcher,
   OutboxDispatcherLoop,
   PostgresCommandReconciler,
+  PostgresDealBriefContextRepository,
   PostgresDealBriefPolicyFacts,
+  PostgresDealBriefWorkflowServices,
   PostgresProviderAttemptLedger,
   PostgresWorkflowStore,
   ReconcilerLoop,
   WORKFLOW_DEAD_LETTER_QUEUE_NAME
 } from '@slacato/infrastructure';
-import { DealBriefProcessor } from './processors/deal-brief.processor.js';
-import { PostgresDealBriefContextRepository } from './processors/postgres-deal-brief-context.repository.js';
-import { PostgresDealBriefWorkflowServices } from './processors/postgres-deal-brief-workflow-services.js';
 import { WorkerModule } from './worker.module.js';
 
 export interface WorkerApplicationOptions {

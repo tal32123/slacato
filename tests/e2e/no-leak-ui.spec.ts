@@ -4,11 +4,15 @@ const hiddenTokens = [
   'OPP-1003',
   'Eclipse BioMaterials',
   'restricted-eclipse',
-  'SLK-1003',
+  'SLK-9007',
+  'SLK-9008',
+  'SLK-9009',
   'pricing_notes.tsv',
-  'account_team_updates.tsv#SLK-1003',
-  'liability language',
-  'concession statement'
+  'account_team_updates.tsv#SLK-9007',
+  'account_team_updates.tsv#SLK-9008',
+  'account_team_updates.tsv#SLK-9009',
+  'aggressive discounting',
+  'risk mitigation'
 ] as const;
 
 async function loginAs(page: Page, name: string, returnTo = '/deals'): Promise<void> {

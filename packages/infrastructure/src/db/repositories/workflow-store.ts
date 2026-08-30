@@ -248,7 +248,7 @@ async function appendProjectedTrace(
 }
 
 /** Persists a complete pure trace projection without leaving the caller's workflow transaction. */
-async function persistTraceProjection(
+export async function persistTraceProjection(
   sql: SqlExecutor,
   projection: WorkflowTraceProjection
 ): Promise<void> {
@@ -458,11 +458,19 @@ async function persistGeneratedArtifact(
   sql: SqlExecutor,
   input: SaveCheckpointInput
 ): Promise<void> {
+  const [namespace, detail, extra] = input.step.split(':');
   if (
     input.logicalGenerationId === undefined ||
-    (!input.step.startsWith('specialist:') && input.step !== 'strategy')
+    (namespace !== 'specialist' && namespace !== 'strategy')
   )
     return;
+  if (detail === undefined || detail.length === 0 || extra !== undefined)
+    throw new DomainConflictError('Generated checkpoint has no valid artifact identity');
+  const strategy = namespace === 'strategy';
+  const draftVersion = strategy ? Number(detail) : 0;
+  if (strategy && (!/^\d+$/.test(detail) || !Number.isSafeInteger(draftVersion)))
+    throw new DomainConflictError('Strategy checkpoint has no valid draft version');
+  const kind = strategy ? 'strategy' : detail;
   const value = input.checkpoint.value;
   if (value === null || typeof value !== 'object' || Array.isArray(value))
     throw new DomainConflictError('Generated checkpoint has no object artifact');
@@ -487,9 +495,13 @@ async function persistGeneratedArtifact(
       throw new DomainConflictError('Generated artifact replay conflicts with persisted content');
     return;
   }
-  await sql`insert into specialist_artifacts (id, run_id, kind, draft_version, outcome, warnings, logical_generation_id, generation_metadata, content, content_hash)
-    values (${`artifact_${hashApprovalPayload(input.logicalGenerationId)}`}, ${input.runId}, ${input.step.replace('specialist:', '')}, 0, ${status}, ${jsonText(warnings)}::jsonb,
-      ${input.logicalGenerationId}, ${jsonText(input.checkpoint.generation ?? {})}::jsonb, ${jsonText(value)}::jsonb, ${contentHash})`;
+  const inserted = await sql<{ kind: string; draft_version: number }[]>`
+    insert into specialist_artifacts (id, run_id, kind, draft_version, outcome, warnings, logical_generation_id, generation_metadata, content, content_hash)
+    values (${`artifact_${hashApprovalPayload(input.logicalGenerationId)}`}, ${input.runId}, ${kind}, ${draftVersion}, ${status}, ${jsonText(warnings)}::jsonb,
+      ${input.logicalGenerationId}, ${jsonText(input.checkpoint.generation ?? {})}::jsonb, ${jsonText(value)}::jsonb, ${contentHash})
+    returning kind, draft_version`;
+  if (inserted[0]?.kind !== kind || inserted[0].draft_version !== draftVersion)
+    throw new DomainConflictError('Generated artifact was not persisted');
 }
 
 /** PostgreSQL authority for atomic, CAS-protected workflow state, checkpoints, approvals, and outbox transitions. */
@@ -580,6 +592,17 @@ export class PostgresWorkflowStore implements WorkflowStore {
       if (replay !== undefined) {
         if (replay.start_request_hash !== input.startRequestHash)
           throw new DomainConflictError('Start idempotency key conflicts with another command');
+        const budget = (
+          await sql<
+            { max_calls: number; deadline_ms: number | null }[]
+          >`select max_calls, deadline_ms from run_budgets where run_id = ${replay.id} for update`
+        )[0];
+        if (
+          budget === undefined ||
+          budget.max_calls !== input.budget.maxCalls ||
+          budget.deadline_ms !== input.budget.deadlineMs
+        )
+          throw new DomainConflictError('Run budget limits conflict with persisted run');
         return asRun(replay);
       }
       const active = (
@@ -636,6 +659,18 @@ export class PostgresWorkflowStore implements WorkflowStore {
         { id: string }[]
       >`select id from outbox_commands where id = ${input.causalCommandId} and run_id = ${input.runId} and status = 'published' and consumed_at is null for update`;
       if (commandRows.length !== 1) return undefined;
+      const causalLease = (
+        await sql<
+          Pick<InvocationRow, 'step' | 'lease_expires_at'>[]
+        >`select step, lease_expires_at from step_invocations
+          where causal_command_id = ${input.causalCommandId} and status = 'leased'
+          for update`
+      )[0];
+      if (
+        causalLease !== undefined &&
+        (causalLease.step !== input.step || new Date(causalLease.lease_expires_at) > now)
+      )
+        return undefined;
       const active = (
         await sql<
           InvocationRow[]
@@ -732,7 +767,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
       const row = (
         await sql<
           RunRow[]
-        >`update runs set status = ${nextStatus}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`
+        >`update runs set status = ${nextStatus}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash`
       )[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
       await storeCheckpoint(sql, {
@@ -929,6 +964,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     input: ApprovalDecisionInput
   ): Promise<ApprovalDecisionStoreResult> {
     return this.database.sql.begin(async (sql) => {
+      await sql`select pg_advisory_xact_lock(hashtext(${`approval-decision:${input.idempotencyKey}`}))`;
       const prior = (
         await sql<
           { request_hash: string }[]
@@ -1032,7 +1068,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
       const row = (
         await sql<
           RunRow[]
-        >`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`
+        >`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash`
       )[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
       await persistTraceProjection(
@@ -1074,6 +1110,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     input: ReplaceApprovalSubjectInput
   ): Promise<Readonly<{ run: WorkflowRun; subject: ApprovalSubject; replayed: boolean }>> {
     return this.database.sql.begin(async (sql) => {
+      await sql`select pg_advisory_xact_lock(hashtext(${`approval-decision:${input.idempotencyKey}`}))`;
       const prior = (
         await sql<
           { request_hash: string }[]
@@ -1282,7 +1319,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
       const row = (
         await sql<
           RunRow[]
-        >`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`
+        >`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash`
       )[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
       await persistTraceProjection(
@@ -1326,7 +1363,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
       const row = (
         await sql<
           RunRow[]
-        >`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model`
+        >`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash`
       )[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
       const failureProjection = projectWorkflowTrace({
