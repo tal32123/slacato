@@ -14,8 +14,6 @@
   },
   "dependencies": {
     "@slacato/contracts": "workspace:*",
-    "ai": "7.0.83",
-    "nanoid": "^6.0.1",
     "zod": "4.4.3"
   },
   "devDependencies": {
