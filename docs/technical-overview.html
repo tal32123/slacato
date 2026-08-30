@@ -113,6 +113,12 @@
     .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 7px; border-radius: 3px; vertical-align: -1px; background: var(--teal-soft); border: 1px solid var(--teal); }
     .legend .durable::before { background: #eef1f2; border-color: #65737b; }
     .legend .future::before { background: #fff7e8; border-color: #9a5a10; border-style: dashed; }
+    .legend .model::before { background: #fff; border-color: #b8c6bf; }
+    .legend .human::before { background: #fff7e8; border-color: #9a5a10; }
+    .sub { color: var(--muted); }
+    .scenarios td:first-child, .scenarios th:first-child { width: 15%; }
+    .scenarios td:nth-child(2), .scenarios th:nth-child(2) { width: 20%; }
+    .scenarios td:nth-child(2) code { white-space: nowrap; }
     .decision { display: grid; grid-template-columns: 210px 1fr; gap: 28px; padding: 25px 0; border-top: 1px solid var(--line); }
     .decision:first-of-type { border-top: 0; }
     .decision h3 { margin: 2px 0; font-size: 18px; }
@@ -148,9 +154,10 @@
       <a href="#context">Context</a>
       <a href="#architecture">Architecture</a>
       <a href="#data">Data model</a>
-      <a href="#lifecycle">Lifecycle</a>
+      <a href="#lifecycle">Run lifecycle</a>
       <a href="#decisions">Design</a>
       <a href="#security">Security</a>
+      <a href="#deliverables">Deliverables</a>
       <a href="#production">Production</a>
     </div>
   </nav>
@@ -182,9 +189,11 @@
     </section>
 
     <section id="architecture">
-      <div class="section-number">02 · Component architecture</div>
+      <div class="section-number">02 · Architecture</div>
       <h2>Thin apps around durable domain and infrastructure seams.</h2>
       <p>The browser is the reviewer workspace; the API owns authenticated commands and read models; the worker advances durable workflow steps. <code>packages/core</code> contains provider-independent policy, agents, contracts, validation, and orchestration. <code>packages/infrastructure</code> implements PostgreSQL, Redis/BullMQ, retrieval, model adapters, and recovery.</p>
+
+      <h3>Logical view</h3>
 
       <div class="diagram" role="img" aria-label="Component architecture showing web, API, worker, core, infrastructure, PostgreSQL, Redis, and model providers">
         <svg viewBox="0 0 1160 700" xmlns="http://www.w3.org/2000/svg">
@@ -214,7 +223,57 @@
           <path d="M920 432L950 496" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
         </svg>
       </div>
-      <p class="diagram-note">Redis transports work; PostgreSQL owns the resumable truth. The worker can reconstruct progress from runs, outbox commands, leases, checkpoints, attempts, and immutable artifacts after a restart.</p>
+      <p class="diagram-note">Redis transports work; PostgreSQL owns the resumable truth. The worker can reconstruct progress from runs, outbox commands, leases, checkpoints, attempts, and immutable artifacts after a restart. Generated output leaves through three channels only — the reviewer workspace, the SSE run timeline at <code>/api/runs/:runId/events</code>, and the JSON/Markdown export at <code>/api/runs/:runId/export/:format</code> — and each one re-checks the requester’s grants server-side before rendering a single citation.</p>
+
+      <h3>Deployment view</h3>
+      <p>One image builds both server services; they differ only in their start command. The browser only ever talks to one origin, which is what the <code>__Host-</code> session cookie requires.</p>
+      <div class="diagram" role="img" aria-label="Deployment view: browser to Caddy web service, API service and worker service from one image, PostgreSQL with pgvector, Redis with BullMQ, the model gateway as the only egress, plus secrets and monitoring">
+        <svg viewBox="0 0 1240 660" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
+          <rect width="1240" height="660" fill="#fbfcfb"/>
+          <style>
+            .dp-svc{fill:#fff;stroke:#158864;stroke-width:2}
+            .dp-store{fill:#fff;stroke:#65737b;stroke-width:1.6}
+            .dp-ext{fill:#eaf6f1;stroke:#158864;stroke-width:1.6}
+            .dp-note{fill:#eef1f2;stroke:#65737b;stroke-width:1.4}
+            .dp-h{font:700 15px system-ui;fill:#0A141D}
+            .dp-s{font:11px system-ui;fill:#52616a}
+            .dp-m{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#4d5b63}
+            .dp-l{font:11px system-ui;fill:#6b7880}
+            .dp-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}
+            .dp-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowD)}
+          </style>
+          <text x="22" y="26" class="dp-g">DEPLOYMENT VIEW · SERVICES · STORAGE · SECRETS · MODEL GATEWAY · MONITORING</text>
+
+          <g><rect class="dp-store" x="30" y="86" width="200" height="110" rx="14"/><text x="48" y="116" class="dp-h">Reviewer browser</text><text x="48" y="140" class="dp-s">React SPA, one origin</text><text x="48" y="158" class="dp-m">__Host- cookie, Lax</text><text x="48" y="178" class="dp-s">no keys, no model access</text></g>
+          <path class="dp-a" d="M230 141H270"/><text x="250" y="132" text-anchor="middle" class="dp-l">HTTPS</text>
+
+          <g><rect class="dp-svc" x="270" y="66" width="250" height="150" rx="14"/><text x="288" y="96" class="dp-h">web service</text><text x="288" y="120" class="dp-m">Dockerfile.web → caddy:2</text><text x="288" y="140" class="dp-s">serves the built SPA on $PORT</text><text x="288" y="160" class="dp-m">/api/* → $API_UPSTREAM</text><text x="288" y="180" class="dp-s">SPA history fallback; keeps the</text><text x="288" y="198" class="dp-s">API same-origin for cookies</text></g>
+          <path class="dp-a" d="M520 111H580"/><text x="550" y="102" text-anchor="middle" class="dp-l">/api/*</text>
+
+          <g><rect class="dp-svc" x="580" y="46" width="270" height="150" rx="14"/><text x="598" y="76" class="dp-h">api service</text><text x="598" y="100" class="dp-m">Dockerfile · @slacato/api</text><text x="598" y="120" class="dp-s">NestJS on PORT (3000 by default)</text><text x="598" y="140" class="dp-s">sessions · commands · queries</text><text x="598" y="160" class="dp-s">SSE timeline · json/markdown export</text><text x="598" y="180" class="dp-s">writes commands to the outbox</text></g>
+
+          <g><rect class="dp-svc" x="580" y="246" width="270" height="190" rx="14"/><text x="598" y="276" class="dp-h">worker service</text><text x="598" y="300" class="dp-m">same image · @slacato/worker</text><text x="598" y="320" class="dp-s">outbox dispatcher every 1 s</text><text x="598" y="340" class="dp-s">reconciler every 5 s</text><text x="598" y="360" class="dp-s">BullMQ concurrency 1 · 2 jobs/s</text><text x="598" y="380" class="dp-s">steps leased 120 s, heartbeat ~40 s</text><text x="598" y="400" class="dp-s">the only process that generates</text><text x="598" y="420" class="dp-s">every agent and embedding call</text></g>
+
+          <g><rect class="dp-store" x="880" y="46" width="300" height="170" rx="14"/><text x="898" y="76" class="dp-h">PostgreSQL + pgvector</text><text x="898" y="100" class="dp-m">pgvector/pgvector:0.8.1-pg17</text><text x="898" y="120" class="dp-s">runs, outbox, leases, checkpoints</text><text x="898" y="140" class="dp-s">evidence versions + embeddings</text><text x="898" y="160" class="dp-s">manifests, approvals, briefs</text><text x="898" y="180" class="dp-s">run_events, trace_spans, audit</text><text x="898" y="200" class="dp-s">security-barrier authorization views</text></g>
+          <path class="dp-a" d="M850 96H880"/>
+          <path class="dp-a" d="M850 276H864V126H880"/>
+
+          <g><rect class="dp-store" x="880" y="246" width="300" height="110" rx="14"/><text x="898" y="276" class="dp-h">Redis + BullMQ</text><text x="898" y="300" class="dp-m">redis:7.4.2-alpine</text><text x="898" y="320" class="dp-s">work delivery and dead letters</text><text x="898" y="340" class="dp-s">never the recovery source</text></g>
+          <path class="dp-a" d="M850 301H880"/>
+
+          <g><rect class="dp-ext" x="880" y="386" width="300" height="130" rx="14"/><text x="898" y="416" class="dp-h">Model gateway</text><text x="898" y="440" class="dp-m">openrouter · ollama · mock</text><text x="898" y="460" class="dp-s">all provider traffic goes through it</text><text x="898" y="480" class="dp-s">per run: 24 calls, 600 s deadline</text><text x="898" y="500" class="dp-s">per call: 4 attempts, 2 schema repairs</text></g>
+          <path class="dp-a" d="M850 411H880"/>
+
+          <g><rect class="dp-note" x="270" y="246" width="260" height="110" rx="12"/><text x="288" y="276" class="dp-h">One runtime image</text><text x="288" y="300" class="dp-s">Dockerfile builds the API and</text><text x="288" y="318" class="dp-s">the worker; they differ only in</text><text x="288" y="336" class="dp-s">the start command.</text></g>
+
+          <g><rect class="dp-note" x="270" y="386" width="260" height="130" rx="12"/><text x="288" y="416" class="dp-h">Local and demo</text><text x="288" y="440" class="dp-m">docker compose up -d</text><text x="288" y="460" class="dp-m">pnpm db:migrate</text><text x="288" y="478" class="dp-m">pnpm ingest:records</text><text x="288" y="496" class="dp-m">pnpm index:embeddings</text></g>
+
+          <g><rect class="dp-note" x="30" y="546" width="580" height="100" rx="12"/><text x="50" y="576" class="dp-h">Secrets and configuration</text><text x="50" y="600" class="dp-s">Server-only environment variables: DATABASE_URL, REDIS_URL, SESSION_SECRET,</text><text x="50" y="618" class="dp-s">WEB_ORIGIN, AI_PROVIDER, provider API keys. Local .env files are gitignored, keys stay</text><text x="50" y="636" class="dp-s">out of model diagnostics, and log redaction suppresses secret and authorization fields.</text></g>
+          <g><rect class="dp-note" x="640" y="546" width="540" height="100" rx="12"/><text x="660" y="576" class="dp-h">Monitoring and operations</text><text x="660" y="600" class="dp-s">GET /api/health/live and /api/health/ready, which probes database, migration,</text><text x="660" y="618" class="dp-s">redis, index, and model. Append-only trace_spans and run_events in PostgreSQL,</text><text x="660" y="636" class="dp-s">plus an SSE run timeline. No export to an external metrics platform yet.</text></g>
+        </svg>
+      </div>
+      <p class="diagram-note">The request path is deliberately cheap: the API authenticates, authorizes, and writes one command to the outbox. Every model call and every retry happens in the worker, so generation load is a queue-depth problem rather than an HTTP problem. The API reaches Redis and the provider only through its readiness probe.</p>
     </section>
 
     <section id="data">
@@ -280,15 +339,95 @@
     </section>
 
     <section id="lifecycle">
-      <div class="section-number">04 · Request lifecycle</div>
-      <h2>Authorization surrounds retrieval and generation.</h2>
-      <p>The workflow is a durable state machine, not a free-running model graph. Every transition checkpoints state and enqueues the next idempotent command through the PostgreSQL outbox; BullMQ workers use leases, heartbeats, and reconciliation to resume safely.</p>
+      <div class="section-number">04 · Run lifecycle</div>
+      <h2>Eleven states, six steps, one command at a time.</h2>
+      <p>A run is a durable state machine, not a free-running model graph. Each step is dispatched as an idempotent command, claimed under a lease, and committed together with the next command in a single transaction. What a model returns decides what the brief <em>says</em>; it never decides what happens <em>next</em>.</p>
+
+      <div class="diagram" role="img" aria-label="Run state machine: created, retrieving, specialists running, synthesizing and validating on the happy path, branching to awaiting approval or finalizing, ending in completed, rejected, failed or cancelled, with a lease-expiry recovery loop">
+        <svg viewBox="0 0 1320 640" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#617078"/></marker>
+            <marker id="arrowSd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#9a5a10"/></marker>
+          </defs>
+          <rect width="1320" height="640" fill="#fbfcfb"/>
+          <style>
+            .sm-code{fill:#eaf6f1;stroke:#158864;stroke-width:2}
+            .sm-model{fill:#fff;stroke:#b8c6bf;stroke-width:1.7}
+            .sm-human{fill:#fff7e8;stroke:#9a5a10;stroke-width:1.7}
+            .sm-term{fill:#eef1f2;stroke:#65737b;stroke-width:1.5}
+            .sm-note{fill:#fff;stroke:#b8c6bf;stroke-width:1.3;stroke-dasharray:5 5}
+            .sm-name{font:700 15px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#0A141D}
+            .sm-t{font:700 13px system-ui;fill:#0A141D}
+            .sm-s{font:11px system-ui;fill:#52616a}
+            .sm-e{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#158864}
+            .sm-l{font:11px system-ui;fill:#6b7880}
+            .sm-dl{font:11px system-ui;fill:#9a5a10}
+            .sm-a{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowS)}
+            .sm-lane{fill:none;stroke:#9a5a10;stroke-width:1.3;stroke-dasharray:5 5}
+            .sm-loop{stroke:#9a5a10;stroke-width:2;stroke-dasharray:6 5;fill:none;marker-end:url(#arrowSd)}
+            .sm-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}
+            .sm-cap{font:700 11px system-ui;fill:#9a5a10;letter-spacing:1.2px}
+          </style>
+
+          <text x="22" y="26" class="sm-g">RUN STATE MACHINE · packages/core/src/domain/runs/state-machine.ts</text>
+          <text x="22" y="46" class="sm-cap">LEASED, REPLAYABLE STEPS — CLAIMED FOR 120 s WITH HEARTBEATS</text>
+          <rect class="sm-lane" x="22" y="54" width="1230" height="120" rx="16"/>
+
+          <g><rect class="sm-code" x="40" y="64" width="216" height="100" rx="14"/><text x="56" y="92" class="sm-name">created</text><text x="56" y="114" class="sm-s">step start</text><text x="56" y="132" class="sm-s">claim lease · checkpoint</text><text x="56" y="154" class="sm-e">→ start</text></g>
+          <path class="sm-a" d="M256 114H286"/>
+          <g><rect class="sm-model" x="286" y="64" width="216" height="100" rx="14"/><text x="302" y="92" class="sm-name">retrieving</text><text x="302" y="114" class="sm-s">step retrieve</text><text x="302" y="132" class="sm-s">authorized hybrid search</text><text x="302" y="154" class="sm-e">→ retrieval_completed</text></g>
+          <path class="sm-a" d="M502 114H532"/>
+          <g><rect class="sm-model" x="532" y="64" width="216" height="100" rx="14"/><text x="548" y="92" class="sm-name">specialists_running</text><text x="548" y="114" class="sm-s">step specialists · 3 LLM calls</text><text x="548" y="132" class="sm-s">frozen evidence manifest</text><text x="548" y="154" class="sm-e">→ specialists_completed</text></g>
+          <path class="sm-a" d="M748 114H778"/>
+          <g><rect class="sm-model" x="778" y="64" width="216" height="100" rx="14"/><text x="794" y="92" class="sm-name">synthesizing</text><text x="794" y="114" class="sm-s">step synthesize · 1 LLM call</text><text x="794" y="132" class="sm-s">StrategyAgent fans in artifacts</text><text x="794" y="154" class="sm-e">→ synthesis_completed</text></g>
+          <path class="sm-a" d="M994 114H1024"/>
+          <g><rect class="sm-code" x="1024" y="64" width="216" height="100" rx="14"/><text x="1040" y="92" class="sm-name">validating</text><text x="1040" y="114" class="sm-s">step validate · no model call</text><text x="1040" y="132" class="sm-s">schema, safety, approval policy</text><text x="1040" y="154" class="sm-l">→ branches below</text></g>
+
+          <path class="sm-loop" d="M1252 150H1290V78H1252"/>
+          <text x="30" y="196" class="sm-dl">A dead worker’s lease expires → ReconcilerLoop requeues the command → the step replays from its checkpoint</text>
+
+          <path class="sm-a" d="M1080 164V222H575V268"/>
+          <text x="828" y="214" text-anchor="middle" class="sm-l">validation_requires_approval · one or more approval entries</text>
+          <path class="sm-a" d="M1180 164V244H905V268"/>
+          <text x="1045" y="238" text-anchor="middle" class="sm-l">validation_completed · no entries</text>
+
+          <g><rect class="sm-human" x="430" y="268" width="290" height="100" rx="14"/><text x="448" y="296" class="sm-name">awaiting_approval</text><text x="448" y="318" class="sm-s">human decision · one per requirement entry</text><text x="448" y="336" class="sm-s">distinct actors, immutable subject hash</text><text x="448" y="358" class="sm-e">→ approval_granted / approval_rejected</text></g>
+          <path class="sm-a" d="M720 318H790"/>
+          <text x="755" y="262" text-anchor="middle" class="sm-l">approval_granted</text>
+          <g><rect class="sm-code" x="790" y="268" width="230" height="100" rx="14"/><text x="808" y="296" class="sm-name">finalizing</text><text x="808" y="318" class="sm-s">step finalize · no model call</text><text x="808" y="336" class="sm-s">re-verify quorum + subject hash</text><text x="808" y="358" class="sm-e">→ complete</text></g>
+          <path class="sm-a" d="M1020 318H1080"/>
+          <text x="1050" y="262" text-anchor="middle" class="sm-l">complete</text>
+          <g><rect class="sm-code" x="1080" y="268" width="170" height="100" rx="14"/><text x="1096" y="296" class="sm-name">completed</text><text x="1096" y="318" class="sm-s">immutable brief</text><text x="1096" y="336" class="sm-s">json / markdown export</text></g>
+
+          <path class="sm-a" d="M575 368V410"/>
+          <text x="590" y="392" class="sm-l">approval_rejected</text>
+
+          <rect class="sm-note" x="22" y="410" width="380" height="72" rx="12"/>
+          <text x="42" y="438" class="sm-t">fail and cancel are legal from every live state</text>
+          <text x="42" y="462" class="sm-s">Terminal states accept no further events at all.</text>
+
+          <g><rect class="sm-term" x="430" y="410" width="200" height="72" rx="12"/><text x="448" y="440" class="sm-name">rejected</text><text x="448" y="464" class="sm-s">any authority rejects</text></g>
+          <g><rect class="sm-term" x="680" y="410" width="200" height="72" rx="12"/><text x="698" y="440" class="sm-name">failed</text><text x="698" y="464" class="sm-s">fatal, non-retryable step error</text></g>
+          <g><rect class="sm-term" x="930" y="410" width="200" height="72" rx="12"/><text x="948" y="440" class="sm-name">cancelled</text><text x="948" y="464" class="sm-s">requester cancels the run</text></g>
+
+          <rect x="22" y="510" width="1274" height="104" rx="14" fill="#eef1f2" stroke="#65737b"/>
+          <text x="48" y="540" class="sm-t">One PostgreSQL transaction per transition</text>
+          <text x="48" y="564" class="sm-s">The state change, its checkpoint, and the next command all commit together into outbox_commands. OutboxDispatcherLoop publishes to BullMQ every 1 s in batches of 25.</text>
+          <text x="48" y="586" class="sm-s">A worker claims one step under a 120 s lease with ~40 s heartbeats (BullMQ lock 180 s). A non-fatal error releases the lease and BullMQ retries; a fatal error fails the run.</text>
+          <text x="48" y="608" class="sm-s">When a worker dies its lease expires; ReconcilerLoop (every 5 s, batch 25) returns the unconsumed command to pending, replays it against existing checkpoints, and dead-letters exhausted deliveries.</text>
+        </svg>
+      </div>
+      <div class="legend"><span>Deterministic code</span><span class="model">Model call</span><span class="human">Human decision</span><span class="durable">Terminal</span></div>
+      <p class="diagram-note">Three of the six steps touch a model — <code>retrieve</code> embeds the query, <code>specialists</code> and <code>synthesize</code> generate. <code>start</code>, <code>validate</code>, and <code>finalize</code> are ordinary code. Nothing a model returns can change which state comes next — the transition table above is exhaustive, and an event that is not in it raises <code>InvalidRunTransitionError</code> instead of moving the run.</p>
+
+      <h3>Where authorization sits in the run</h3>
+      <p>The same run drawn along its trust boundaries. Authorization is enforced twice: inside the retrieval SQL, and again immediately before every model call.</p>
       <div class="diagram" role="img" aria-label="Request lifecycle from opportunity and requester through permissions, retrieval, agents, validation, approval, and delivery">
-        <svg viewBox="0 0 1320 690" xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 1320 520" xmlns="http://www.w3.org/2000/svg">
           <defs><marker id="arrowL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#617078"/></marker></defs>
-          <rect width="1320" height="690" fill="#fbfcfb"/>
-          <style>.lb{fill:#fff;stroke:#b8c6bf;stroke-width:1.5}.lg{fill:#eaf6f1;stroke:#158864;stroke-width:2}.lw{fill:#fff7e8;stroke:#9a5a10;stroke-width:1.7}.lt{font:700 14px system-ui;fill:#0A141D}.ls{font:11px system-ui;fill:#52616a}.la{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowL)}.ld{stroke:#9a5a10;stroke-width:2;stroke-dasharray:6 5;fill:none;marker-end:url(#arrowL)}</style>
-          <g transform="translate(35 56)"><rect class="lb" width="170" height="92" rx="14"/><text x="85" y="34" text-anchor="middle" class="lt">Opportunity ID</text><text x="85" y="56" text-anchor="middle" class="lt">+ requester</text><text x="85" y="76" text-anchor="middle" class="ls">authenticated persona</text></g>
+          <rect width="1320" height="520" fill="#fbfcfb"/>
+          <style>.lb{fill:#fff;stroke:#b8c6bf;stroke-width:1.5}.lg{fill:#eaf6f1;stroke:#158864;stroke-width:2}.lw{fill:#fff7e8;stroke:#9a5a10;stroke-width:1.7}.lio{fill:#eef1f2;stroke:#65737b;stroke-width:1.5}.lt{font:700 14px system-ui;fill:#0A141D}.ls{font:11px system-ui;fill:#52616a}.la{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowL)}.ld{stroke:#9a5a10;stroke-width:2;stroke-dasharray:6 5;fill:none;marker-end:url(#arrowL)}</style>
+          <g transform="translate(35 56)"><rect class="lio" width="170" height="92" rx="14"/><text x="85" y="34" text-anchor="middle" class="lt">Opportunity ID</text><text x="85" y="56" text-anchor="middle" class="lt">+ requester</text><text x="85" y="76" text-anchor="middle" class="ls">authenticated persona</text></g>
           <path class="la" d="M205 102H250"/>
           <g transform="translate(250 44)"><rect class="lg" width="190" height="116" rx="14"/><text x="95" y="30" text-anchor="middle" class="lt">Permission gate 1</text><text x="95" y="55" text-anchor="middle" class="ls">authorize run binding</text><text x="95" y="75" text-anchor="middle" class="ls">SQL-scoped account, source,</text><text x="95" y="94" text-anchor="middle" class="ls">opportunity &amp; sensitivity</text></g>
           <path class="la" d="M440 102H485"/>
@@ -305,27 +444,27 @@
           <path class="la" d="M640 274H575"/>
           <g transform="translate(315 218)"><rect class="lw" width="260" height="112" rx="14"/><text x="130" y="31" text-anchor="middle" class="lt">Deterministic policy</text><text x="130" y="55" text-anchor="middle" class="ls">discount · legal · concession</text><text x="130" y="75" text-anchor="middle" class="ls">low confidence · conflict</text><text x="130" y="95" text-anchor="middle" class="ls">approval entries + dependencies</text></g>
           <path class="la" d="M315 274H250"/>
-          <g transform="translate(35 218)"><rect class="lb" width="215" height="112" rx="14"/><text x="107" y="31" text-anchor="middle" class="lt">Approval required?</text><text x="107" y="58" text-anchor="middle" class="ls">no → finalization</text><text x="107" y="81" text-anchor="middle" class="ls">yes → await authorities</text></g>
+          <g transform="translate(35 218)"><rect class="lg" width="215" height="112" rx="14"/><text x="107" y="31" text-anchor="middle" class="lt">Approval required?</text><text x="107" y="58" text-anchor="middle" class="ls">no → finalization</text><text x="107" y="81" text-anchor="middle" class="ls">yes → await authorities</text></g>
 
           <path class="ld" d="M142 330V410H348"/>
           <g transform="translate(348 380)"><rect class="lw" width="290" height="106" rx="14"/><text x="145" y="30" text-anchor="middle" class="lt">Human-in-the-loop decisions</text><text x="145" y="54" text-anchor="middle" class="ls">membership + category authority</text><text x="145" y="74" text-anchor="middle" class="ls">quorum + dependencies + immutable diff</text><text x="145" y="93" text-anchor="middle" class="ls">approve · edit-and-approve · reject</text></g>
           <path class="la" d="M638 433H720"/>
           <g transform="translate(720 380)"><rect class="lg" width="225" height="106" rx="14"/><text x="112" y="31" text-anchor="middle" class="lt">Finalize</text><text x="112" y="57" text-anchor="middle" class="ls">verify subject hash</text><text x="112" y="78" text-anchor="middle" class="ls">persist immutable brief</text></g>
           <path class="la" d="M945 433H1015"/>
-          <g transform="translate(1015 380)"><rect class="lb" width="270" height="106" rx="14"/><text x="135" y="31" text-anchor="middle" class="lt">Brief delivered</text><text x="135" y="55" text-anchor="middle" class="ls">9 sections · stable citations</text><text x="135" y="76" text-anchor="middle" class="ls">run timeline · evidence detail</text></g>
-          <path class="la" d="M142 330V433H720"/>
+          <g transform="translate(1015 380)"><rect class="lio" width="270" height="106" rx="14"/><text x="135" y="31" text-anchor="middle" class="lt">Brief delivered</text><text x="135" y="55" text-anchor="middle" class="ls">9 sections · stable citations</text><text x="135" y="76" text-anchor="middle" class="ls">run timeline · evidence detail</text></g>
+          <path class="la" d="M142 330V355H760V380"/>
 
-          <rect x="35" y="545" width="1250" height="100" rx="14" fill="#eef1f2" stroke="#65737b"/><text x="60" y="575" class="lt">Durability underneath every arrow</text><text x="60" y="600" class="ls">runs · outbox_commands · step_invocations · workflow_checkpoints · generation_attempts · run_events · trace_spans</text><text x="60" y="622" class="ls">Idempotency keys, version checks, leases, causal command linkage, append-only events, and reconciliation make restart/replay behavior explicit.</text>
-          <text x="975" y="185" class="ls" fill="#9a5a10">Degradation boundary: conversation and stakeholder may degrade; commercial is fail-closed.</text>
+          <text x="1285" y="185" text-anchor="end" class="ls" fill="#9a5a10">Degradation boundary: conversation and stakeholder may degrade; commercial is fail-closed.</text>
         </svg>
       </div>
+      <div class="legend"><span>Deterministic code</span><span class="model">Model call</span><span class="human">Policy and human decisions</span><span class="durable">Request / delivered brief</span></div>
       <div class="callout warning"><p><strong>Partial failure is intentionally asymmetric.</strong> Conversation and stakeholder failures become schema-valid degraded artifacts with warnings and omitted dependent claims. The commercial specialist is policy-critical; its failure stops the run rather than allowing pricing/legal analysis to disappear silently.</p></div>
     </section>
 
     <section id="decisions">
       <div class="section-number">05 · How and why</div>
       <h2>Models propose. Deterministic code governs.</h2>
-      <div class="decision"><h3>Durable workflow over model orchestration</h3><p>The fixed sequence—retrieve, specialists, synthesize, validate, finalize—is encoded in a Postgres-backed workflow/outbox with checkpoints and versioned transitions. This makes retries, recovery, idempotency, and operator inspection testable without asking a model to decide what should run next.</p></div>
+      <div class="decision"><h3>Durable workflow over model orchestration</h3><p>The fixed sequence—start, retrieve, specialists, synthesize, validate, finalize—lives in a Postgres-backed workflow and outbox with checkpoints and versioned transitions, so retries, recovery, idempotency, and operator inspection are testable. No model is ever asked what should run next.</p></div>
       <div class="decision"><h3>Two independent permission gates</h3><p>Authorized SQL relations and predicates restrict rows before lexical or vector search. Immediately before every LLM call, <code>assertAgentContextBindings</code> recomputes the binding and compares its scope hash to the immutable manifest, catching stale or substituted contexts.</p></div>
       <div class="decision"><h3>Rule-based approval triggers</h3><p>Discount thresholds, renewal uplift, legal concepts, customer-facing concessions, confidence, conflict, and missing evidence are classified by provider-independent code. A model cannot self-declare that its recommendation is safe enough to skip approval.</p></div>
       <div class="decision"><h3>Per-claim citation validation</h3><p>Generated citation tuples are canonicalized to code-owned manifest values. <code>assessClaimSupport</code> checks that referenced evidence exists and that the claim’s material names, amounts, dates, predicates, polarity, and bounded paraphrase are supported; unsupported claims are rejected or removed.</p></div>
@@ -333,15 +472,15 @@
       <div class="decision"><h3>Typed, schema-validated artifacts</h3><p>Conversation, stakeholder, commercial, and strategy outputs have strict Zod contracts, bounded arrays/text/serialized size, structured repair, and provider-neutral model interfaces. Strategy returns the canonical nine-section <code>DealBrief</code> rather than a second divergent format.</p></div>
       <div class="callout"><p><strong>Citation shape, precisely:</strong> the brief contract has nine required top-level sections. Factual sections expose claims directly or through their typed child records (stakeholders, recommended actions, and evidence summaries). <code>missingInformation</code> is intentionally questions, not asserted claims; review warnings reference existing claim IDs. The renderer only exposes generated output after every referenced evidence ID is authorized.</p></div>
 
-      <h3>Retrieval details retained from the internal design notes</h3>
+      <h3>Retrieval details</h3>
       <ul>
         <li>An immutable manifest binds the run, requester/deal scope hash, policy hash, full query/plan hash, embedding provider/model/dimension/version/normalization, context limit, and diagnostics.</li>
-        <li>Distinct per-source quotas prevent a high-volume source from consuming the candidate set. The plan runs the user query plus fixed section-oriented searches, then fuses their results.</li>
+        <li>The plan runs the requester’s query plus six fixed section-oriented searches (deal snapshot, buyer goals, stakeholders, negotiation state, next actions, missing information), each scoped to the source types that can answer it, then fuses the results. Per-source quotas stop a high-volume source from consuming the candidate set.</li>
         <li>Policy evidence reserves a result slot when authorized. Exact account, opportunity, and contact records are included as cited grounding without displacing the ranked quality set.</li>
         <li>Context packing reserves at least eight characters for each ranked or mandatory grounding item; an impossible budget fails explicitly rather than silently dropping evidence.</li>
         <li>Citation resolution reauthorizes the current evidence row and checks immutable manifest membership. Missing, stale, unauthorized, and out-of-manifest citations share one opaque denial.</li>
       </ul>
-      <div class="callout warning"><p><strong>HNSW is planned, not shipped.</strong> The current operative semantic path is exact cosine over the authorized subset. The removed HNSW note described a gated future optimization: profile-specific projections and isolated, stable security domains would remain shadow-only until zero-leakage, policy-inclusion, citation-authorization, recall/overlap, underfill, latency, WAL/replica, rebuild, and recovery gates pass. Any future ANN adapter must return candidate IDs only, rejoin current authorization, rerank by exact cosine, preserve exact search as oracle/fallback/kill switch, and never use one global shared graph.</p></div>
+      <div class="callout warning"><p><strong>HNSW is planned, not shipped.</strong> The shipped semantic path is exact cosine over the authorized subset. Any future ANN adapter must return candidate IDs only, rejoin current authorization, rerank by exact cosine, keep exact search as oracle, fallback, and kill switch, and never share one global graph across security domains. It stays shadow-only until zero-leakage, policy-inclusion, citation-authorization, recall, underfill, latency, replication, rebuild, and recovery gates pass.</p></div>
     </section>
 
     <section id="security">
@@ -365,8 +504,8 @@
       </div>
 
       <h3>State persistence, recovery, and inspection</h3>
-      <p>PostgreSQL durably stores identities and grants, immutable evidence versions and embeddings, run state/version, deadlines and provider-attempt usage, manifests, outbox delivery state, step leases, checkpoints, model attempts, specialist artifacts, claims/citations, approval snapshots and decisions, briefs, audit events, run events, and trace spans. Redis/BullMQ is a delivery layer, not the recovery authority.</p>
-      <p>After interruption, the reconciler examines published/claimed outbox commands and BullMQ state, fences recovery with claim tokens, reopens or republishes safe work, and resumes from existing checkpoints. Operators can inspect the run timeline and persisted spans. Trace projection records authorization, retrieval, model calls, validation, guardrails, usage/repair, degradation, approval requirements/decisions, and finalization; append-only database triggers and stable IDs make projection idempotent.</p>
+      <p>PostgreSQL is the system of record: identities and grants, immutable evidence versions and embeddings, run state and version, budgets and provider attempts, manifests, outbox delivery state, step leases, checkpoints, specialist artifacts, claims and citations, approval snapshots and decisions, briefs, audit events, run events, and trace spans. Redis/BullMQ delivers work; it is never the recovery authority.</p>
+      <p>Recovery is the mechanism drawn in §04: the reconciler inspects published and claimed outbox commands against BullMQ state, fences its recovery with claim tokens, republishes only safe work, and resumes from the checkpoints already written. Trace projection records authorization, retrieval, every model call, validation, guardrails, usage and repair, degradation, approval requirements and decisions, and finalization; append-only triggers and stable IDs make that projection idempotent, so an operator reading the timeline sees the same history a replay would produce.</p>
 
       <h3>Synthetic Slack-style updates: production and ingestion</h3>
       <p><code>scripts/generate-slack-fixtures.ts</code> accepts only live <code>openrouter</code> or <code>ollama</code> configuration—<code>mock</code> is rejected. It asks for exactly three clearly synthetic updates per opportunity: a reinforcing fact, missing context, and ambiguity/conflict. It validates row IDs, account/opportunity bindings, chronology between the latest evidence date and close date, synthetic notices, access levels, control characters, and category coverage before replacing the TSV.</p>
@@ -378,8 +517,48 @@
       <div class="callout danger"><p><strong>Not production-hardened:</strong> there is no provider cost/spend accounting beyond per-run call/token/deadline budgets and persisted token usage; no documented API/user/provider rate-limiting policy; no secrets-manager or automatic rotation integration; no enterprise identity provider; and no production-grade PII service. These are deployment gaps, not controls to infer from the current code.</p></div>
     </section>
 
+    <section id="deliverables">
+      <div class="section-number">07 · Deliverables and demo scenarios</div>
+      <h2>Every required scenario has a checked-in artifact.</h2>
+      <p><code>samples/</code> holds artifacts exported from live-provider runs against a dedicated <code>slacato_samples</code> database by <code>scripts/export-sample-artifacts.ts</code>. <code>samples/manifest.json</code> records the run IDs, provider, generation and embedding models, token usage, and timings; <code>samples/index.html</code> browses them offline. Scenario 1 is interchangeable: Maya Levin (<code>USR-5001</code>) owns <code>OPP-1001</code> and Owen Patel (<code>USR-5002</code>) owns <code>OPP-1002</code>.</p>
+
+      <table class="scenarios">
+        <thead><tr><th>Required scenario</th><th>Request</th><th>What the artifact shows</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>1 · Authorized brief</strong></td>
+            <td>Maya Levin (<code>USR-5001</code>) → <code>OPP-1001</code></td>
+            <td>A finalized nine-section brief in which every factual claim carries a citation resolved against that run’s evidence manifest. <code>normal-opportunity-brief.json</code> and <code>.txt</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>2 · Approval routing</strong></td>
+            <td>Nora Chen (<code>USR-5003</code>) → <code>OPP-1003</code></td>
+            <td>Eight policy triggers produced five approval entries: deal desk (discount above 10% plus negative renewal uplift), sales leader (above 15%), legal reviewer (liability cap, restricted research, customer-specific security language), evidence review (missing material evidence), and a customer-concession entry that depends on the other four. Four distinct actors approved all five before the run could finalize. <code>restricted-approval-flow.json</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>3 · Unauthorized request</strong></td>
+            <td>Harper Noor (<code>USR-5007</code>) → <code>OPP-1003</code></td>
+            <td>An opaque <code>404</code> with no account name, source name, count, or evidence metadata. Harper is granted only <code>ACC-2001</code> and only Salesforce and Gong; <code>OPP-1003</code> belongs to the restricted <code>ACC-2003</code>, so its evidence is never retrieved and therefore cannot be summarized, cited, or leaked. <code>denied-access.json</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>4 · Generated Slack updates</strong></td>
+            <td>Both finalized briefs</td>
+            <td>All nine Slack rows are model-generated and carry <code>synthetic_notice=true</code>. The authorized brief’s stakeholder map rests on <code>slack:SLK-9002:0</code>; the restricted brief’s executive summary <em>and</em> negotiation state both rest on <code>slack:SLK-9009:0</code>, an internal-chat note that executives disagree on whether discounting or risk mitigation should lead. Generation provenance is in <code>fixtures/cato/slack/generation.json</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Where each deliverable lives</h3>
+      <div class="grid-2">
+        <div class="card"><h4>A · Runnable prototype</h4><p><code>README.md</code> setup, <code>docker-compose.yml</code> for PostgreSQL and Redis, then <code>pnpm db:migrate</code>, <code>pnpm ingest:records</code>, <code>pnpm index:embeddings</code>, <code>pnpm dev</code>. <code>AI_PROVIDER=mock</code> runs the whole workflow with no network.</p></div>
+        <div class="card"><h4>B · Architecture diagrams</h4><p>Logical and deployment views in §02, the persisted schema in §03, and the run state machine plus the authorization pipeline in §04.</p></div>
+        <div class="card"><h4>C · Written overview</h4><p><code>README.md</code> for operation; this document for design; §06 for security, permission enforcement, state persistence, and how the Slack updates are produced and ingested.</p></div>
+        <div class="card"><h4>D · Sample run artifacts</h4><p><code>samples/</code>: two finalized briefs (JSON and Markdown), the approval flow, the denied-access capture, and the trace and event streams for the restricted run.</p></div>
+      </div>
+    </section>
+
     <section id="production">
-      <div class="section-number">07 · Production readiness</div>
+      <div class="section-number">08 · Production readiness</div>
       <h2>A strong recovery core; an intentionally incomplete operating envelope.</h2>
       <table>
         <thead><tr><th>Area</th><th>Current design</th><th>Production deployment still needs</th></tr></thead>
