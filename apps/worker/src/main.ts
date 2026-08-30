@@ -5,14 +5,12 @@ import { ProcessDealBriefStep } from '@slacato/core';
 import {
   BullMqCommandQueue,
   type ConfiguredModelGateways,
-  createConfiguredModelGateways,
   createDatabaseClient,
+  createWorkerModelGateways,
   type DatabaseClient,
   DealBriefProcessor,
   type Env,
   loadRuntimeEnv,
-  type MockGenerationResolver,
-  type OllamaCapabilities,
   OutboxDispatcher,
   OutboxDispatcherLoop,
   PostgresCommandReconciler,
@@ -22,7 +20,8 @@ import {
   PostgresProviderAttemptLedger,
   PostgresWorkflowStore,
   ReconcilerLoop,
-  WORKFLOW_DEAD_LETTER_QUEUE_NAME
+  WORKFLOW_DEAD_LETTER_QUEUE_NAME,
+  type WorkerCompositionOverrides
 } from '@slacato/infrastructure';
 import { WorkerModule } from './worker.module.js';
 
@@ -31,10 +30,7 @@ export interface WorkerApplicationOptions {
   modelGateway?: WorkerModelGatewayOptions;
 }
 
-export type WorkerModelGatewayOptions = Readonly<{
-  mockFixtureResolver?: MockGenerationResolver;
-  ollamaCapabilities?: Pick<OllamaCapabilities, 'nativeStructuredOutput'>;
-}>;
+export type WorkerModelGatewayOptions = WorkerCompositionOverrides;
 
 /** Creates the model gateways used by the worker for its configured AI provider. */
 export class WorkerModelGatewayFactory {
@@ -46,23 +42,7 @@ export class WorkerModelGatewayFactory {
 
   /** Builds model gateways for the configured provider and applies any worker-specific overrides. */
   public create(options: WorkerModelGatewayOptions = {}): ConfiguredModelGateways {
-    if (this.environment.AI_PROVIDER === 'mock') {
-      if (options.mockFixtureResolver === undefined)
-        throw new Error('Worker mock model composition requires a fixture resolver');
-      return createConfiguredModelGateways(this.environment, {
-        attemptLedger: this.attemptLedger,
-        mock: { resolve: options.mockFixtureResolver }
-      });
-    }
-    if (this.environment.AI_PROVIDER === 'ollama') {
-      return createConfiguredModelGateways(this.environment, {
-        attemptLedger: this.attemptLedger,
-        ...(options.ollamaCapabilities === undefined
-          ? {}
-          : { ollamaCapabilities: options.ollamaCapabilities })
-      });
-    }
-    return createConfiguredModelGateways(this.environment, { attemptLedger: this.attemptLedger });
+    return createWorkerModelGateways(this.environment, this.attemptLedger, options);
   }
 }
 

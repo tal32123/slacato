@@ -1,21 +1,12 @@
 import type { ReadinessCheck, ReadinessDependencies } from '@slacato/core';
-import type { Env } from '../config/env.js';
 import type { DatabaseClient } from '../db/client.js';
+import { type ConfiguredProvider, PROVIDER_REGISTRY } from '../model/registry.js';
 import type { BullMqCommandQueue } from '../queue/bullmq.js';
 
 /** Drizzle timestamp for 0021_operable_approval_grants, the migration required by this API build. */
 export const LATEST_DRIZZLE_MIGRATION_TIMESTAMP = 1_788_730_200_000;
 
 const DEFAULT_PROBE_TIMEOUT_MS = 3_000;
-const OPENROUTER_API_BASE_URL = 'https://openrouter.ai/api/v1';
-
-type ConfiguredProvider = Readonly<{
-  provider: Env['AI_PROVIDER'];
-  generationModel: string;
-  embeddingModel: string;
-  ollamaBaseUrl?: string;
-  apiKey?: string;
-}>;
 
 export type ProductionReadinessOptions = Readonly<{
   database: DatabaseClient;
@@ -50,74 +41,15 @@ function boundedCheck(
   };
 }
 
-/** Checks that the configured generation and embedding models are advertised by their provider. */
-async function configuredModelsAvailable(
-  configured: ConfiguredProvider,
-  signal: AbortSignal
-): Promise<boolean> {
-  if (configured.provider === 'mock')
-    return configured.generationModel.length > 0 && configured.embeddingModel.length > 0;
-
-  if (configured.apiKey === undefined || configured.apiKey.length === 0) return false;
-  if (configured.provider === 'ollama') {
-    if (configured.ollamaBaseUrl === undefined) return false;
-    const response = await fetch(`${configured.ollamaBaseUrl.replace(/\/$/, '')}/tags`, {
-      headers: { Authorization: `Bearer ${configured.apiKey}` },
-      signal
-    });
-    if (!response.ok) return false;
-    const payload: unknown = await response.json();
-    if (
-      typeof payload !== 'object' ||
-      payload === null ||
-      !('models' in payload) ||
-      !Array.isArray(payload.models)
-    )
-      return false;
-    const models = new Set(
-      payload.models.flatMap((model) =>
-        typeof model === 'object' &&
-        model !== null &&
-        'name' in model &&
-        typeof model.name === 'string'
-          ? [model.name]
-          : []
-      )
-    );
-    return models.has(configured.generationModel) && models.has(configured.embeddingModel);
-  }
-
-  const models = [...new Set([configured.generationModel, configured.embeddingModel])];
-  const availability = await Promise.all(
-    models.map(async (model) => {
-      const modelPath = model.split('/').map(encodeURIComponent).join('/');
-      const response = await fetch(`${OPENROUTER_API_BASE_URL}/models/${modelPath}/endpoints`, {
-        headers: { Authorization: `Bearer ${configured.apiKey}` },
-        signal
-      });
-      if (!response.ok) return false;
-      const payload: unknown = await response.json();
-      return (
-        typeof payload === 'object' &&
-        payload !== null &&
-        'data' in payload &&
-        typeof payload.data === 'object' &&
-        payload.data !== null &&
-        'endpoints' in payload.data &&
-        Array.isArray(payload.data.endpoints) &&
-        payload.data.endpoints.length > 0
-      );
-    })
-  );
-  return availability.every(Boolean);
-}
-
 /** Creates the bounded model/provider probe used by production and focused composition tests. */
 export function createConfiguredModelReadinessCheck(
   configured: ConfiguredProvider,
   timeoutMs = DEFAULT_PROBE_TIMEOUT_MS
 ): ReadinessCheck {
-  return boundedCheck((signal) => configuredModelsAvailable(configured, signal), timeoutMs);
+  return boundedCheck(
+    (signal) => PROVIDER_REGISTRY[configured.provider].readinessProbe(configured, signal),
+    timeoutMs
+  );
 }
 
 /** Accepts the required migration and forward-compatible database migration levels. */

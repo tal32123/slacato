@@ -47,7 +47,23 @@ export {
 } from './model/ollama.js';
 export { createOpenRouterModelGateways, type OpenRouterGatewayConfig } from './model/openrouter.js';
 export { openRouterDiagnosticCode } from './model/openrouter-diagnostics.js';
-export { type ConfiguredModelGateways, createConfiguredModelGateways } from './model/provider.js';
+export {
+  type ConfiguredModelGateways,
+  type ConfiguredProvider,
+  createConfiguredModelGateways,
+  createWorkerModelGateways,
+  resolveConfiguredProvider,
+  resolveProviderModels,
+  resolveProviderRuntimeFacts
+} from './model/provider.js';
+export {
+  type AiProvider,
+  PROVIDER_REGISTRY,
+  type ProviderDescriptor,
+  type ProviderModels,
+  type ProviderRuntimeFacts,
+  type WorkerCompositionOverrides
+} from './model/registry.js';
 export {
   BullMqCommandQueue,
   type CommandInspection,

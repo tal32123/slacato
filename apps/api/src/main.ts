@@ -25,7 +25,10 @@ import {
   PostgresRunEventQuery,
   PostgresRunQueryRepository,
   PostgresSessionRegistry,
-  PostgresWorkflowStore
+  PostgresWorkflowStore,
+  resolveConfiguredProvider,
+  resolveProviderModels,
+  resolveProviderRuntimeFacts
 } from '@slacato/infrastructure';
 import type { ErrorRequestHandler } from 'express';
 import { json } from 'express';
@@ -43,46 +46,12 @@ export interface ApiApplicationOptions {
 export function configuredProviderModels(
   environment: Env
 ): Readonly<{ generation: string; embedding: string }> {
-  if (environment.AI_PROVIDER === 'ollama') {
-    return {
-      generation: environment.OLLAMA_CHAT_MODEL,
-      embedding: environment.OLLAMA_EMBEDDING_MODEL
-    };
-  }
-  if (environment.AI_PROVIDER === 'openrouter') {
-    return {
-      generation: environment.OPENROUTER_CHAT_MODEL,
-      embedding: environment.OPENROUTER_EMBEDDING_MODEL
-    };
-  }
-  return { generation: 'mock-brief', embedding: 'mock-embedding' };
+  return resolveProviderModels(environment);
 }
 
 /** Describes the provider runtime facts that diagnostics reports without reconstructing them. */
 export function configuredProviderRuntime(environment: Env): ProviderRuntimeDescriptor {
-  const models = configuredProviderModels(environment);
-  if (environment.AI_PROVIDER === 'mock') {
-    return {
-      provider: environment.AI_PROVIDER,
-      outputMode: 'deterministic_mock',
-      pinnedGenerationModel: models.generation,
-      pinnedEmbeddingModel: models.embedding
-    };
-  }
-  if (environment.AI_PROVIDER === 'openrouter') {
-    return {
-      provider: environment.AI_PROVIDER,
-      outputMode: 'native_schema',
-      pinnedGenerationModel: models.generation,
-      pinnedEmbeddingModel: models.embedding
-    };
-  }
-  return {
-    provider: environment.AI_PROVIDER,
-    outputMode: 'capability_probe_required',
-    pinnedGenerationModel: models.generation,
-    pinnedEmbeddingModel: models.embedding
-  };
+  return resolveProviderRuntimeFacts(environment);
 }
 
 /** Converts body-parser failures into the API's stable HTTP error responses. */
@@ -128,16 +97,7 @@ export async function createApiApplication(
   const env = loadRuntimeEnv(options.environment ?? process.env);
   const providerRuntime = configuredProviderRuntime(env);
   const database = createDatabaseClient(env.DATABASE_URL, 5);
-  const provider = {
-    provider: env.AI_PROVIDER,
-    generationModel: providerRuntime.pinnedGenerationModel,
-    embeddingModel: providerRuntime.pinnedEmbeddingModel,
-    ...(env.AI_PROVIDER === 'ollama'
-      ? { ollamaBaseUrl: env.OLLAMA_BASE_URL, apiKey: env.OLLAMA_API_KEY }
-      : env.AI_PROVIDER === 'openrouter'
-        ? { apiKey: env.OPENROUTER_API_KEY }
-        : {})
-  };
+  const provider = resolveConfiguredProvider(env);
   let redis: BullMqCommandQueue | undefined;
   let readiness: ReadinessDependencies;
   if (options.readiness === undefined) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { envSchema, parseEnv } from '@slacato/infrastructure/config/env';
-import { createConfiguredModelGateways, createDatabaseClient, PostgresProviderAttemptLedger } from '@slacato/infrastructure';
+import { createConfiguredModelGateways, createDatabaseClient, PostgresProviderAttemptLedger, PROVIDER_REGISTRY } from '@slacato/infrastructure';
 
 describe('envSchema', () => {
   it('rejects a configuration without server secrets', () => {
@@ -89,6 +89,41 @@ describe('envSchema', () => {
     void database.close();
   });
 });
+
+describe('PROVIDER_REGISTRY', () => {
+  it('declares exactly one descriptor for every AI_PROVIDER literal the environment schema accepts', () => {
+    const schemaProviders = discriminatedUnionProviders().sort();
+    const registryProviders = Object.keys(PROVIDER_REGISTRY).sort();
+
+    expect(registryProviders).toEqual(schemaProviders);
+  });
+
+  it('keys every descriptor by its own provider id so a lookup cannot return another provider', () => {
+    for (const [id, descriptor] of Object.entries(PROVIDER_REGISTRY)) expect(descriptor.id).toBe(id);
+  });
+
+  it('supplies the whole per-provider behaviour set in every descriptor', () => {
+    for (const descriptor of Object.values(PROVIDER_REGISTRY)) {
+      expect(typeof descriptor.createGateways).toBe('function');
+      expect(typeof descriptor.workerCompositionOptions).toBe('function');
+      expect(typeof descriptor.models).toBe('function');
+      expect(typeof descriptor.readinessCredentials).toBe('function');
+      expect(typeof descriptor.readinessProbe).toBe('function');
+      expect(['deterministic_mock', 'capability_probe_required', 'native_schema']).toContain(descriptor.outputMode);
+    }
+  });
+});
+
+/** Reads the AI_PROVIDER literals straight out of the parsed environment's discriminated union. */
+function discriminatedUnionProviders(): string[] {
+  const pipe = envSchema as unknown as { def: { out: { def: { options: readonly unknown[] } } } };
+  return pipe.def.out.def.options.map((option) => {
+    const shape = (option as { def: { shape: { AI_PROVIDER: { def: { values: readonly string[] } } } } }).def.shape;
+    const [literal] = shape.AI_PROVIDER.def.values;
+    if (literal === undefined) throw new Error('AI_PROVIDER branch is missing its literal value');
+    return literal;
+  });
+}
 
 const baseEnvironment = {
   NODE_ENV: 'test',
