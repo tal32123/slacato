@@ -1,0 +1,23 @@
+# Builds the Vite SPA and serves it from Caddy, which also reverse-proxies
+# /api/* to the API over Railway's private network. The browser therefore sees
+# a single origin, which the app's relative /api paths, credentialed fetches,
+# and SameSite=Lax __Host- cookies all require.
+FROM node:22-slim AS build
+
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
+
+WORKDIR /app
+COPY . .
+
+RUN pnpm install --frozen-lockfile --prod=false
+
+# apps/web/tsconfig.json declares no project references, so `tsc -b apps/web`
+# resolves @slacato/contracts against packages/contracts/dist rather than
+# building it. Build contracts explicitly first or the SPA build fails on a
+# clean checkout with "Cannot find module '@slacato/contracts'".
+RUN pnpm --filter @slacato/contracts build && pnpm --filter @slacato/web build
+
+FROM caddy:2-alpine
+COPY --from=build /app/apps/web/dist /srv
+COPY Caddyfile /etc/caddy/Caddyfile

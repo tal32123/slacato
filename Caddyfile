@@ -1,0 +1,22 @@
+{
+	admin off
+	auto_https off
+}
+
+# Railway terminates TLS at its edge and forwards plain HTTP to $PORT.
+:{$PORT:8080} {
+	encode gzip
+
+	# Same-origin API passthrough. API_UPSTREAM is the API service's private
+	# Railway address, e.g. api.railway.internal:3000.
+	handle /api/* {
+		reverse_proxy {$API_UPSTREAM}
+	}
+
+	# SPA history fallback for client-side routes.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
