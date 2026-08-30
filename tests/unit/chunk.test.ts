@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildEvidenceDocuments, chunkDocument, parseFixtureSet, type EvidenceDocument } from '@slacato/core';
+import { buildEvidenceDocuments, chunkDocument, parseFixtureSet, POLICY_CHUNK_CHARACTERS, type EvidenceDocument } from '@slacato/core';
 
 const base = {
   externalId: 'CALL-001',
@@ -53,17 +53,51 @@ describe('deterministic evidence chunking', () => {
     expect(first[1]?.content).toContain('Speaker 6: Turn 6');
   });
 
-  it('keeps policy Markdown as one complete chunk', () => {
-    const policyMarkdown = '# Policy\nIntro\n\n## Approval Rules\n1. Approval is required.\n\n## Access Rules\n1. Deny by default.';
+  it('chunks policy Markdown at headings', () => {
     const chunks = chunkDocument({
       ...base,
       sourceType: 'policy',
       externalId: 'deal-desk-policy',
       reliability: 'authoritative_policy',
-      content: policyMarkdown
+      content: '# Policy\nIntro\n\n## Approval Rules\n1. Approval is required.\n\n## Access Rules\n1. Deny by default.'
     });
 
-    expect(chunks.map((chunk) => chunk.content)).toEqual([policyMarkdown]);
+    expect(chunks.map((chunk) => chunk.content)).toEqual([
+      '# Policy\nIntro',
+      '## Approval Rules\n1. Approval is required.',
+      '## Access Rules\n1. Deny by default.'
+    ]);
+    expect(chunks.map((chunk) => chunk.id)).toEqual([
+      'policy:deal-desk-policy:0',
+      'policy:deal-desk-policy:1',
+      'policy:deal-desk-policy:2'
+    ]);
+  });
+
+  it('splits an oversized policy section into heading-anchored chunks that stay quotable', () => {
+    const rules = Array.from({ length: 12 }, (_, index) => `${index + 1}. Approval rule ${index + 1} states a requirement in enough words to fill a line.`);
+    const chunks = chunkDocument({
+      ...base,
+      sourceType: 'policy',
+      externalId: 'deal-desk-policy',
+      reliability: 'authoritative_policy',
+      content: `## Approval Rules\n${rules.join('\n')}`
+    });
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk) => chunk.content.length <= POLICY_CHUNK_CHARACTERS)).toBe(true);
+    expect(chunks.every((chunk) => chunk.content.startsWith('## Approval Rules\n'))).toBe(true);
+    expect(rules.every((rule) => chunks.some((chunk) => chunk.content.includes(rule)))).toBe(true);
+  });
+
+  it('keeps every canonical policy rule inside a chunk retrieval can quote whole', () => {
+    const policy = buildEvidenceDocuments(parseFixtureSet('fixtures/cato')).find((document) => document.sourceType === 'policy');
+    if (policy === undefined) throw new Error('Canonical fixtures are missing the deal desk policy');
+    const chunks = chunkDocument(policy);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk) => chunk.content.length <= POLICY_CHUNK_CHARACTERS)).toBe(true);
+    expect(chunks.some((chunk) => chunk.content.includes('10. If source access is denied, the system must not reveal a summary'))).toBe(true);
   });
 
   it('builds classified canonical documents without embeddings', () => {

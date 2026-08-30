@@ -2,10 +2,12 @@ import {
   AUTHORIZED_SOURCE_TYPES,
   type AuthorizedSourceType
 } from '../../domain/permissions/authorize.js';
+import { POLICY_CHUNK_CHARACTERS } from './chunk.js';
 import type { EvidencePlan } from './contracts.js';
 
 const DEFAULT_CONTEXT_CHARACTERS = 24_000;
 const CANONICAL_CRM_RECORD_LIMIT = 1 + 1 + 5; // Account, opportunity, and every canonical contact.
+const CANONICAL_POLICY_SECTION_LIMIT = 1 + 3; // Policy preamble and every bounded rule section.
 const RELIABILITY_ADJUSTMENTS: Readonly<Record<string, number>> = Object.freeze({
   authoritative_policy: 0.02,
   authoritative_system: 0.015,
@@ -64,7 +66,7 @@ export function buildEvidencePlan(
     sourceLimits: {
       gong_summary: Math.min(input.limit, 2),
       gong_transcript: input.limit,
-      policy: 1,
+      policy: CANONICAL_POLICY_SECTION_LIMIT,
       pricing: Math.min(input.limit, 2),
       salesforce: CANONICAL_CRM_RECORD_LIMIT,
       slack: Math.min(input.limit, 2)
@@ -72,7 +74,10 @@ export function buildEvidencePlan(
     mandatorySourceTypes: ['policy'],
     policyReservation: {
       resultSlots: 1,
-      contextCharacters: Math.max(1, Math.min(512, Math.ceil(maxContextCharacters * 0.25)))
+      contextCharacters: Math.max(
+        1,
+        Math.min(POLICY_CHUNK_CHARACTERS, Math.ceil(maxContextCharacters * 0.25))
+      )
     },
     maxContextCharacters
   };

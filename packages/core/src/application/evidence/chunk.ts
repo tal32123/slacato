@@ -63,12 +63,47 @@ function transcriptWindows(content: string): string[] {
   return windows;
 }
 
+/** Longest policy chunk retrieval can quote in full, so no rule is lost to the excerpt budget. */
+export const POLICY_CHUNK_CHARACTERS = 512;
+
+/** Splits a policy at its Markdown headings and divides any section too long to quote whole into smaller rule groups that repeat their heading, so late rules stay readable on their own. */
+function policySections(content: string): string[] {
+  return content
+    .split(/\n(?=#{1,6}\s)/)
+    .map((section) => section.trim())
+    .filter(Boolean)
+    .flatMap((section) => {
+      if (section.length <= POLICY_CHUNK_CHARACTERS) return [section];
+      const lines = section
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const heading = lines[0] !== undefined && /^#{1,6}\s/.test(lines[0]) ? lines[0] : undefined;
+      const rules = heading === undefined ? lines : lines.slice(1);
+      const render = (group: readonly string[]): string =>
+        (heading === undefined ? group : [heading, ...group]).join('\n');
+      const windows: string[] = [];
+      let group: string[] = [];
+      for (const rule of rules) {
+        if (group.length > 0 && render([...group, rule]).length > POLICY_CHUNK_CHARACTERS) {
+          windows.push(render(group));
+          group = [];
+        }
+        group.push(rule);
+      }
+      if (group.length > 0) windows.push(render(group));
+      return windows.length === 0 ? [section] : windows;
+    });
+}
+
 /** Deterministically chunks at source-semantic boundaries and preserves authorization metadata. */
 export function chunkDocument(document: EvidenceDocument): EvidenceChunk[] {
   const contents =
     document.sourceType === 'gong_transcript'
       ? transcriptWindows(document.content)
-      : [document.content.trim()];
+      : document.sourceType === 'policy'
+        ? policySections(document.content)
+        : [document.content.trim()];
   return contents.map((content, chunkIndex) => ({
     id: `${document.sourceType}:${document.externalId}:${chunkIndex}`,
     documentExternalId: document.externalId,
