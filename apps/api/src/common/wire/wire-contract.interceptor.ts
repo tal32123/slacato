@@ -83,14 +83,14 @@ export class WireContractInterceptor implements NestInterceptor<unknown, unknown
     return message ? { ...message, data: result.data } : result.data;
   }
 
-  /** Enforces the declared contract for one populated request part. */
+  /** Enforces the declared contract for one request part, including an empty-but-declared part. */
   private validateRequestPart(
     part: RequestPart,
     value: unknown,
     declaration: RequestContract | undefined
   ): void {
-    if (!hasValues(value)) return;
     if (!declaration) {
+      if (!hasValues(value)) return;
       throw new BadRequestException({
         code: 'WIRE_SCHEMA_REQUIRED',
         message: `Controller ${part} schema is required`

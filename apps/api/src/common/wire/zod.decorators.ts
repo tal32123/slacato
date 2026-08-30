@@ -7,18 +7,19 @@ import {
   WIRE_CONTRACT_METADATA,
   type WireContract
 } from './wire-contract.metadata.js';
+import { ZodRequestPipe } from './zod-request.pipe.js';
 
 /** Applies strict Zod validation to a JSON request body at the controller boundary. */
 export const ZodBody = <TOutput>(schema: ZodType<TOutput>): ParameterDecorator =>
-  requestPart('body', schema, Body());
+  requestPart('body', schema, Body(new ZodRequestPipe(schema)));
 
 /** Applies strict Zod validation to route query data at the controller boundary. */
 export const ZodQuery = <TOutput>(schema: ZodType<TOutput>): ParameterDecorator =>
-  requestPart('query', schema, Query());
+  requestPart('query', schema, Query(new ZodRequestPipe(schema)));
 
 /** Applies strict Zod validation to route parameters at the controller boundary. */
 export const ZodParam = <TOutput>(schema: ZodType<TOutput>): ParameterDecorator =>
-  requestPart('params', schema, Param());
+  requestPart('params', schema, Param(new ZodRequestPipe(schema)));
 
 /** Explicitly opts a legacy class DTO body into the strict global ValidationPipe fallback. */
 export const ClassDtoBody = (): ParameterDecorator => requestPart('body', 'class-dto', Body());
