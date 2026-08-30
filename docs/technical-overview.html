@@ -123,6 +123,21 @@
     #data .e-title, #data .e-text { cursor: help; }
     .erd-tooltip { position: fixed; z-index: 1200; max-width: min(360px, calc(100vw - 24px)); padding: 10px 12px; border: 1px solid var(--teal); border-radius: 10px; background: #0A141D; color: #fff; box-shadow: 0 12px 30px rgba(10,20,29,.24); font-size: 13px; line-height: 1.45; pointer-events: none; }
     .erd-tooltip[hidden] { display: none; }
+    .readiness-list { display: grid; gap: 18px; margin: 24px 0 34px; }
+    .readiness-card { min-width: 0; padding: 24px; border: 1px solid var(--line); border-left: 4px solid var(--teal); border-radius: 14px; background: #fbfcfb; }
+    .readiness-card > h3 { margin: 0 0 6px; }
+    .readiness-card > p { max-width: none; margin: 0; color: #46545c; }
+    .readiness-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+    .readiness-block { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+    .readiness-block h4 { margin-bottom: 8px; color: var(--teal-dark); }
+    .readiness-block ul { max-width: none; margin: 0; padding-left: 1.1em; color: #46545c; font-size: 14px; line-height: 1.5; }
+    .readiness-block strong { color: var(--ink); }
+    .change-marker { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 14px; padding: 10px 12px; border: 1px solid #d8b46b; border-radius: 10px; background: var(--warning-soft); color: #68400e; text-align: left; cursor: pointer; }
+    .change-zone { outline: 2px solid rgba(21,136,100,.28); outline-offset: 4px; }
+    .change-marker strong { flex: 0 0 auto; color: var(--warning); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .change-marker span { min-width: 0; font-size: 13px; line-height: 1.35; }
+    .change-marker small { margin-left: auto; color: #795822; white-space: nowrap; }
+    .change-marker:hover, .change-marker:focus-visible { border-color: var(--warning); outline: none; }
     .legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 14px 0 0; color: var(--muted); font-size: 13px; }
     .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 7px; border-radius: 3px; vertical-align: -1px; background: var(--teal-soft); border: 1px solid var(--teal); }
     .legend .durable::before { background: #eef1f2; border-color: #65737b; }
@@ -142,20 +157,11 @@
     th { color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
     footer { max-width: 1180px; margin: -60px auto 60px; padding: 0 24px; color: var(--muted); font-size: 13px; }
     @media (max-width: 800px) {
-      .grid-2, .grid-3, .diagram-guide { grid-template-columns: 1fr; }
+      .grid-2, .grid-3, .diagram-guide, .readiness-columns { grid-template-columns: 1fr; }
       .decision { grid-template-columns: 1fr; gap: 6px; }
       .hero { padding-top: 64px; }
       section { padding: 28px 22px; }
       .brand { margin-right: 6px; }
-      .readiness, .readiness tbody, .readiness tr, .readiness td { display: block; width: 100%; }
-      .readiness thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-      .readiness tr { padding: 14px 0; border-bottom: 1px solid var(--line); }
-      .readiness td { padding: 6px 0; border: 0; overflow-wrap: anywhere; }
-      .readiness td:first-child { font-size: 18px; }
-      .readiness td:nth-child(n+2)::before { display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px; font-weight: 760; letter-spacing: .06em; text-transform: uppercase; }
-      .readiness td:nth-child(2)::before { content: "Why it matters"; }
-      .readiness td:nth-child(3)::before { content: "What the design already does"; }
-      .readiness td:nth-child(4)::before { content: "What production still needs"; }
     }
     @media print {
       nav { display: none; }
@@ -163,6 +169,7 @@
       .hero { padding-top: 40px; }
       section { box-shadow: none; break-inside: avoid; }
       .diagram { overflow: visible; }
+      .change-marker { display: none; }
     }
   </style>
 </head>
@@ -181,10 +188,10 @@
     </div>
   </nav>
 
-  <header class="hero">
+  <header class="hero change-zone" data-change-id="hero-summary" data-change="The overview sentence is now shorter and uses plain language.">
     <div class="eyebrow">Technical overview · offline artifact</div>
     <h1>Evidence-grounded negotiation preparation.</h1>
-    <p class="lede">A durable, permission-aware assistant that turns fragmented deal signals into a reviewable sales brief—without treating the model as an authorization system, a policy engine, or a source of truth.</p>
+    <p class="lede">Turns scattered deal information into one brief you can review and verify.</p>
     <div class="hero-meta">
       <span class="pill">NestJS + React + BullMQ</span>
       <span class="pill">PostgreSQL + pgvector</span>
@@ -203,58 +210,47 @@
       <div class="grid-3">
         <div class="card"><h4>Reduce preparation time</h4><p>Fan out focused analysis across conversation, stakeholder, and commercial evidence, then synthesize one coherent brief.</p></div>
         <div class="card"><h4>Keep evidence inspectable</h4><p>Claims link to immutable authorized evidence; API and UI render stable labels such as <code>source=&lt;file&gt;, id=&lt;value&gt;</code>.</p></div>
-        <div class="card"><h4>Keep people accountable</h4><p>Recommendations that cross policy thresholds cannot finalize until the required authority entries are decided.</p></div>
+        <div class="card change-zone" data-change-id="approval-example" data-change="The approval rule now includes a concrete example."><h4>Keep people accountable</h4><p>If a recommendation needs approval—for example, a large discount—the brief waits for the right person to approve or reject it.</p></div>
       </div>
     </section>
 
     <section id="architecture">
       <div class="section-number">02 · Architecture</div>
       <h2>Thin apps around durable domain and infrastructure seams.</h2>
-      <p>The browser is the reviewer workspace; the API owns authenticated commands and read models; the worker advances durable workflow steps. <code>packages/core</code> contains provider-independent policy, agents, contracts, validation, and orchestration. <code>packages/infrastructure</code> implements PostgreSQL, Redis/BullMQ, retrieval, model adapters, and recovery.</p>
+      <p>The browser requests work. The API checks access. The worker builds the brief. Core holds the business rules; infrastructure connects them to storage, queues, search, and models.</p>
 
       <h3>Logical view</h3>
 
-      <div class="diagram" data-diagram="logical-architecture" role="img" aria-label="Component architecture showing web, API, worker, core, infrastructure, PostgreSQL, Redis, and model providers">
-        <svg viewBox="0 0 1160 700" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker>
-            <filter id="shadowA" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0A141D" flood-opacity=".08"/></filter>
-          </defs>
-          <rect x="28" y="28" width="1104" height="644" rx="22" fill="#fbfcfb" stroke="#dce3df"/>
-          <text x="58" y="66" font-family="system-ui" font-size="13" font-weight="700" fill="#158864" letter-spacing="1.5">RUNTIME COMPONENTS</text>
+      <div class="diagram change-zone" data-change-id="logical-diagram" data-change="Every component now explains its job inside the diagram." data-diagram="logical-architecture" role="img" aria-label="Component architecture showing web, API, worker, core, infrastructure, PostgreSQL, Redis, and model providers">
+        <svg viewBox="0 0 1160 760" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
+          <rect x="28" y="28" width="1104" height="704" rx="22" fill="#fbfcfb" stroke="#dce3df"/>
+          <style>
+            .la-app{fill:#fff;stroke:#158864;stroke-width:2}.la-core{fill:#eaf6f1;stroke:#158864;stroke-width:2}.la-infra{fill:#eef1f2;stroke:#65737b;stroke-width:2}.la-store{fill:#fff;stroke:#65737b;stroke-width:1.5}
+            .la-title{font:700 18px system-ui;fill:#0A141D}.la-copy{font:13px system-ui;fill:#4d5b63}.la-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowA)}.la-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}
+          </style>
+          <text x="52" y="64" class="la-g">EACH BOX STATES THE ONE JOB IT OWNS</text>
 
-          <g filter="url(#shadowA)"><rect x="70" y="102" width="240" height="112" rx="16" fill="#fff" stroke="#158864" stroke-width="2"/><text x="190" y="144" text-anchor="middle" font-family="system-ui" font-size="20" font-weight="700" fill="#0A141D">apps/web</text><text x="190" y="172" text-anchor="middle" font-family="system-ui" font-size="14" fill="#52616a">React reviewer workspace</text><text x="190" y="193" text-anchor="middle" font-family="system-ui" font-size="12" fill="#6b7880">briefs · evidence · approvals</text></g>
-          <g filter="url(#shadowA)"><rect x="460" y="102" width="240" height="112" rx="16" fill="#fff" stroke="#158864" stroke-width="2"/><text x="580" y="144" text-anchor="middle" font-family="system-ui" font-size="20" font-weight="700" fill="#0A141D">apps/api</text><text x="580" y="172" text-anchor="middle" font-family="system-ui" font-size="14" fill="#52616a">NestJS HTTP boundary</text><text x="580" y="193" text-anchor="middle" font-family="system-ui" font-size="12" fill="#6b7880">sessions · commands · queries · SSE</text></g>
-          <g filter="url(#shadowA)"><rect x="850" y="102" width="240" height="112" rx="16" fill="#fff" stroke="#158864" stroke-width="2"/><text x="970" y="144" text-anchor="middle" font-family="system-ui" font-size="20" font-weight="700" fill="#0A141D">apps/worker</text><text x="970" y="172" text-anchor="middle" font-family="system-ui" font-size="14" fill="#52616a">Durable step processor</text><text x="970" y="193" text-anchor="middle" font-family="system-ui" font-size="12" fill="#6b7880">leases · retries · reconciliation</text></g>
-          <path d="M310 158H460" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/><text x="385" y="145" text-anchor="middle" font-family="system-ui" font-size="11" fill="#6b7880">HTTP / SSE</text>
+          <g><rect class="la-app" x="40" y="96" width="300" height="150" rx="16"/><text x="190" y="132" text-anchor="middle" class="la-title">Web reviewer</text><text x="190" y="168" text-anchor="middle" class="la-copy">The seller starts a brief, then reviews</text><text x="190" y="190" text-anchor="middle" class="la-copy">its evidence, timeline, and approvals.</text></g>
+          <g><rect class="la-app" x="430" y="96" width="300" height="150" rx="16"/><text x="580" y="132" text-anchor="middle" class="la-title">API</text><text x="580" y="168" text-anchor="middle" class="la-copy">Checks access, records work, and returns</text><text x="580" y="190" text-anchor="middle" class="la-copy">safe results to the reviewer.</text></g>
+          <g><rect class="la-app" x="820" y="96" width="300" height="150" rx="16"/><text x="970" y="132" text-anchor="middle" class="la-title">Worker</text><text x="970" y="168" text-anchor="middle" class="la-copy">Runs retrieval and model steps, then resumes</text><text x="970" y="190" text-anchor="middle" class="la-copy">interrupted work from checkpoints.</text></g>
+          <path class="la-a" d="M340 171H430"/><path class="la-a" d="M730 171H820"/>
 
-          <rect x="122" y="282" width="390" height="150" rx="18" fill="#eaf6f1" stroke="#158864" stroke-width="2"/><text x="317" y="321" text-anchor="middle" font-family="system-ui" font-size="19" font-weight="700" fill="#0A141D">packages/core</text><text x="317" y="350" text-anchor="middle" font-family="system-ui" font-size="13" fill="#36564b">domain policy · workflow · agents · validators</text><text x="317" y="378" text-anchor="middle" font-family="system-ui" font-size="13" fill="#36564b">typed brief and agent artifact contracts</text><text x="317" y="406" text-anchor="middle" font-family="system-ui" font-size="13" fill="#36564b">provider-independent ports</text>
-          <rect x="648" y="282" width="390" height="150" rx="18" fill="#eef1f2" stroke="#65737b" stroke-width="2"/><text x="843" y="321" text-anchor="middle" font-family="system-ui" font-size="19" font-weight="700" fill="#0A141D">packages/infrastructure</text><text x="843" y="350" text-anchor="middle" font-family="system-ui" font-size="13" fill="#4d5b63">Drizzle repositories · retrieval SQL · queues</text><text x="843" y="378" text-anchor="middle" font-family="system-ui" font-size="13" fill="#4d5b63">workflow persistence · trace projection</text><text x="843" y="406" text-anchor="middle" font-family="system-ui" font-size="13" fill="#4d5b63">OpenRouter · Ollama · mock adapters</text>
-          <path d="M580 214V250H317V282" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
-          <path d="M970 214V250H843V282" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
-          <path d="M512 357H648" stroke="#63727a" stroke-width="2" marker-start="url(#arrowA)" marker-end="url(#arrowA)"/><text x="580" y="344" text-anchor="middle" font-family="system-ui" font-size="11" fill="#6b7880">ports / adapters</text>
+          <g><rect class="la-core" x="70" y="310" width="470" height="170" rx="18"/><text x="305" y="350" text-anchor="middle" class="la-title">Core business rules</text><text x="305" y="390" text-anchor="middle" class="la-copy">Defines workflow, approval, and citation rules</text><text x="305" y="412" text-anchor="middle" class="la-copy">without depending on a database or model vendor.</text></g>
+          <g><rect class="la-infra" x="620" y="310" width="470" height="170" rx="18"/><text x="855" y="350" text-anchor="middle" class="la-title">Infrastructure adapters</text><text x="855" y="390" text-anchor="middle" class="la-copy">Connects those rules to Postgres, queues, search,</text><text x="855" y="412" text-anchor="middle" class="la-copy">recovery, and model providers.</text></g>
+          <path class="la-a" d="M580 246V278H305V310"/><path class="la-a" d="M970 246V278H855V310"/>
+          <path d="M540 395H620" stroke="#63727a" stroke-width="2" marker-start="url(#arrowA)" marker-end="url(#arrowA)"/>
 
-          <rect x="70" y="516" width="260" height="106" rx="15" fill="#fff" stroke="#65737b"/><text x="200" y="554" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#0A141D">PostgreSQL + pgvector</text><text x="200" y="582" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">authoritative state · exact vectors</text><text x="200" y="602" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">FTS · manifests · traces</text>
-          <rect x="450" y="516" width="260" height="106" rx="15" fill="#fff" stroke="#65737b"/><text x="580" y="554" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#0A141D">Redis + BullMQ</text><text x="580" y="582" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">delivery and wake-up mechanism</text><text x="580" y="602" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">Postgres remains recovery source</text>
-          <rect x="830" y="496" width="260" height="146" rx="15" fill="#fff" stroke="#158864"/><text x="960" y="532" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#0A141D">Model gateway</text><text x="960" y="560" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">OpenRouter · Ollama · mock</text><line x1="860" y1="578" x2="1060" y2="578" stroke="#dce3df"/><text x="960" y="602" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">budgets · retries · schema repair</text><text x="960" y="622" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">usage / attempt ledger</text>
-          <path d="M760 432L300 516" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
-          <path d="M843 432L650 516" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
-          <path d="M920 432L950 496" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
+          <g><rect class="la-store" x="40" y="550" width="330" height="140" rx="15"/><text x="205" y="588" text-anchor="middle" class="la-title">PostgreSQL + pgvector</text><text x="205" y="624" text-anchor="middle" class="la-copy">Stores permissions, evidence, run state,</text><text x="205" y="646" text-anchor="middle" class="la-copy">checkpoints, approvals, and final briefs.</text></g>
+          <g><rect class="la-store" x="415" y="550" width="330" height="140" rx="15"/><text x="580" y="588" text-anchor="middle" class="la-title">Redis + BullMQ</text><text x="580" y="624" text-anchor="middle" class="la-copy">Delivers queued work to workers; Postgres</text><text x="580" y="646" text-anchor="middle" class="la-copy">can rebuild it after a failure.</text></g>
+          <g><rect class="la-store" x="790" y="550" width="330" height="140" rx="15"/><text x="955" y="588" text-anchor="middle" class="la-title">Model gateway</text><text x="955" y="624" text-anchor="middle" class="la-copy">Controls every model call, retry, budget,</text><text x="955" y="646" text-anchor="middle" class="la-copy">and response validation.</text></g>
+          <path class="la-a" d="M730 480L290 550"/><path class="la-a" d="M855 480L650 550"/><path class="la-a" d="M965 480L955 550"/>
         </svg>
       </div>
-      <div class="diagram-guide" aria-label="Logical architecture explanations">
-        <div class="guide-item"><h4>Reviewer workspace</h4><p>A request starts in the reviewer workspace, where a seller asks for a brief and later inspects its evidence, timeline, and approval state.</p></div>
-        <div class="guide-item"><h4>API</h4><p>The API verifies the user and their permissions, records commands, and returns safe read models. It does not wait for models to finish.</p></div>
-        <div class="guide-item"><h4>Worker</h4><p>The worker picks up durable commands, runs each workflow step, and resumes interrupted work from saved checkpoints.</p></div>
-        <div class="guide-item"><h4>Core</h4><p>The core package defines the business rules: which steps are legal, what agents must return, when approval is required, and whether a claim is supported.</p></div>
-        <div class="guide-item"><h4>Infrastructure</h4><p>The infrastructure package connects those rules to storage, queues, search, and model providers without letting those technologies define policy.</p></div>
-        <div class="guide-item"><h4>PostgreSQL, Redis, and models</h4><p>PostgreSQL preserves the recoverable truth. Redis only delivers work, while the model gateway is the single controlled path for generation and embeddings.</p></div>
-      </div>
-      <p class="diagram-note">Redis transports work; PostgreSQL owns the resumable truth. The worker can reconstruct progress from runs, outbox commands, leases, checkpoints, attempts, and immutable artifacts after a restart. Generated output leaves through three channels only — the reviewer workspace, the SSE run timeline at <code>/api/runs/:runId/events</code>, and the JSON/Markdown export at <code>/api/runs/:runId/export/:format</code> — and each one re-checks the requester’s grants server-side before rendering a single citation.</p>
 
       <h3>Deployment view</h3>
-      <p>This view shows only the boundaries that matter when the system is deployed: where a request enters, which service performs the long-running work, where recoverable state lives, and where model traffic can leave the system. Low-level tuning values are intentionally omitted because they do not explain the design.</p>
-      <div class="diagram" data-diagram="deployment" role="img" aria-label="Deployment flow from reviewer browser through the web gateway and API to the worker, PostgreSQL, Redis, and model gateway">
+      <p>The API proves who may request work, the worker performs it, PostgreSQL preserves the history needed to recover it, and the model gateway contains external model access.</p>
+      <div class="diagram change-zone" data-change-id="deployment-diagram" data-change="The deployment purpose moved above the diagram." data-diagram="deployment" role="img" aria-label="Deployment flow from reviewer browser through the web gateway and API to the worker, PostgreSQL, Redis, and model gateway">
         <svg viewBox="0 0 1240 560" xmlns="http://www.w3.org/2000/svg">
           <desc>A request starts in the reviewer browser. The web gateway keeps the browser and API on one trusted origin. The API authorizes and records work, the worker performs it, PostgreSQL preserves recovery state, Redis delivers pending work, and the model gateway controls provider traffic.</desc>
           <defs><marker id="arrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
@@ -293,7 +289,6 @@
         <div class="guide-item"><h4>Why does PostgreSQL own recovery?</h4><p>Workflow state and checkpoints survive process or queue loss. Redis can be cleared and rebuilt without losing which step should run next.</p></div>
         <div class="guide-item"><h4>Why one model gateway?</h4><p>Every provider call crosses one boundary where budgets, retries, validation, and diagnostics can be applied consistently.</p></div>
       </div>
-      <p class="diagram-note">The core deployment decision is separation of responsibility: the API proves who may request work, the worker performs it, PostgreSQL preserves the history needed to recover it, and the model gateway contains external model access.</p>
     </section>
 
     <section id="data">
@@ -301,7 +296,7 @@
       <h2>Actual Drizzle schema, grouped by responsibility.</h2>
       <p>The model separates permissions, evidence, workflow, and outputs so access is checked before retrieval, interrupted work can resume, and every generated claim can be traced to the exact evidence version that supported it. Read the groups from identity and deals through evidence, workflow, and final artifacts; arrows point from a record to the parent it depends on. Hover over any table name or field row for a plain-language explanation.</p>
 
-      <div class="diagram" data-diagram="data-model" role="img" aria-label="Entity relationship diagram of the actual Drizzle schema">
+      <div class="diagram change-zone" data-change-id="data-tooltips" data-change="ERD hover help now uses one tooltip instead of two." data-diagram="data-model" role="img" aria-label="Entity relationship diagram of the actual Drizzle schema">
         <svg viewBox="0 0 1320 1220" xmlns="http://www.w3.org/2000/svg">
           <defs><marker id="arrowE" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#88959b"/></marker></defs>
           <rect width="1320" height="1220" fill="#fbfcfb"/>
@@ -605,32 +600,91 @@
     <section id="production">
       <div class="section-number">08 · Production readiness</div>
       <h2>A strong recovery core; an intentionally incomplete operating envelope.</h2>
-      <table class="readiness">
-        <thead><tr><th>Area</th><th>Why it matters</th><th>What the design already does</th><th>What production still needs</th></tr></thead>
-        <tbody>
-          <tr><td><strong>Scalability</strong></td><td>Brief generation must stay responsive as the number of users, deals, and evidence records grows.</td><td>The API records work quickly while separate workers process it from a queue. Bounded searches and model inputs stop one run from consuming unlimited resources.</td><td>Load and soak tests must reveal real bottlenecks, safe queue depth, database capacity, and worker scaling rules. Faster vector indexing should be added only if measured search latency requires it.</td></tr>
-          <tr><td><strong>High availability</strong></td><td>A process restart or duplicate delivery must not lose a brief, repeat an approval, or advance a run twice.</td><td>Commands are idempotent, state changes are versioned, and each step has a lease and checkpoint. Another worker can continue interrupted work from PostgreSQL.</td><td>The deployed databases need redundancy, tested failover, backups, restore drills, and a safe schema rollout process. Those controls protect against infrastructure loss, not just application restarts.</td></tr>
-          <tr><td><strong>Monitoring</strong></td><td>Operators need to know which run is slow or stuck, what failed, and whether users are receiving correct results.</td><td>The system saves a timeline of authorization, retrieval, model calls, validation, approvals, failures, and completion. Health endpoints also report whether required dependencies are reachable.</td><td>Those signals must feed dashboards, alerts, retention rules, and on-call runbooks. Without that operating layer, the data exists but nobody is reliably notified when service quality degrades.</td></tr>
-          <tr><td><strong>Secrets</strong></td><td>Database and provider credentials grant broad access and must not leak through source code, browser bundles, diagnostics, or logs.</td><td>Credentials are server-only, validated at startup, excluded from checked-in environment files, and redacted from common logging and model-diagnostic paths.</td><td>Production needs managed secret storage or workload identity, least-privilege credentials, automatic rotation, access auditing, short-lived tokens where possible, and a tested revocation process.</td></tr>
-          <tr><td><strong>Operational support</strong></td><td>Support staff need a safe way to explain, recover, cancel, or quarantine a bad run without direct database access.</td><td>Runs expose timelines, approvals, diagnostic codes, cancellation, dead-letter classification, and explicit recovery states that make an incident inspectable.</td><td>A scoped support console, replay and quarantine procedures, retention and deletion controls, escalation ownership, and audited emergency access are still required.</td></tr>
-          <tr><td><strong>Safety and governance</strong></td><td>The system handles confidential deal evidence and generates commercial recommendations, so both access and advice need accountable controls.</td><td>Database authorization limits evidence before search; unsupported claims and unsafe prose are rejected; policy rules create immutable human approvals for sensitive recommendations.</td><td>Before production, the organization must complete threat modeling, penetration and privacy reviews, production-grade PII evaluation, adversarial prompt testing, policy ownership, and periodic permission reviews.</td></tr>
-          <tr><td><strong>Cost and capacity</strong></td><td>Model calls can create unpredictable spend and latency when usage grows or providers behave differently.</td><td>Runs and individual calls have bounded attempts, time, context, and output, and actual token usage is persisted for later analysis.</td><td>Production needs currency-level spend accounting, budgets by tenant or team, anomaly alerts, forecasts, and measured routing rules. Model choices should change only after quality, latency, and cost are compared for each agent.</td></tr>
-        </tbody>
-      </table>
+      <div class="readiness-list change-zone" data-change-id="production-readiness" data-change="The readiness table is now a set of plain-language cards with defined bullet points.">
+        <article class="readiness-card">
+          <h3>Scalability</h3>
+          <p><strong>What it is:</strong> keeping the system responsive as users, simultaneous briefs, and evidence rows increase.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>A design that works for one demo can slow down or fail when many teams use it together.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Separate API and workers:</strong> web requests stay quick while workers handle slow retrieval and generation.</li><li><strong>Queue:</strong> holds bursts of work until a worker is available.</li><li><strong>Bounded work:</strong> each run has limits, so one brief cannot consume unlimited search or model capacity.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Load test:</strong> run many briefs at once to find the point where response time or errors become unacceptable.</li><li><strong>Soak test:</strong> keep realistic traffic running for hours or days to reveal memory leaks and growing backlogs.</li><li><strong>Safe queue depth:</strong> define how many waiting jobs are acceptable before adding workers or slowing new requests.</li><li><strong>Database capacity:</strong> measure how many connections and searches PostgreSQL can handle safely.</li><li><strong>Worker scaling rules:</strong> define when workers are added or removed from measured queue and latency signals.</li><li><strong>Fast vector index:</strong> yes, ANN/HNSW is likely needed when a user’s authorized search scope reaches millions of rows. If millions of total rows filter down to a small authorized subset, exact search may still be safer and fast enough.</li></ul></div>
+          </div>
+        </article>
 
-      <h3>Deliberately deferred enhancements</h3>
-      <div class="grid-2">
-        <div class="card"><h4>Adaptive ANN / HNSW</h4><p>Future profile-specific, security-domain-isolated candidate search with exact authorization rejoin/rerank and strict activation gates. Exact authorized cosine remains the oracle and fallback.</p></div>
-        <div class="card"><h4>PII defense in depth</h4><p>A private, pinned detector such as Presidio could augment deterministic patterns and human review at ingestion and generated-evidence promotion; it must be evaluated on organization-specific labels and fail closed for risky paths.</p></div>
-        <div class="card"><h4>Cross-encoder reranking</h4><p>Prototype only if measured hybrid retrieval misses relevance goals, and accept it only when incremental quality justifies latency, cost, context exposure, and operational complexity.</p></div>
-        <div class="card"><h4>Synthetic labeled evaluations</h4><p>Add only with explicit label schemas, provenance, contamination controls, independent human review, and acceptance thresholds; generated labels must never silently become ground truth.</p></div>
+        <article class="readiness-card">
+          <h3>High availability</h3>
+          <p><strong>What it is:</strong> continuing safely when an application process, queue, or database instance fails.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>A restart must not lose a brief, repeat an approval, or advance the same run twice.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Interrupted work recovery:</strong> yes—if a worker stops, its lease expires and another worker continues from the saved PostgreSQL checkpoint.</li><li><strong>Idempotent commands:</strong> receiving the same command twice does not repeat completed work.</li><li><strong>Version checks:</strong> two workers cannot both commit conflicting state changes.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Redundant databases:</strong> managed PostgreSQL and Redis need standby instances in another availability zone.</li><li><strong>Failover and restore drills:</strong> prove the standby and backups work before an incident.</li><li><strong>Safe schema rollout:</strong> define how database changes are deployed and reversed without breaking live workers.</li><li><strong>Disaster-recovery target:</strong> decide how much data loss and downtime the business can accept.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Monitoring</h3>
+          <p><strong>What it is:</strong> showing operators whether the system is healthy, slow, stuck, or producing errors.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>Saved diagnostic data is useful only if someone can find a problem and act before users report it.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Run timeline:</strong> records authorization, retrieval, model calls, checks, approvals, failures, and completion.</li><li><strong>Health endpoints:</strong> report whether the API and its required dependencies are reachable.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Telemetry export:</strong> send metrics and traces to an operations platform.</li><li><strong>Dashboards and alerts:</strong> make queue growth, errors, slow runs, dead letters, and provider failures visible.</li><li><strong>Service-level objectives:</strong> define acceptable reliability and response-time targets.</li><li><strong>Runbooks:</strong> give on-call staff exact steps for each alert.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Secrets</h3>
+          <p><strong>What it is:</strong> protecting database passwords, session keys, and model-provider credentials.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>A leaked credential can expose customer evidence or let an attacker spend money through a provider account.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Server-only configuration:</strong> credentials are never sent to the browser.</li><li><strong>Startup validation:</strong> the server refuses invalid or missing security settings.</li><li><strong>Redaction:</strong> common secret fields are removed from logs and model diagnostics.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Secret manager or workload identity:</strong> provide credentials without storing long-lived keys in files.</li><li><strong>Least privilege:</strong> each service receives only the access it needs.</li><li><strong>Rotation and audit:</strong> replace keys automatically and record who accessed them.</li><li><strong>Revocation plan:</strong> define how a leaked credential is disabled immediately.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Operational support</h3>
+          <p><strong>What it is:</strong> giving support staff safe tools to inspect and recover customer runs.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>Support should not need direct database access to explain, cancel, recover, or quarantine a bad run.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Inspectable runs:</strong> timelines, approvals, and diagnostic codes show what happened.</li><li><strong>Cancellation:</strong> a requester can stop live work through a defined workflow transition.</li><li><strong>Recovery states:</strong> dead-letter and retry outcomes are recorded rather than hidden.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Scoped support console:</strong> expose only the customer data an operator is allowed to inspect.</li><li><strong>Replay and quarantine:</strong> safely retry recoverable work or isolate suspicious work.</li><li><strong>Retention and deletion:</strong> enforce how long customer data remains stored.</li><li><strong>Escalation and emergency access:</strong> assign owners and audit every exceptional action.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Safety and governance</h3>
+          <p><strong>What it is:</strong> controlling who sees confidential evidence and who is accountable for sensitive recommendations.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>The assistant handles private deal information and can influence pricing, legal, and customer commitments.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Database authorization:</strong> forbidden evidence is filtered before search.</li><li><strong>Citation checks:</strong> unsupported claims are rejected.</li><li><strong>Safety checks:</strong> unsafe instructions in evidence are treated as data, not commands.</li><li><strong>Human approvals:</strong> policy-sensitive recommendations cannot finalize without the required authority.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Threat model and penetration test:</strong> identify attack paths and verify defenses.</li><li><strong>Privacy and residency review:</strong> decide which data may be sent to each provider and region.</li><li><strong>PII evaluation:</strong> measure detection of organization-specific personal information.</li><li><strong>Adversarial prompt testing:</strong> test malicious or misleading evidence at scale.</li><li><strong>Policy ownership:</strong> assign people to review approval rules and user permissions regularly.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Cost and capacity</h3>
+          <p><strong>What it is:</strong> keeping model spend and processing time predictable as usage grows.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>A provider change, retry storm, or traffic spike can increase both latency and cost unexpectedly.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Attempt and time limits:</strong> stop a run from retrying forever.</li><li><strong>Context and output limits:</strong> cap how much text each model call can process or return.</li><li><strong>Usage records:</strong> save actual token counts for later analysis.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Currency-level accounting:</strong> convert provider usage into actual money spent.</li><li><strong>Team budgets:</strong> cap or alert on spend by tenant or team.</li><li><strong>Forecasts and anomaly alerts:</strong> detect unusual growth before a bill arrives.</li><li><strong>Measured model routing:</strong> choose models only after comparing quality, latency, and price for each agent task.</li></ul></div>
+          </div>
+        </article>
+      </div>
+
+      <h3>Possible later improvements</h3>
+      <p>These are useful ideas, not current features. Each card starts with what the idea means, then explains why it should wait.</p>
+      <div class="grid-2 change-zone" data-change-id="deferred-improvements" data-change="Each later improvement now starts with a definition and plain-language reason.">
+        <div class="card deferred-card"><h4>Adaptive ANN / HNSW</h4><p><strong>What it is:</strong> a fast approximate vector index that finds likely matches without comparing every row.</p><p><strong>Why later:</strong> it is probably needed when one authorized search scope reaches millions of rows. It must still recheck permissions and exact similarity before returning evidence; total database size alone is not enough reason to enable it.</p></div>
+        <div class="card deferred-card"><h4>PII defense in depth</h4><p><strong>What it is:</strong> an extra check for names, contact details, identifiers, and other personal information before data reaches a model or final brief.</p><p><strong>Why later:</strong> a private detector such as Presidio and a separate checking agent can both flag possible PII, but neither should make the final decision alone. Deterministic rules and human review remain the authority for risky cases.</p></div>
+        <div class="card deferred-card"><h4>Cross-encoder reranking</h4><p><strong>What it is:</strong> a second model that rereads the query and top search results together to improve their final order.</p><p><strong>Why later:</strong> it adds latency, cost, and more evidence exposure. Add it only if measured retrieval quality is not good enough without it.</p></div>
+        <div class="card deferred-card"><h4>Synthetic labeled evaluations</h4><p><strong>What it is:</strong> model-generated test questions and expected answers used to expand retrieval and brief-quality evaluation.</p><p><strong>Why later:</strong> generated labels can be wrong or copy training data. They need provenance, contamination checks, human review, and clear acceptance thresholds before they influence quality decisions.</p></div>
       </div>
     </section>
   </main>
 
   <footer>Strategic Deal Intelligence Assistant · Technical overview generated from the current repository source and Drizzle migrations · 30 August 2026</footer>
   <script>
-    const svgNamespace = 'http://www.w3.org/2000/svg';
     const tableDescriptions = {
       personas: 'People who can request briefs or make approval decisions. A persona supplies the identity and role used by authorization.',
       permission_grants: 'The readable scope for one persona: which account, source types, restricted records, pricing data, and approval actions they may access.',
@@ -773,17 +827,11 @@
       if (!heading) continue;
       const tableName = heading.textContent.trim();
       const tableDescription = tableDescriptions[tableName] ?? `${tableName} stores one part of the system’s durable state.`;
-      const tableTitle = document.createElementNS(svgNamespace, 'title');
-      tableTitle.textContent = tableDescription;
-      entity.prepend(tableTitle);
       addErdHelp(heading, tableDescription);
 
       for (const field of entity.querySelectorAll('.e-text')) {
         const label = field.textContent.trim();
         const fieldDescription = fieldDescriptions[label] ?? `${label.replaceAll('_', ' ')}: stored data used by ${tableName}.`;
-        const fieldTitle = document.createElementNS(svgNamespace, 'title');
-        fieldTitle.textContent = fieldDescription;
-        field.append(fieldTitle);
         addErdHelp(field, fieldDescription);
       }
     }
@@ -806,6 +854,43 @@
       });
       toolbar.append(button);
       diagram.prepend(toolbar);
+    }
+
+    for (const zone of document.querySelectorAll('.change-zone')) {
+      const changeId = zone.dataset.changeId;
+      const storageKey = `technical-overview-change:${changeId}`;
+      let dismissed = false;
+      try {
+        dismissed = sessionStorage.getItem(storageKey) === 'dismissed';
+      } catch {
+        dismissed = false;
+      }
+      if (dismissed) {
+        zone.classList.remove('change-zone');
+        continue;
+      }
+
+      const marker = document.createElement('button');
+      marker.type = 'button';
+      marker.className = 'change-marker';
+      marker.setAttribute('aria-label', `Updated: ${zone.dataset.change}. Click to dismiss this highlight.`);
+      const label = document.createElement('strong');
+      label.textContent = 'Updated';
+      const description = document.createElement('span');
+      description.textContent = zone.dataset.change;
+      const action = document.createElement('small');
+      action.textContent = 'Click to dismiss';
+      marker.append(label, description, action);
+      marker.addEventListener('click', () => {
+        try {
+          sessionStorage.setItem(storageKey, 'dismissed');
+        } catch {
+          // The marker still dismisses when storage is unavailable.
+        }
+        marker.remove();
+        zone.classList.remove('change-zone');
+      });
+      zone.prepend(marker);
     }
 
     document.addEventListener('keydown', (event) => {
