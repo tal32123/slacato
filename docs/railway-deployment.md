@@ -18,7 +18,7 @@ service therefore runs Caddy, which serves the built SPA and reverse-proxies
 | Service | Source | Public domain | Notes |
 |---|---|---|---|
 | `postgres` | image `pgvector/pgvector:0.8.1-pg17` | no | Volume at `/var/lib/postgresql/data`. `drizzle/0000_initial.sql` runs `CREATE EXTENSION vector`, so stock Postgres is not sufficient. |
-| `redis` | image `redis:7.4.2-alpine` | no | Start args must include `--maxmemory-policy noeviction`; BullMQ loses jobs under an eviction policy. Volume at `/data`. |
+| `redis` | image `redis:7.4.2-alpine` | no | Needs `--maxmemory-policy noeviction`; BullMQ silently drops jobs under an eviction policy. `create-service` takes no command, so set it afterwards via `update-service` `startCommand` (see below). Volume at `/data`. |
 | `api` | repo `tal32123/slacato`, `Dockerfile` | no | Root directory is the repo root — `workspace:*` deps do not resolve from `apps/api`. |
 | `worker` | repo `tal32123/slacato`, `Dockerfile` | no | Same image; start command differs. Without it, briefs queue forever. |
 | `web` | repo `tal32123/slacato`, `Dockerfile.web` | **yes** | Caddy static + `/api` proxy. |
@@ -45,6 +45,13 @@ service therefore runs Caddy, which serves the built SPA and reverse-proxies
 - Dockerfile path: `Dockerfile.web`
 - Generate a Railway domain; this origin is the app's public URL.
 
+**redis** — `create-service` accepts an image but no command, so apply the
+persistence and eviction flags in a second step:
+```
+startCommand: redis-server --appendonly yes --appendfsync everysec \
+  --maxmemory 256mb --maxmemory-policy noeviction
+```
+
 ## Variables
 
 `packages/infrastructure/src/config/env.ts` is a **strict discriminated union**.
@@ -53,10 +60,15 @@ boot. `parseEnv` filters to a known key list, so Railway's own `PORT` and
 `RAILWAY_*` variables are ignored safely.
 
 **api** and **worker**
+These are raw Docker images, not Railway's managed Postgres/Redis templates, so
+they publish **no** `DATABASE_URL` or `REDIS_URL` reference variable. Build the
+URLs explicitly; `${{<service>.VAR}}` is keyed on the actual service name, so
+confirm the names `create-service` assigned before using them.
+
 ```
 NODE_ENV=production
-DATABASE_URL=${{postgres.DATABASE_URL}}
-REDIS_URL=${{redis.REDIS_URL}}
+DATABASE_URL=postgresql://slacato:${{postgres.POSTGRES_PASSWORD}}@postgres.railway.internal:5432/slacato
+REDIS_URL=redis://redis.railway.internal:6379
 WEB_ORIGIN=https://<web-domain>        # exact origin, no trailing path
 SESSION_SECRET=<fresh random, >=32 chars>
 AI_PROVIDER=openrouter
@@ -83,6 +95,11 @@ Set variables with `skipDeploys: true` while wiring references, then redeploy on
 4. Set `WEB_ORIGIN` on `api` and `worker` to that domain, and `API_UPSTREAM` on
    `web`. Redeploy `api`, `worker`, and `web`.
 5. Verify: `GET https://<web-domain>/api/health/ready` returns `200 {"status":"ready"}`.
+
+The Caddy -> `api.railway.internal:3000` hop is the one link not exercised
+locally: Railway's private network is IPv6-only, and the local smoke test proxied
+to an IPv4 address. If `/api/*` returns 502 on first deploy, check name
+resolution there first.
 
 ## Notes
 
