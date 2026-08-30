@@ -59,6 +59,40 @@ describe('safe structured logging', () => {
     });
   });
 
+  it('preserves the diagnostic error class and workflow step for failed commands', () => {
+    expect(
+      redactLogPayload({
+        event: 'workflow_command_failed',
+        runId: 'run_diag',
+        status: 'failed',
+        step: 'synthesize',
+        errorName: 'DomainConflictError',
+        errorCode: 'WORKFLOW_COMMAND_FAILED'
+      })
+    ).toEqual({
+      event: 'workflow_command_failed',
+      runId: 'run_diag',
+      status: 'failed',
+      step: 'synthesize',
+      errorName: 'DomainConflictError',
+      errorCode: 'WORKFLOW_COMMAND_FAILED'
+    });
+  });
+
+  it('still redacts an error message or stack smuggled through the diagnostic fields', () => {
+    expect(
+      redactLogPayload({
+        event: 'workflow_command_failed',
+        errorName: 'Error: leaked Northstar Foods account detail',
+        step: 'Required retrieval checkpoint is missing'
+      })
+    ).toEqual({
+      event: 'workflow_command_failed',
+      errorName: REDACTED,
+      step: REDACTED
+    });
+  });
+
   it('handles arrays, cycles, and Error objects without leaking messages, stacks, or causes', () => {
     const cause = new Error('CAUSE_SENTINEL');
     const error = Object.assign(new Error('ERROR_MESSAGE_SENTINEL', { cause }), { code: 'SAFE_PROVIDER_ERROR' });

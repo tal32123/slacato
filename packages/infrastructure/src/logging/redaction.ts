@@ -16,6 +16,8 @@ const SAFE_FIELD_ORDER = [
   'model',
   'durationMs',
   'retryCount',
+  'step',
+  'errorName',
   'inputTokens',
   'outputTokens',
   'errorCode'
@@ -26,6 +28,8 @@ const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$/;
 const eventPattern = /^[a-z][a-z0-9_]{0,127}$/;
 const statusPattern = /^[a-z][a-z0-9_]{0,63}$/;
 const errorCodePattern = /^[A-Z][A-Z0-9_]{0,127}$/;
+const errorNamePattern = /^[A-Z][A-Za-z0-9]{0,127}$/;
+const stepPattern = /^[a-z][a-z0-9_:-]{0,63}$/;
 
 /** Keeps only identifier-safe text for an approved telemetry field. */
 function safeString(field: SafeField, value: unknown): string | typeof REDACTED {
@@ -37,7 +41,11 @@ function safeString(field: SafeField, value: unknown): string | typeof REDACTED 
         ? statusPattern
         : field === 'errorCode'
           ? errorCodePattern
-          : identifierPattern;
+          : field === 'errorName'
+            ? errorNamePattern
+            : field === 'step'
+              ? stepPattern
+              : identifierPattern;
   return pattern.test(value) ? value : REDACTED;
 }
 

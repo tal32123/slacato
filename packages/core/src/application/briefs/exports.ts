@@ -1,3 +1,4 @@
+import { formatEvidenceCitation } from '../../domain/briefs/references.js';
 import type { Citation, Claim, DealBrief } from '../../domain/briefs/schema.js';
 import { assertApprovableBrief, canonicalJson } from './workflow.js';
 
@@ -49,6 +50,18 @@ function claimLines(
     );
   }
   return lines;
+}
+
+/** Renders one citation in the assignment's source-file and stable-source-ID format.
+ *
+ * The composed label is emitted literally so an exported brief cites evidence exactly as the
+ * reviewer workspace does. Anything that does not match the expected shape - including the raw
+ * locator fallback for an unrecognized source - is escaped instead of trusted. */
+const CITATION_LABEL = /^source=[A-Za-z0-9_./-]+, [a-z_]+=[A-Za-z0-9_.:-]+$/;
+function citationSourceLabel(citation: Citation): string {
+  const label = formatEvidenceCitation(citation.locator);
+  if (label !== undefined && CITATION_LABEL.test(label)) return label;
+  return `source=${escapeMarkdown(citation.locator)}`;
 }
 
 /** Builds a conflict-free citation registry from every claim in the brief. */
@@ -181,7 +194,7 @@ function renderMarkdown(brief: DealBrief, citations: ReadonlyMap<string, Citatio
     left.id.localeCompare(right.id)
   )) {
     lines.push(
-      `[^${citation.id}]: Evidence \`${citation.evidenceId}\` — ${escapeMarkdown(citation.locator)}${citation.rationale === undefined ? '' : ` — ${escapeMarkdown(citation.rationale)}`}`
+      `[^${citation.id}]: ${citationSourceLabel(citation)}${citation.rationale === undefined ? '' : ` — ${escapeMarkdown(citation.rationale)}`}`
     );
   }
   lines.push(

@@ -13,6 +13,7 @@ import {
   type SourceSnapshotView,
   type StakeholderView
 } from '@slacato/contracts';
+import { resolveEvidenceIdentity } from '@slacato/core';
 import type {
   AuthorizedDeal,
   Claim,
@@ -101,10 +102,9 @@ function mapAuthorizedEvidenceToDetail(evidence: DealEvidence): EvidenceDetail |
   const locator = evidence.sourceLocator?.trim();
   if (!locator) return undefined;
   const fields = parseColonDelimitedRecord(evidence.content);
-  const sourcePath = locator.split('#', 1)[0];
-  if (!sourcePath) return undefined;
-  const stableIdentity = resolveStableEvidenceIdentity(sourcePath, fields, locator);
-  if (stableIdentity === undefined || !stableIdentity.key || !stableIdentity.id) return undefined;
+  const stableIdentity = resolveEvidenceIdentity(locator, fields);
+  if (stableIdentity === undefined) return undefined;
+  const sourcePath = stableIdentity.sourcePath;
   const eventDate = evidence.eventDate === null ? null : parseIsoDate(evidence.eventDate);
   if (evidence.eventDate !== null && eventDate === null) return undefined;
   return {
@@ -708,53 +708,6 @@ function parseColonDelimitedRecord(content: string): Readonly<Record<string, str
   return fields;
 }
 
-/** Resolves the stable source-specific identity used by public evidence details. */
-function resolveStableEvidenceIdentity(
-  sourcePath: string,
-  fields: Readonly<Record<string, string>>,
-  locator: string
-): Readonly<{ key: string; id: string }> | undefined {
-  if (sourcePath.endsWith('/opportunities.tsv'))
-    return createEvidenceIdentity(
-      'opportunity_id',
-      fields.opportunityId ?? extractLocatorRecordId(locator)
-    );
-  if (sourcePath.endsWith('/accounts.tsv'))
-    return createEvidenceIdentity(
-      'account_id',
-      fields.accountId ?? extractLocatorRecordId(locator)
-    );
-  if (sourcePath.endsWith('/contacts.tsv'))
-    return createEvidenceIdentity(
-      'contact_id',
-      fields.contactId ?? extractLocatorRecordId(locator)
-    );
-  if (sourcePath.includes('/gong_call_summaries.tsv') || sourcePath.includes('/transcripts/')) {
-    return createEvidenceIdentity(
-      'call_id',
-      fields.callId ?? extractCallIdFromSourcePath(sourcePath) ?? extractLocatorRecordId(locator)
-    );
-  }
-  if (sourcePath.endsWith('/pricing_notes.tsv'))
-    return createEvidenceIdentity(
-      'pricing_note_id',
-      fields.pricingNoteId ?? extractLocatorRecordId(locator)
-    );
-  if (sourcePath.endsWith('/account_team_updates.tsv'))
-    return createEvidenceIdentity('update_id', fields.updateId ?? extractLocatorRecordId(locator));
-  if (sourcePath.endsWith('/deal_desk_policy.md'))
-    return { key: 'policy_id', id: 'deal-desk-policy' };
-  return createEvidenceIdentity('record_id', extractLocatorRecordId(locator));
-}
-
-/** Creates a normalized evidence identity when the source supplies a non-empty identifier. */
-function createEvidenceIdentity(
-  key: string,
-  id: string | undefined
-): Readonly<{ key: string; id: string }> | undefined {
-  return id === undefined || id.trim().length === 0 ? undefined : { key, id: id.trim() };
-}
-
 /** Returns the evidence ID for an optional authorized evidence item. */
 function evidenceIdsForItem(item: EvidenceDetail | undefined): string[] {
   return item === undefined ? [] : [item.id];
@@ -834,14 +787,4 @@ function sourceBackedConfidenceForRisk(value: DealListItem['riskLevel']): number
 /** Serializes database date values as an ISO timestamp. */
 function serializeDateTime(value: Date | string): string {
   return (value instanceof Date ? value : new Date(value)).toISOString();
-}
-
-/** Extracts the stable record identifier encoded in an evidence locator. */
-function extractLocatorRecordId(locator: string | null): string | undefined {
-  return locator?.split('#')[1]?.split('/')[0];
-}
-
-/** Extracts the canonical call identifier encoded in a conversation source path. */
-function extractCallIdFromSourcePath(sourcePath: string): string | undefined {
-  return sourcePath.match(/(CALL-\d+)/)?.[1];
 }

@@ -2030,4 +2030,88 @@ describe('specialized agents', () => {
     })).rejects.toThrow('manifest');
     expect(gateway.requests).toHaveLength(0);
   });
+
+  it('keeps a realistically classified stakeholder whose identity is grounded in one CRM record', async () => {
+    const cited = evidence(
+      'evidence_contact_marco',
+      'salesforce',
+      [
+        'contactId: CON-3002',
+        'accountId: ACC-2001',
+        'fullName: Marco Devlin',
+        'title: VP Infrastructure',
+        'roleInDeal: Technical decision maker',
+        'influenceLevel: high',
+        'sentiment: positive',
+        'notes: Owns branch migration plan and wants named escalation owners for rollout.'
+      ].join('\n')
+    );
+    const citation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
+    const claims = [{
+      id: 'claim_marco_identity',
+      statement: 'Marco Devlin is VP Infrastructure.',
+      confidence: 0.9,
+      citations: [citation]
+    }];
+    const generatedStakeholder = {
+      name: 'Marco Devlin', title: 'VP Infrastructure', role: 'decision_maker' as const,
+      influence: 'high' as const, relationship: 'positive' as const, goals: [], concerns: [], claims
+    };
+    const gateway = new RecordingGateway([{ ...emptyBrief, stakeholderMap: { stakeholders: [generatedStakeholder] } }]);
+
+    const brief = await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: emptyConversation, stakeholder: emptyStakeholder, commercial: emptyCommercial
+    });
+
+    expect(brief.stakeholderMap.stakeholders).toEqual([
+      expect.objectContaining({ name: 'Marco Devlin', title: 'VP Infrastructure', role: 'decision_maker', influence: 'high' })
+    ]);
+  });
+
+  it('drops a stakeholder whose name is not grounded in any cited evidence record', async () => {
+    const cited = evidence('evidence_contact_only_marco', 'salesforce', 'fullName: Marco Devlin\ntitle: VP Infrastructure');
+    const citation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
+    const claims = [{
+      id: 'claim_marco_only', statement: 'Marco Devlin is VP Infrastructure.', confidence: 0.9, citations: [citation]
+    }];
+    const gateway = new RecordingGateway([{
+      ...emptyBrief,
+      stakeholderMap: { stakeholders: [{
+        name: 'Priya Raman', title: 'Chief Financial Officer', role: 'economic_buyer' as const,
+        influence: 'high' as const, relationship: 'neutral' as const, goals: [], concerns: [], claims
+      }] }
+    }]);
+
+    const brief = await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: emptyConversation, stakeholder: emptyStakeholder, commercial: emptyCommercial
+    });
+
+    expect(brief.stakeholderMap.stakeholders).toEqual([]);
+  });
+
+  it('keeps a deal-specific internal next action that makes no customer-facing commitment', async () => {
+    const cited = evidence('evidence_escalation_owners', 'gong_summary', 'The buyer asked for named escalation owners before rollout.');
+    const citation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
+    const artifactClaim = {
+      id: 'claim_escalation_owners', statement: 'The buyer asked for named escalation owners before rollout.',
+      confidence: 0.9, citations: [citation]
+    };
+    const gateway = new RecordingGateway([{
+      ...emptyBrief,
+      recommendedNextActions: { actions: [{
+        action: 'Confirm the named escalation owners for the branch migration rollout with the account team.',
+        owner: 'account executive', priority: 'high',
+        rationale: 'The buyer asked for named escalation owners before rollout.',
+        claims: [{ ...artifactClaim, id: 'claim_escalation_action' }]
+      }] }
+    }]);
+
+    const brief = await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: { ...emptyConversation, claims: [artifactClaim] }, stakeholder: emptyStakeholder, commercial: emptyCommercial
+    });
+
+    expect(brief.recommendedNextActions.actions).toEqual([expect.objectContaining({
+      action: 'Confirm the named escalation owners for the branch migration rollout with the account team.'
+    })]);
+  });
 });

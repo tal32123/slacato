@@ -72,3 +72,73 @@ export function collectDealBriefReferences(brief: DealBrief): DealBriefReference
   const sortedEvidenceIds = Object.freeze([...evidenceIds].sort(compareIdentifiers));
   return Object.freeze({ citations, evidenceIds: sortedEvidenceIds });
 }
+
+/** The stable, source-specific identity a citation points at. */
+export type EvidenceIdentity = Readonly<{ sourcePath: string; key: string; id: string }>;
+
+/** Returns the record identifier encoded in an evidence locator. */
+function locatorRecordId(locator: string): string | undefined {
+  return locator.split('#')[1]?.split('/')[0];
+}
+
+/** Builds an identity only when the source supplies a non-empty identifier. */
+function identity(
+  sourcePath: string,
+  key: string,
+  id: string | undefined
+): EvidenceIdentity | undefined {
+  return id === undefined || id.trim().length === 0
+    ? undefined
+    : { sourcePath, key, id: id.trim() };
+}
+
+/**
+ * Resolves the source file and stable source ID a citation refers to.
+ *
+ * Callers that have already parsed the evidence body may supply its fields; the locator alone is
+ * otherwise sufficient, so exported artifacts and the API surface derive the same identity.
+ */
+export function resolveEvidenceIdentity(
+  locator: string,
+  fields: Readonly<Record<string, string>> = {}
+): EvidenceIdentity | undefined {
+  const trimmed = locator.trim();
+  const sourcePath = trimmed.split('#', 1)[0];
+  if (!sourcePath) return undefined;
+  const recordId = locatorRecordId(trimmed);
+  if (sourcePath.endsWith('/opportunities.tsv'))
+    return identity(sourcePath, 'opportunity_id', fields.opportunityId ?? recordId);
+  if (sourcePath.endsWith('/accounts.tsv'))
+    return identity(sourcePath, 'account_id', fields.accountId ?? recordId);
+  if (sourcePath.endsWith('/contacts.tsv'))
+    return identity(sourcePath, 'contact_id', fields.contactId ?? recordId);
+  if (sourcePath.includes('/gong_call_summaries.tsv') || sourcePath.includes('/transcripts/'))
+    return identity(
+      sourcePath,
+      'call_id',
+      fields.callId ?? sourcePath.match(/(CALL-\d+)/)?.[1] ?? recordId
+    );
+  if (sourcePath.endsWith('/pricing_notes.tsv'))
+    return identity(sourcePath, 'pricing_note_id', fields.pricingNoteId ?? recordId);
+  if (sourcePath.endsWith('/account_team_updates.tsv'))
+    return identity(sourcePath, 'update_id', fields.updateId ?? recordId);
+  if (sourcePath.endsWith('/deal_desk_policy.md'))
+    return { sourcePath, key: 'policy_id', id: 'deal-desk-policy' };
+  return identity(sourcePath, 'record_id', recordId);
+}
+
+/**
+ * Renders the one citation format the assignment asks for, naming the source file and stable ID.
+ *
+ * Every surface that shows a citation uses this, so an exported brief and the reviewer workspace
+ * cite the same evidence the same way.
+ */
+export function formatEvidenceCitation(
+  locator: string,
+  fields: Readonly<Record<string, string>> = {}
+): string | undefined {
+  const resolved = resolveEvidenceIdentity(locator, fields);
+  return resolved === undefined
+    ? undefined
+    : `source=${resolved.sourcePath}, ${resolved.key}=${resolved.id}`;
+}

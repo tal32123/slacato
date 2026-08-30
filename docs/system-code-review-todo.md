@@ -1,9 +1,13 @@
-What does the workflow even do? does this shit work? diagrams and stuff are needed here.
-are we following the docs/requirements even?
-are the modules/services properly structured?
-have a team of senior faang architects look into this and give their thoughts.
+# Open engineering items
 
-add delete run button (for finished runs, soft delete)
-railway release
+Working notes for the maintainers. Not a submission deliverable — the reviewer-facing documents
+are `README.md`, `docs/technical-overview.html` (including its security-notes section), and
+`docs/railway-deployment.md`.
 
-SHOULD WE ADD COMPACTION? DO WE CHUNK EMBEDDINGS? SHOULD WE ADD A CHAT VIEW?, i think so. chat can use simple rag as well and have compaction once the chat grows long. What do you think? for compaction you tell me what you think we should do and how to test, but i think we should show a compaction marker to the user and persist to db in accordance with the existing repo that ai sdk from vercel has for persistence to postgres. also use ai elements repo chat.
+- Add a delete-run action for finished runs (soft delete, preserving the run's trace and approval
+  history so the audit record stays intact).
+- Wire the golden-retrieval regression eval (`scripts/evaluate.ts retrieval`) into CI. The harness
+  already gates on `permissionLeakage !== 0 || macroRecallAtK < 0.5`; only the CI step is missing.
+  Planned as Task 15, Step 4 of the implementation plan.
+- Record per-run provider spend. Token usage is persisted per attempt; it is never converted to a
+  currency cost, which the technical overview currently discloses as a known limitation.
