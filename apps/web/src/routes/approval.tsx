@@ -1,4 +1,4 @@
-import { type ApprovalDetailResponse, type DemoSession } from '@slacato/contracts';
+import type { ApprovalDetailResponse, DemoSession } from '@slacato/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import type { LoaderFunctionArgs } from 'react-router';
@@ -203,10 +203,7 @@ function ApprovalDecisionPage({
         ) : (
           <ol className="mt-4 grid gap-3">
             {detail.decisions.map((record) => (
-              <li
-                key={`${record.decidedAt}:${record.actorName}`}
-                className="rounded-lg border p-4"
-              >
+              <li key={`${record.decidedAt}:${record.actorName}`} className="rounded-lg border p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge
                     status={record.action === 'reject' ? 'attention' : 'ready'}
@@ -219,9 +216,7 @@ function ApprovalDecisionPage({
                   <time dateTime={record.decidedAt}>{formatTime(record.decidedAt)}</time>
                   {record.changed ? ' · Subject changed' : ''}
                 </p>
-                {record.rationale && (
-                  <p className="mt-3 text-sm leading-6">{record.rationale}</p>
-                )}
+                {record.rationale && <p className="mt-3 text-sm leading-6">{record.rationale}</p>}
                 {record.diff && (
                   <div className="mt-4 rounded-lg bg-muted/50 p-4">
                     <p className="text-sm font-medium">Recorded changes</p>

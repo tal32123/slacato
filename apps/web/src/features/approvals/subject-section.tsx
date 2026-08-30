@@ -176,7 +176,10 @@ export function ApprovalSubjectDetail({
         ) : (
           <ul className="mt-3 grid gap-3">
             {payload.confidenceAndReviewWarnings.warnings.map((warning) => (
-              <li key={warning.code} className="rounded-lg border border-attention bg-attention/10 p-3">
+              <li
+                key={warning.code}
+                className="rounded-lg border border-attention bg-attention/10 p-3"
+              >
                 <p className="font-medium">
                   {label(warning.severity)} · {warning.code}
                 </p>
@@ -241,7 +244,9 @@ export function BriefList({
 }
 
 /** Explains when an approval-brief section has no recorded content. */
-export function EmptyState({ children }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
+export function EmptyState({
+  children
+}: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
   return <p className="mt-2 text-sm text-muted-foreground">{children}</p>;
 }
 

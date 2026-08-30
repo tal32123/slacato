@@ -693,19 +693,28 @@ export function buildFixtureSet(input: RawFixtureInput): FixtureSet {
     .parse(parseTsvRows(sourceContent('salesforce/accounts.tsv'), 'salesforce/accounts.tsv'));
   const opportunities = z
     .array(opportunityFixtureSchema)
-    .parse(parseTsvRows(sourceContent('salesforce/opportunities.tsv'), 'salesforce/opportunities.tsv'));
+    .parse(
+      parseTsvRows(sourceContent('salesforce/opportunities.tsv'), 'salesforce/opportunities.tsv')
+    );
   const contacts = z
     .array(contactFixtureSchema)
     .parse(parseTsvRows(sourceContent('salesforce/contacts.tsv'), 'salesforce/contacts.tsv'));
   const gongSummaries = z
     .array(gongSummaryFixtureSchema)
-    .parse(parseTsvRows(sourceContent('gong/gong_call_summaries.tsv'), 'gong/gong_call_summaries.tsv'));
+    .parse(
+      parseTsvRows(sourceContent('gong/gong_call_summaries.tsv'), 'gong/gong_call_summaries.tsv')
+    );
   const pricingNotes = z
     .array(pricingNoteFixtureSchema)
     .parse(parseTsvRows(sourceContent('pricing/pricing_notes.tsv'), 'pricing/pricing_notes.tsv'));
   const permissions = z
     .array(permissionFixtureSchema)
-    .parse(parseTsvRows(sourceContent('policies/access_permissions.tsv'), 'policies/access_permissions.tsv'));
+    .parse(
+      parseTsvRows(
+        sourceContent('policies/access_permissions.tsv'),
+        'policies/access_permissions.tsv'
+      )
+    );
   const slackGeneration = slackGenerationMetadataSchema.parse(input.slackGenerationJson);
   if (slackGeneration.sourceCommit !== attribution.commit)
     throw new Error('Slack source commit does not match canonical attribution');
