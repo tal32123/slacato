@@ -3,6 +3,8 @@ import {
   type DealBriefView,
   type DealListItem,
   dealListItemSchema,
+  type DealWorkspaceView,
+  dealWorkspaceViewSchema,
   type EvidenceDetail,
   type GeneratedDealOutputView,
   isoDateSchema,
@@ -52,10 +54,20 @@ type GeneratedOutputRenderingInput = Readonly<{
 type SourceBackedBriefView = Omit<DealBriefView, 'status'> & Readonly<{ status: 'source_backed' }>;
 type GeneratedBriefView = Omit<DealBriefView, 'status'> & Readonly<{ status: 'generated' }>;
 
-export type AuthorizedWorkspaceEvidence = Readonly<{
+type AuthorizedWorkspaceEvidence = Readonly<{
   evidence: readonly EvidenceDetail[];
   opportunityRecord: DealEvidence | undefined;
   stakeholderEvidence: readonly DealEvidence[];
+}>;
+
+/** Input for rendering a full authorized deal workspace view from authorized query results. */
+export type RenderDealWorkspaceInput = Readonly<{
+  sessionVersion: string;
+  target: AuthorizedDeal;
+  latestRun: LatestDealRun | undefined;
+  opportunityRows: readonly DealEvidence[];
+  stakeholderRows: readonly DealEvidence[];
+  supplementalRows: readonly DealEvidence[];
 }>;
 
 /** Maps an authorized deal query model into the public deal-list contract. */
@@ -85,7 +97,7 @@ export function mapAuthorizedDealToListItem(
 }
 
 /** Maps an authorized evidence query model into a provenance-safe public evidence detail. */
-export function mapAuthorizedEvidenceToDetail(evidence: DealEvidence): EvidenceDetail | undefined {
+function mapAuthorizedEvidenceToDetail(evidence: DealEvidence): EvidenceDetail | undefined {
   const locator = evidence.sourceLocator?.trim();
   if (!locator) return undefined;
   const fields = parseColonDelimitedRecord(evidence.content);
@@ -110,7 +122,7 @@ export function mapAuthorizedEvidenceToDetail(evidence: DealEvidence): EvidenceD
 }
 
 /** Projects authorized repository evidence while excluding unstable provenance and invalid optional dates. */
-export function projectAuthorizedWorkspaceEvidence(
+function projectAuthorizedWorkspaceEvidence(
   opportunityRows: readonly DealEvidence[],
   stakeholderRows: readonly DealEvidence[],
   supplementalRows: readonly DealEvidence[]
@@ -134,7 +146,7 @@ export function projectAuthorizedWorkspaceEvidence(
 }
 
 /** Renders deterministic authorized records as a source snapshot rather than generated output. */
-export function renderSourceSnapshot(input: SourceSnapshotRenderingInput): SourceSnapshotView {
+function renderSourceSnapshot(input: SourceSnapshotRenderingInput): SourceSnapshotView {
   return {
     type: 'source_snapshot',
     label: 'Source snapshot',
@@ -148,7 +160,7 @@ export function renderSourceSnapshot(input: SourceSnapshotRenderingInput): Sourc
 }
 
 /** Renders a generated draft or finalized artifact only with the run that produced it. */
-export function renderGeneratedOutput(
+function renderGeneratedOutput(
   input: GeneratedOutputRenderingInput
 ): GeneratedDealOutputView | null {
   if (input.generatedOutput === null || input.producingRun === undefined) return null;
@@ -169,11 +181,49 @@ export function renderGeneratedOutput(
 }
 
 /** Keeps the legacy brief field available while newer clients use the separate workspace representations. */
-export function legacyBriefForWorkspace(
+function legacyBriefForWorkspace(
   sourceSnapshot: SourceSnapshotView,
   generatedOutput: GeneratedDealOutputView | null
 ): DealBriefView {
   return generatedOutput?.content ?? sourceSnapshot.evidenceOverview;
+}
+
+/**
+ * Renders a full authorized deal workspace view: projects authorized evidence, maps the deal
+ * summary, then assembles the source snapshot, generated output, and legacy brief in the order
+ * that the workspace response depends on.
+ */
+export function renderDealWorkspace(input: RenderDealWorkspaceInput): DealWorkspaceView {
+  const workspaceEvidence = projectAuthorizedWorkspaceEvidence(
+    input.opportunityRows,
+    input.stakeholderRows,
+    input.supplementalRows
+  );
+  const deal = mapAuthorizedDealToListItem(
+    { ...input.target, recordContent: workspaceEvidence.opportunityRecord?.content ?? null },
+    input.latestRun ?? null
+  );
+  const sourceSnapshot = renderSourceSnapshot({
+    deal,
+    opportunityRecord: workspaceEvidence.opportunityRecord,
+    stakeholderEvidence: workspaceEvidence.stakeholderEvidence,
+    evidence: workspaceEvidence.evidence
+  });
+  const generatedOutput = renderGeneratedOutput({
+    generatedOutput: input.latestRun?.generatedOutput ?? null,
+    producingRun: input.latestRun,
+    evidence: workspaceEvidence.evidence
+  });
+  const brief = legacyBriefForWorkspace(sourceSnapshot, generatedOutput);
+
+  return dealWorkspaceViewSchema.parse({
+    sessionVersion: input.sessionVersion,
+    deal,
+    sourceSnapshot,
+    generatedOutput,
+    brief,
+    evidence: workspaceEvidence.evidence
+  });
 }
 
 /** Renders all nine canonical generated sections after proving every referenced evidence ID is authorized. */

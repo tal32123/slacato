@@ -1,18 +1,8 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import {
-  type DealListItem,
-  type DealWorkspaceView,
-  dealWorkspaceViewSchema
-} from '@slacato/contracts';
+import type { DealListItem, DealWorkspaceView } from '@slacato/contracts';
 import type { DealQuerySession, EvidenceScope } from '@slacato/core';
 import { DEALS_OPTIONS, type DealsModuleOptions } from './contracts.js';
-import {
-  legacyBriefForWorkspace,
-  mapAuthorizedDealToListItem,
-  projectAuthorizedWorkspaceEvidence,
-  renderGeneratedOutput,
-  renderSourceSnapshot
-} from './deal-workspace.mapper.js';
+import { mapAuthorizedDealToListItem, renderDealWorkspace } from './deal-workspace.mapper.js';
 
 /** Authorizes deal queries, fetches their source data, and orchestrates workspace rendering. */
 @Injectable()
@@ -54,35 +44,14 @@ export class DealsService {
       this.options.repository.listEvidence(scope, 'stakeholders'),
       this.options.repository.listEvidence(scope, 'supplemental')
     ]);
-    const workspaceEvidence = projectAuthorizedWorkspaceEvidence(
+
+    return renderDealWorkspace({
+      sessionVersion: session.claims.version,
+      target,
+      latestRun,
       opportunityRows,
       stakeholderRows,
       supplementalRows
-    );
-    const deal = mapAuthorizedDealToListItem(
-      { ...target, recordContent: workspaceEvidence.opportunityRecord?.content ?? null },
-      latestRun ?? null
-    );
-    const sourceSnapshot = renderSourceSnapshot({
-      deal,
-      opportunityRecord: workspaceEvidence.opportunityRecord,
-      stakeholderEvidence: workspaceEvidence.stakeholderEvidence,
-      evidence: workspaceEvidence.evidence
-    });
-    const generatedOutput = renderGeneratedOutput({
-      generatedOutput: latestRun?.generatedOutput ?? null,
-      producingRun: latestRun,
-      evidence: workspaceEvidence.evidence
-    });
-    const brief = legacyBriefForWorkspace(sourceSnapshot, generatedOutput);
-
-    return dealWorkspaceViewSchema.parse({
-      sessionVersion: session.claims.version,
-      deal,
-      sourceSnapshot,
-      generatedOutput,
-      brief,
-      evidence: workspaceEvidence.evidence
     });
   }
 }
