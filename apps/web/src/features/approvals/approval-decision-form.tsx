@@ -18,6 +18,7 @@ export function ApprovalDecisionForm({
     <>
       {decision.mutable && (
         <section
+          data-tour="approval-decision"
           className="border-b py-7"
           aria-labelledby="decision-title"
           aria-busy={decision.isPending}

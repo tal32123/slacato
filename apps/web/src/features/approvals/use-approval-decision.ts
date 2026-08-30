@@ -11,6 +11,7 @@ import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ApiError, decideApproval } from '@/api/client';
 import { csrfQueryOptions, queryClient, queryKeys } from '@/api/session';
+import { advanceGuidedTour } from '@/components/guided-tour';
 
 /** A single before/after row surfaced in the edit-and-approve change preview. */
 export interface ApprovalPreviewField {
@@ -191,6 +192,7 @@ export function useApprovalDecision(
         queryClient.invalidateQueries({ queryKey: queryKeys.scoped(session.version, 'deals') })
       ]);
       if (result.approvalSubjectId === detail.approvalSubjectId) await refetch();
+      advanceGuidedTour('approval-decision');
     },
     onError: () => setActiveAction(null)
   });

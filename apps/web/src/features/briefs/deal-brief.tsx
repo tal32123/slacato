@@ -167,7 +167,12 @@ function WorkspaceContent({
         const isSourceCue =
           sourceCues && (id === 'recommendedNextActions' || id === 'confidenceAndReviewWarnings');
         return (
-          <section key={id} className="border-b py-8" aria-labelledby={`${brief.status}-${id}`}>
+          <section
+            key={id}
+            data-tour={id === 'sourceEvidence' ? 'slack-evidence' : undefined}
+            className="border-b py-8"
+            aria-labelledby={`${brief.status}-${id}`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id={`${brief.status}-${id}`} className="text-xl font-semibold">
                 {section.title}

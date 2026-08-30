@@ -4,6 +4,7 @@ import { useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { startBrief } from '@/api/client';
 import { csrfQueryOptions, queryClient, queryKeys } from '@/api/session';
+import { advanceGuidedTour } from '@/components/guided-tour';
 import { Button } from '@/components/ui/button';
 
 /** Lets a seller start a brief-generation run and opens the resulting run workspace. */
@@ -29,6 +30,7 @@ export function GenerateBriefAction({
         queryClient.invalidateQueries({ queryKey: queryKeys.scoped(sessionVersion, 'deals') }),
         queryClient.invalidateQueries({ queryKey: queryKeys.scoped(sessionVersion, 'runs') })
       ]);
+      advanceGuidedTour('generate-brief');
       await navigate(`/runs/${encodeURIComponent(runId)}`);
     }
   });

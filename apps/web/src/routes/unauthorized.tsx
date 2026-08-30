@@ -33,17 +33,24 @@ export function AccessState({
   title,
   detail,
   icon: Icon,
-  action
+  action,
+  tourTarget,
+  children
 }: Readonly<{
   eyebrow: string;
   title: string;
   detail: string;
   icon: typeof LogIn;
   action: React.ReactNode;
+  tourTarget?: string;
+  children?: React.ReactNode;
 }>): React.JSX.Element {
   return (
-    <main className="grid min-h-screen place-items-center bg-background px-5 py-12">
-      <section className="w-full max-w-lg rounded-2xl border bg-card p-7 shadow-sm sm:p-10">
+    <main id="main-content" className="grid min-h-screen place-items-center bg-background px-5 py-12">
+      <section
+        data-tour={tourTarget}
+        className="w-full max-w-lg rounded-2xl border bg-card p-7 shadow-sm sm:p-10"
+      >
         <span className="mb-6 grid size-12 place-items-center rounded-xl bg-secondary text-secondary-foreground">
           <Icon className="size-6" />
         </span>
@@ -55,6 +62,7 @@ export function AccessState({
           <Shield className="size-4" /> SlaCato keeps denied account details private.
         </div>
       </section>
+      {children}
     </main>
   );
 }

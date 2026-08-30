@@ -12,9 +12,11 @@ import {
   selectPersonaSession,
   sessionQueryOptions
 } from '@/api/session';
+import { advanceGuidedTour } from '@/components/guided-tour';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { demoPersonaPurpose, groupDemoPersonas } from '@/features/personas/demo-personas';
 import { cn } from '@/lib/utils';
 import { throwProtectedLoaderError } from './loader-security';
 
@@ -54,6 +56,7 @@ export function SettingsRoute(): React.JSX.Element {
     try {
       await selectPersonaSession(selected, csrf.data);
       await revalidator.revalidate();
+      advanceGuidedTour('settings-personas');
     } catch {
       setMutationError(true);
     } finally {
@@ -133,38 +136,52 @@ export function SettingsRoute(): React.JSX.Element {
           </Button>
         </div>
 
-        <fieldset className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <legend className="sr-only">Canonical demo personas</legend>
-          {personas.data?.map((persona) => {
-            const active = persona.userId === session.persona.userId;
-            return (
-              <label
-                key={persona.userId}
-                className={cn(
-                  'relative flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/50',
-                  selected === persona.userId && 'border-primary ring-2 ring-ring/20'
-                )}
-              >
-                <input
-                  type="radio"
-                  name="persona"
-                  value={persona.userId}
-                  checked={selected === persona.userId}
-                  onChange={() => setSelected(persona.userId)}
-                  className="mt-1 size-5 accent-primary"
-                />
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2 font-medium">
-                    {persona.displayName}
-                    {active && <Check aria-hidden="true" className="size-4 text-primary" />}
-                  </span>
-                  <span className="mt-1 block text-sm text-muted-foreground">{persona.role}</span>
-                  {active && <span className="sr-only">{persona.displayName}, active persona</span>}
-                </span>
-              </label>
-            );
-          })}
-        </fieldset>
+        <div data-tour="settings-personas" className="grid gap-6">
+          {groupDemoPersonas(personas.data ?? []).map((group) => (
+            <fieldset key={group.id} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <legend className="col-span-full mb-2 text-sm font-semibold">
+                {group.title}
+                <span className="ml-2 font-normal text-muted-foreground">{group.description}</span>
+              </legend>
+              {group.personas.map((persona) => {
+                const active = persona.userId === session.persona.userId;
+                return (
+                  <label
+                    key={persona.userId}
+                    className={cn(
+                      'relative flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/50',
+                      selected === persona.userId && 'border-primary ring-2 ring-ring/20'
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="persona"
+                      value={persona.userId}
+                      checked={selected === persona.userId}
+                      onChange={() => setSelected(persona.userId)}
+                      className="mt-1 size-5 accent-primary"
+                    />
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2 font-medium">
+                        {persona.displayName}
+                        {active && <Check aria-hidden="true" className="size-4 text-primary" />}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted-foreground">
+                        {persona.role}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted-foreground">
+                        {demoPersonaPurpose(persona)}
+                      </span>
+                      {active && (
+                        <span className="sr-only">{persona.displayName}, active persona</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+          ))}
+        </div>
       </section>
 
       <section className="grid gap-4 border-t pt-7 lg:grid-cols-2" aria-label="Session controls">
