@@ -1,0 +1,105 @@
+# Deal Brief
+
+## 1. Deal Snapshot
+- **Account:** Northstar Foods Cooperative
+- **Opportunity:** Northstar Foods Cooperative \- Global Access Renewal
+- **Stage:** 6\.0 Order Review
+### Claims
+- Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\. (confidence: 1.00) [^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]
+
+## 2. Executive Summary
+Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\.
+### Claims
+- Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\. (confidence: 1.00) [^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]
+
+## 3. Buyer Goals and Business Drivers
+### Goals
+- None
+### Business Drivers
+- Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\.
+### Claims
+- Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\. (confidence: 1.00) [^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]
+
+## 4. Stakeholder Map
+- None
+### Coverage Gaps
+- Verify unsupported stakeholder records\.
+### Claims
+- We still need the final owner matrix and success metrics confirmed by the client stakeholders\. (confidence: 1.00) [^citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6]
+
+## 5. Negotiation State
+Insufficient supported evidence is available for a negotiation\-state assessment\.
+### Leverage
+- None
+### Risks
+- Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate\.
+### Claims
+- Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate\. (confidence: 1.00) [^citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800]
+
+## 6. Recommended Next Actions
+- None
+
+## 7. Missing Information
+### 1. Verify evidence for claim claim\_bg\_01\.
+- **Why it matters:** No single cited evidence unit supports the complete material relation\.
+### 2. Verify evidence for claim claim\_ns\_01\.
+- **Why it matters:** No single cited evidence unit supports the complete material relation\.
+### 3. Verify evidence for claim claim\_ns\_02\.
+- **Why it matters:** No single cited evidence unit supports the complete material relation\.
+### 4. Verify evidence for claim claim\_sev\_03\.
+- **Why it matters:** No single cited evidence unit supports the complete material relation\.
+### 5. Verify evidence for claim claim\_sev\_10\.
+- **Why it matters:** No single cited evidence unit supports the complete material relation\.
+### 6. Verify unsupported generated assertions before use\.
+- **Why it matters:** The generated assertion lacks support in the authorized evidence manifest\.
+
+## 8. Source Evidence
+### salesforce:CON\-3002:OPP\-1001:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-18T00:00:00Z
+- **Summary:** Owns branch migration plan and wants named escalation owners for rollout\.
+#### Claims
+- Owns branch migration plan and wants named escalation owners for rollout\. (confidence: 1.00) [^citation_24eef038997ced1746e5bea4a772beb4751b10ac]
+### salesforce:CON\-3003:OPP\-1001:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-15T00:00:00Z
+- **Summary:** Focused on renewal uplift, payment schedule, and keeping final order form simple\.
+#### Claims
+- Focused on renewal uplift, payment schedule, and keeping final order form simple\. (confidence: 1.00) [^citation_619fe5d577cbbf7d6ffdda1e2728d6ed295e6b6a]
+### salesforce:CON\-3004:OPP\-1001:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-12T00:00:00Z
+- **Summary:** Advocates for reducing bypass exceptions but needs reporting on migration progress\.
+#### Claims
+- Advocates for reducing bypass exceptions but needs reporting on migration progress\. (confidence: 1.00) [^citation_1f1f502b3907db41bb68e3fbc260d89a7de810d6]
+### salesforce:CON\-3005:OPP\-1001:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-16T00:00:00Z
+- **Summary:** Reviewing liability language and data processing addendum\.
+#### Claims
+- Reviewing liability language and data processing addendum\. (confidence: 1.00) [^citation_6778a31e8b4cfabeecbb519bb254a7fceae98f09]
+### slack:SLK\-9002:0
+- **Source type:** slack
+- **Captured at:** 2026\-05\-05T00:00:00Z
+- **Summary:** We still need the final owner matrix and success metrics confirmed by the client stakeholders\.
+#### Claims
+- We still need the final owner matrix and success metrics confirmed by the client stakeholders\. (confidence: 1.00) [^citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6]
+### gong\_transcript:CALL\-008:transcript:1
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-18T00:00:00Z
+- **Summary:** Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate\.
+#### Claims
+- Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate\. (confidence: 1.00) [^citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800]
+### Citation Labels
+[^citation_1f1f502b3907db41bb68e3fbc260d89a7de810d6]: Evidence `salesforce:CON-3004:OPP-1001:contact:0` — salesforce/contacts\.tsv\#CON\-3004/opportunity/OPP\-1001\#chunk\-0
+[^citation_24eef038997ced1746e5bea4a772beb4751b10ac]: Evidence `salesforce:CON-3002:OPP-1001:contact:0` — salesforce/contacts\.tsv\#CON\-3002/opportunity/OPP\-1001\#chunk\-0
+[^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]: Evidence `salesforce:ACC-2001:OPP-1001:account:0` — salesforce/accounts\.tsv\#ACC\-2001/opportunity/OPP\-1001\#chunk\-0
+[^citation_619fe5d577cbbf7d6ffdda1e2728d6ed295e6b6a]: Evidence `salesforce:CON-3003:OPP-1001:contact:0` — salesforce/contacts\.tsv\#CON\-3003/opportunity/OPP\-1001\#chunk\-0
+[^citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800]: Evidence `gong_transcript:CALL-008:transcript:1` — gong/transcripts/OPP\-1001\_CALL\-008\.md\#chunk\-1
+[^citation_6778a31e8b4cfabeecbb519bb254a7fceae98f09]: Evidence `salesforce:CON-3005:OPP-1001:contact:0` — salesforce/contacts\.tsv\#CON\-3005/opportunity/OPP\-1001\#chunk\-0
+[^citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6]: Evidence `slack:SLK-9002:0` — slack/account\_team\_updates\.tsv\#SLK\-9002\#chunk\-0
+
+## 9. Confidence and Review Warnings
+- **Overall confidence:** 1.00
+- **PENDING_STAKEHOLDER_CONFIRMATION (warning):** We still need the final owner matrix and success metrics confirmed by the client stakeholders\. — claims: `claim_st_06`
+- **INSUFFICIENT_CLAIM_SUPPORT (warning):** No single cited evidence unit supports the complete material relation\. — claims: none

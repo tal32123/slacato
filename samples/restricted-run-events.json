@@ -1,0 +1,225 @@
+{
+  "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+  "events": [
+    {
+      "id": "event_de1d452b-50c8-4763-94f2-dfeab7ef46ba",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 1,
+      "type": "run_created",
+      "version": 1,
+      "payload": {
+        "status": "created",
+        "deadlineMs": 600000
+      },
+      "created_at": "2026-08-30 18:34:01.445+00"
+    },
+    {
+      "id": "event_068a9f36-de0a-4dd9-96a8-c3d73d5017a3",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 2,
+      "type": "start",
+      "version": 1,
+      "payload": {
+        "status": "retrieving",
+        "version": 1
+      },
+      "created_at": "2026-08-30 18:34:02.243+00"
+    },
+    {
+      "id": "event_c958ee73-6677-4364-bb80-f9abeb3048fe",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 3,
+      "type": "retrieval_completed",
+      "version": 1,
+      "payload": {
+        "status": "specialists_running",
+        "version": 2
+      },
+      "created_at": "2026-08-30 18:34:04.437+00"
+    },
+    {
+      "id": "event_3811627d-2498-4cc2-a962-c61a1483a829",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 4,
+      "type": "checkpoint_committed",
+      "version": 1,
+      "payload": {
+        "step": "specialist:conversation",
+        "logicalGenerationId": "generation_ac2c77a00fa64ce666e46547f65eddcb91c4a7b182a26b200f28f353bfa2cec2"
+      },
+      "created_at": "2026-08-30 18:34:10.519+00"
+    },
+    {
+      "id": "event_b96e12fd-c418-4daf-a0aa-dfaca3fdef64",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 5,
+      "type": "checkpoint_committed",
+      "version": 1,
+      "payload": {
+        "step": "specialist:stakeholder",
+        "logicalGenerationId": "generation_7055c3e78b83f892f5175bfe8ce9f532731ebaa9b04dc27f308fd52d56276804"
+      },
+      "created_at": "2026-08-30 18:34:10.532+00"
+    },
+    {
+      "id": "event_b722b18c-4617-44e1-8ede-ccf548b51947",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 6,
+      "type": "checkpoint_committed",
+      "version": 1,
+      "payload": {
+        "step": "specialist:commercial",
+        "logicalGenerationId": "generation_06a2460b2255bd0e47395016dc07479750d57bbe13c0e64d7292a04fc23ce549"
+      },
+      "created_at": "2026-08-30 18:34:10.54+00"
+    },
+    {
+      "id": "event_b74d3305-e23b-4428-a2cc-1a1b35342c7f",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 7,
+      "type": "specialists_completed",
+      "version": 1,
+      "payload": {
+        "status": "synthesizing",
+        "version": 3
+      },
+      "created_at": "2026-08-30 18:34:10.543+00"
+    },
+    {
+      "id": "event_3d9dc0e8-1d35-4603-8299-027347808a84",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 8,
+      "type": "checkpoint_committed",
+      "version": 1,
+      "payload": {
+        "step": "strategy:1",
+        "logicalGenerationId": "generation_08dd2f6ce33b5ac7e09d7f1fa8cfb015e3f7b5fcd25963c0eb9b393e784bee20"
+      },
+      "created_at": "2026-08-30 18:34:29.71+00"
+    },
+    {
+      "id": "event_3d43e127-4687-4c2b-93d4-a36229f7ff12",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 9,
+      "type": "synthesis_completed",
+      "version": 1,
+      "payload": {
+        "status": "validating",
+        "version": 4
+      },
+      "created_at": "2026-08-30 18:34:29.715+00"
+    },
+    {
+      "id": "event_bbf376cd-0dbf-4163-8c63-b376f88cd11d",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 10,
+      "type": "awaiting_approval",
+      "version": 1,
+      "payload": {
+        "version": 5,
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9",
+        "quorumVersion": "deal-brief-approval-v1"
+      },
+      "created_at": "2026-08-30 18:34:30.402+00"
+    },
+    {
+      "id": "event_3d1badf2-19b0-4864-adfd-e565f502fbd7",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 11,
+      "type": "approval_entry_recorded",
+      "version": 1,
+      "payload": {
+        "action": "approve_unchanged",
+        "entryId": "approval:commercial_discount:deal_desk",
+        "version": 6,
+        "category": "commercial_discount",
+        "authority": "deal_desk",
+        "approvalSubjectId": "approval_subject_ccc417345f33b66b2b60cf8acdd216fa4d1f5c0cf96e1f31c91ecd1ac8575375",
+        "approvedSubjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "created_at": "2026-08-30 18:34:59.449+00"
+    },
+    {
+      "id": "event_ec1e7881-d140-41da-bd59-17d853efc06c",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 12,
+      "type": "approval_entry_recorded",
+      "version": 1,
+      "payload": {
+        "action": "approve_unchanged",
+        "entryId": "approval:commercial_discount:sales_leader",
+        "version": 7,
+        "category": "commercial_discount",
+        "authority": "sales_leader",
+        "approvalSubjectId": "approval_subject_ccc417345f33b66b2b60cf8acdd216fa4d1f5c0cf96e1f31c91ecd1ac8575375",
+        "approvedSubjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "created_at": "2026-08-30 18:35:13.625+00"
+    },
+    {
+      "id": "event_09e1618c-59c2-470e-87d8-b7065758eeed",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 13,
+      "type": "approval_entry_recorded",
+      "version": 1,
+      "payload": {
+        "action": "approve_unchanged",
+        "entryId": "approval:legal_terms:legal_reviewer",
+        "version": 8,
+        "category": "legal_terms",
+        "authority": "legal_reviewer",
+        "approvalSubjectId": "approval_subject_ccc417345f33b66b2b60cf8acdd216fa4d1f5c0cf96e1f31c91ecd1ac8575375",
+        "approvedSubjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "created_at": "2026-08-30 18:35:28.708+00"
+    },
+    {
+      "id": "event_7e56d108-d735-4d72-a99b-4441a925ad41",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 14,
+      "type": "approval_entry_recorded",
+      "version": 1,
+      "payload": {
+        "action": "approve_unchanged",
+        "entryId": "approval:evidence_review:account_owner-or-sales_leader",
+        "version": 9,
+        "category": "evidence_review",
+        "authority": "account_owner",
+        "approvalSubjectId": "approval_subject_ccc417345f33b66b2b60cf8acdd216fa4d1f5c0cf96e1f31c91ecd1ac8575375",
+        "approvedSubjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "created_at": "2026-08-30 18:35:46.906+00"
+    },
+    {
+      "id": "event_e05c9dff-2552-4185-912e-880d46b73e90",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 15,
+      "type": "approval_granted",
+      "version": 1,
+      "payload": {
+        "action": "approve_unchanged",
+        "entryId": "approval:customer_concession:account_owner",
+        "version": 10,
+        "category": "customer_concession",
+        "authority": "account_owner",
+        "approvalSubjectId": "approval_subject_ccc417345f33b66b2b60cf8acdd216fa4d1f5c0cf96e1f31c91ecd1ac8575375",
+        "approvedSubjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "created_at": "2026-08-30 18:35:47.005+00"
+    },
+    {
+      "id": "event_5c09322d-7170-4894-8067-811063d381f1",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "sequence": 16,
+      "type": "complete",
+      "version": 1,
+      "payload": {
+        "version": 11,
+        "terminal": true,
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9",
+        "deterministic": true
+      },
+      "created_at": "2026-08-30 18:35:47.748+00"
+    }
+  ]
+}

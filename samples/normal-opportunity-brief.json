@@ -1,0 +1,273 @@
+{
+  "buyerGoalsAndBusinessDrivers": {
+    "businessDrivers": [
+      "Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership."
+    ],
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "salesforce:ACC-2001:OPP-1001:account:0",
+            "id": "citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a",
+            "locator": "salesforce/accounts.tsv#ACC-2001/opportunity/OPP-1001#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_bg_02",
+        "statement": "Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership."
+      }
+    ],
+    "goals": []
+  },
+  "confidenceAndReviewWarnings": {
+    "overallConfidence": 1,
+    "warnings": [
+      {
+        "claimIds": [
+          "claim_st_06"
+        ],
+        "code": "PENDING_STAKEHOLDER_CONFIRMATION",
+        "message": "We still need the final owner matrix and success metrics confirmed by the client stakeholders.",
+        "severity": "warning"
+      },
+      {
+        "claimIds": [],
+        "code": "INSUFFICIENT_CLAIM_SUPPORT",
+        "message": "No single cited evidence unit supports the complete material relation.",
+        "severity": "warning"
+      }
+    ]
+  },
+  "dealSnapshot": {
+    "accountName": "Northstar Foods Cooperative",
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "salesforce:ACC-2001:OPP-1001:account:0",
+            "id": "citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a",
+            "locator": "salesforce/accounts.tsv#ACC-2001/opportunity/OPP-1001#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_ds_01",
+        "statement": "Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership."
+      }
+    ],
+    "opportunityName": "Northstar Foods Cooperative - Global Access Renewal",
+    "stage": "6.0 Order Review"
+  },
+  "executiveSummary": {
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "salesforce:ACC-2001:OPP-1001:account:0",
+            "id": "citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a",
+            "locator": "salesforce/accounts.tsv#ACC-2001/opportunity/OPP-1001#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_es_01",
+        "statement": "Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership."
+      }
+    ],
+    "narrative": "Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership."
+  },
+  "missingInformation": {
+    "items": [
+      {
+        "question": "Verify evidence for claim claim_bg_01.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify evidence for claim claim_ns_01.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify evidence for claim claim_ns_02.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify evidence for claim claim_sev_03.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify evidence for claim claim_sev_10.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify unsupported generated assertions before use.",
+        "whyItMatters": "The generated assertion lacks support in the authorized evidence manifest."
+      }
+    ]
+  },
+  "negotiationState": {
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "gong_transcript:CALL-008:transcript:1",
+            "id": "citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800",
+            "locator": "gong/transcripts/OPP-1001_CALL-008.md#chunk-1"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_ns_03",
+        "statement": "Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate."
+      }
+    ],
+    "currentState": "Insufficient supported evidence is available for a negotiation-state assessment.",
+    "leverage": [],
+    "risks": [
+      "Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate."
+    ]
+  },
+  "recommendedNextActions": {
+    "actions": []
+  },
+  "sourceEvidence": {
+    "evidence": [
+      {
+        "capturedAt": "2026-04-18T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3002:OPP-1001:contact:0",
+                "id": "citation_24eef038997ced1746e5bea4a772beb4751b10ac",
+                "locator": "salesforce/contacts.tsv#CON-3002/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_sev_04",
+            "statement": "Owns branch migration plan and wants named escalation owners for rollout."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3002:OPP-1001:contact:0",
+        "sourceType": "crm",
+        "summary": "Owns branch migration plan and wants named escalation owners for rollout."
+      },
+      {
+        "capturedAt": "2026-04-15T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3003:OPP-1001:contact:0",
+                "id": "citation_619fe5d577cbbf7d6ffdda1e2728d6ed295e6b6a",
+                "locator": "salesforce/contacts.tsv#CON-3003/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_sev_05",
+            "statement": "Focused on renewal uplift, payment schedule, and keeping final order form simple."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3003:OPP-1001:contact:0",
+        "sourceType": "crm",
+        "summary": "Focused on renewal uplift, payment schedule, and keeping final order form simple."
+      },
+      {
+        "capturedAt": "2026-04-12T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3004:OPP-1001:contact:0",
+                "id": "citation_1f1f502b3907db41bb68e3fbc260d89a7de810d6",
+                "locator": "salesforce/contacts.tsv#CON-3004/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_sev_06",
+            "statement": "Advocates for reducing bypass exceptions but needs reporting on migration progress."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3004:OPP-1001:contact:0",
+        "sourceType": "crm",
+        "summary": "Advocates for reducing bypass exceptions but needs reporting on migration progress."
+      },
+      {
+        "capturedAt": "2026-04-16T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3005:OPP-1001:contact:0",
+                "id": "citation_6778a31e8b4cfabeecbb519bb254a7fceae98f09",
+                "locator": "salesforce/contacts.tsv#CON-3005/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_sev_07",
+            "statement": "Reviewing liability language and data processing addendum."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3005:OPP-1001:contact:0",
+        "sourceType": "crm",
+        "summary": "Reviewing liability language and data processing addendum."
+      },
+      {
+        "capturedAt": "2026-05-05T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "slack:SLK-9002:0",
+                "id": "citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6",
+                "locator": "slack/account_team_updates.tsv#SLK-9002#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_sev_08",
+            "statement": "We still need the final owner matrix and success metrics confirmed by the client stakeholders."
+          }
+        ],
+        "evidenceId": "slack:SLK-9002:0",
+        "sourceType": "slack",
+        "summary": "We still need the final owner matrix and success metrics confirmed by the client stakeholders."
+      },
+      {
+        "capturedAt": "2026-04-18T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-008:transcript:1",
+                "id": "citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800",
+                "locator": "gong/transcripts/OPP-1001_CALL-008.md#chunk-1"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_sev_09",
+            "statement": "Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate."
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-008:transcript:1",
+        "sourceType": "conversation",
+        "summary": "Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate."
+      }
+    ]
+  },
+  "stakeholderMap": {
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "slack:SLK-9002:0",
+            "id": "citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6",
+            "locator": "slack/account_team_updates.tsv#SLK-9002#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_st_06",
+        "statement": "We still need the final owner matrix and success metrics confirmed by the client stakeholders."
+      }
+    ],
+    "coverageGaps": [
+      "Verify unsupported stakeholder records."
+    ],
+    "stakeholders": []
+  }
+}

@@ -1,0 +1,395 @@
+{
+  "buyerGoalsAndBusinessDrivers": {
+    "businessDrivers": [
+      "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
+    ],
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
+            "id": "citation_562d62940b7a9e58b72aa9a247fa949078a2d062",
+            "locator": "salesforce/contacts.tsv#CON-3011/opportunity/OPP-1003#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_bg_1",
+        "statement": "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
+      }
+    ],
+    "goals": [
+      "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
+    ]
+  },
+  "confidenceAndReviewWarnings": {
+    "overallConfidence": 0.95,
+    "warnings": [
+      {
+        "claimIds": [
+          "claim_ns_2"
+        ],
+        "code": "PENDING_APPROVAL",
+        "message": "Required approvals for discounts and liability language have not been completed.",
+        "severity": "warning"
+      },
+      {
+        "claimIds": [],
+        "code": "POLICY_TRUNCATED_LIABILITY",
+        "message": "Policy rule 4 regarding liability cap changes is truncated in the source text.",
+        "severity": "warning"
+      },
+      {
+        "claimIds": [],
+        "code": "INSUFFICIENT_CLAIM_SUPPORT",
+        "message": "No single cited evidence unit supports the complete material relation.",
+        "severity": "warning"
+      }
+    ]
+  },
+  "dealSnapshot": {
+    "accountName": "Eclipse BioMaterials Ltd",
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "salesforce:OPP-1003:0",
+            "id": "citation_9b269902be276d2215f2101ca0f3d54db5e552ad",
+            "locator": "salesforce/opportunities.tsv#OPP-1003#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_ds_1",
+        "statement": "opportunityId: OPP-1003"
+      }
+    ],
+    "opportunityName": "Eclipse BioMaterials Ltd - Restricted Renewal and Data Protection",
+    "stage": "5.0 Negotiate"
+  },
+  "executiveSummary": {
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "slack:SLK-9009:0",
+            "id": "citation_95e304c3dd5876c8fc630a0739759d6fabfc455b",
+            "locator": "slack/account_team_updates.tsv#SLK-9009#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_es_1",
+        "statement": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+      }
+    ],
+    "narrative": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+  },
+  "missingInformation": {
+    "items": [
+      {
+        "question": "Verify evidence for claim claim_ev_12.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify evidence for claim claim_ev_13.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify evidence for claim claim_ev_14.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify evidence for claim claim_ev_15.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify evidence for claim claim_ev_16.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      },
+      {
+        "question": "Verify evidence for claim claim_ev_20.",
+        "whyItMatters": "No single cited evidence unit supports the complete material relation."
+      }
+    ]
+  },
+  "negotiationState": {
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "slack:SLK-9009:0",
+            "id": "citation_95e304c3dd5876c8fc630a0739759d6fabfc455b",
+            "locator": "slack/account_team_updates.tsv#SLK-9009#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_ns_1",
+        "statement": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+      },
+      {
+        "citations": [
+          {
+            "evidenceId": "salesforce:OPP-1003:0",
+            "id": "citation_9b269902be276d2215f2101ca0f3d54db5e552ad",
+            "locator": "salesforce/opportunities.tsv#OPP-1003#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_ns_2",
+        "statement": "Route discount, liability language, and restricted data access request for approval by 2026-05-14"
+      }
+    ],
+    "currentState": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations.",
+    "leverage": [
+      "Route discount, liability language, and restricted data access request for approval by 2026-05-14"
+    ],
+    "risks": [
+      "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+    ]
+  },
+  "recommendedNextActions": {
+    "actions": []
+  },
+  "sourceEvidence": {
+    "evidence": [
+      {
+        "capturedAt": "2026-05-18T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "slack:SLK-9009:0",
+                "id": "citation_95e304c3dd5876c8fc630a0739759d6fabfc455b",
+                "locator": "slack/account_team_updates.tsv#SLK-9009#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_1",
+            "statement": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+          }
+        ],
+        "evidenceId": "slack:SLK-9009:0",
+        "sourceType": "slack",
+        "summary": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+      },
+      {
+        "capturedAt": "2026-04-27T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-027:transcript:6",
+                "id": "citation_6c92da60ed5f7013cfaa5efedb62207b38a21764",
+                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-6"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_2",
+            "statement": "The technical missing item remains the exception owner confirmation."
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-027:transcript:6",
+        "sourceType": "conversation",
+        "summary": "The technical missing item remains the exception owner confirmation."
+      },
+      {
+        "capturedAt": "2026-04-26T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
+                "id": "citation_562d62940b7a9e58b72aa9a247fa949078a2d062",
+                "locator": "salesforce/contacts.tsv#CON-3011/opportunity/OPP-1003#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_3",
+            "statement": "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
+        "sourceType": "crm",
+        "summary": "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
+      },
+      {
+        "capturedAt": "2026-04-24T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3013:OPP-1003:contact:0",
+                "id": "citation_18f25eb4db843e0752cd8e0ca0942ae0ff69e1f2",
+                "locator": "salesforce/contacts.tsv#CON-3013/opportunity/OPP-1003#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_4",
+            "statement": "Requests liability language changes and strict review before customer-facing concessions."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3013:OPP-1003:contact:0",
+        "sourceType": "crm",
+        "summary": "Requests liability language changes and strict review before customer-facing concessions."
+      },
+      {
+        "capturedAt": "2026-04-25T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
+                "id": "citation_037a3e93d25952c35cb4c36cf8ef0bdf10ad9bfb",
+                "locator": "salesforce/contacts.tsv#CON-3012/opportunity/OPP-1003#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_5",
+            "statement": "Values the platform but flagged sensitive research access controls as non-negotiable."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
+        "sourceType": "crm",
+        "summary": "Values the platform but flagged sensitive research access controls as non-negotiable."
+      },
+      {
+        "capturedAt": "2026-04-26T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3014:OPP-1003:contact:0",
+                "id": "citation_d13bbeac0efb25a98a2a7b77f37cc8c7841afbce",
+                "locator": "salesforce/contacts.tsv#CON-3014/opportunity/OPP-1003#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_6",
+            "statement": "Pressing for aggressive discount and shorter renewal term."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3014:OPP-1003:contact:0",
+        "sourceType": "crm",
+        "summary": "Pressing for aggressive discount and shorter renewal term."
+      },
+      {
+        "capturedAt": "2026-04-23T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3015:OPP-1003:contact:0",
+                "id": "citation_c3a49b563a64fc9f46ce72afc4b6154a8d65b70a",
+                "locator": "salesforce/contacts.tsv#CON-3015/opportunity/OPP-1003#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_7",
+            "statement": "Needs evidence that research data workflows remain segmented by team."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3015:OPP-1003:contact:0",
+        "sourceType": "crm",
+        "summary": "Needs evidence that research data workflows remain segmented by team."
+      },
+      {
+        "capturedAt": "2026-04-27T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-027:transcript:3",
+                "id": "citation_87d2200667472a2cabc00583f34852b41a1d0ebf",
+                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-3"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_11",
+            "statement": "Vendor AE: So next action is internal package comparison with approval flags, not an external proposal."
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-027:transcript:3",
+        "sourceType": "conversation",
+        "summary": "Vendor AE: So next action is internal package comparison with approval flags, not an external proposal."
+      },
+      {
+        "capturedAt": "2026-04-13T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-023:transcript:5",
+                "id": "citation_3dd1f561cbe3147aa789b6fbe1b245146ea418b6",
+                "locator": "gong/transcripts/OPP-1003_CALL-023.md#chunk-5"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_17",
+            "statement": "Priya Sato: That is better than ranking by discount alone."
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-023:transcript:5",
+        "sourceType": "conversation",
+        "summary": "Priya Sato: That is better than ranking by discount alone."
+      },
+      {
+        "capturedAt": "2026-04-27T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-027:transcript:5",
+                "id": "citation_b311fde6ea0e071f4ae30069badf48f4c1ec4411",
+                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-5"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_18",
+            "statement": "Vendor AE: We will mark external-safe language separately from internal-only analysis."
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-027:transcript:5",
+        "sourceType": "conversation",
+        "summary": "Vendor AE: We will mark external-safe language separately from internal-only analysis."
+      },
+      {
+        "capturedAt": "2026-04-13T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-023:transcript:4",
+                "id": "citation_cf7103413dcd968e2386cb206c0c6539a42ffb7e",
+                "locator": "gong/transcripts/OPP-1003_CALL-023.md#chunk-4"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_19",
+            "statement": "Priya Sato: That is the brief I need."
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-023:transcript:4",
+        "sourceType": "conversation",
+        "summary": "Priya Sato: That is the brief I need."
+      }
+    ]
+  },
+  "stakeholderMap": {
+    "claims": [
+      {
+        "citations": [
+          {
+            "evidenceId": "gong_transcript:CALL-027:transcript:6",
+            "id": "citation_6c92da60ed5f7013cfaa5efedb62207b38a21764",
+            "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-6"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_sh_6",
+        "statement": "The technical missing item remains the exception owner confirmation."
+      }
+    ],
+    "coverageGaps": [
+      "Verify unsupported stakeholder records."
+    ],
+    "stakeholders": []
+  }
+}

@@ -1,0 +1,863 @@
+{
+  "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+  "provider": "openrouter",
+  "model": "google/gemini-3.5-flash-lite",
+  "tokenUsage": {
+    "inputTokens": 22984,
+    "outputTokens": 8911,
+    "calls": 5
+  },
+  "providerAttempts": [
+    {
+      "id": "f763a676-44e4-4623-b343-ace315c96e51",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "operation": "retrieval-embedding",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "openai/text-embedding-3-small",
+      "output_mode": null,
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [],
+      "possible_duplicate": false,
+      "input_tokens": 90,
+      "output_tokens": 1,
+      "started_at": "2026-08-30 18:34:03.267289+00",
+      "completed_at": "2026-08-30 18:34:04.390687+00"
+    },
+    {
+      "id": "11b2596e-73d1-45ee-9c58-b20c395f69ee",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "operation": "commercial-policy-analysis",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "output_mode": "native_schema",
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [
+        "POLICY_TRUNCATED_LIABILITY",
+        "INSUFFICIENT_CLAIM_SUPPORT"
+      ],
+      "possible_duplicate": false,
+      "input_tokens": 2535,
+      "output_tokens": 696,
+      "started_at": "2026-08-30 18:34:05.275179+00",
+      "completed_at": "2026-08-30 18:34:08.330355+00"
+    },
+    {
+      "id": "df2733e6-ea5f-43ee-9817-5391fbbc7522",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "operation": "conversation-intelligence",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "output_mode": "native_schema",
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [
+        "INSUFFICIENT_CLAIM_SUPPORT"
+      ],
+      "possible_duplicate": false,
+      "input_tokens": 5517,
+      "output_tokens": 669,
+      "started_at": "2026-08-30 18:34:05.279062+00",
+      "completed_at": "2026-08-30 18:34:08.476494+00"
+    },
+    {
+      "id": "6a62e53f-e945-40f0-b440-727d893bbcb9",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "operation": "stakeholder-intelligence",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "output_mode": "native_schema",
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [
+        "PENDING_APPROVAL",
+        "INSUFFICIENT_CLAIM_SUPPORT"
+      ],
+      "possible_duplicate": false,
+      "input_tokens": 7049,
+      "output_tokens": 1346,
+      "started_at": "2026-08-30 18:34:05.279481+00",
+      "completed_at": "2026-08-30 18:34:10.486018+00"
+    },
+    {
+      "id": "attempt_98dbdf0c1865dce70a3b4b5f869d690fc21e79a38031a320cb5bc531f7d6fd1b",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "operation": "conversation",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "output_mode": null,
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [],
+      "possible_duplicate": false,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "started_at": "2026-08-30 18:34:10.504412+00",
+      "completed_at": "2026-08-30 18:34:10.504412+00"
+    },
+    {
+      "id": "attempt_859f683a4c197530073166dd2e8aa6a206ecdd7cfc56691a214e4b3831af3b09",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "operation": "stakeholder",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "output_mode": null,
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [],
+      "possible_duplicate": false,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "started_at": "2026-08-30 18:34:10.520683+00",
+      "completed_at": "2026-08-30 18:34:10.520683+00"
+    },
+    {
+      "id": "attempt_5afcddb1ebdddbdcc5bf8b0eafb7473cc646b10a971fd675c55e8df3245a9c4e",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "operation": "commercial",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "output_mode": null,
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [],
+      "possible_duplicate": false,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "started_at": "2026-08-30 18:34:10.533815+00",
+      "completed_at": "2026-08-30 18:34:10.533815+00"
+    },
+    {
+      "id": "c8702044-938c-47b0-9cd7-6475d940427d",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "operation": "negotiation-strategy",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "output_mode": "native_schema",
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [
+        "PENDING_APPROVAL",
+        "POLICY_TRUNCATED_LIABILITY",
+        "INSUFFICIENT_CLAIM_SUPPORT"
+      ],
+      "possible_duplicate": false,
+      "input_tokens": 7793,
+      "output_tokens": 6199,
+      "started_at": "2026-08-30 18:34:11.316499+00",
+      "completed_at": "2026-08-30 18:34:29.644836+00"
+    },
+    {
+      "id": "attempt_15f7574696713dc7c3ceaf9d847839976bd4c6335fa3f5fbe029b7be6c17b42b",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "operation": "strategy",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "output_mode": null,
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [],
+      "possible_duplicate": false,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "started_at": "2026-08-30 18:34:29.701415+00",
+      "completed_at": "2026-08-30 18:34:29.701415+00"
+    }
+  ],
+  "spans": [
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_2f107a32e58046d76c01c54200cf1fd9c415273c1a524a183024c4137bc455a1",
+      "parent_id": null,
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "authorization",
+      "attempt": 1,
+      "kind": "authorization_lookup",
+      "status": "completed",
+      "payload": {
+        "decision": "allowed",
+        "readCount": 4,
+        "readKinds": [
+          "opportunity",
+          "account",
+          "requester",
+          "permissions"
+        ],
+        "correlationHash": "cf6addbc1ebf75520c0210b0560eaee2c652ce99ddc3f5db61d312c22b35c9cc"
+      },
+      "started_at": "2026-08-30 18:34:01.442+00",
+      "ended_at": "2026-08-30 18:34:01.442+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
+      "parent_id": "span_2f107a32e58046d76c01c54200cf1fd9c415273c1a524a183024c4137bc455a1",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "retrieval",
+      "attempt": 1,
+      "kind": "evidence_retrieval",
+      "status": "completed",
+      "payload": {
+        "scores": [
+          0.10996693055786619,
+          0.10205150288618169,
+          0.10071601218219843,
+          0.10048454715342423,
+          0.09917992682296756,
+          0.09880553203476966,
+          0.09807266662397315,
+          0.09600794903329748,
+          0.09582487359328996,
+          0.09529560012941443,
+          0.09460792724150488,
+          0.09374165196592835,
+          0.09326276342666769,
+          0.09265510690737917,
+          0.09159051691112965,
+          0.0911920497930914,
+          0.09106244075098008,
+          0.09103890144738436,
+          0.09089711070003452,
+          0.05298536403963132,
+          0.07867072524275529,
+          0.08922740989538151
+        ],
+        "resultIds": [
+          "slack:SLK-9009:0",
+          "gong_transcript:CALL-027:transcript:3",
+          "gong_transcript:CALL-027:transcript:6",
+          "gong_transcript:CALL-027:transcript:4",
+          "gong_transcript:CALL-027:transcript:2",
+          "gong_transcript:CALL-023:transcript:2",
+          "gong_transcript:CALL-027:transcript:1",
+          "salesforce:CON-3011:OPP-1003:contact:0",
+          "gong_transcript:CALL-023:transcript:0",
+          "salesforce:CON-3013:OPP-1003:contact:0",
+          "gong_transcript:CALL-023:transcript:5",
+          "salesforce:CON-3012:OPP-1003:contact:0",
+          "gong_transcript:CALL-027:transcript:5",
+          "salesforce:CON-3014:OPP-1003:contact:0",
+          "gong_transcript:CALL-023:transcript:4",
+          "gong_transcript:CALL-023:transcript:3",
+          "salesforce:CON-3015:OPP-1003:contact:0",
+          "gong_transcript:CALL-019:transcript:4",
+          "gong_transcript:CALL-023:transcript:1",
+          "policy:deal-desk-policy:OPP-1003:0",
+          "salesforce:ACC-2003:OPP-1003:account:0",
+          "salesforce:OPP-1003:0"
+        ],
+        "evidenceCount": 22
+      },
+      "started_at": "2026-08-30 18:34:04.433+00",
+      "ended_at": "2026-08-30 18:34:04.433+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_6011303266673a79b27d86bd0768f5af862037c5d39cf21f9f9ee355da86797b",
+      "parent_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "conversation",
+      "attempt": 1,
+      "kind": "specialist_attempt",
+      "status": "completed",
+      "payload": {
+        "operation": "conversation",
+        "logicalGenerationId": "generation_ac2c77a00fa64ce666e46547f65eddcb91c4a7b182a26b200f28f353bfa2cec2"
+      },
+      "started_at": "2026-08-30 18:34:10.513+00",
+      "ended_at": "2026-08-30 18:34:10.513+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_d9a2da6ddc9d7d24581b1cf63fa7404b29c38a02409e6f40ee966ff9d452f757",
+      "parent_id": "span_6011303266673a79b27d86bd0768f5af862037c5d39cf21f9f9ee355da86797b",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "conversation",
+      "attempt": 1,
+      "kind": "model_call",
+      "status": "completed",
+      "payload": {
+        "model": "google/gemini-3.5-flash-lite",
+        "ordinal": 1,
+        "provider": "openrouter",
+        "outputMode": null,
+        "parametersHash": "944db2dc745d75145aaecfbdb8d89aeb787da1799e2121884185ff3401ef5bc1",
+        "durableAttemptId": "attempt_98dbdf0c1865dce70a3b4b5f869d690fc21e79a38031a320cb5bc531f7d6fd1b",
+        "possibleDuplicate": false,
+        "logicalGenerationId": "generation_ac2c77a00fa64ce666e46547f65eddcb91c4a7b182a26b200f28f353bfa2cec2"
+      },
+      "started_at": "2026-08-30 18:34:10.515+00",
+      "ended_at": "2026-08-30 18:34:10.515+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_785f4dd00028d3e388c074547cee9c1ccbfbbf971c4b4fb25c540dab5b1438b2",
+      "parent_id": "span_d9a2da6ddc9d7d24581b1cf63fa7404b29c38a02409e6f40ee966ff9d452f757",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "conversation",
+      "attempt": 1,
+      "kind": "validation",
+      "status": "completed",
+      "payload": {
+        "decision": "accepted",
+        "validationAttempts": 0
+      },
+      "started_at": "2026-08-30 18:34:10.516+00",
+      "ended_at": "2026-08-30 18:34:10.516+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_71043573d2ecb2daa2a75ff7a7e0d311c742d5effd20d0d99478ea5ac8fb906e",
+      "parent_id": "span_d9a2da6ddc9d7d24581b1cf63fa7404b29c38a02409e6f40ee966ff9d452f757",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "conversation",
+      "attempt": 1,
+      "kind": "guardrail",
+      "status": "completed",
+      "payload": {
+        "decision": "passed"
+      },
+      "started_at": "2026-08-30 18:34:10.517+00",
+      "ended_at": "2026-08-30 18:34:10.517+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_83109170a729c7a1e32446b80ddddc7e9a448e0b14cd6436708530569c120892",
+      "parent_id": "span_d9a2da6ddc9d7d24581b1cf63fa7404b29c38a02409e6f40ee966ff9d452f757",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "conversation",
+      "attempt": 1,
+      "kind": "usage",
+      "status": "completed",
+      "payload": {
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      "started_at": "2026-08-30 18:34:10.518+00",
+      "ended_at": "2026-08-30 18:34:10.518+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_bed64f3e23b0d6e013b3b8d0e7d81b6feb42149a8bb385d43a9e860113a37657",
+      "parent_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "stakeholder",
+      "attempt": 1,
+      "kind": "specialist_attempt",
+      "status": "completed",
+      "payload": {
+        "operation": "stakeholder",
+        "logicalGenerationId": "generation_7055c3e78b83f892f5175bfe8ce9f532731ebaa9b04dc27f308fd52d56276804"
+      },
+      "started_at": "2026-08-30 18:34:10.527+00",
+      "ended_at": "2026-08-30 18:34:10.527+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_ecb60533a38fca68ce2e9ed9768491b0d7698ad3d27e8fe77f3eb6d935acd963",
+      "parent_id": "span_bed64f3e23b0d6e013b3b8d0e7d81b6feb42149a8bb385d43a9e860113a37657",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "stakeholder",
+      "attempt": 1,
+      "kind": "model_call",
+      "status": "completed",
+      "payload": {
+        "model": "google/gemini-3.5-flash-lite",
+        "ordinal": 1,
+        "provider": "openrouter",
+        "outputMode": null,
+        "parametersHash": "27e264dfc175c0f55a9559c9c90669b3b54e1a907086800546cf4faa61a26508",
+        "durableAttemptId": "attempt_859f683a4c197530073166dd2e8aa6a206ecdd7cfc56691a214e4b3831af3b09",
+        "possibleDuplicate": false,
+        "logicalGenerationId": "generation_7055c3e78b83f892f5175bfe8ce9f532731ebaa9b04dc27f308fd52d56276804"
+      },
+      "started_at": "2026-08-30 18:34:10.529+00",
+      "ended_at": "2026-08-30 18:34:10.529+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_124d1e8de1acc69efc0d5ae792f4c063073df86351075730fa59a1d09f05b1a6",
+      "parent_id": "span_ecb60533a38fca68ce2e9ed9768491b0d7698ad3d27e8fe77f3eb6d935acd963",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "stakeholder",
+      "attempt": 1,
+      "kind": "guardrail",
+      "status": "completed",
+      "payload": {
+        "decision": "passed"
+      },
+      "started_at": "2026-08-30 18:34:10.53+00",
+      "ended_at": "2026-08-30 18:34:10.53+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_b365783cc54137425cc9e82aaa8dbed7f1315a9bd46f761bf9a42ea94c06d103",
+      "parent_id": "span_ecb60533a38fca68ce2e9ed9768491b0d7698ad3d27e8fe77f3eb6d935acd963",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "stakeholder",
+      "attempt": 1,
+      "kind": "validation",
+      "status": "completed",
+      "payload": {
+        "decision": "accepted",
+        "validationAttempts": 0
+      },
+      "started_at": "2026-08-30 18:34:10.53+00",
+      "ended_at": "2026-08-30 18:34:10.53+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_140d5e5c289125a8990762459b6023023c4b3ddb5ca898a6070e733791394eb2",
+      "parent_id": "span_ecb60533a38fca68ce2e9ed9768491b0d7698ad3d27e8fe77f3eb6d935acd963",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "stakeholder",
+      "attempt": 1,
+      "kind": "usage",
+      "status": "completed",
+      "payload": {
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      "started_at": "2026-08-30 18:34:10.531+00",
+      "ended_at": "2026-08-30 18:34:10.531+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_717530aef81f1a3fa29d288222794d6f2e58f9694ac963e10c1b133374758c08",
+      "parent_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "commercial",
+      "attempt": 1,
+      "kind": "specialist_attempt",
+      "status": "completed",
+      "payload": {
+        "operation": "commercial",
+        "logicalGenerationId": "generation_06a2460b2255bd0e47395016dc07479750d57bbe13c0e64d7292a04fc23ce549"
+      },
+      "started_at": "2026-08-30 18:34:10.537+00",
+      "ended_at": "2026-08-30 18:34:10.537+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_8926b633428366f6ddcca8053b16d9a34010595f8d4a27d2520dd96603708878",
+      "parent_id": "span_d1d7dfbdbf4a08583e843fcd8929f1eaf387af2522d69ef3e6bda9e42a959328",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "commercial",
+      "attempt": 1,
+      "kind": "validation",
+      "status": "completed",
+      "payload": {
+        "decision": "accepted",
+        "validationAttempts": 0
+      },
+      "started_at": "2026-08-30 18:34:10.538+00",
+      "ended_at": "2026-08-30 18:34:10.538+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_d1d7dfbdbf4a08583e843fcd8929f1eaf387af2522d69ef3e6bda9e42a959328",
+      "parent_id": "span_717530aef81f1a3fa29d288222794d6f2e58f9694ac963e10c1b133374758c08",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "commercial",
+      "attempt": 1,
+      "kind": "model_call",
+      "status": "completed",
+      "payload": {
+        "model": "google/gemini-3.5-flash-lite",
+        "ordinal": 1,
+        "provider": "openrouter",
+        "outputMode": null,
+        "parametersHash": "2425224822fd7b66558bd266b4c8d1e75b1326151393f476e6fd4e31ee17e0d7",
+        "durableAttemptId": "attempt_5afcddb1ebdddbdcc5bf8b0eafb7473cc646b10a971fd675c55e8df3245a9c4e",
+        "possibleDuplicate": false,
+        "logicalGenerationId": "generation_06a2460b2255bd0e47395016dc07479750d57bbe13c0e64d7292a04fc23ce549"
+      },
+      "started_at": "2026-08-30 18:34:10.538+00",
+      "ended_at": "2026-08-30 18:34:10.538+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_7e8efe3798c7f45dbd1038382aeecb8ca97bc7e6df477501095843c0b25070c4",
+      "parent_id": "span_d1d7dfbdbf4a08583e843fcd8929f1eaf387af2522d69ef3e6bda9e42a959328",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "commercial",
+      "attempt": 1,
+      "kind": "usage",
+      "status": "completed",
+      "payload": {
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      "started_at": "2026-08-30 18:34:10.539+00",
+      "ended_at": "2026-08-30 18:34:10.539+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_df49af8e39bbf8b367bab31ba6cc988afe9052dd0bffc7e8915a8dc05cf0b0d5",
+      "parent_id": "span_d1d7dfbdbf4a08583e843fcd8929f1eaf387af2522d69ef3e6bda9e42a959328",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "commercial",
+      "attempt": 1,
+      "kind": "guardrail",
+      "status": "completed",
+      "payload": {
+        "decision": "passed"
+      },
+      "started_at": "2026-08-30 18:34:10.539+00",
+      "ended_at": "2026-08-30 18:34:10.539+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_3f616d7583b28b5b67ea95aa072da995c8486c2c8eaa7b1ef6670e5e44a623f5",
+      "parent_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "strategy",
+      "attempt": 1,
+      "kind": "strategy_attempt",
+      "status": "completed",
+      "payload": {
+        "operation": "strategy",
+        "logicalGenerationId": "generation_08dd2f6ce33b5ac7e09d7f1fa8cfb015e3f7b5fcd25963c0eb9b393e784bee20"
+      },
+      "started_at": "2026-08-30 18:34:29.706+00",
+      "ended_at": "2026-08-30 18:34:29.706+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_c5372258514aa4ecbef7f09998133518b18f36d5adef23c40835dc5ddd7cbe50",
+      "parent_id": "span_3f616d7583b28b5b67ea95aa072da995c8486c2c8eaa7b1ef6670e5e44a623f5",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "strategy",
+      "attempt": 1,
+      "kind": "model_call",
+      "status": "completed",
+      "payload": {
+        "model": "google/gemini-3.5-flash-lite",
+        "ordinal": 1,
+        "provider": "openrouter",
+        "outputMode": null,
+        "parametersHash": "5bdad2dcb16f21a896ef8b426eabdf97b826bb3491e00a47cb84b59da22e397d",
+        "durableAttemptId": "attempt_15f7574696713dc7c3ceaf9d847839976bd4c6335fa3f5fbe029b7be6c17b42b",
+        "possibleDuplicate": false,
+        "logicalGenerationId": "generation_08dd2f6ce33b5ac7e09d7f1fa8cfb015e3f7b5fcd25963c0eb9b393e784bee20"
+      },
+      "started_at": "2026-08-30 18:34:29.707+00",
+      "ended_at": "2026-08-30 18:34:29.707+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_cf592935b0847097da943aca63d7ce297c67af01e74e2589d47ad1e31f259e47",
+      "parent_id": "span_c5372258514aa4ecbef7f09998133518b18f36d5adef23c40835dc5ddd7cbe50",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "strategy",
+      "attempt": 1,
+      "kind": "validation",
+      "status": "completed",
+      "payload": {
+        "decision": "accepted",
+        "validationAttempts": 0
+      },
+      "started_at": "2026-08-30 18:34:29.708+00",
+      "ended_at": "2026-08-30 18:34:29.708+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_7e68e24ec634e80eb85e8153b6c4628f0a76caf073eb6562d7c9c663cb52e824",
+      "parent_id": "span_c5372258514aa4ecbef7f09998133518b18f36d5adef23c40835dc5ddd7cbe50",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "strategy",
+      "attempt": 1,
+      "kind": "usage",
+      "status": "completed",
+      "payload": {
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      "started_at": "2026-08-30 18:34:29.709+00",
+      "ended_at": "2026-08-30 18:34:29.709+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_806f891f07ec371bd34df97cd0679595ac42c364cf476322cd01efeecd3914fa",
+      "parent_id": "span_c5372258514aa4ecbef7f09998133518b18f36d5adef23c40835dc5ddd7cbe50",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "strategy",
+      "attempt": 1,
+      "kind": "guardrail",
+      "status": "completed",
+      "payload": {
+        "decision": "passed"
+      },
+      "started_at": "2026-08-30 18:34:29.709+00",
+      "ended_at": "2026-08-30 18:34:29.709+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
+      "parent_id": "span_3f616d7583b28b5b67ea95aa072da995c8486c2c8eaa7b1ef6670e5e44a623f5",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "policy",
+      "attempt": 1,
+      "kind": "policy_decision",
+      "status": "completed",
+      "payload": {
+        "decision": "approval_required",
+        "policyHash": "332355fd544880ec6441c3ca720f3f0fdca21c41470d6408f849ab4fb6dd618f",
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:34:30.395+00",
+      "ended_at": "2026-08-30 18:34:30.395+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_e6dfd9faee09eacc0ba1ed51773be14e991fe55835a4cac1bac9df497d011d00",
+      "parent_id": "span_3f616d7583b28b5b67ea95aa072da995c8486c2c8eaa7b1ef6670e5e44a623f5",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "recommendation",
+      "attempt": 1,
+      "kind": "recommendation",
+      "status": "completed",
+      "payload": {
+        "recommendationIds": []
+      },
+      "started_at": "2026-08-30 18:34:30.397+00",
+      "ended_at": "2026-08-30 18:34:30.397+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_a41b73a0e4b4750bd88fe3970cf3f166a9a443609f5d913b184ba7919b2c88d6",
+      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_requirement",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:commercial_discount:deal_desk",
+        "category": "commercial_discount",
+        "policyHash": "07630ae60a54d26a1f91936a4feb8c1ccd6fce16fb884da0e34baa7f051cc8ca",
+        "authorities": [
+          "deal_desk"
+        ],
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:34:30.398+00",
+      "ended_at": "2026-08-30 18:34:30.398+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_1f77e2a375572d5147c3de96cd9e0b1a6168dc5d15a263a2d83c6fd206260b1e",
+      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_requirement",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:commercial_discount:sales_leader",
+        "category": "commercial_discount",
+        "policyHash": "c5313e142ed1d3b9800b162a697ac577a3a2e67df8fc17edf8e536aa9b372bab",
+        "authorities": [
+          "sales_leader"
+        ],
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:34:30.399+00",
+      "ended_at": "2026-08-30 18:34:30.399+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_422ecb776aec80b57e6f0ae98d19e8374e988d989b996e2a82a6f32d034e2fe8",
+      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_requirement",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:legal_terms:legal_reviewer",
+        "category": "legal_terms",
+        "policyHash": "dd8d0cd0f07c778f3d0db8e3fc3e3f5fdbb33a75f91e563dddb745f3878613d8",
+        "authorities": [
+          "legal_reviewer"
+        ],
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:34:30.4+00",
+      "ended_at": "2026-08-30 18:34:30.4+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_5b2e58f26e8dda16381ecb75acc784fecdafa67f5bbcc57604e5a3cc8148df06",
+      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_requirement",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:evidence_review:account_owner-or-sales_leader",
+        "category": "evidence_review",
+        "policyHash": "30a310edd0ee2af364b18ef793cf0b5e5926478c5d7799bffbae4781f62235a7",
+        "authorities": [
+          "account_owner",
+          "sales_leader"
+        ],
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:34:30.4+00",
+      "ended_at": "2026-08-30 18:34:30.4+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_10ece9bb8a2bed53e1b17d7006e42dd6fbd2b422ab94286489d34fee93f82c51",
+      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_requirement",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:customer_concession:account_owner",
+        "category": "customer_concession",
+        "policyHash": "64aadef211194281e60af761f7797a3573f77b996c7996deb00a74f7263488d0",
+        "authorities": [
+          "account_owner"
+        ],
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:34:30.401+00",
+      "ended_at": "2026-08-30 18:34:30.401+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_42622e0541fea4b6ec25af17b2f8c59965be70ecb7089865336248378e2cc94a",
+      "parent_id": "span_a41b73a0e4b4750bd88fe3970cf3f166a9a443609f5d913b184ba7919b2c88d6",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_decision",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:commercial_discount:deal_desk",
+        "category": "commercial_discount",
+        "decision": "approved",
+        "authority": "deal_desk",
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:34:59.447+00",
+      "ended_at": "2026-08-30 18:34:59.447+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_26a7a494df962c7246b430d11dfac938f1b9c083f332570a08ebda1070c5eaae",
+      "parent_id": "span_1f77e2a375572d5147c3de96cd9e0b1a6168dc5d15a263a2d83c6fd206260b1e",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_decision",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:commercial_discount:sales_leader",
+        "category": "commercial_discount",
+        "decision": "approved",
+        "authority": "sales_leader",
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:35:13.624+00",
+      "ended_at": "2026-08-30 18:35:13.624+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_66272a862b8d6c2acf0aeff72dd60da7783b4c56d24c50fd5120d7c54b1a32c1",
+      "parent_id": "span_422ecb776aec80b57e6f0ae98d19e8374e988d989b996e2a82a6f32d034e2fe8",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_decision",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:legal_terms:legal_reviewer",
+        "category": "legal_terms",
+        "decision": "approved",
+        "authority": "legal_reviewer",
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:35:28.706+00",
+      "ended_at": "2026-08-30 18:35:28.706+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_b6b65d86f5b8fac23acb29c1734c40483422db38c42e9d6397f3c798b36c7402",
+      "parent_id": "span_5b2e58f26e8dda16381ecb75acc784fecdafa67f5bbcc57604e5a3cc8148df06",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_decision",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:evidence_review:account_owner-or-sales_leader",
+        "category": "evidence_review",
+        "decision": "approved",
+        "authority": "account_owner",
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:35:46.901+00",
+      "ended_at": "2026-08-30 18:35:46.901+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_5daa45f3709499b4a5faae3abf521a250205b89f9809795aafe03d60a5093f96",
+      "parent_id": "span_10ece9bb8a2bed53e1b17d7006e42dd6fbd2b422ab94286489d34fee93f82c51",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "approval",
+      "attempt": 1,
+      "kind": "approval_decision",
+      "status": "completed",
+      "payload": {
+        "entryId": "approval:customer_concession:account_owner",
+        "category": "customer_concession",
+        "decision": "approved",
+        "authority": "account_owner",
+        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:35:47.001+00",
+      "ended_at": "2026-08-30 18:35:47.001+00"
+    },
+    {
+      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
+      "span_id": "span_d913c34beb6b3f5225b7c738d5bfde08fb928949ccc08753b605d8a59486c0b8",
+      "parent_id": "span_5daa45f3709499b4a5faae3abf521a250205b89f9809795aafe03d60a5093f96",
+      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "step": "finalization",
+      "attempt": 1,
+      "kind": "finalization",
+      "status": "completed",
+      "payload": {
+        "decision": "completed",
+        "artifactHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+      },
+      "started_at": "2026-08-30 18:35:47.746+00",
+      "ended_at": "2026-08-30 18:35:47.746+00"
+    }
+  ]
+}

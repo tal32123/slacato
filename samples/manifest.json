@@ -1,0 +1,122 @@
+{
+  "deliverable": "Deliverable D: Sample run artifacts",
+  "generatedAt": "2026-08-30T18:40:41.068Z",
+  "database": "slacato_samples",
+  "liveLlmVerified": true,
+  "scenarios": {
+    "authorizedNormalOpportunity": {
+      "persona": {
+        "userId": "USR-5001",
+        "name": "Maya Levin"
+      },
+      "opportunity": {
+        "id": "OPP-1001",
+        "name": "Northstar Foods Cooperative - Global Access Renewal"
+      },
+      "provenance": {
+        "runId": "run_31c495bb7ef6ab0f2f3bdc210ab546fb96a168acfa6209b5e5e5172334b41f42",
+        "provider": "openrouter",
+        "generationModel": "google/gemini-3.5-flash-lite",
+        "embeddingModel": "openai/text-embedding-3-small",
+        "tokenUsage": {
+          "calls": 6,
+          "inputTokens": 31543,
+          "outputTokens": 9788,
+          "totalTokens": 41331
+        },
+        "runStartedAt": "2026-08-30T18:32:24.594Z",
+        "runCompletedAt": "2026-08-30T18:33:36.131Z"
+      },
+      "files": [
+        "normal-opportunity-brief.json",
+        "normal-opportunity-brief.txt"
+      ]
+    },
+    "restrictedApprovalSensitiveOpportunity": {
+      "persona": {
+        "userId": "USR-5003",
+        "name": "Nora Chen"
+      },
+      "opportunity": {
+        "id": "OPP-1003",
+        "name": "Eclipse BioMaterials Ltd - Restricted Renewal and Data Protection"
+      },
+      "provenance": {
+        "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+        "provider": "openrouter",
+        "generationModel": "google/gemini-3.5-flash-lite",
+        "embeddingModel": "openai/text-embedding-3-small",
+        "tokenUsage": {
+          "calls": 5,
+          "inputTokens": 22984,
+          "outputTokens": 8911,
+          "totalTokens": 31895
+        },
+        "runStartedAt": "2026-08-30T18:34:01.436Z",
+        "runCompletedAt": "2026-08-30T18:35:47.741Z"
+      },
+      "files": [
+        "restricted-opportunity-brief.json",
+        "restricted-opportunity-brief.txt",
+        "restricted-approval-flow.json"
+      ]
+    },
+    "deniedAccessNoLeak": {
+      "persona": {
+        "userId": "USR-5007",
+        "name": "Harper Noor"
+      },
+      "opportunity": {
+        "id": "OPP-1003"
+      },
+      "expectedHttpStatus": 404,
+      "leakCheck": {
+        "containsAccountName": false,
+        "containsSourceName": false,
+        "containsCounts": false,
+        "containsEvidenceMetadata": false
+      },
+      "files": [
+        "denied-access.json"
+      ]
+    },
+    "traceAndLogExamples": {
+      "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "provenance": {
+        "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+        "provider": "openrouter",
+        "generationModel": "google/gemini-3.5-flash-lite",
+        "embeddingModel": "openai/text-embedding-3-small",
+        "tokenUsage": {
+          "calls": 5,
+          "inputTokens": 22984,
+          "outputTokens": 8911,
+          "totalTokens": 31895
+        },
+        "runStartedAt": "2026-08-30T18:34:01.436Z",
+        "runCompletedAt": "2026-08-30T18:35:47.741Z"
+      },
+      "requiredSpanKinds": [
+        "model_call",
+        "evidence_retrieval",
+        "validation",
+        "guardrail",
+        "approval_requirement",
+        "approval_decision",
+        "finalization"
+      ],
+      "files": [
+        "restricted-run-trace.json",
+        "restricted-run-events.json"
+      ]
+    }
+  },
+  "reproduction": {
+    "command": "pnpm tsx scripts/export-sample-artifacts.ts <normal-run-id> <restricted-run-id> [api-base]",
+    "prerequisites": [
+      "Source .env and override DATABASE_URL to the dedicated slacato_samples database.",
+      "Run the API against the same database for the fresh denied-access HTTP capture.",
+      "Both supplied runs must already be finalized live-provider runs."
+    ]
+  }
+}

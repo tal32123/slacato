@@ -11,7 +11,7 @@ This pnpm monorepo builds a negotiation-preparation brief for a seller from synt
 > set +a
 > ```
 >
-> The current `drizzle.config.ts` fallback does point at the default `slacato` Compose database, but relying on it ignores provider, session, origin, and any custom database settings. Sourcing `.env` is therefore a required first step, even though the older stale-database-name failure mode no longer exists in the current tree.
+> This is not optional. `drizzle.config.ts` falls back to the default `slacato` Compose database, which lags behind the migrations the test suite expects. Skipping this step is measurably broken: `pnpm test` reports **15 failed / 441 passed** with confusing schema errors (`column "source_commit" ... does not exist`, a `run_budgets.max_input_tokens` NOT NULL violation). With `.env` sourced, the same suite reports **456 passed, 1 skipped, 0 failed**. Sourcing it also selects the correct provider, session, and origin settings.
 
 ## Technical overview
 
@@ -102,6 +102,9 @@ pnpm typecheck
 pnpm lint
 pnpm build
 ```
+
+> [!WARNING]
+> **Stop any app server on port 3000 before running `pnpm test:e2e`.** Playwright is configured with `reuseExistingServer` outside CI, so if anything is already listening on `:3000` it silently tests against *that* server instead of starting its own with persona bootstrapping enabled. The symptom is misleading: every login-dependent test fails on `/login?returnTo=…` rather than reporting a port conflict. Check with `lsof -nP -iTCP:3000 -sTCP:LISTEN` and stop the process first.
 
 The deterministic retrieval evaluation is also available:
 
