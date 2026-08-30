@@ -7,11 +7,11 @@ import {
   assertSlackCoverage,
   classifyEvidenceSensitivity,
   opportunityFixtureSchema,
-  parseFixtureSet,
   slackUpdatesSchema,
   type OpportunityFixture,
   type PolicyFixture
 } from '@slacato/core';
+import { parseFixtureSet } from '../../scripts/fixture-loader.js';
 
 const opportunities = ['OPP-1001', 'OPP-1002', 'OPP-1003'] as const;
 

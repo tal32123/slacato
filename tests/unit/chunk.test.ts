@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildEvidenceDocuments, chunkDocument, parseFixtureSet, POLICY_CHUNK_CHARACTERS, type EvidenceDocument } from '@slacato/core';
+import { buildEvidenceDocuments, chunkDocument, POLICY_CHUNK_CHARACTERS, type EvidenceDocument } from '@slacato/core';
+import { parseFixtureSet } from '../../scripts/fixture-loader.js';
 
 const base = {
   externalId: 'CALL-001',

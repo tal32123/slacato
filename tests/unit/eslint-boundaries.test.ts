@@ -15,7 +15,8 @@ describe('architectural boundary lint policy', () => {
     ['packages/core/src', '../../infrastructure/src/index.ts'],
     ['packages/infrastructure/src', '../../../apps/api/src/main.ts'],
     ['apps/web/src', '../../../packages/infrastructure/src/index.ts'],
-    ['apps/api/src', '../../../packages/infrastructure/src/index.ts']
+    ['apps/api/src', '../../../packages/infrastructure/src/index.ts'],
+    ['scripts', '../apps/web/src/main.tsx']
   ])('rejects %s importing %s outside its composition root', async (directory, source) => {
     const file = join(process.cwd(), directory, `boundary-fixture-${randomUUID()}.ts`);
     created.push(file);
@@ -41,5 +42,36 @@ describe('architectural boundary lint policy', () => {
     });
 
     expect(result?.messages.some((message) => message.ruleId === 'no-restricted-imports')).toBe(true);
+  });
+
+  it('permits scripts to depend on core, contracts, and infrastructure', async () => {
+    const eslint = new ESLint({ cwd: process.cwd() });
+    const [result] = await eslint.lintFiles(['scripts/ingest.ts']);
+
+    expect(result?.messages.some((message) => message.ruleId === 'boundaries/dependencies')).toBe(false);
+    expect(result?.messages.some((message) => message.ruleId === 'boundaries/no-unknown-files')).toBe(false);
+  });
+
+  it.each([
+    ['node:fs'],
+    ['node:fs/promises'],
+    ['node:path'],
+    ['node:child_process']
+  ])('rejects packages/core importing %s directly', async (source) => {
+    const eslint = new ESLint({ cwd: process.cwd() });
+    const [result] = await eslint.lintText(`import '${source}';\nexport {};\n`, {
+      filePath: 'packages/core/src/application/evidence/boundary-fixture.ts'
+    });
+
+    expect(result?.messages.some((message) => message.ruleId === 'no-restricted-imports')).toBe(true);
+  });
+
+  it('still permits packages/core importing node:crypto for pure hashing', async () => {
+    const eslint = new ESLint({ cwd: process.cwd() });
+    const [result] = await eslint.lintText("import { createHash } from 'node:crypto';\nexport {};\n", {
+      filePath: 'packages/core/src/application/evidence/boundary-fixture.ts'
+    });
+
+    expect(result?.messages.some((message) => message.ruleId === 'no-restricted-imports')).toBe(false);
   });
 });

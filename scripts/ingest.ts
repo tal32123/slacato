@@ -8,9 +8,9 @@ import {
   chunkDocument,
   DEMO_APPROVAL_IDENTITIES,
   deriveApprovalAuthorities,
-  deriveApprovalAuthority,
-  parseFixtureSet
+  deriveApprovalAuthority
 } from '../packages/core/src/index.js';
+import { parseFixtureSet } from './fixture-loader.js';
 
 const DEFAULT_DATABASE_URL = 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 type InsertCounts = Readonly<{

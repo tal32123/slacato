@@ -7,7 +7,8 @@ const applicationElements = [
   { type: 'infrastructure', pattern: 'packages/infrastructure/**' },
   { type: 'web', pattern: 'apps/web/**' },
   { type: 'api', pattern: 'apps/api/**' },
-  { type: 'worker', pattern: 'apps/worker/**' }
+  { type: 'worker', pattern: 'apps/worker/**' },
+  { type: 'scripts', pattern: 'scripts/**' }
 ];
 
 const element = (type) => ({ element: { type } });
@@ -28,6 +29,7 @@ export default tseslint.config(
       ]
     },
     rules: {
+      'boundaries/no-unknown-files': 'error',
       'boundaries/dependencies': ['error', {
         default: 'disallow',
         policies: [
@@ -37,6 +39,7 @@ export default tseslint.config(
           { from: element('web'), allow: allow('web', 'core', 'contracts') },
           { from: element('api'), allow: allow('api', 'core', 'contracts') },
           { from: element('worker'), allow: allow('worker', 'core', 'contracts') },
+          { from: element('scripts'), allow: allow('scripts', 'core', 'contracts', 'infrastructure') },
           { from: { file: { categories: 'api-composition' } }, allow: allow('api', 'core', 'contracts', 'infrastructure') },
           { from: { file: { categories: 'worker-composition' } }, allow: allow('worker', 'core', 'contracts', 'infrastructure') },
           { from: element('core'), disallow: disallowModules('@slacato/infrastructure', '@nestjs/**', 'bullmq', 'react', 'react-dom') },
@@ -48,7 +51,7 @@ export default tseslint.config(
       }]
     }
   },
-  { files: ['packages/core/**/*.ts'], rules: { 'no-restricted-imports': ['error', { patterns: ['@slacato/infrastructure', '@nestjs/**', 'bullmq', 'react', 'react-dom'] }] } },
+  { files: ['packages/core/**/*.ts'], rules: { 'no-restricted-imports': ['error', { patterns: ['@slacato/infrastructure', '@nestjs/**', 'bullmq', 'react', 'react-dom', 'node:fs', 'node:fs/*', 'node:path', 'node:child_process'] }] } },
   {
     files: ['packages/core/src/application/agents/{conversation,stakeholder,commercial,strategy}.ts'],
     rules: {
