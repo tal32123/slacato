@@ -938,7 +938,8 @@ const COMMERCIAL_COMMITMENT =
 const UNSAFE_CUSTOMER_FACING_ACTION =
   /\b(?:promise|guarantee|bypass|conceal|mislead|fabricate|disclose|reveal|leak)\b/i;
 /** Sends a commercial term to its deterministic owner instead of settling it in the brief. */
-const ROUTES_FOR_APPROVAL = /\bfor (?:deal desk |legal |commercial |security )?(?:approval|review)\b/i;
+const ROUTES_FOR_APPROVAL =
+  /\bfor (?:deal desk |legal |commercial |security )?(?:approval|review)\b/i;
 /** Verbs that would settle a commercial term rather than route it. */
 const GRANTS_COMMERCIAL_TERM =
   /\b(?:offer|grant|concede|waive|give|extend|apply|honou?r|provide|accept|approve)\w*\b/i;
