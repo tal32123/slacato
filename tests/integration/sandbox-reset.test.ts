@@ -147,9 +147,10 @@ describe('sandbox reset against a real database', () => {
       runs: 1,
       activeRuns: 1,
       approvalSubjects: 1,
-      approvalDecisions: 1,
-      traceSpans: 1
+      approvalDecisions: 1
     });
+    // StartDealBrief records its own authorization trace alongside the one inserted above.
+    expect(preview.tally.traceSpans).toBeGreaterThan(1);
     expect(preview.tally.runEvents).toBeGreaterThan(0);
     // Previewing changes nothing.
     expect((await client.sql`select id from runs`).length).toBe(1);
@@ -208,6 +209,12 @@ describe('sandbox reset against a real database', () => {
       select count(*)::int count from audit_events where type = 'sandbox_reset'`;
     expect(resetAudits[0]?.count).toBe(3);
     expect(await embeddingCorpus(client.sql)).toEqual(corpusBefore);
+
+    // The reset clears these tables with `truncate` precisely because the schema forbids deleting
+    // from them. It must not have loosened that: the application still cannot rewrite its own
+    // record of what it did, which is the guarantee the append-only triggers exist to make.
+    await expect(client.sql`delete from audit_events`).rejects.toThrow(/immutable|append/i);
+    await expect(client.sql`delete from evidence_versions`).rejects.toThrow(/immutable/i);
 
     await client.close();
   }, 120_000);
