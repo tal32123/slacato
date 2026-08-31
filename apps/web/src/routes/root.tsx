@@ -24,7 +24,7 @@ export async function protectedRootLoader({
       sessionRuntime.finishTransition();
       const url = new URL(request.url);
       const returnTo = safeDestination(`${url.pathname}${url.search}`, '/deals');
-      return redirect(`/unauthorized?returnTo=${encodeURIComponent(returnTo)}`);
+      return redirect(`/login?returnTo=${encodeURIComponent(returnTo)}`);
     }
     sessionRuntime.finishTransition();
     return session;
