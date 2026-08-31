@@ -228,3 +228,33 @@ test.describe('guided tour: following an instruction is progress, not a detour',
     await expect(page.getByText(/stepped off the guided path/)).toHaveCount(0);
   });
 });
+
+test.describe('guided tour: a run step waits for the run', () => {
+  test('holds Next while a real run is still working, and still offers a way onward', async ({
+    page
+  }) => {
+    // Reported: the tour told the user to wait for the run and then let them walk straight past it.
+    // No worker runs in this suite, so a started run stays non-terminal for the whole test -- which
+    // makes the hold deterministic to assert here. Releasing on a completed, failed or cancelled
+    // run is covered in tests/unit/guided-tour-precision.test.ts, where the run state is staged.
+    await startTourAsMaya(page);
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page).toHaveURL('/deals/OPP-1001');
+
+    await page.getByRole('button', { name: 'Generate Brief' }).click();
+    await expect(page).toHaveURL(/\/runs\/[^/]+$/);
+
+    await expect(page.getByRole('heading', { name: 'Watch the work actually happen' })).toBeVisible();
+    const next = page.getByRole('button', { name: 'Next' });
+    await expect(next).toBeDisabled();
+    await expect(page.getByText(/Waiting for this run to reach "completed"/)).toBeVisible();
+
+    // The arrow-key shortcut is refused for the same reason the button is.
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('heading', { name: 'Watch the work actually happen' })).toBeVisible();
+
+    // Holding is not trapping: a deliberate override is always available.
+    await page.getByRole('button', { name: 'Continue anyway' }).click();
+    await expect(page.getByText(`Step 5 of ${TOTAL_STEPS}`)).toBeVisible();
+  });
+});

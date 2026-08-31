@@ -164,8 +164,11 @@ export function SettingsRoute(): React.JSX.Element {
                         setSelected(persona.userId);
                         // Selecting a persona is only half of a switch. Reporting it lets the tour
                         // move its spotlight onto "Use selected persona" instead of leaving that
-                        // button behind the dimmed backdrop where it cannot be clicked.
-                        advanceGuidedTour('persona-selected');
+                        // button behind the dimmed backdrop where it cannot be clicked. The report
+                        // names the persona: every radio here shares one group, so an arrow key
+                        // moves focus AND selection to a sibling the spotlight never offered, and
+                        // an anonymous report would advance the step with the wrong person chosen.
+                        advanceGuidedTour(`persona-selected:${persona.userId}`);
                       }}
                       className="mt-1 size-5 accent-primary"
                     />

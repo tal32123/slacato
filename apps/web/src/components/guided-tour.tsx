@@ -144,7 +144,7 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
   },
   {
     target: 'persona-USR-5003',
-    action: 'persona-selected',
+    action: 'persona-selected:USR-5003',
     route: '/settings',
     scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'Select the restricted deal owner',
@@ -187,7 +187,7 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
   },
   {
     target: 'persona-USR-5005',
-    action: 'persona-selected',
+    action: 'persona-selected:USR-5005',
     route: '/settings',
     scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'Now look through an approver\u2019s eyes',
@@ -223,7 +223,7 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
   },
   {
     target: 'persona-USR-5007',
-    action: 'persona-selected',
+    action: 'persona-selected:USR-5007',
     route: '/settings',
     scenario: 'Scenario 3 \u00b7 Unauthorized attempt',
     title: 'Select someone with no access',
@@ -646,6 +646,22 @@ export function GuidedTour(): React.JSX.Element {
                 className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
               >
                 <p>{runGate.notice}</p>
+                {runGate.waiting && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {/* Holding the step is the point; trapping the user in it is not. Waiting can
+                        outlast the tour's ability to read the run at all -- an unreadable session,
+                        a run page reached outside the protected shell -- and without a deliberate
+                        way past, the only exits left are abandoning the tour entirely. */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => settle(Math.min(stepIndex + 1, tourSteps.length - 1))}
+                    >
+                      Continue anyway
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
             <div className="mt-5 flex items-center justify-between gap-3">

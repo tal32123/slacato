@@ -179,6 +179,24 @@ describe('guided tour: the spotlight frames only the control to act on', () => {
     expect(framed?.textContent).not.toContain('Active persona');
   });
 
+  it('does not advance when an arrow key selects a persona the step never offered', async () => {
+    // Every persona radio shares one radio group, so arrow keys move focus AND selection to a
+    // sibling the spotlight does not frame and the focus trap does not admit. Reporting the
+    // selection anonymously would advance the step with the wrong person chosen and the persona
+    // cards then sealed behind the backdrop.
+    const index = stepIndexWhere(
+      (step) => step.route === '/settings' && step.body.includes('Nora Chen')
+    );
+    startAtStep(index);
+    renderSettingsWithTour();
+
+    await screen.findByRole('dialog');
+    fireEvent.click(await screen.findByRole('radio', { name: /Maya Levin/ }));
+
+    await waitFor(() => expect(screen.getByText(`Step ${index + 1} of ${tourSteps.length}`)).toBeInTheDocument());
+    expect(document.querySelector(`[data-tour="${tourSteps[index].target}"]`)).not.toBeNull();
+  });
+
   it('moves the spotlight onto "Use selected persona" once the named persona is selected', async () => {
     // Selecting the radio is only half the action. The apply button must become the spotlighted
     // target rather than staying behind the dimmed backdrop where it cannot be clicked.
@@ -264,6 +282,51 @@ describe('guided tour: run steps wait for the run to reach a real outcome', () =
     await screen.findByRole('dialog');
     await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).toBeEnabled());
     expect(screen.getByRole('status').textContent).toMatch(/did not finish|failed|ended/i);
+  });
+});
+
+describe('guided tour: a held run step is never a dead end', () => {
+  it('offers a deliberate way onward when the run state cannot be read at all', async () => {
+    // The waiting branch also covers "no data yet", which never resolves when the tour cannot
+    // reach the run -- no protected session on the route, for instance. Next stays disabled, the
+    // arrow key is refused and the missing-target block does not render, so without an explicit
+    // escape the only remaining exits abandon the tour.
+    const index = stepIndexWhere((step) => step.target === 'run-progress-detail');
+    startAtStep(index);
+    const router = createMemoryRouter(
+      [
+        {
+          Component: () => createElement(Fragment, null, createElement(Outlet), createElement(GuidedTour)),
+          children: [
+            {
+              path: '/runs/:runId',
+              Component: () =>
+                createElement('main', { id: 'main-content' },
+                  createElement('div', { 'data-tour': 'run-progress-detail' }, 'Progress'))
+            },
+            { path: '*', Component: () => createElement('main', { id: 'main-content' }, 'Elsewhere') }
+          ]
+        }
+      ],
+      { initialEntries: ['/runs/RUN-1'] }
+    );
+    render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(RouterProvider, { router })
+      )
+    );
+
+    await screen.findByRole('dialog');
+    expect(screen.getByRole('button', { name: /Next/ })).toBeDisabled();
+
+    const escape = await screen.findByRole('button', { name: 'Continue anyway' });
+    fireEvent.click(escape);
+
+    await waitFor(() =>
+      expect(screen.getByText(`Step ${index + 2} of ${tourSteps.length}`)).toBeInTheDocument()
+    );
   });
 });
 
