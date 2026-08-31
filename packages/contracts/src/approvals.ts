@@ -33,7 +33,23 @@ const citationSchema = z
     rationale: shortTextSchema.optional()
   })
   .strict();
-const claimSchema: z.ZodType = z
+/** Stable reference from a brief claim to the authorized evidence version that supports it. */
+export type ApprovalCitation = {
+  id: string;
+  evidenceId: string;
+  locator: string;
+  rationale?: string | undefined;
+};
+/** One assertion a brief section makes, with the evidence citations that support it. */
+export type ApprovalClaim = {
+  id: string;
+  statement: string;
+  confidence: number;
+  citations: ApprovalCitation[];
+};
+// The explicit annotation keeps declaration emission from inlining this object type at every
+// `claims` site; naming the output type instead of erasing it to `unknown` keeps consumers typed.
+const claimSchema: z.ZodType<ApprovalClaim> = z
   .object({
     id: opaqueIdSchema,
     statement: shortTextSchema,
