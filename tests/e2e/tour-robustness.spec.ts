@@ -119,7 +119,11 @@ test.describe('guided tour: keyboard and dismissal', () => {
     await startTourAsMaya(page);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Start guided tour' })).toBeFocused();
+    // The launcher renames itself once there is a position to come back to, so the focus target
+    // is the resume control rather than a fresh start it would no longer perform.
+    await expect(
+      page.getByRole('button', { name: `Resume guided tour at step 2 of ${TOTAL_STEPS}` })
+    ).toBeFocused();
   });
 });
 
@@ -237,3 +241,89 @@ test.describe('guided tour: following an instruction is progress, not a detour',
 // tests/unit/guided-tour-precision.test.ts, where the run state can be staged directly: it holds
 // while the run works, releases on the state the step narrates, releases with an honest notice on a
 // failed run, and always offers a deliberate way onward.
+
+test.describe('guided tour: the dialog never covers the control it names', () => {
+  /**
+   * Measures the step dialog and the spotlit target as real rectangles, in a real browser.
+   *
+   * A screenshot cannot answer this question -- the failure is a 30px overlap that looks fine and
+   * silently swallows the tap -- so the assertion is geometric, plus a hit test at the exact
+   * point a user's finger would land.
+   */
+  async function measureStepOne(page: import('@playwright/test').Page) {
+    return await page.evaluate(() => {
+      const dialog = document.querySelector('[data-tour-dialog="true"]');
+      const target = document.querySelector('[data-tour-active="true"]');
+      if (dialog === null || target === null) throw new Error('Expected a spotlit target and a step dialog');
+      const d = dialog.getBoundingClientRect();
+      const t = target.getBoundingClientRect();
+      const button = target.querySelector('button');
+      if (button === null) throw new Error('Expected the spotlit persona card to contain its own button');
+      const b = button.getBoundingClientRect();
+      const point = { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) };
+      const hit = document.elementFromPoint(point.x, point.y);
+      return {
+        overlaps: d.left < t.right && d.right > t.left && d.top < t.bottom && d.bottom > t.top,
+        tapReachesButton: hit !== null && (button === hit || button.contains(hit)),
+        buttonOnScreen: b.top >= 0 && b.bottom <= window.innerHeight
+      };
+    });
+  }
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1440, height: 900 }
+  ]) {
+    // 390x844 is the exact-boundary case: the persona card's centre lands on 422 and half the
+    // viewport is also 422, so the old "which half is the centre in?" rule answered "upper",
+    // pinned the dialog to the bottom edge, and laid it over "Continue as Maya Levin" -- on a
+    // step that requires that click and therefore offers no Next to escape by.
+    test(`step one keeps its own button clear and tappable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await loginAs(page, 'Maya Levin', '/deals');
+      await page.evaluate(() => window.dispatchEvent(new Event('slacato:start-guided-tour')));
+      await expect(page).toHaveURL('/login');
+      await expect(page.getByText(`Step 1 of ${TOTAL_STEPS}`)).toBeVisible();
+
+      const measured = await measureStepOne(page);
+
+      expect(measured.overlaps).toBe(false);
+      expect(measured.buttonOnScreen).toBe(true);
+      expect(measured.tapReachesButton).toBe(true);
+    });
+  }
+});
+
+test.describe('guided tour: leaving and coming back', () => {
+  test('Escape then the launcher resumes the same step instead of restarting at step one', async ({ page }) => {
+    // Reported from a live walkthrough: Escape at step 14 cost thirteen steps, two persona
+    // switches and a recorded approval decision, because the launcher always called settle(0)
+    // -- and closing also hides the invitation banner, so the launcher was the only way back.
+    await startTourAsMaya(page);
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page).toHaveURL('/deals/OPP-1001');
+    await expect(page.getByText(`Step 3 of ${TOTAL_STEPS}`)).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const launcher = page.getByRole('button', { name: `Resume guided tour at step 3 of ${TOTAL_STEPS}` });
+    await expect(launcher).toBeFocused();
+
+    await launcher.click();
+
+    await expect(page.getByText(`Step 3 of ${TOTAL_STEPS}`)).toBeVisible();
+    await expect(page).toHaveURL('/deals/OPP-1001');
+    // Closing deliberately silences the invitation banner; resuming must not undo that.
+    expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? 'null'), STORAGE_KEY))
+      .toEqual({ active: true, stepIndex: 2, dismissed: true });
+  });
+
+  test('"Start over" is the deliberate way back to step one', async ({ page }) => {
+    await startTourAsMaya(page);
+    await page.getByRole('button', { name: 'Start over' }).click();
+
+    await expect(page).toHaveURL('/login');
+    await expect(page.getByText(`Step 1 of ${TOTAL_STEPS}`)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start over' })).toHaveCount(0);
+  });
+});

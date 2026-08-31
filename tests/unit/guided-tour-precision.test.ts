@@ -497,7 +497,10 @@ describe('guided tour: no step narrates a state the reviewer cannot see', () => 
     const first = tourSteps.findIndex((candidate) => candidate.target === 'approvals');
     const step = tourSteps[first];
 
-    expect(step?.body).toMatch(/Pending normally reads 0/);
+    // The copy has to read true whether Pending holds an entry or none, because which of the
+    // four entries is open to her depends on what the other authorities have already decided.
+    expect(step?.body).toMatch(/Pending lists only what Nora may decide right now/);
+    expect(step?.body).toMatch(/an empty Pending list here is the routing working/);
     expect(step?.body).toMatch(/Decision history/);
     // The old copy claimed she "sees only the decisions she personally holds authority for",
     // which a reviewer reads as "these entries are hers" while looking at none.

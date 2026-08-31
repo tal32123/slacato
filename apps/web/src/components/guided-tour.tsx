@@ -217,7 +217,7 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     route: '/approvals',
     scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'Owning the deal is not authority over it',
-    body: 'Every triggered rule became its own entry with its own eligible authority and its own quorum, shown as "completed of required". This inbox lists only what Nora may decide right now, so on her own restricted deal Pending normally reads 0: the discount belongs to Deal Desk, the liability wording to Legal, and her Account Owner entry opens only once theirs are decided. That empty Pending list is the routing working, not a missing screen. Decision history below shows whatever has already been decided.'
+    body: 'Every triggered rule became its own entry with its own eligible authority and its own quorum, shown as "completed of required". Pending lists only what Nora may decide right now, which on her own restricted deal is often nothing: the discount belongs to Deal Desk and the liability wording to Legal, and her own Account Owner entry can stay closed until theirs are decided. So an empty Pending list here is the routing working, not a missing screen — owning the deal is not authority over it. Decision history below shows whatever has already been decided.'
   },
   {
     target: 'persona-USR-5005',
@@ -331,7 +331,13 @@ export function placeTourDialog(anchor: TourAnchor | undefined, requiresInteract
   const spaceBelow = viewportHeight - (anchor.box.top + anchor.box.height);
   const side = spaceAbove >= spaceBelow ? 'top' : 'bottom';
   const room = Math.max(spaceAbove, spaceBelow) - DIALOG_MARGIN * 2;
-  return { side, maxHeight: Math.min(usable, Math.max(room, MIN_DIALOG_HEIGHT)) };
+  if (room >= MIN_DIALOG_HEIGHT) return { side, maxHeight: Math.min(usable, room) };
+  // Neither side can host even a minimal dialog, so the spotlight is effectively the whole
+  // viewport -- several steps frame a whole page section taller than the screen -- and no
+  // placement avoids it. A step that asks the user to act on its target keeps the strict cap,
+  // because covering the named control is the one unrecoverable failure. A step that asks only
+  // for reading gets its normal height instead of a useless stub.
+  return { side, maxHeight: requiresInteraction ? MIN_DIALOG_HEIGHT : usable };
 }
 
 /** Guides users through an interactive tour anchored to the product controls they need next. */
