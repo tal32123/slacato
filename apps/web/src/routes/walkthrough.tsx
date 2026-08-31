@@ -53,7 +53,7 @@ const steps: readonly WalkthroughStep[] = [
     persona: 'Maya Levin · Account Owner',
     screen: 'OPP-1001 brief → Evidence',
     action:
-      'In the generated OPP-1001 brief, open a citation labelled Slack and inspect the evidence detail rather than trusting the generated claim alone.',
+      'In the generated OPP-1001 brief, open the numbered Source Evidence entry whose label names slack/account_team_updates.tsv and inspect the evidence detail rather than trusting the generated claim alone.',
     expectedProof:
       'The evidence drawer identifies Slack as the source and shows its locator and authorized excerpt. Citation resolution is reauthorized for the active persona.',
     links: [{ label: 'Inspect OPP-1001 brief', to: '/deals/OPP-1001', primary: true }]
