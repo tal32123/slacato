@@ -149,7 +149,7 @@ export function DealBrief({
             <details className="group" data-testid="source-snapshot-disclosure">
               <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 py-1 [&::-webkit-details-marker]:hidden">
                 <span className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
-                  {sourceSnapshot.label}
+                  <h2 className="text-2xl font-semibold">{sourceSnapshot.label}</h2>
                   <StatusBadge status="readonly" label="Deterministic — not AI-generated" />
                 </span>
                 <span className="text-sm font-medium text-primary underline underline-offset-4 group-open:hidden">
@@ -170,6 +170,7 @@ export function DealBrief({
                 selectedEvidenceId={selectedEvidenceId}
                 onEvidence={onEvidence}
                 sourceCues
+                qualifyHeadings
               />
             </details>
           </section>
@@ -185,13 +186,17 @@ function WorkspaceContent({
   evidence,
   selectedEvidenceId,
   onEvidence,
-  sourceCues = false
+  sourceCues = false,
+  qualifyHeadings = false
 }: Readonly<{
   brief: DealWorkspaceView['brief'];
   evidence: ReadonlyMap<string, DealWorkspaceView['evidence'][number]>;
   selectedEvidenceId: string | null;
   onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
   sourceCues?: boolean;
+  /** Distinguishes these headings from an identically titled generated brief on the same page.
+   *  Only meaningful when both views render together; alone it just corrupts the accessible name. */
+  qualifyHeadings?: boolean;
 }>): React.JSX.Element {
   return (
     <div>
@@ -209,8 +214,8 @@ function WorkspaceContent({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id={`${brief.status}-${id}`} className="text-xl font-semibold">
                 {section.title}
-                {sourceCues && ' '}
-                {sourceCues && (
+                {qualifyHeadings && ' '}
+                {qualifyHeadings && (
                   <span className="ml-2 align-middle text-xs font-normal uppercase tracking-wide text-muted-foreground">
                     Source snapshot
                   </span>
