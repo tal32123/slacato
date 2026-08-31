@@ -4,102 +4,146 @@
 - **Account:** Northstar Foods Cooperative
 - **Opportunity:** Northstar Foods Cooperative \- Global Access Renewal
 - **Stage:** 6\.0 Order Review
-### Claims
-- Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\. (confidence: 1.00) [^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]
 
 ## 2. Executive Summary
 Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\.
 ### Claims
-- Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\. (confidence: 1.00) [^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]
+- Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\. (confidence: 1.00) [^citation_bfd11c393a4cfb47c9a932d0850edfce2b1a1557]
 
 ## 3. Buyer Goals and Business Drivers
 ### Goals
-- None
+- Wants a clean renewal path but will not support expansion unless regional exception handling is reduced\.
 ### Business Drivers
 - Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\.
 ### Claims
-- Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\. (confidence: 1.00) [^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]
+- Wants a clean renewal path but will not support expansion unless regional exception handling is reduced\. (confidence: 1.00) [^citation_f96455e01192ceceefd4e1e0f6e1cdcb12e0eb75]
+- Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership\. (confidence: 1.00) [^citation_bfd11c393a4cfb47c9a932d0850edfce2b1a1557]
 
 ## 4. Stakeholder Map
-- None
+### Marco Devlin
+- **Title:** VP Infrastructure
+- **Organization:** Northstar Foods Cooperative
+- **Role:** decision\_maker
+- **Influence:** high
+- **Relationship:** positive
+### Goals
+- Owns branch migration plan and wants named escalation owners for rollout\.
+### Concerns
+- Owns branch migration plan and wants named escalation owners for rollout\.
+#### Claims
+- Marco Devlin is VP Infrastructure (confidence: 1.00) [^citation_29af71561c79b01568e4d4d56e9ce76ea4ac8919]
+- Owns branch migration plan and wants named escalation owners for rollout\. (confidence: 1.00) [^citation_29af71561c79b01568e4d4d56e9ce76ea4ac8919]
+### Iris Calder
+- **Title:** Procurement Director
+- **Organization:** Northstar Foods Cooperative
+- **Role:** procurement
+- **Influence:** medium
+- **Relationship:** neutral
+### Goals
+- Focused on renewal uplift, payment schedule, and keeping final order form simple\.
+### Concerns
+- Focused on renewal uplift, payment schedule, and keeping final order form simple\.
+#### Claims
+- Iris Calder is Procurement Director (confidence: 1.00) [^citation_2174b8ecac26b3505e618ffb06347cf2bc4601a1]
+- Focused on renewal uplift, payment schedule, and keeping final order form simple\. (confidence: 1.00) [^citation_2174b8ecac26b3505e618ffb06347cf2bc4601a1]
+### Pavel Stone
+- **Title:** Global Network Lead
+- **Organization:** Northstar Foods Cooperative
+- **Role:** evaluator
+- **Influence:** medium
+- **Relationship:** positive
+### Goals
+- Advocates for reducing bypass exceptions but needs reporting on migration progress\.
+### Concerns
+- Advocates for reducing bypass exceptions but needs reporting on migration progress\.
+#### Claims
+- Pavel Stone is Global Network Lead (confidence: 1.00) [^citation_58bc41f104d36734cd5f7e3eb74694776e7111ac]
+- Advocates for reducing bypass exceptions but needs reporting on migration progress\. (confidence: 1.00) [^citation_58bc41f104d36734cd5f7e3eb74694776e7111ac]
+### Amara Quinn
+- **Title:** Legal Counsel
+- **Organization:** Northstar Foods Cooperative
+- **Role:** legal
+- **Influence:** medium
+- **Relationship:** neutral
+### Goals
+- Reviewing liability language and data processing addendum\.
+### Concerns
+- Reviewing liability language and data processing addendum\.
+#### Claims
+- Amara Quinn is Legal Counsel (confidence: 1.00) [^citation_b331cfd61e6d72638476ca84dc7211a0f87c13f7]
+- Reviewing liability language and data processing addendum\. (confidence: 1.00) [^citation_b331cfd61e6d72638476ca84dc7211a0f87c13f7]
 ### Coverage Gaps
 - Verify unsupported stakeholder records\.
-### Claims
-- We still need the final owner matrix and success metrics confirmed by the client stakeholders\. (confidence: 1.00) [^citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6]
 
 ## 5. Negotiation State
-Insufficient supported evidence is available for a negotiation\-state assessment\.
+Send revised order form and migration success plan by 2026\-04\-28
 ### Leverage
-- None
+- Send revised order form and migration success plan by 2026\-04\-28
 ### Risks
-- Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate\.
+- Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\.
 ### Claims
-- Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate\. (confidence: 1.00) [^citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800]
+- Send revised order form and migration success plan by 2026\-04\-28 (confidence: 1.00) [^citation_31509f3fc6d7cc1fac357d2971dc93c10c545976]
+- Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\. (confidence: 1.00) [^citation_c454929763baca67f063df14782ff9d0bd8e48f1]
 
 ## 6. Recommended Next Actions
-- None
+### 1. Schedule the revised order form and migration success plan dispatch\.
+- **Priority:** high
+- **Due date:** 2026\-04\-28
+- **Rationale:** Send revised order form and migration success plan by 2026\-04\-28
+#### Claims
+- Send revised order form and migration success plan by 2026\-04\-28 (confidence: 1.00) [^citation_31509f3fc6d7cc1fac357d2971dc93c10c545976]
 
 ## 7. Missing Information
-### 1. Verify evidence for claim claim\_bg\_01\.
+### 1. Verify evidence for claim claim\_ds\_1\.
 - **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 2. Verify evidence for claim claim\_ns\_01\.
+### 2. Verify evidence for claim claim\_stk\_elena\.
 - **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 3. Verify evidence for claim claim\_ns\_02\.
-- **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 4. Verify evidence for claim claim\_sev\_03\.
-- **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 5. Verify evidence for claim claim\_sev\_10\.
-- **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 6. Verify unsupported generated assertions before use\.
+### 3. Verify unsupported generated assertions before use\.
 - **Why it matters:** The generated assertion lacks support in the authorized evidence manifest\.
 
 ## 8. Source Evidence
+### salesforce:CON\-3001:OPP\-1001:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-18T00:00:00Z
+- **Summary:** Wants a clean renewal path but will not support expansion unless regional exception handling is reduced\.
+#### Claims
+- Wants a clean renewal path but will not support expansion unless regional exception handling is reduced\. (confidence: 1.00) [^citation_f96455e01192ceceefd4e1e0f6e1cdcb12e0eb75]
 ### salesforce:CON\-3002:OPP\-1001:contact:0
 - **Source type:** crm
 - **Captured at:** 2026\-04\-18T00:00:00Z
 - **Summary:** Owns branch migration plan and wants named escalation owners for rollout\.
 #### Claims
-- Owns branch migration plan and wants named escalation owners for rollout\. (confidence: 1.00) [^citation_24eef038997ced1746e5bea4a772beb4751b10ac]
+- Owns branch migration plan and wants named escalation owners for rollout\. (confidence: 1.00) [^citation_29af71561c79b01568e4d4d56e9ce76ea4ac8919]
 ### salesforce:CON\-3003:OPP\-1001:contact:0
 - **Source type:** crm
 - **Captured at:** 2026\-04\-15T00:00:00Z
 - **Summary:** Focused on renewal uplift, payment schedule, and keeping final order form simple\.
 #### Claims
-- Focused on renewal uplift, payment schedule, and keeping final order form simple\. (confidence: 1.00) [^citation_619fe5d577cbbf7d6ffdda1e2728d6ed295e6b6a]
+- Focused on renewal uplift, payment schedule, and keeping final order form simple\. (confidence: 1.00) [^citation_2174b8ecac26b3505e618ffb06347cf2bc4601a1]
 ### salesforce:CON\-3004:OPP\-1001:contact:0
 - **Source type:** crm
 - **Captured at:** 2026\-04\-12T00:00:00Z
 - **Summary:** Advocates for reducing bypass exceptions but needs reporting on migration progress\.
 #### Claims
-- Advocates for reducing bypass exceptions but needs reporting on migration progress\. (confidence: 1.00) [^citation_1f1f502b3907db41bb68e3fbc260d89a7de810d6]
+- Advocates for reducing bypass exceptions but needs reporting on migration progress\. (confidence: 1.00) [^citation_58bc41f104d36734cd5f7e3eb74694776e7111ac]
 ### salesforce:CON\-3005:OPP\-1001:contact:0
 - **Source type:** crm
 - **Captured at:** 2026\-04\-16T00:00:00Z
 - **Summary:** Reviewing liability language and data processing addendum\.
 #### Claims
-- Reviewing liability language and data processing addendum\. (confidence: 1.00) [^citation_6778a31e8b4cfabeecbb519bb254a7fceae98f09]
-### slack:SLK\-9002:0
-- **Source type:** slack
-- **Captured at:** 2026\-05\-05T00:00:00Z
-- **Summary:** We still need the final owner matrix and success metrics confirmed by the client stakeholders\.
-#### Claims
-- We still need the final owner matrix and success metrics confirmed by the client stakeholders\. (confidence: 1.00) [^citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6]
-### gong\_transcript:CALL\-008:transcript:1
-- **Source type:** conversation
-- **Captured at:** 2026\-04\-18T00:00:00Z
-- **Summary:** Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate\.
-#### Claims
-- Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate\. (confidence: 1.00) [^citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800]
+- Reviewing liability language and data processing addendum\. (confidence: 1.00) [^citation_b331cfd61e6d72638476ca84dc7211a0f87c13f7]
 ### Citation Labels
-[^citation_1f1f502b3907db41bb68e3fbc260d89a7de810d6]: source=salesforce/contacts.tsv, contact_id=CON-3004
-[^citation_24eef038997ced1746e5bea4a772beb4751b10ac]: source=salesforce/contacts.tsv, contact_id=CON-3002
-[^citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a]: source=salesforce/accounts.tsv, account_id=ACC-2001
-[^citation_619fe5d577cbbf7d6ffdda1e2728d6ed295e6b6a]: source=salesforce/contacts.tsv, contact_id=CON-3003
-[^citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800]: source=gong/transcripts/OPP-1001_CALL-008.md, call_id=CALL-008
-[^citation_6778a31e8b4cfabeecbb519bb254a7fceae98f09]: source=salesforce/contacts.tsv, contact_id=CON-3005
-[^citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6]: source=slack/account_team_updates.tsv, update_id=SLK-9002
+[^citation_2174b8ecac26b3505e618ffb06347cf2bc4601a1]: source=salesforce/contacts.tsv, contact_id=CON-3003
+[^citation_29af71561c79b01568e4d4d56e9ce76ea4ac8919]: source=salesforce/contacts.tsv, contact_id=CON-3002
+[^citation_31509f3fc6d7cc1fac357d2971dc93c10c545976]: source=salesforce/opportunities.tsv, opportunity_id=OPP-1001
+[^citation_58bc41f104d36734cd5f7e3eb74694776e7111ac]: source=salesforce/contacts.tsv, contact_id=CON-3004
+[^citation_b331cfd61e6d72638476ca84dc7211a0f87c13f7]: source=salesforce/contacts.tsv, contact_id=CON-3005
+[^citation_bfd11c393a4cfb47c9a932d0850edfce2b1a1557]: source=salesforce/accounts.tsv, account_id=ACC-2001
+[^citation_c454929763baca67f063df14782ff9d0bd8e48f1]: source=policies/deal_desk_policy.md, policy_id=deal-desk-policy
+[^citation_f96455e01192ceceefd4e1e0f6e1cdcb12e0eb75]: source=salesforce/contacts.tsv, contact_id=CON-3001
 
 ## 9. Confidence and Review Warnings
 - **Overall confidence:** 1.00
-- **PENDING_STAKEHOLDER_CONFIRMATION (warning):** We still need the final owner matrix and success metrics confirmed by the client stakeholders\. — claims: `claim_st_06`
+- **POLICY_LEGAL_APPROVAL (warning):** Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\. — claims: `claim_ns_2`
 - **INSUFFICIENT_CLAIM_SUPPORT (warning):** No single cited evidence unit supports the complete material relation\. — claims: none
+- **INSUFFICIENT_CLAIM_SUPPORT (warning):** Material anchors are absent: legal counsel amara quinn — claims: none

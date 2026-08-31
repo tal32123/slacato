@@ -1,13 +1,13 @@
 {
-  "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+  "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
   "opportunityId": "OPP-1003",
   "authorizedRequester": {
     "userId": "USR-5003",
     "name": "Nora Chen"
   },
   "approvalSubject": {
-    "id": "approval_subject_ccc417345f33b66b2b60cf8acdd216fa4d1f5c0cf96e1f31c91ecd1ac8575375",
-    "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9",
+    "id": "approval_subject_f65208b74ec8eef34278c52972a8cc97e5abab81de5a1f67f7d9d3d2df05b98e",
+    "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee",
     "policyTriggers": [
       "discount_above_10_percent",
       "negative_renewal_uplift",
@@ -21,7 +21,7 @@
     "quorumVersion": "deal-brief-approval-v1",
     "required": 5,
     "completed": 5,
-    "createdAt": "2026-08-30T18:34:30.386Z"
+    "createdAt": "2026-08-31T05:59:15.685Z"
   },
   "requirements": [
     {
@@ -36,7 +36,7 @@
       ],
       "depends_on": [],
       "ordinal": 0,
-      "created_at": "2026-08-30 18:34:30.386865+00"
+      "created_at": "2026-08-31 05:59:15.685336+00"
     },
     {
       "entry_id": "approval:commercial_discount:sales_leader",
@@ -49,7 +49,7 @@
       ],
       "depends_on": [],
       "ordinal": 1,
-      "created_at": "2026-08-30 18:34:30.386865+00"
+      "created_at": "2026-08-31 05:59:15.685336+00"
     },
     {
       "entry_id": "approval:legal_terms:legal_reviewer",
@@ -64,7 +64,7 @@
       ],
       "depends_on": [],
       "ordinal": 2,
-      "created_at": "2026-08-30 18:34:30.386865+00"
+      "created_at": "2026-08-31 05:59:15.685336+00"
     },
     {
       "entry_id": "approval:evidence_review:account_owner-or-sales_leader",
@@ -78,7 +78,7 @@
       ],
       "depends_on": [],
       "ordinal": 3,
-      "created_at": "2026-08-30 18:34:30.386865+00"
+      "created_at": "2026-08-31 05:59:15.685336+00"
     },
     {
       "entry_id": "approval:customer_concession:account_owner",
@@ -96,7 +96,7 @@
         "approval:evidence_review:account_owner-or-sales_leader"
       ],
       "ordinal": 4,
-      "created_at": "2026-08-30 18:34:30.386865+00"
+      "created_at": "2026-08-31 05:59:15.685336+00"
     }
   ],
   "decisions": [
@@ -107,11 +107,11 @@
       "action": "approve_unchanged",
       "actor_id": "USR-5005",
       "actor_name": "Rina Vale",
-      "rationale": "Commercial discount reviewed against deal desk policy.",
+      "rationale": "Reviewed for the sample submission artifact set.",
       "result_run_version": 6,
       "result_status": "awaiting_approval",
       "result_quorum_satisfied": false,
-      "created_at": "2026-08-30 18:34:59.438+00"
+      "created_at": "2026-08-31 05:59:16.915+00"
     },
     {
       "entry_id": "approval:commercial_discount:sales_leader",
@@ -120,11 +120,11 @@
       "action": "approve_unchanged",
       "actor_id": "USR-5008",
       "actor_name": "Tomas Reed",
-      "rationale": "Sales leadership reviewed the discount and commercial posture.",
+      "rationale": "Reviewed for the sample submission artifact set.",
       "result_run_version": 7,
       "result_status": "awaiting_approval",
       "result_quorum_satisfied": false,
-      "created_at": "2026-08-30 18:35:13.62+00"
+      "created_at": "2026-08-31 05:59:18.209+00"
     },
     {
       "entry_id": "approval:legal_terms:legal_reviewer",
@@ -133,11 +133,11 @@
       "action": "approve_unchanged",
       "actor_id": "USR-5006",
       "actor_name": "Iris Wynn",
-      "rationale": "Legal terms and liability language reviewed for the sample flow.",
+      "rationale": "Reviewed for the sample submission artifact set.",
       "result_run_version": 8,
       "result_status": "awaiting_approval",
       "result_quorum_satisfied": false,
-      "created_at": "2026-08-30 18:35:28.7+00"
+      "created_at": "2026-08-31 05:59:19.489+00"
     },
     {
       "entry_id": "approval:evidence_review:account_owner-or-sales_leader",
@@ -146,11 +146,11 @@
       "action": "approve_unchanged",
       "actor_id": "USR-5003",
       "actor_name": "Nora Chen",
-      "rationale": "Account owner reviewed the evidence-backed claims and warnings.",
+      "rationale": "Reviewed for the sample submission artifact set.",
       "result_run_version": 9,
       "result_status": "awaiting_approval",
       "result_quorum_satisfied": false,
-      "created_at": "2026-08-30 18:35:46.888+00"
+      "created_at": "2026-08-31 05:59:20.778+00"
     },
     {
       "entry_id": "approval:customer_concession:account_owner",
@@ -159,11 +159,11 @@
       "action": "approve_unchanged",
       "actor_id": "USR-5003",
       "actor_name": "Nora Chen",
-      "rationale": "Account owner approved the customer-facing concession after upstream commercial, legal, and evidence reviews.",
+      "rationale": "Reviewed for the sample submission artifact set.",
       "result_run_version": 10,
       "result_status": "finalizing",
       "result_quorum_satisfied": true,
-      "created_at": "2026-08-30 18:35:46.994+00"
+      "created_at": "2026-08-31 05:59:22.064+00"
     }
   ],
   "finalOutcome": {

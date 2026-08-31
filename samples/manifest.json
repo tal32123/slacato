@@ -1,6 +1,6 @@
 {
   "deliverable": "Deliverable D: Sample run artifacts",
-  "generatedAt": "2026-08-30T18:40:41.068Z",
+  "generatedAt": "2026-08-31T06:00:14.428Z",
   "database": "slacato_samples",
   "liveLlmVerified": true,
   "scenarios": {
@@ -14,18 +14,18 @@
         "name": "Northstar Foods Cooperative - Global Access Renewal"
       },
       "provenance": {
-        "runId": "run_31c495bb7ef6ab0f2f3bdc210ab546fb96a168acfa6209b5e5e5172334b41f42",
+        "runId": "run_fd58beab2fab37d7595481091a5fe84f9ed616c11a26b8ed312ceb9b03866c0a",
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
         "embeddingModel": "openai/text-embedding-3-small",
         "tokenUsage": {
-          "calls": 6,
-          "inputTokens": 31543,
-          "outputTokens": 9788,
-          "totalTokens": 41331
+          "calls": 5,
+          "inputTokens": 25266,
+          "outputTokens": 7093,
+          "totalTokens": 32359
         },
-        "runStartedAt": "2026-08-30T18:32:24.594Z",
-        "runCompletedAt": "2026-08-30T18:33:36.131Z"
+        "runStartedAt": "2026-08-31T05:40:53.065Z",
+        "runCompletedAt": "2026-08-31T05:41:16.197Z"
       },
       "files": [
         "normal-opportunity-brief.json",
@@ -42,18 +42,18 @@
         "name": "Eclipse BioMaterials Ltd - Restricted Renewal and Data Protection"
       },
       "provenance": {
-        "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+        "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
         "embeddingModel": "openai/text-embedding-3-small",
         "tokenUsage": {
           "calls": 5,
-          "inputTokens": 22984,
-          "outputTokens": 8911,
-          "totalTokens": 31895
+          "inputTokens": 25255,
+          "outputTokens": 8730,
+          "totalTokens": 33985
         },
-        "runStartedAt": "2026-08-30T18:34:01.436Z",
-        "runCompletedAt": "2026-08-30T18:35:47.741Z"
+        "runStartedAt": "2026-08-31T05:58:48.644Z",
+        "runCompletedAt": "2026-08-31T05:59:22.724Z"
       },
       "files": [
         "restricted-opportunity-brief.json",
@@ -81,20 +81,20 @@
       ]
     },
     "traceAndLogExamples": {
-      "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "provenance": {
-        "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+        "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
         "embeddingModel": "openai/text-embedding-3-small",
         "tokenUsage": {
           "calls": 5,
-          "inputTokens": 22984,
-          "outputTokens": 8911,
-          "totalTokens": 31895
+          "inputTokens": 25255,
+          "outputTokens": 8730,
+          "totalTokens": 33985
         },
-        "runStartedAt": "2026-08-30T18:34:01.436Z",
-        "runCompletedAt": "2026-08-30T18:35:47.741Z"
+        "runStartedAt": "2026-08-31T05:58:48.644Z",
+        "runCompletedAt": "2026-08-31T05:59:22.724Z"
       },
       "requiredSpanKinds": [
         "model_call",
