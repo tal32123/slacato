@@ -11,6 +11,8 @@ import { ExportsModule } from './modules/exports/exports.module.js';
 import { HealthModule, type HealthModuleOptions } from './modules/health/health.module.js';
 import type { WorkflowApiOptions } from './modules/runs/contracts.js';
 import { RunsModule } from './modules/runs/runs.module.js';
+import type { SandboxModuleOptions } from './modules/sandbox/contracts.js';
+import { SandboxModule } from './modules/sandbox/sandbox.module.js';
 
 /** Composes the API delivery modules with their externally supplied dependencies. */
 @Module({})
@@ -22,7 +24,8 @@ export class AppModule {
     diagnosticsOptions?: DiagnosticsModuleOptions,
     dealsOptions?: DealsModuleOptions,
     briefExportService?: BriefExportService,
-    healthOptions?: HealthModuleOptions
+    healthOptions?: HealthModuleOptions,
+    sandboxOptions?: SandboxModuleOptions
   ): DynamicModule {
     return {
       module: AppModule,
@@ -42,7 +45,10 @@ export class AppModule {
               )
             ]),
         ...(dealsOptions === undefined ? [] : [DealsModule.register(dealsOptions)]),
-        ...(briefExportService === undefined ? [] : [ExportsModule.register(briefExportService)])
+        ...(briefExportService === undefined ? [] : [ExportsModule.register(briefExportService)]),
+        // Absent unless composition proved this process is connected to a designated sandbox, so
+        // the reset routes do not exist in a deployment that never opted in.
+        ...(sandboxOptions === undefined ? [] : [SandboxModule.register(sandboxOptions)])
       ]
     };
   }
