@@ -282,7 +282,7 @@ function explicitStakeholderClassificationSupported(assertion: string, support: 
   ).test(normalizedAssertion(support));
 }
 
-type StructuredField = Readonly<{ name: string; value: string }>;
+type StructuredField = Readonly<{ name: string; label: string; value: string }>;
 
 /** Converts a code-owned camelCase field name to its normalized display label. */
 function structuredFieldDisplayName(value: string): string {
@@ -295,7 +295,13 @@ function structuredFields(value: string): readonly StructuredField[] {
     const match = /^([a-z][A-Za-z0-9]*):\s+(.+)$/su.exec(line.trim());
     return match?.[1] === undefined || match[2] === undefined
       ? []
-      : [{ name: structuredFieldDisplayName(match[1]), value: match[2].trim() }];
+      : [
+          {
+            name: structuredFieldDisplayName(match[1]),
+            label: normalize(match[1]),
+            value: match[2].trim()
+          }
+        ];
   });
 }
 
@@ -372,9 +378,11 @@ function structuredRecordAssertionSupported(assertion: string, support: string):
   const fields = structuredFields(support)
     .map((field) => ({ ...field, terms: paraphraseTerms(field.value) }))
     .filter((field) => field.terms.length > 0);
-  const labelTerms = new Set(fields.flatMap((field) => paraphraseTerms(field.name)));
-  const linkable = (term: string): boolean =>
-    STRUCTURED_ATTRIBUTION_TERMS.has(term) || labelTerms.has(term);
+  // A field label is text the cited record already contains, in either its camelCase form or its
+  // display form, so consuming one adds no unsupported content and is not charged to the budget.
+  const labelTerms = new Set(
+    fields.flatMap((field) => [...paraphraseTerms(field.name), ...paraphraseTerms(field.label)])
+  );
   const matches = (offset: number, terms: readonly string[]): boolean =>
     terms.every((term, index) => assertionTerms[offset + index] === term);
   const visit = (offset: number, used: ReadonlySet<number>, linked: number): boolean => {
@@ -386,10 +394,11 @@ function structuredRecordAssertionSupported(assertion: string, support: string):
       if (visit(offset + field.terms.length, next, linked)) return true;
     }
     const term = assertionTerms[offset];
+    if (term === undefined) return false;
+    if (labelTerms.has(term)) return visit(offset + 1, used, linked);
     return (
-      term !== undefined &&
       linked < MAX_STRUCTURED_LINK_TERMS &&
-      linkable(term) &&
+      STRUCTURED_ATTRIBUTION_TERMS.has(term) &&
       visit(offset + 1, used, linked + 1)
     );
   };
