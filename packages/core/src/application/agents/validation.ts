@@ -937,6 +937,11 @@ const COMMERCIAL_COMMITMENT =
   /\b(?:discount|concession|concede|credit|rebate|waiver|waive|refund|price reduction|free of charge)\b/i;
 const UNSAFE_CUSTOMER_FACING_ACTION =
   /\b(?:promise|guarantee|bypass|conceal|mislead|fabricate|disclose|reveal|leak)\b/i;
+/** Sends a commercial term to its deterministic owner instead of settling it in the brief. */
+const ROUTES_FOR_APPROVAL = /\bfor (?:deal desk |legal |commercial |security )?(?:approval|review)\b/i;
+/** Verbs that would settle a commercial term rather than route it. */
+const GRANTS_COMMERCIAL_TERM =
+  /\b(?:offer|grant|concede|waive|give|extend|apply|honou?r|provide|accept|approve)\w*\b/i;
 
 /** Recognizes approved language that explicitly communicates evidence uncertainty. */
 function isExplicitUncertainty(value: string): boolean {
@@ -1001,8 +1006,17 @@ function safeRecommendationAction(value: string, claims: readonly Claim[]): bool
   if (!safeGeneratedProse(normalized)) return false;
   if (safeInformationRequest(normalized)) return true;
   if (normalized.length > MAX_RECOMMENDATION_ACTION_CHARACTERS) return false;
-  // Pricing and concessions belong to the deterministic approval policy, never to raw actions.
-  if (COMMERCIAL_COMMITMENT.test(normalized)) return false;
+  // Pricing and concessions belong to the deterministic approval policy, never to raw actions. The
+  // one exception is an action that hands the term to that policy rather than settling it: OPP-1003
+  // records "Route discount, liability language, and restricted data access request for approval by
+  // 2026-05-14" as its own next step, and rejecting it emptied Recommended Next Actions in two of
+  // three live runs. Routing language plus the absence of any granting verb is what separates the
+  // two; "Offer a 15% discount" and "Approve the 15% discount" are still rejected.
+  if (
+    COMMERCIAL_COMMITMENT.test(normalized) &&
+    !(ROUTES_FOR_APPROVAL.test(normalized) && !GRANTS_COMMERCIAL_TERM.test(normalized))
+  )
+    return false;
   if (UNSAFE_CUSTOMER_FACING_ACTION.test(normalized)) return false;
   // One action is one instruction, however well grounded its text is: a multi-sentence passage
   // copied out of a transcript or a Slack thread is a status narrative, not something to execute.
