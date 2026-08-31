@@ -192,6 +192,30 @@ describe('specialized agents', () => {
     );
   });
 
+  it('requires grounded stakeholder identity so a real model can satisfy the claim validator', async () => {
+    const gateway = new RecordingGateway([emptyStakeholder, emptyCommercial]);
+    const records = [
+      evidence('evidence_crm', 'salesforce', 'fullName: Clara Esteves\ntitle: Director of Plant Systems'),
+      evidence('evidence_policy', 'policy', 'Discounts above 20% require approval.')
+    ];
+
+    await new StakeholderAgent(gateway).run(context(records));
+    await new CommercialAgent(gateway).run(context(records));
+
+    const [stakeholder, commercial] = gateway.requests.map((request) =>
+      request.messages.map((message) => message.content).join('\n')
+    );
+    // A claim may only restate what its own cited unit says. Contact records carry an accountId,
+    // never the account name, so an identity claim naming the organization is unsupportable and
+    // the whole stakeholder is dropped. Every specialist needs this, not just the stakeholder one.
+
+    // Without this the model writes true-but-unciteable prose ("Strong champion for factory
+    // rollout"), which never restates the person, so identity support can never resolve.
+    expect(stakeholder).toContain('names that person in full');
+    expect(stakeholder).toContain('restates their title exactly as the record naming them states it');
+    expect(stakeholder).toContain('never name the company in that claim');
+  });
+
   it('cannot let an evidence record close the fixed inert-data delimiter', async () => {
     const gateway = new RecordingGateway([emptyConversation]);
     const injected = evidence(
