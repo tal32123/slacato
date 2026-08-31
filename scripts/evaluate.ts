@@ -159,24 +159,33 @@ async function runRetrievalEvaluation(): Promise<ReturnType<typeof evaluateRetri
           ].sort();
       const runId = `run_eval_${testCase.id.replaceAll(/[^A-Za-z0-9_-]/g, '_')}`;
       await database.sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash) values (${runId}, ${testCase.opportunityId}, ${testCase.userId}, 'retrieving', 'mock', 'mock-brief', ${`eval:${runId}`})`;
-      const result = await retriever.search({
-        query: testCase.query,
-        accountId: testCase.accountId,
-        opportunityId: testCase.opportunityId,
-        runId,
-        limit: testCase.limit,
-        maxContextCharacters: 20_000,
-        scope: {
-          personaId: testCase.userId,
-          allowed: true,
-          accountIds: [testCase.accountId],
-          sourceTypes,
-          canViewSensitivePricing: grants.some((grant) => grant.sensitive_pricing),
-          canRequestApproval: grants.some((grant) => grant.can_request_approval),
-          canApprove: grants.some((grant) => grant.can_approve),
-          canViewRestrictedAccounts: grants.some((grant) => grant.can_read_restricted)
-        }
-      });
+      let result: Awaited<ReturnType<typeof retriever.search>>;
+      try {
+        result = await retriever.search({
+          query: testCase.query,
+          accountId: testCase.accountId,
+          opportunityId: testCase.opportunityId,
+          runId,
+          limit: testCase.limit,
+          maxContextCharacters: 20_000,
+          scope: {
+            personaId: testCase.userId,
+            allowed: true,
+            accountIds: [testCase.accountId],
+            sourceTypes,
+            canViewSensitivePricing: grants.some((grant) => grant.sensitive_pricing),
+            canRequestApproval: grants.some((grant) => grant.can_request_approval),
+            canApprove: grants.some((grant) => grant.can_approve),
+            canViewRestrictedAccounts: grants.some((grant) => grant.can_read_restricted)
+          }
+        });
+      } catch (error) {
+        // Leaving the run in 'retrieving' would trip runs_one_active_opportunity_uq on the next
+        // case sharing this opportunity (the golden set has two OPP-1003 cases), masking the real
+        // failure behind a confusing unique-constraint violation instead of surfacing it directly.
+        await database.sql`update runs set status = 'failed' where id = ${runId}`;
+        throw error;
+      }
       await database.sql`update runs set status = 'completed' where id = ${runId}`;
       results.push({
         id: testCase.id,

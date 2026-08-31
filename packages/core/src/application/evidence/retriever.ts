@@ -7,6 +7,17 @@ import type { EvidencePlan } from './contracts.js';
 
 const DEFAULT_CONTEXT_CHARACTERS = 24_000;
 const CANONICAL_CRM_RECORD_LIMIT = 1 + 1 + 5; // Account, opportunity, and every canonical contact.
+// Deliberately separate from CANONICAL_CRM_RECORD_LIMIT: that constant guarantees every canonical
+// CRM record is always surfaced by `searchExactCrmEvidence`. This constant instead bounds how many
+// Salesforce rows are ADMITTED AS CANDIDATES into the ranked hybrid search (lexical/semantic + RRF)
+// before fusion. Reusing the completeness guarantee (7) here made the per-source cap a no-op --
+// since every opportunity has at most 7 Salesforce rows, all of them entered every section search
+// regardless of relevance, so Salesforce accumulated RRF mass purely by appearing in more candidate
+// lists and crowded out genuinely relevant slack/gong/policy chunks. Set to 2 to match the existing
+// cap already used for every other non-primary source type (gong_summary, pricing, slack); values
+// of 1-7 were compared against `pnpm eval:deterministic` and none regressed macroRecallAtK or
+// permissionLeakage, so this is the smallest, most consistent choice available.
+const SALESFORCE_CANDIDATE_WINDOW = 2;
 const CANONICAL_POLICY_SECTION_LIMIT = 1 + 3; // Policy preamble and every bounded rule section.
 const RELIABILITY_ADJUSTMENTS: Readonly<Record<string, number>> = Object.freeze({
   authoritative_policy: 0.02,
@@ -68,9 +79,10 @@ export function buildEvidencePlan(
       gong_transcript: input.limit,
       policy: CANONICAL_POLICY_SECTION_LIMIT,
       pricing: Math.min(input.limit, 2),
-      salesforce: CANONICAL_CRM_RECORD_LIMIT,
+      salesforce: Math.min(input.limit, SALESFORCE_CANDIDATE_WINDOW),
       slack: Math.min(input.limit, 2)
     },
+    crmRecordLimit: CANONICAL_CRM_RECORD_LIMIT,
     mandatorySourceTypes: ['policy'],
     policyReservation: {
       resultSlots: 1,

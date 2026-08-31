@@ -33,12 +33,15 @@ describe('EvidencePlan', () => {
       'deal_snapshot', 'buyer_goals', 'stakeholders', 'negotiation_state', 'next_actions', 'missing_information'
     ]);
     expect(plan.mandatorySourceTypes).toEqual(['policy']);
-    expect(plan.sourceLimits).toEqual({ gong_summary: 2, gong_transcript: 4, policy: 4, pricing: 2, salesforce: 7, slack: 2 });
+    expect(plan.sourceLimits).toEqual({ gong_summary: 2, gong_transcript: 4, policy: 4, pricing: 2, salesforce: 2, slack: 2 });
     expect(plan.policyReservation).toEqual({ resultSlots: 1, contextCharacters: 500 });
-    expect(Object.entries(plan.sourceLimits).every(([source, limit]) =>
-      limit > 0 && (source === 'salesforce' || limit <= 4)
-    )).toBe(true);
+    expect(Object.entries(plan.sourceLimits).every(([, limit]) => limit > 0 && limit <= 4)).toBe(true);
     expect(plan.maxContextCharacters).toBe(2_000);
+    // The always-surface CRM completeness guarantee (account + opportunity + 5 canonical contacts)
+    // must stay separate from, and larger than, the hybrid-search Salesforce candidate window --
+    // otherwise Salesforce crowds out relevant evidence in every hybrid search (see retriever.ts).
+    expect(plan.crmRecordLimit).toBe(7);
+    expect(plan.sourceLimits.salesforce).toBeLessThan(plan.crmRecordLimit);
   });
 });
 
