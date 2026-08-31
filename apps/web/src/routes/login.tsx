@@ -1,6 +1,6 @@
 import type { Persona } from '@slacato/contracts';
 import { Check, Database, LoaderCircle, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { fetchCsrf, fetchPersonas } from '@/api/client';
 import { safeDestination, selectPersonaSession, sessionRuntime } from '@/api/session';
@@ -20,6 +20,7 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { demoPersonaPurpose, groupDemoPersonas } from '@/features/personas/demo-personas';
 
 type LoginState =
@@ -73,114 +74,119 @@ export function LoginRoute(): React.JSX.Element {
   };
 
   return (
-    <main
-      id="main-content"
-      className="min-h-screen bg-background lg:grid lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.28fr)]"
-    >
-      <aside className="relative overflow-hidden bg-brand-forest px-6 py-8 text-brand-pale sm:px-10 lg:flex lg:min-h-screen lg:flex-col lg:justify-between lg:px-12 lg:py-12">
-        <div className="relative">
-          <div className="mb-14 flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-lg bg-brand-mint text-brand-forest">
-              <ShieldCheck className="size-6" />
-            </span>
-            <span className="text-xl font-semibold tracking-tight">SlaCato</span>
+    // The persona cards reveal their full sign-in label through a tooltip when the name is clipped,
+    // and every Radix tooltip needs a provider above it to share open/close timing.
+    <TooltipProvider>
+      <main
+        id="main-content"
+        className="min-h-screen bg-background lg:grid lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.28fr)]"
+      >
+        <aside className="relative overflow-hidden bg-brand-forest px-6 py-8 text-brand-pale sm:px-10 lg:flex lg:min-h-screen lg:flex-col lg:justify-between lg:px-12 lg:py-12">
+          <div className="relative">
+            <div className="mb-14 flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-lg bg-brand-mint text-brand-forest">
+                <ShieldCheck className="size-6" />
+              </span>
+              <span className="text-xl font-semibold tracking-tight">SlaCato</span>
+            </div>
+            <Badge className="mb-5 border border-brand-mint/35 bg-brand-medium text-brand-mint">
+              Verified demo workspace
+            </Badge>
+            <h1 className="max-w-lg text-3xl font-semibold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
+              Deal intelligence with permission boundaries you can see.
+            </h1>
+            <p className="mt-5 max-w-md text-sm leading-6 text-brand-pale/75 sm:text-base">
+              Step into a canonical sales persona to explore grounded account strategy, approvals,
+              and evidence.
+            </p>
           </div>
-          <Badge className="mb-5 border border-brand-mint/35 bg-brand-medium text-brand-mint">
-            Verified demo workspace
-          </Badge>
-          <h1 className="max-w-lg text-3xl font-semibold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-            Deal intelligence with permission boundaries you can see.
-          </h1>
-          <p className="mt-5 max-w-md text-sm leading-6 text-brand-pale/75 sm:text-base">
-            Step into a canonical sales persona to explore grounded account strategy, approvals, and
-            evidence.
-          </p>
-        </div>
-        <ul className="relative mt-10 grid gap-3 text-sm text-brand-pale/80 sm:grid-cols-3 lg:mt-16 lg:grid-cols-1">
-          <TrustItem icon={Database} label="Canonical fixture identities" />
-          <TrustItem icon={LockKeyhole} label="Server-authorized access" />
-          <TrustItem icon={Sparkles} label="Deterministic demo ready" />
-        </ul>
-      </aside>
+          <ul className="relative mt-10 grid gap-3 text-sm text-brand-pale/80 sm:grid-cols-3 lg:mt-16 lg:grid-cols-1">
+            <TrustItem icon={Database} label="Canonical fixture identities" />
+            <TrustItem icon={LockKeyhole} label="Server-authorized access" />
+            <TrustItem icon={Sparkles} label="Deterministic demo ready" />
+          </ul>
+        </aside>
 
-      <section className="mx-auto flex w-full max-w-5xl flex-col px-5 py-10 sm:px-10 sm:py-14 lg:justify-center lg:px-14">
-        <div className="mb-8 max-w-2xl">
-          <p className="mb-2 text-sm font-medium text-primary">Demo access</p>
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Choose your demo persona
-          </h2>
-          <p className="mt-3 leading-6 text-muted-foreground">
-            No passwords. No invented roles. Every option comes from the ingested permissions
-            fixture.
-          </p>
-        </div>
+        <section className="mx-auto flex w-full max-w-5xl flex-col px-5 py-10 sm:px-10 sm:py-14 lg:justify-center lg:px-14">
+          <div className="mb-8 max-w-2xl">
+            <p className="mb-2 text-sm font-medium text-primary">Demo access</p>
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Choose your demo persona
+            </h2>
+            <p className="mt-3 leading-6 text-muted-foreground">
+              No passwords. No invented roles. Every option comes from the ingested permissions
+              fixture.
+            </p>
+          </div>
 
-        <GuidedTourInvitation />
+          <GuidedTourInvitation />
 
-        {state.status === 'loading' && <LoadingState />}
-        {state.status === 'error' && (
-          <Alert variant="destructive">
-            <AlertTitle>Demo access is temporarily unavailable</AlertTitle>
-            <AlertDescription>
-              Check that the API and canonical fixture ingestion are ready, then try again.
-            </AlertDescription>
-            <Button className="mt-4 min-h-11" variant="outline" onClick={retry}>
-              Try again
-            </Button>
-          </Alert>
-        )}
-        {state.status === 'ready' && (
-          <div className="grid gap-8">
-            {groupDemoPersonas(state.personas).map((group) => {
-              const cards = (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {group.personas.map((persona) => (
-                    <PersonaChoice
-                      key={persona.userId}
-                      persona={persona}
-                      submitting={submitting}
-                      onChoose={choose}
-                    />
-                  ))}
-                </div>
-              );
-              if (group.collapsed)
-                return (
-                  <details key={group.id} className="rounded-xl border bg-card/60 px-5 py-4">
-                    {/* Typography matches the open groups' <h3> so the three group titles read as
+          {state.status === 'loading' && <LoadingState />}
+          {state.status === 'error' && (
+            <Alert variant="destructive">
+              <AlertTitle>Demo access is temporarily unavailable</AlertTitle>
+              <AlertDescription>
+                Check that the API and canonical fixture ingestion are ready, then try again.
+              </AlertDescription>
+              <Button className="mt-4 min-h-11" variant="outline" onClick={retry}>
+                Try again
+              </Button>
+            </Alert>
+          )}
+          {state.status === 'ready' && (
+            <div className="grid gap-8">
+              {groupDemoPersonas(state.personas).map((group) => {
+                const cards = (
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {group.personas.map((persona) => (
+                      <PersonaChoice
+                        key={persona.userId}
+                        persona={persona}
+                        submitting={submitting}
+                        onChoose={choose}
+                      />
+                    ))}
+                  </div>
+                );
+                if (group.collapsed)
+                  return (
+                    <details key={group.id} className="rounded-xl border bg-card/60 px-5 py-4">
+                      {/* Typography matches the open groups' <h3> so the three group titles read as
                         one level rather than the collapsed one looking like a footnote. */}
-                    <summary className="min-h-11 cursor-pointer text-lg font-semibold tracking-tight marker:text-muted-foreground">
+                      <summary className="min-h-11 cursor-pointer text-lg font-semibold tracking-tight marker:text-muted-foreground">
+                        {group.title}
+                      </summary>
+                      <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                        {group.description}
+                      </p>
+                      <div className="mt-4">{cards}</div>
+                    </details>
+                  );
+                return (
+                  <section key={group.id} aria-labelledby={`persona-group-${group.id}`}>
+                    <h3
+                      id={`persona-group-${group.id}`}
+                      className="text-lg font-semibold tracking-tight"
+                    >
                       {group.title}
-                    </summary>
+                    </h3>
                     <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                       {group.description}
                     </p>
                     <div className="mt-4">{cards}</div>
-                  </details>
+                  </section>
                 );
-              return (
-                <section key={group.id} aria-labelledby={`persona-group-${group.id}`}>
-                  <h3
-                    id={`persona-group-${group.id}`}
-                    className="text-lg font-semibold tracking-tight"
-                  >
-                    {group.title}
-                  </h3>
-                  <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-                    {group.description}
-                  </p>
-                  <div className="mt-4">{cards}</div>
-                </section>
-              );
-            })}
-          </div>
-        )}
-        <p className="mt-7 flex items-center gap-2 text-xs text-muted-foreground">
-          <Check className="size-4 text-primary" /> Sessions expire automatically after eight hours.
-        </p>
-      </section>
-      <GuidedTour />
-    </main>
+              })}
+            </div>
+          )}
+          <p className="mt-7 flex items-center gap-2 text-xs text-muted-foreground">
+            <Check className="size-4 text-primary" /> Sessions expire automatically after eight
+            hours.
+          </p>
+        </section>
+        <GuidedTour />
+      </main>
+    </TooltipProvider>
   );
 }
 
@@ -194,6 +200,10 @@ function PersonaChoice({
   submitting: string | undefined;
   onChoose: (persona: Persona) => Promise<void>;
 }>): React.JSX.Element {
+  const busy = submitting === persona.userId;
+  const label = busy ? 'Opening workspace…' : `Continue as ${persona.displayName}`;
+  const [labelRef, labelClipped] = useClippedText(label);
+
   // min-w-0 keeps the card inside its grid track: a grid item's automatic minimum size is its
   // min-content width, and the sign-in label used to make that wider than the column, which pushed
   // the cards past the viewport edge at 390px and past the card edge in the 3-column layout.
@@ -223,25 +233,34 @@ function PersonaChoice({
       </CardContent>
       <CardFooter className="px-5">
         {/* The label carries the persona name, so it is the widest thing in the card and it used to
-            spill out of the button in the 3-column layout. Dropping the decorative arrow and the
-            wide inline padding gives every canonical name a single line down to the narrowest
-            3-column width; whitespace-normal keeps an unusually long fixture name wrapping inside
-            the button instead of overflowing it. The label is centred, so the reduced inline padding
-            is not visible. */}
-        <Button
-          className="h-auto min-h-11 w-full whitespace-normal px-2 py-2 text-center leading-5"
-          disabled={submitting !== undefined}
-          onClick={() => void onChoose(persona)}
-        >
-          {submitting === persona.userId && (
-            <LoaderCircle aria-hidden="true" className="animate-spin" />
-          )}
-          <span>
-            {submitting === persona.userId
-              ? 'Opening workspace…'
-              : `Continue as ${persona.displayName}`}
-          </span>
-        </Button>
+            spill out of the button in the 3-column layout. It now clips to one line with an
+            ellipsis instead of wrapping, which keeps every button exactly one 44px row tall so the
+            primary actions stay on a single baseline whatever a fixture name is called. truncate
+            also zeroes the label's min-content contribution, which is what stops the card pushing
+            past its grid track. The full label stays available three ways: the accessible name
+            below, and a tooltip on hover and on keyboard focus -- offered only when the text is
+            actually clipped, so a fully visible label never repeats itself. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              // Radix's trigger spreads its own data-slot over the button's, so restate it and keep
+              // every button in the app selectable as one thing.
+              data-slot="button"
+              // The visible text may be an ellipsis-clipped fragment, so the accessible name
+              // carries the whole label and assistive tech never announces "Continue as Maya Lev...".
+              aria-label={label}
+              className="min-h-11 w-full min-w-0 px-2 text-center leading-5"
+              disabled={submitting !== undefined}
+              onClick={() => void onChoose(persona)}
+            >
+              {busy && <LoaderCircle aria-hidden="true" className="animate-spin" />}
+              <span ref={labelRef} className="min-w-0 truncate">
+                {label}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          {labelClipped && <TooltipContent>{label}</TooltipContent>}
+        </Tooltip>
       </CardFooter>
     </Card>
   );
@@ -270,6 +289,33 @@ function LoadingState(): React.JSX.Element {
       </div>
     </div>
   );
+}
+
+/**
+ * Reports whether an element's single-line text is clipped by its own box, so callers can offer the
+ * full string only when it is genuinely hidden. Overflow is a rendered-layout fact rather than a
+ * property of the string, so it has to be measured; the observer re-measures on every width change,
+ * including the first layout a card gets when its collapsed group is disclosed.
+ */
+function useClippedText(text: string): readonly [React.RefObject<HTMLSpanElement | null>, boolean] {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [clipped, setClipped] = useState(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The text is a re-measure trigger, not a read.
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+    // A sub-pixel scrollWidth rounds up against an integer clientWidth, so require a real overflow.
+    const measure = (): void => setClipped(element.scrollWidth > element.clientWidth + 1);
+    measure();
+    // jsdom has no ResizeObserver; the one measurement above is all that environment can offer.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [text]);
+
+  return [ref, clipped] as const;
 }
 
 /** Produces a compact avatar label from a person's name. */
