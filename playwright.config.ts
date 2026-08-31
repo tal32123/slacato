@@ -37,7 +37,11 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:4173', trace: 'retain-on-failure' },
   webServer: [
     {
-      command: `DATABASE_URL=${databaseUrl} pnpm db:ensure && DATABASE_URL=${databaseUrl} pnpm db:migrate && DATABASE_URL=${databaseUrl} pnpm ingest:records && pnpm build && DATABASE_URL=${databaseUrl} SESSION_SECRET=playwright-session-secret-that-is-long-enough AI_PROVIDER=mock WEB_ORIGIN=http://127.0.0.1:4173 SLACATO_BOOTSTRAP=1 PORT=${apiPort} node apps/api/dist/main.js`,
+      // Embeddings must be indexed with the same AI_PROVIDER the server below runs with (mock),
+      // or /api/health/ready reports the evidence index unavailable and the UI's generation
+      // readiness gate correctly refuses to enable "Generate Brief" -- see
+      // apps/web/src/features/runs/generation-readiness.ts.
+      command: `DATABASE_URL=${databaseUrl} pnpm db:ensure && DATABASE_URL=${databaseUrl} pnpm db:migrate && DATABASE_URL=${databaseUrl} pnpm ingest:records && DATABASE_URL=${databaseUrl} AI_PROVIDER=mock pnpm index:embeddings && pnpm build && DATABASE_URL=${databaseUrl} SESSION_SECRET=playwright-session-secret-that-is-long-enough AI_PROVIDER=mock WEB_ORIGIN=http://127.0.0.1:4173 SLACATO_BOOTSTRAP=1 PORT=${apiPort} node apps/api/dist/main.js`,
       url: `http://127.0.0.1:${apiPort}/api/health/live`,
       reuseExistingServer,
       timeout: 120_000
