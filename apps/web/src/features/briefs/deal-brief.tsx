@@ -316,8 +316,10 @@ function accountTeamUpdateIds(
 function describeAccountTeamUpdateImpact(updateIds: readonly string[]): string {
   if (updateIds.length === 0)
     return 'Badged because this section cites a generated account-team update the requester is authorized to read.';
-  const label = updateIds.length === 1 ? 'account-team update' : 'account-team updates';
-  return `Badged because this section cites ${label} ${updateIds.join(', ')}. Without the requester's Slack grant that citation is never retrieved and the badge is absent.`;
+  const single = updateIds.length === 1;
+  const label = single ? 'account-team update' : 'account-team updates';
+  const consequence = single ? 'that citation is' : 'those citations are';
+  return `Badged because this section cites ${label} ${updateIds.join(', ')}. Without the requester's Slack grant ${consequence} never retrieved and the badge is absent.`;
 }
 
 /** Appends the cited update ids to an inline impact label, or nothing when none are resolvable. */
