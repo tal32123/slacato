@@ -156,13 +156,30 @@ class SessionRuntime {
     return generation === this.connectionGeneration;
   }
 
-  /** Begins a session transition by closing protected surfaces and clearing session-scoped data. */
-  public prepareTransition(preserveQueryKey?: readonly unknown[]): void {
+  /**
+   * Begins a session transition by closing protected surfaces and clearing session-scoped data.
+   *
+   * By default this also blanks the rendered shell (via `transitioning`) until `finishTransition`
+   * runs, which is correct when the current page has no way to know the outcome on its own -- a
+   * cross-tab broadcast, or reconciling after a request whose result is ambiguous. Pass
+   * `blank: false` when the transition is being driven by the very page the user is looking at
+   * (the Settings persona switch): the teardown of session-scoped queries, streams, and overlays
+   * below must still happen immediately for security, but there is nothing to protect by also
+   * unmounting the page out from under its own in-flight mutation -- that page already renders its
+   * own "Changing persona…" state, and un-mounting it besides races the mutation's latency against
+   * whatever the user or a test does next for no safety benefit.
+   */
+  public prepareTransition(
+    preserveQueryKey?: readonly unknown[],
+    options?: Readonly<{ blank?: boolean }>
+  ): void {
     for (const stream of this.streams) stream.close();
     this.streams.clear();
     this.connectionGeneration += 1;
-    this.transitionInProgress = true;
-    this.notifyTransition();
+    if (options?.blank !== false) {
+      this.transitionInProgress = true;
+      this.notifyTransition();
+    }
     for (const close of this.overlayClosers) close();
     this.overlayClosers.clear();
     const shouldTearDown = ({ queryKey }: { queryKey: readonly unknown[] }): boolean =>
@@ -225,7 +242,10 @@ export async function selectPersonaSession(
   userId: string,
   csrfToken: string
 ): Promise<Extract<AuthSessionResponse, { authenticated: true }>> {
-  sessionRuntime.prepareTransition();
+  // This switch is always initiated from the Settings page the caller is currently rendering, so
+  // there is no need to blank the shell while the mutation is in flight -- see prepareTransition's
+  // doc comment. Tearing down scoped queries/streams/overlays still happens immediately below.
+  sessionRuntime.prepareTransition(undefined, { blank: false });
   try {
     const payload = await changePersona(userId, csrfToken);
     queryClient.setQueryData(queryKeys.session, payload.session);

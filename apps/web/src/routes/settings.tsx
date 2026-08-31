@@ -58,6 +58,11 @@ export function SettingsRoute(): React.JSX.Element {
       await revalidator.revalidate();
       advanceGuidedTour('settings-personas');
     } catch {
+      // The mutation did not durably switch the persona (a rejected request, or a request whose
+      // outcome could not be confirmed and was reconciled back to the still-active persona), so
+      // the selection control must reflect the persona that is actually active rather than the
+      // one the user had highlighted before submitting.
+      setSelected(session.persona.userId);
       setMutationError(true);
     } finally {
       setSaving(false);
