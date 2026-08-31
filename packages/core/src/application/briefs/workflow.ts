@@ -28,6 +28,7 @@ import {
 } from '../../domain/shared/errors.js';
 import type { RunId } from '../../domain/shared/ids.js';
 import type { AgentContext, StrategyArtifacts } from '../agents/contracts.js';
+import { withoutSelfContradictoryWarnings } from '../agents/validation.js';
 import type { WorkflowCommand } from '../workflow/command-queue.js';
 import type {
   RunLifecycleStore,
@@ -286,7 +287,13 @@ function mergeSpecialistReviewWarnings(
   brief: DealBrief,
   artifacts: readonly Readonly<{ reviewWarnings?: readonly ReviewWarning[] }>[]
 ): DealBrief {
-  const specialistWarnings = artifacts.flatMap((artifact) => artifact.reviewWarnings ?? []);
+  // Specialist warnings reach the reviewer without passing through validateDealBrief, so the
+  // self-contradiction guard has to be applied on this path too: a specialist that reports a
+  // person absent must not sit beside a brief presenting that same person as a cited stakeholder.
+  const specialistWarnings = withoutSelfContradictoryWarnings(
+    artifacts.flatMap((artifact) => artifact.reviewWarnings ?? []),
+    brief.stakeholderMap.stakeholders.map((stakeholder) => stakeholder.name)
+  );
   const validClaimIds = retainedClaimIds(brief);
   const specialistKeys = new Set(
     specialistWarnings.map(
