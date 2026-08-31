@@ -18,15 +18,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 /** The record families a reset removes, in the order a reviewer asks about them. */
-const ERASED_LABELS: readonly (readonly [keyof SandboxResetTallyView, string])[] = [
-  ['runs', 'runs'],
-  ['approvalSubjects', 'approval requests'],
-  ['approvalDecisions', 'approval decisions'],
-  ['briefs', 'generated briefs'],
-  ['runEvents', 'run events'],
-  ['traceSpans', 'trace spans'],
-  ['queuedCommands', 'queued commands'],
-  ['auditEvents', 'run audit records']
+const ERASED_LABELS: readonly Readonly<{
+  key: keyof SandboxResetTallyView;
+  one: string;
+  many: string;
+}>[] = [
+  { key: 'runs', one: 'run', many: 'runs' },
+  { key: 'approvalSubjects', one: 'approval request', many: 'approval requests' },
+  { key: 'approvalDecisions', one: 'approval decision', many: 'approval decisions' },
+  { key: 'briefs', one: 'generated brief', many: 'generated briefs' },
+  { key: 'runEvents', one: 'run event', many: 'run events' },
+  { key: 'traceSpans', one: 'trace span', many: 'trace spans' },
+  { key: 'queuedCommands', one: 'queued command', many: 'queued commands' },
+  { key: 'auditEvents', one: 'run audit record', many: 'run audit records' }
 ];
 
 /**
@@ -104,11 +108,11 @@ export function ResetSandboxCard({
 
         <TallyList tally={report.tally} />
 
-        {report.tally.activeRuns > 0 && (
+        {report.tally.runsInFlight > 0 && (
           <p className="mt-3 text-sm leading-6 text-attention-foreground">
-            {report.tally.activeRuns === 1
-              ? '1 run has not finished yet.'
-              : `${report.tally.activeRuns} runs have not finished yet.`}{' '}
+            {report.tally.runsInFlight === 1
+              ? '1 run is generating right now.'
+              : `${report.tally.runsInFlight} runs are generating right now.`}{' '}
             Resetting discards that work; a step already handed to the worker fails once and is set
             aside.
           </p>
@@ -183,9 +187,9 @@ export function ResetSandboxCard({
 function TallyList({ tally }: Readonly<{ tally: SandboxResetTallyView }>): React.JSX.Element {
   return (
     <dl className="mt-4 grid gap-y-1 text-sm">
-      {ERASED_LABELS.map(([key, label]) => (
+      {ERASED_LABELS.map(({ key, many }) => (
         <div key={key} className="flex justify-between gap-4">
-          <dt className="text-muted-foreground">{label}</dt>
+          <dt className="text-muted-foreground">{many}</dt>
           <dd className="font-medium tabular-nums">{tally[key]}</dd>
         </div>
       ))}
@@ -193,10 +197,16 @@ function TallyList({ tally }: Readonly<{ tally: SandboxResetTallyView }>): React
   );
 }
 
-/** Renders the counts as the prose a confirmation should read like. */
+/**
+ * Renders the counts as the prose a confirmation should read like.
+ *
+ * Families with nothing in them are left out and singulars agree, because a sentence reading
+ * "1 runs, 0 generated briefs" is the kind of detail that makes a reader stop trusting the number
+ * they are being asked to approve.
+ */
 export function describeErased(tally: SandboxResetTallyView): string {
-  const parts = ERASED_LABELS.filter(([key]) => tally[key] > 0).map(
-    ([key, label]) => `${tally[key]} ${label}`
+  const parts = ERASED_LABELS.filter(({ key }) => tally[key] > 0).map(
+    ({ key, one, many }) => `${tally[key]} ${tally[key] === 1 ? one : many}`
   );
   if (parts.length === 0) return 'nothing — this sandbox already has no run history';
   const last = parts.at(-1) ?? '';
