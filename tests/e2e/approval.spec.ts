@@ -308,11 +308,16 @@ test('edit and approve validates semantic fields, reflows at 320px and 200%-equi
     'Negotiation state', 'Recommended next actions', 'Missing information',
     'Authorized evidence summaries', 'Confidence and review warnings'
   ]) await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  // Section prose and the claims backing it can carry the same sentence - a claim statement is
+  // often the goal or risk it supports, verbatim - so assert the text is present, not that it is
+  // present exactly once.
   await expect(page.getByText(payload.executiveSummary.narrative, { exact: true }).first()).toBeVisible();
   await expect(
-    page.getByText(payload.buyerGoalsAndBusinessDrivers.goals[0] ?? '', { exact: true })
+    page.getByText(payload.buyerGoalsAndBusinessDrivers.goals[0] ?? '', { exact: true }).first()
   ).toBeVisible();
-  await expect(page.getByText(payload.negotiationState.currentState, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(payload.negotiationState.currentState, { exact: true }).first()
+  ).toBeVisible();
   const edit = page.getByRole('button', { name: 'Edit and approve' });
   await edit.focus();
   await page.keyboard.press('Enter');
