@@ -121,6 +121,7 @@
       "withoutSlackRunId": "run_ea1c3ed1a0de789547e8adf408f7f1b340df41b65e83dd669e15ab381a4d7e23",
       "finding": "On OPP-1003 the authorized Slack updates reach the finalized brief and shape it: 3 claim(s) outside Source Evidence cite a Slack update, and the reviewer-facing workspace marks 4 section(s) as account-team-update impacted. Revoking only the requester's slack read grant removes every Slack entry from retrieval and leaves 0 such claim(s).",
       "files": [
+        "slack-impact.html",
         "slack-impact-comparison.json",
         "slack-impact-comparison.md"
       ]
@@ -161,6 +162,7 @@
       "pnpm tsx scripts/generate-sample-runs.ts --api=<api-base> --approval-capture=samples/restricted-approval-flow.json OPP-1003",
       "pnpm tsx scripts/generate-sample-runs.ts --api=<api-base> OPP-1001 OPP-1002",
       "pnpm tsx scripts/slack-impact-comparison.ts <with-slack-run-id> <without-slack-run-id>",
+      "pnpm tsx scripts/render-slack-impact-visual.ts",
       "pnpm tsx scripts/export-sample-artifacts.ts <normal-run-id> <expansion-run-id> <restricted-run-id> [api-base]"
     ],
     "prerequisites": [
