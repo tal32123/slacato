@@ -68,7 +68,14 @@ const payload = {
       evidenceId,
       sourceType: 'crm',
       summary: 'The renewal is ready for a documented commercial review.',
-      capturedAt: '2026-08-29T00:00:00.000Z',
+      // capturedAt is code-owned: validateDealBrief discards whatever the payload carries and
+      // re-stamps it from the cited evidence row's own event_date as `<date>T00:00:00Z` (see
+      // packages/core/src/application/agents/validation.ts). edit_and_approve re-grounds the
+      // submitted payload and requires the result to hash-equal it, so this fixture -- which is
+      // written straight into approval_subjects by SQL, never through the grounding pass a real
+      // brief goes through -- has to already be in that canonical form. Spelling the same instant
+      // as `...T00:00:00.000Z` re-stamps to a different string and 400s the edit.
+      capturedAt: '2026-08-29T00:00:00Z',
       claims: [{
         id: `claim_source_${suffix}`,
         statement: 'The renewal is ready for a documented commercial review.',
