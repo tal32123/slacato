@@ -25,13 +25,13 @@ are `README.md`, `docs/technical-overview.html` (including its security-notes se
   half of hybrid search is not a meaningful signal under mock embeddings, so this metric mainly
   exercises the lexical channel today. The comparison carries a 1e-9 tolerance so float
   representation noise alone cannot turn CI red; the gate itself is unchanged at 0.5.
-- `stakeholderIdentitySupported` (`packages/core/src/application/agents/validation.ts`) documents that
-  a stakeholder survives on "a title **or** organization stated by the same record that names them",
-  but builds `profile = [title, organization]` and requires *both*. Currently unreachable, because
-  claims are pruned against their evidence before the identity tuple is evaluated, so it is a latent
-  contract mismatch rather than a live bug - it becomes reachable the moment claim pruning loosens.
 
 ## Done
+
+- `stakeholderIdentitySupported` now matches its documented contract: each professional attribute is
+  tried independently, so a grounded title OR organization supports a stakeholder rather than
+  requiring both. Fixed in `c4c99e1`, with a regression test proving the safety property still holds -
+  a bare grounded name never carries an inferred role.
 
 - Wired the golden-retrieval regression eval (`scripts/evaluate.ts retrieval`, exposed as
   `pnpm eval:deterministic`) into CI as a "Run golden-retrieval regression eval" step (Task 15,
