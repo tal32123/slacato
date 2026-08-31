@@ -132,7 +132,7 @@ export function DealBrief({
                 label={generatedOutput.lifecycle === 'finalized' ? 'Finalized' : 'Draft'}
               />
             </div>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            <p className="mt-3 break-words text-sm leading-6 text-muted-foreground">
               This is the primary brief for this negotiation. Produced by run{' '}
               {generatedOutput.producingRun.id} ·{' '}
               {generatedOutput.producingRun.status.replaceAll('_', ' ')}

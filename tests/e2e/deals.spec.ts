@@ -109,6 +109,34 @@ test('shows a generated draft separately from the source snapshot and names its 
   await expect(page.getByText('Produced by run run-workspace-draft · awaiting approval')).toBeVisible();
 });
 
+test('does not overflow horizontally at a narrow viewport when the run id is a long unbroken hash', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, 'Maya Levin');
+  const workspace = await page.evaluate(async () => {
+    const response = await fetch('/api/deals/OPP-1001', { credentials: 'same-origin' });
+    return response.json() as Record<string, unknown>;
+  });
+  const sourceSnapshot = workspace.sourceSnapshot as { evidenceOverview: Record<string, unknown> };
+  const generatedContent = { ...sourceSnapshot.evidenceOverview, status: 'generated' };
+  const longRunId = 'run_bf0be74fedb74b4ca1e29d8c6f5b3a71fe0d92c4b7a1e6f803d2c9b5a7e1f04';
+  const generatedWorkspace = {
+    ...workspace,
+    generatedOutput: {
+      type: 'generated_output', lifecycle: 'draft',
+      producingRun: { id: longRunId, status: 'awaiting_approval', updatedAt: '2026-08-29T01:00:00.000Z' },
+      content: generatedContent
+    },
+    brief: generatedContent
+  };
+  await page.route('**/api/deals/OPP-1001', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(generatedWorkspace) });
+  });
+
+  await page.goto('/deals/OPP-1001');
+  await expect(page.getByText(`Produced by run ${longRunId}`, { exact: false })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test('desktop evidence uses one non-modal complementary region with replace and back history', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 600 });
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
