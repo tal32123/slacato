@@ -57,9 +57,9 @@ const deal: DealWorkspaceView['deal'] = {
 
 function buildWorkspace(withGeneratedOutput: boolean): DealWorkspaceView {
   const sourceSnapshotBrief = buildSections('source_backed', 'source snapshot') as DealWorkspaceView['sourceSnapshot']['evidenceOverview'];
-  const generatedBrief = buildSections('generated', 'generated output') as DealWorkspaceView['generatedOutput'] extends null
-    ? never
-    : NonNullable<DealWorkspaceView['generatedOutput']>['content'];
+  const generatedBrief = buildSections('generated', 'generated output') as NonNullable<
+    DealWorkspaceView['generatedOutput']
+  >['content'];
   return {
     sessionVersion: 'session-v1',
     deal,

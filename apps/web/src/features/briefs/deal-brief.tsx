@@ -209,9 +209,9 @@ function WorkspaceContent({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id={`${brief.status}-${id}`} className="text-xl font-semibold">
                 {section.title}
+                {sourceCues && ' '}
                 {sourceCues && (
                   <span className="ml-2 align-middle text-xs font-normal uppercase tracking-wide text-muted-foreground">
-                    {' '}
                     Source snapshot
                   </span>
                 )}
