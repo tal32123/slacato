@@ -7,6 +7,8 @@ the brief, including at least one cited generated update*.
 
 Machine-readable data, including every run id, token count, manifest rank and
 cited claim quoted below: [`slack-impact-comparison.json`](slack-impact-comparison.json).
+The same measurement rendered for reading at a glance, generated from that file:
+[`slack-impact.html`](slack-impact.html).
 
 ## What was tested
 
