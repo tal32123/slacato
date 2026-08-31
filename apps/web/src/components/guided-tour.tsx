@@ -321,12 +321,16 @@ type DialogPlacement = Readonly<{ side: 'top' | 'bottom'; maxHeight: number }>;
  * fills the viewport outright and no non-overlapping placement exists, where the floor above
  * keeps the dialog usable.
  */
-export function placeTourDialog(anchor: TourAnchor | undefined, requiresInteraction: boolean): DialogPlacement {
+export function placeTourDialog(
+  anchor: TourAnchor | undefined,
+  requiresInteraction: boolean
+): DialogPlacement {
   const viewportHeight = anchor?.viewportHeight ?? 0;
   const usable = Math.max(MIN_DIALOG_HEIGHT, viewportHeight - DIALOG_MARGIN * 2);
   // Without a measured target the spotlight is not framing anything yet, so there is nothing to
   // avoid: keep the prior default of floating interactive steps near the top.
-  if (anchor === undefined) return { side: requiresInteraction ? 'top' : 'bottom', maxHeight: usable };
+  if (anchor === undefined)
+    return { side: requiresInteraction ? 'top' : 'bottom', maxHeight: usable };
   const spaceAbove = anchor.box.top;
   const spaceBelow = viewportHeight - (anchor.box.top + anchor.box.height);
   const side = spaceAbove >= spaceBelow ? 'top' : 'bottom';
@@ -618,7 +622,9 @@ export function GuidedTour(): React.JSX.Element {
         className="fixed bottom-20 right-4 z-40 min-h-11 min-w-11 gap-2 rounded-full border border-primary/30 bg-card px-4 shadow-lg lg:bottom-5"
         onClick={open}
         aria-label={
-          resumable ? `Resume guided tour at step ${stepIndex + 1} of ${tourSteps.length}` : 'Start guided tour'
+          resumable
+            ? `Resume guided tour at step ${stepIndex + 1} of ${tourSteps.length}`
+            : 'Start guided tour'
         }
         data-tour="tour-launcher"
       >
