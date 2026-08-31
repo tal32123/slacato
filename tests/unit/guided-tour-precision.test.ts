@@ -473,3 +473,69 @@ describe('guided tour: following the step’s own instruction is never "stepping
     );
   });
 });
+
+/**
+ * Guards the wording of the steps that narrate a state which only exists on a first pass.
+ *
+ * Approval decisions are taken once and never come back, so a reviewer walking the tour a second
+ * time reaches step 14 to find "Pending 0 · No approvals currently require your authority" under
+ * copy telling them to open Rina's pending entry, and step 15 with no decision form at all.
+ * Nora's inbox at step 11 is empty on every pass, because her own entry unlocks only once the
+ * other authorities have decided. Step 20 promised permission facts while spotlighting a section
+ * that carries none of them. None of that is a data problem the tour can fix; what it can do is
+ * stop describing a screen the reviewer is not looking at.
+ */
+describe('guided tour: no step narrates a state the reviewer cannot see', () => {
+  /** Finds the single step matching a predicate, failing loudly when the tour has moved on. */
+  function stepAt(predicate: (step: (typeof tourSteps)[number], index: number) => boolean) {
+    const found = tourSteps.filter(predicate);
+    expect(found).toHaveLength(1);
+    return found[0];
+  }
+
+  it('explains why the restricted owner’s own approval inbox is empty instead of implying entries', () => {
+    const first = tourSteps.findIndex((candidate) => candidate.target === 'approvals');
+    const step = tourSteps[first];
+
+    expect(step?.body).toMatch(/Pending normally reads 0/);
+    expect(step?.body).toMatch(/Decision history/);
+    // The old copy claimed she "sees only the decisions she personally holds authority for",
+    // which a reviewer reads as "these entries are hers" while looking at none.
+    expect(step?.body).not.toMatch(/Nora sees only the decisions/);
+  });
+
+  it('tells the approver what a repeat pass looks like when the decision is already recorded', () => {
+    const first = tourSteps.findIndex((candidate) => candidate.target === 'approvals');
+    const step = tourSteps.filter((candidate) => candidate.target === 'approvals')[1];
+    // Two steps visit this inbox: Nora's own deal first, then the approver's. This is the second.
+    expect(tourSteps.indexOf(step!)).toBeGreaterThan(first);
+
+    expect(step?.body).toMatch(/Open her pending entry/);
+    expect(step?.body).toMatch(/already decided on an earlier pass/);
+    expect(step?.body).toMatch(/Decision history/);
+  });
+
+  it('warns that the decision form is gone once the decision has been made', () => {
+    const step = stepAt((candidate) => candidate.target === 'approval-decision');
+
+    expect(step?.body).toMatch(/already recorded/);
+    expect(step?.body).toMatch(/Continue anyway/);
+  });
+
+  it('promises only what the spotlit diagnostics section shows, and says where the rest lives', () => {
+    const step = stepAt((candidate) => candidate.target === 'diagnostics');
+
+    expect(step?.body).toMatch(/spotlight is on Runtime configuration/);
+    // The permission facts live in a sibling section the spotlight never covers, so the step has
+    // to place them there rather than fold them into what it is pointing at.
+    expect(step?.body).toMatch(/outside the spotlight/);
+    expect(step?.body).toMatch(/Canonical permission view/);
+  });
+
+  it('describes the Slack step against the brief its anchor actually frames', () => {
+    const step = stepAt((candidate) => candidate.target === 'slack-evidence');
+
+    expect(step?.body).toMatch(/generated brief’s own Source Evidence/);
+    expect(step?.body).toMatch(/slack\/account_team_updates/);
+  });
+});

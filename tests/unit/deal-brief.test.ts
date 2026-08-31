@@ -191,4 +191,19 @@ describe('DealBrief', () => {
 
     expect(screen.getByText('No authorized records populate this section.')).toBeInTheDocument();
   });
+
+  // Regression: both views render a section called Source Evidence, and both carried the same
+  // `data-tour="slack-evidence"` anchor. The guided tour resolves an anchor by DOM order, so its
+  // Slack step always framed the generated brief's copy while its wording described the source
+  // snapshot's -- thousands of pixels below, inside a closed disclosure, and never spotlit.
+  it('gives each Source Evidence view its own tour anchor so a step cannot frame the wrong one', () => {
+    const { container } = renderBrief(buildWorkspace(true));
+
+    const anchors = container.querySelectorAll('[data-tour="slack-evidence"]');
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0]?.getAttribute('aria-labelledby')).toBe('generated-sourceEvidence');
+    expect(
+      container.querySelector('[data-tour="snapshot-source-evidence"]')?.getAttribute('aria-labelledby')
+    ).toBe('source_backed-sourceEvidence');
+  });
 });

@@ -13,6 +13,14 @@ const STORAGE_KEY = 'slacato.guided-tour.v3';
 const START_EVENT = 'slacato:start-guided-tour';
 const ADVANCE_EVENT = 'slacato:guided-tour-advance';
 const TARGET_PADDING = 8;
+/** Gap kept between the step dialog and the viewport edge, and between it and its own target. */
+const DIALOG_MARGIN = 16;
+/**
+ * The shortest the step dialog is ever rendered. Reached only when the spotlight fills the
+ * viewport, which leaves no non-overlapping placement at all; a scrollable stub is still better
+ * than a dialog collapsed to nothing.
+ */
+const MIN_DIALOG_HEIGHT = 144;
 const FOCUSABLE_SELECTOR =
   'button:not(:disabled), [href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
@@ -166,7 +174,7 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     route: '/deals/OPP-1001',
     scenario: 'Scenario 4 \u00b7 Generated Slack updates',
     title: 'See the generated Slack updates change the answer',
-    body: 'We added a reviewed, synthetic Slack channel of account-team updates to the supplied CRM, call, and pricing data. Source Evidence lists the Slack updates that were retrieved, and anything they changed is tagged "Account-team update impact" so you can tell what the chatter actually moved.'
+    body: 'We added a reviewed, synthetic Slack channel of account-team updates to the supplied CRM, call, and pricing data. The spotlight is on the generated brief’s own Source Evidence: it lists every authorized record the output summarizes, the slack/account_team_updates rows among them, and anything the chatter moved carries an "Account-team update impact" tag so you can tell what it actually changed.'
   },
   {
     target: 'persona-USR-5003',
@@ -208,8 +216,8 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     target: 'approvals',
     route: '/approvals',
     scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
-    title: 'Approval routing, split by authority',
-    body: 'Every triggered rule becomes its own entry with its own eligible authority, and each entry shows quorum as "completed of required". Nora sees only the decisions she personally holds authority for, even on her own deal.'
+    title: 'Owning the deal is not authority over it',
+    body: 'Every triggered rule became its own entry with its own eligible authority and its own quorum, shown as "completed of required". This inbox lists only what Nora may decide right now, so on her own restricted deal Pending normally reads 0: the discount belongs to Deal Desk, the liability wording to Legal, and her Account Owner entry opens only once theirs are decided. That empty Pending list is the routing working, not a missing screen. Decision history below shows whatever has already been decided.'
   },
   {
     target: 'persona-USR-5005',
@@ -236,14 +244,14 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     route: '/approvals',
     scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'A different person, a different inbox',
-    body: 'Rina sees the discount decision that is hers to make, and only that one. The legal wording waits for Iris Wynn and the deeper discount waits for Tomas Reed, so no single person can release the recommendation alone. Open her pending entry to make the decision.',
+    body: 'Rina sees the discount decision that is hers to make, and only that one. The legal wording waits for Iris Wynn and the deeper discount waits for Tomas Reed, so no single person can release the recommendation alone. Open her pending entry to make the decision. A decision is taken once and never returns: if this deal’s Deal Desk entry was already decided on an earlier pass, Pending reads 0 and the entry sits in Decision history below instead — read it there and choose Next.',
     advanceOnPath: (pathname) => pathname.startsWith('/approvals/')
   },
   {
     target: 'approval-decision',
     scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'Record a real human decision',
-    body: 'Approve unchanged, edit and approve, or reject with a reason. The decision is bound to the exact brief snapshot and run version you are looking at, so it cannot silently land on different content. Quorum still needs the other authorities, so the run stays parked until they decide too.',
+    body: 'Approve unchanged, edit and approve, or reject with a reason. The decision is bound to the exact brief snapshot and run version you are looking at, so it cannot silently land on different content. Quorum still needs the other authorities, so the run stays parked until they decide too. If the Deal Desk decision on this deal was already recorded, there is no form left to open: this step reports that its target is not on screen, and "Continue anyway" moves you on.',
     waitingFor: 'Record your Deal Desk decision to continue.',
     requiresInteraction: true
   },
@@ -286,12 +294,45 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     route: '/diagnostics',
     scenario: 'Wrap-up \u00b7 Verify the setup',
     title: 'Verify the setup for yourself',
-    body: 'Diagnostics reports the live generation model, the embedding profile, index health, and the permission facts behind the boundaries you just watched. Choose Finish, then use Settings to return to any persona.'
+    body: 'The spotlight is on Runtime configuration: the live provider and output mode, the pinned generation and embedding models, index health, and every dependency check — server-reported, and not editable here. Immediately below it, outside the spotlight, the Canonical permission view lists the grants and approval authorities behind the boundaries you just watched. Choose Finish, then use Settings to return to any persona.'
   }
 ];
 
 type PersistedTour = Readonly<{ active: boolean; stepIndex: number; dismissed: boolean }>;
 type TargetBox = Readonly<{ top: number; left: number; width: number; height: number }>;
+/** The spotlight box together with the viewport it was measured against, so both stay in step. */
+type TourAnchor = Readonly<{ box: TargetBox; viewportHeight: number }>;
+type DialogPlacement = Readonly<{ side: 'top' | 'bottom'; maxHeight: number }>;
+
+/**
+ * Places the step dialog in the free space beside its own target rather than on a guessed side.
+ *
+ * The previous rule asked only which half of the viewport the target's centre fell in and pinned
+ * the dialog to the opposite edge. That is exact-boundary unsafe: a target whose centre sits
+ * precisely on the midpoint counts as "upper half", so the dialog is pinned to the bottom edge --
+ * and at 390x844 the login persona card's centre lands on 422 with the midpoint also at 422, so
+ * the dialog was laid straight over the very button the step told the user to press. It is a
+ * required-interaction step, so there was no Next to escape with either.
+ *
+ * The rule now measures the actual free space above and below the spotlight, takes the larger
+ * side, and caps the dialog's height at that space. Capping is what makes it boundary-safe: the
+ * dialog scrolls its own content instead of growing across its target, so no combination of
+ * viewport, target size and target position can make the two overlap -- except when the spotlight
+ * fills the viewport outright and no non-overlapping placement exists, where the floor above
+ * keeps the dialog usable.
+ */
+export function placeTourDialog(anchor: TourAnchor | undefined, requiresInteraction: boolean): DialogPlacement {
+  const viewportHeight = anchor?.viewportHeight ?? 0;
+  const usable = Math.max(MIN_DIALOG_HEIGHT, viewportHeight - DIALOG_MARGIN * 2);
+  // Without a measured target the spotlight is not framing anything yet, so there is nothing to
+  // avoid: keep the prior default of floating interactive steps near the top.
+  if (anchor === undefined) return { side: requiresInteraction ? 'top' : 'bottom', maxHeight: usable };
+  const spaceAbove = anchor.box.top;
+  const spaceBelow = viewportHeight - (anchor.box.top + anchor.box.height);
+  const side = spaceAbove >= spaceBelow ? 'top' : 'bottom';
+  const room = Math.max(spaceAbove, spaceBelow) - DIALOG_MARGIN * 2;
+  return { side, maxHeight: Math.min(usable, Math.max(room, MIN_DIALOG_HEIGHT)) };
+}
 
 /** Guides users through an interactive tour anchored to the product controls they need next. */
 export function GuidedTour(): React.JSX.Element {
@@ -300,7 +341,7 @@ export function GuidedTour(): React.JSX.Element {
   const initial = useRef(readTourState());
   const [active, setActive] = useState(initial.current.active);
   const [stepIndex, setStepIndex] = useState(initial.current.stepIndex);
-  const [targetBox, setTargetBox] = useState<TargetBox>();
+  const [anchor, setAnchor] = useState<TourAnchor>();
   const [targetMissing, setTargetMissing] = useState(false);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -336,7 +377,10 @@ export function GuidedTour(): React.JSX.Element {
     const bounded = Math.max(0, Math.min(tourSteps.length - 1, safe));
     routedStep.current = undefined;
     setStepIndex(bounded);
-    persistTourState({ active: true, stepIndex: bounded, dismissed: false });
+    // `dismissed` records a decision about the invitation banner, not about the tour: someone who
+    // dismissed the banner and later reopened the tour from the launcher has not asked to be
+    // invited again. Carrying the stored value forward keeps the banner quiet as intended.
+    persistTourState({ active: true, stepIndex: bounded, dismissed: readTourState().dismissed });
   }, []);
 
   const close = useCallback((): void => {
@@ -345,9 +389,18 @@ export function GuidedTour(): React.JSX.Element {
     window.requestAnimationFrame(() => launcherRef.current?.focus());
   }, [stepIndex]);
 
+  /**
+   * Reopens the tour where the user left it.
+   *
+   * `close()` already persists the step reached, and a page reload restores it -- but this
+   * previously called `settle(0)`, so the launcher (the only way back once closing has hidden the
+   * invitation banner) threw that position away and sent the user to `/login` at step one.
+   * Leaving and returning now costs nothing; restarting is offered separately, as a deliberate
+   * choice, by the dialog's own "Start over".
+   */
   const open = useCallback((): void => {
     setActive(true);
-    settle(0);
+    settle(readTourState().stepIndex);
   }, [settle]);
 
   const move = useCallback(
@@ -478,7 +531,7 @@ export function GuidedTour(): React.JSX.Element {
       });
       if (target === null) {
         targetElRef.current = null;
-        setTargetBox(undefined);
+        setAnchor(undefined);
         missingTimer = window.setTimeout(() => setTargetMissing(true), 100);
         return;
       }
@@ -506,11 +559,17 @@ export function GuidedTour(): React.JSX.Element {
         targetFocusPlaced = interactive !== undefined;
       }
       const rect = target.getBoundingClientRect();
-      setTargetBox({
-        top: Math.max(4, rect.top - TARGET_PADDING),
-        left: Math.max(4, rect.left - TARGET_PADDING),
-        width: Math.min(window.innerWidth - 8, rect.width + TARGET_PADDING * 2),
-        height: Math.min(window.innerHeight - 8, rect.height + TARGET_PADDING * 2)
+      // The viewport height travels with the box: the dialog's placement is derived from both, so
+      // reading one at measurement time and the other at render time could mix two viewports
+      // across a resize and put the dialog back on top of its own target.
+      setAnchor({
+        box: {
+          top: Math.max(4, rect.top - TARGET_PADDING),
+          left: Math.max(4, rect.left - TARGET_PADDING),
+          width: Math.min(window.innerWidth - 8, rect.width + TARGET_PADDING * 2),
+          height: Math.min(window.innerHeight - 8, rect.height + TARGET_PADDING * 2)
+        },
+        viewportHeight: window.innerHeight
       });
       setTargetMissing(false);
     };
@@ -539,21 +598,10 @@ export function GuidedTour(): React.JSX.Element {
   }, [active, location.pathname, step.requiresInteraction, stepIndex]);
 
   const offPath = targetMissing && step.route !== undefined && location.pathname !== step.route;
-  // Anchor the dialog to whichever half of the viewport the spotlighted target is NOT in, so a
-  // target near the top of a short or narrow page -- the login persona cards on a phone, for
-  // instance -- is never covered by the very tooltip explaining it. Without a target yet, fall
-  // back to the prior default: interactive steps float near the top, everything else near the
-  // bottom.
-  const targetInLowerHalf =
-    targetBox !== undefined && targetBox.top + targetBox.height / 2 > window.innerHeight / 2;
-  const placement =
-    targetBox === undefined
-      ? step.requiresInteraction === true
-        ? 'top-4'
-        : 'bottom-4'
-      : targetInLowerHalf
-        ? 'top-4'
-        : 'bottom-4';
+  const placement = placeTourDialog(anchor, step.requiresInteraction === true);
+  // A closed tour that stopped past step one has a position worth returning to, so the launcher
+  // says so rather than presenting itself as a fresh start it no longer performs.
+  const resumable = !active && stepIndex > 0;
 
   return (
     <>
@@ -563,11 +611,13 @@ export function GuidedTour(): React.JSX.Element {
         variant="secondary"
         className="fixed bottom-20 right-4 z-40 min-h-11 min-w-11 gap-2 rounded-full border border-primary/30 bg-card px-4 shadow-lg lg:bottom-5"
         onClick={open}
-        aria-label="Start guided tour"
+        aria-label={
+          resumable ? `Resume guided tour at step ${stepIndex + 1} of ${tourSteps.length}` : 'Start guided tour'
+        }
         data-tour="tour-launcher"
       >
         <Compass aria-hidden="true" />
-        <span className="hidden sm:inline">Guided tour</span>
+        <span className="hidden sm:inline">{resumable ? 'Resume tour' : 'Guided tour'}</span>
       </Button>
 
       {active && (
@@ -579,10 +629,10 @@ export function GuidedTour(): React.JSX.Element {
               onGate={setWatchedGate}
             />
           )}
-          {targetBox === undefined ? (
+          {anchor === undefined ? (
             <div className="pointer-events-auto absolute inset-0 bg-brand-forest/75 backdrop-blur-[1px]" />
           ) : (
-            <Spotlight box={targetBox} />
+            <Spotlight box={anchor.box} />
           )}
           <div
             ref={dialogRef}
@@ -590,7 +640,9 @@ export function GuidedTour(): React.JSX.Element {
             aria-modal={step.requiresInteraction === true ? undefined : true}
             aria-labelledby="guided-tour-title"
             aria-describedby="guided-tour-description"
-            className={`pointer-events-auto fixed left-1/2 z-[72] max-h-[calc(100dvh-2rem)] w-[min(92vw,25rem)] overflow-y-auto -translate-x-1/2 rounded-2xl border border-primary/25 bg-card p-5 text-card-foreground shadow-2xl sm:p-6 ${placement}`}
+            data-tour-dialog="true"
+            style={{ [placement.side]: DIALOG_MARGIN, maxHeight: placement.maxHeight }}
+            className="pointer-events-auto fixed left-1/2 z-[72] w-[min(92vw,25rem)] overflow-y-auto -translate-x-1/2 rounded-2xl border border-primary/25 bg-card p-5 text-card-foreground shadow-2xl sm:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -695,9 +747,18 @@ export function GuidedTour(): React.JSX.Element {
               </div>
             )}
             <div className="mt-5 flex items-center justify-between gap-3">
-              <Button type="button" variant="ghost" onClick={close}>
-                Skip tour
-              </Button>
+              <div className="flex flex-wrap items-center gap-1">
+                <Button type="button" variant="ghost" onClick={close}>
+                  Skip tour
+                </Button>
+                {/* Leaving now resumes here, so returning to the beginning has to be something the
+                    reviewer can ask for rather than something closing the tour does to them. */}
+                {stepIndex > 0 && (
+                  <Button type="button" variant="ghost" onClick={() => settle(0)}>
+                    Start over
+                  </Button>
+                )}
+              </div>
               {step.requiresInteraction === true ? (
                 generationGate.blocked ? (
                   <Button
@@ -870,7 +931,7 @@ export function advanceGuidedTour(completedAction: string): boolean {
   )
     return false;
   const stepIndex = Math.min(state.stepIndex + 1, tourSteps.length - 1);
-  persistTourState({ active: true, stepIndex, dismissed: false });
+  persistTourState({ active: true, stepIndex, dismissed: state.dismissed });
   window.dispatchEvent(new CustomEvent(ADVANCE_EVENT, { detail: { stepIndex } }));
   return true;
 }

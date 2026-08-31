@@ -207,7 +207,19 @@ function WorkspaceContent({
         return (
           <section
             key={id}
-            data-tour={id === 'sourceEvidence' ? 'slack-evidence' : undefined}
+            // The two views render the same nine section ids on one page, so a tour anchor placed
+            // on both resolves to whichever happens to come first in the DOM -- which is how the
+            // guided tour's Slack step came to frame the generated brief's Source Evidence while
+            // its copy described the source snapshot's, thousands of pixels below and inside a
+            // closed disclosure. Each view carries its own anchor name, so a step names the view
+            // it means.
+            data-tour={
+              id === 'sourceEvidence'
+                ? sourceCues
+                  ? 'snapshot-source-evidence'
+                  : 'slack-evidence'
+                : undefined
+            }
             className="border-b py-8"
             aria-labelledby={`${brief.status}-${id}`}
           >
