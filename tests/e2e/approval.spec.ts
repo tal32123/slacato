@@ -155,9 +155,19 @@ async function seedApproval(opportunityId: string, runId: string, subjectId: str
       restricted_research_language, customer_specific_security_language, customer_facing_concession_language,
       conflicting_evidence, missing_material_evidence, source_commit)
     values (${opportunityId}, 12, 0, false, false, false, false, false, false, false, 'task-13-e2e') on conflict (opportunity_id) do nothing`;
-  await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content)
+  // document_versions.*_ck requires reliability_class/source_locator/classification_reason/policy_hash
+  // to be all-null or all-populated, and (independently) the embedding indexer's corpus provenance
+  // check -- which runs unconditionally against every row matching its salesforce/gong/pricing/
+  // slack/policies source-locator prefixes, evidence's own locator included -- requires a complete,
+  // consistent parent document for any such evidence row. Leaving these null let this fixture's
+  // leftover row (approval fixtures are never cleaned up between runs) fail that check on the next
+  // `pnpm index:embeddings`, crashing the e2e webServer on its very next start.
+  await sql`insert into document_versions
+    (id, external_id, version, source_type, content_hash, content, reliability_class, source_locator,
+      classification_reason, policy_hash)
     values (${`document-${runId}`}, ${`external-${runId}`}, 1, 'salesforce',
-      ${`document-hash-${runId}`}, 'The renewal is ready for a documented commercial review.')`;
+      ${`document-hash-${runId}`}, 'The renewal is ready for a documented commercial review.',
+      'authoritative_system', ${localSourceLocator}, 'task-13-e2e', ${'a'.repeat(64)})`;
   const evidenceContent =
     'The renewal is ready for a documented commercial review. Complete the renewal with reviewed commercial terms. The commercial position is awaiting authorized approval.';
   const evidenceContentHash = `evidence-hash-${runId}`;

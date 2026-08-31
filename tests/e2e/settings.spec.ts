@@ -51,7 +51,12 @@ test('shows truthful read-only permission and runtime diagnostics with seller-as
   await expect(page.getByText('Pinned embedding model')).toBeVisible();
   await expect(page.getByText('Index health')).toBeVisible();
   await expect(page.getByText('Runtime readiness')).toBeVisible();
-  await expect(page.getByText('Runtime not ready')).toBeVisible();
+  // The e2e webServer now runs `pnpm index:embeddings` for the canonical corpus before the API
+  // starts (see playwright.config.ts), so every database, migration, redis, index, and model
+  // check genuinely passes here -- unlike before, when a fresh e2e database had no embeddings at
+  // all and this badge truthfully reported "Runtime not ready". Asserting "Runtime ready" is what
+  // keeps this test honest to its own name.
+  await expect(page.getByText('Runtime ready', { exact: true })).toBeVisible();
   const representativeSourceRow = sourceMatrix.getByRole('row', { name: /ACC-2001 Gong summary/ });
   await expect(representativeSourceRow.getByRole('cell')).toHaveText([
     'ACC-2001',

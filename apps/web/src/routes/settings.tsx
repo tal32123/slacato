@@ -121,28 +121,24 @@ export function SettingsRoute(): React.JSX.Element {
         </Alert>
       )}
 
-      <section aria-labelledby="persona-heading" data-tour="settings-personas">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="persona-heading" className="text-xl font-semibold">
-              Active persona
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Changing persona closes open views and live connections before protected data is
-              reloaded.
-            </p>
-          </div>
-          <Button
-            className="min-h-11"
-            disabled={saving || selected === session.persona.userId || csrf.data === undefined}
-            onClick={() => void changePersona()}
-          >
-            {saving ? 'Changing persona…' : 'Use selected persona'}
-          </Button>
-        </div>
-
-        <div className="grid gap-6">
-          {groupDemoPersonas(personas.data ?? []).map((group) => (
+      <section aria-labelledby="persona-heading">
+        {(() => {
+          const personaGroups = groupDemoPersonas(personas.data ?? []);
+          // "Other fixture identities" is unbounded -- e2e fixtures accumulate rows in it across
+          // runs (see tests/e2e/support/personas.ts and approval.spec.ts's per-process leader
+          // persona), and no graded scenario or tour step ever narrates a persona from it.
+          // Excluding it from the spotlighted region below keeps that region's height from growing
+          // with fixture debris: a section taller than the viewport breaks two things at once --
+          // the guided tour's spotlight cutout math (apps/web/src/components/guided-tour.tsx) has
+          // to clamp, and its dialog-placement heuristic (top half vs. bottom half of the target)
+          // degenerates when the target spans both halves of the viewport, letting the dialog end
+          // up overlapping the very persona row (Nora Chen, Rina Vale, or Harper Noor, across the
+          // three tour steps that land here) the step just asked the user to click. Reproduced
+          // concretely: this only failed on a second run against a database a prior run had
+          // already added fixture identities to, not on a fresh one.
+          const spotlighted = personaGroups.filter((group) => group.id !== 'supporting');
+          const supporting = personaGroups.filter((group) => group.id === 'supporting');
+          const renderGroup = (group: (typeof personaGroups)[number]): React.JSX.Element => (
             <fieldset key={group.id} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <legend className="col-span-full mb-2 text-sm font-semibold">
                 {group.title}
@@ -185,8 +181,40 @@ export function SettingsRoute(): React.JSX.Element {
                 );
               })}
             </fieldset>
-          ))}
-        </div>
+          );
+          return (
+            <>
+              <div data-tour="settings-personas">
+                <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h2 id="persona-heading" className="text-xl font-semibold">
+                      Active persona
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Changing persona closes open views and live connections before protected
+                      data is reloaded.
+                    </p>
+                  </div>
+                  <Button
+                    className="min-h-11"
+                    disabled={
+                      saving || selected === session.persona.userId || csrf.data === undefined
+                    }
+                    onClick={() => void changePersona()}
+                  >
+                    {saving ? 'Changing persona…' : 'Use selected persona'}
+                  </Button>
+                </div>
+
+                <div className="grid gap-6">{spotlighted.map(renderGroup)}</div>
+              </div>
+
+              {supporting.length > 0 && (
+                <div className="mt-6 grid gap-6">{supporting.map(renderGroup)}</div>
+              )}
+            </>
+          );
+        })()}
       </section>
 
       <section className="grid gap-4 border-t pt-7 lg:grid-cols-2" aria-label="Session controls">
