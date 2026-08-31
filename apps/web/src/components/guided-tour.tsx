@@ -1,9 +1,9 @@
-import type { RunDetailResponse, RunStatus } from '@slacato/contracts';
+import type { DemoSession, RunDetailResponse, RunStatus } from '@slacato/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Compass, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
-import { readinessQueryOptions, sessionQueryOptions } from '@/api/session';
+import { useLocation, useNavigate, useRouteLoaderData } from 'react-router';
+import { readinessQueryOptions } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { describeGenerationReadiness } from '@/features/runs/generation-readiness';
@@ -25,6 +25,8 @@ function readableRunStatus(status: RunStatus): string {
   return status.replace(/_/g, ' ');
 }
 
+type RunGate = Readonly<{ waiting: boolean; notice?: string }>;
+
 /**
  * Decides whether a run-narrating step must hold, and what to tell the user while it does.
  * A step never holds on a run that has stopped: an unreadable state, a failure, a cancellation
@@ -35,7 +37,7 @@ function describeRunGate(
   expected: readonly RunStatus[] | undefined,
   detail: RunDetailResponse | undefined,
   failed: boolean
-): Readonly<{ waiting: boolean; notice?: string }> {
+): RunGate {
   if (expected === undefined) return { waiting: false };
   if (failed)
     return {
@@ -294,25 +296,14 @@ export function GuidedTour(): React.JSX.Element {
       : { blocked: false };
 
   // Steps that narrate a run read that run's live state rather than trusting the user to judge
-  // when the work is done. The run page already streams its own updates into this exact query
-  // key, so subscribing here mostly reads a cache another component keeps warm; the refetch
-  // interval is the fallback for a dropped stream, and it stops as soon as the run is terminal.
+  // when the work is done. The watcher below is mounted only while such a step is on a run page,
+  // so the tour registers no query observers on any other screen: an always-present observer on a
+  // session-scoped key interferes with the protected route loaders, which tear those keys down
+  // and re-fetch around every session transition.
   const runId = RUN_PATH_PATTERN.exec(location.pathname)?.[1];
   const awaitsRun = active && step.awaitRunStatus !== undefined && runId !== undefined;
-  const runSession = useQuery({ ...sessionQueryOptions(), enabled: awaitsRun });
-  const sessionVersion =
-    runSession.data?.authenticated === true ? runSession.data.version : undefined;
-  const runQuery = useQuery({
-    ...runDetailQueryOptions(sessionVersion ?? '', runId ?? ''),
-    enabled: awaitsRun && sessionVersion !== undefined,
-    refetchInterval: (query) =>
-      (query.state.data as RunDetailResponse | undefined)?.terminal === true ? false : 4000
-  });
-  const runGate = describeRunGate(
-    awaitsRun ? step.awaitRunStatus : undefined,
-    runQuery.data,
-    runQuery.isError
-  );
+  const [watchedGate, setWatchedGate] = useState<RunGate>({ waiting: false });
+  const runGate = awaitsRun ? watchedGate : { waiting: false };
 
   const settle = useCallback((nextIndex: number): void => {
     const safe = Number.isFinite(nextIndex) ? Math.round(nextIndex) : 0;
@@ -555,6 +546,9 @@ export function GuidedTour(): React.JSX.Element {
 
       {active && (
         <div className="pointer-events-none fixed inset-0 z-[70]" aria-live="polite">
+          {awaitsRun && runId !== undefined && step.awaitRunStatus !== undefined && (
+            <RunStateWatcher runId={runId} expected={step.awaitRunStatus} onGate={setWatchedGate} />
+          )}
           {targetBox === undefined ? (
             <div className="pointer-events-auto absolute inset-0 bg-brand-forest/75 backdrop-blur-[1px]" />
           ) : (
@@ -707,6 +701,38 @@ export function GuidedTour(): React.JSX.Element {
       )}
     </>
   );
+}
+
+/**
+ * Watches one run's live state for a step that narrates it, and reports whether that step holds.
+ * Rendered only while such a step is on a run page. It subscribes to the very query key the run
+ * page already streams its own server-sent updates into, so this normally reads a cache that page
+ * keeps warm; the refetch interval is the fallback for a dropped stream and stops once the run is
+ * terminal. The session comes from the protected route's loader rather than a query of its own,
+ * so the tour adds no observer on the session key.
+ */
+function RunStateWatcher({
+  runId,
+  expected,
+  onGate
+}: Readonly<{
+  runId: string;
+  expected: readonly RunStatus[];
+  onGate: (gate: RunGate) => void;
+}>): null {
+  const session = useRouteLoaderData('protected-root') as DemoSession | undefined;
+  const version = session?.authenticated === true ? session.version : undefined;
+  const run = useQuery({
+    ...runDetailQueryOptions(version ?? '', runId),
+    enabled: version !== undefined,
+    refetchInterval: (query) =>
+      (query.state.data as RunDetailResponse | undefined)?.terminal === true ? false : 4000
+  });
+  const { waiting, notice } = describeRunGate(expected, run.data, run.isError);
+  useEffect(() => {
+    onGate(notice === undefined ? { waiting } : { waiting, notice });
+  }, [notice, onGate, waiting]);
+  return null;
 }
 
 /** Offers the guided tour on arrival so a reviewer either follows it or skips it deliberately. */
