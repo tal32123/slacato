@@ -25,7 +25,7 @@ export function GenerateBriefAction({
       const csrfToken = await queryClient.ensureQueryData(csrfQueryOptions(sessionVersion));
       return startBrief({ opportunityId, idempotencyKey: operationKey.current }, csrfToken);
     },
-    onSuccess: async ({ runId }) => {
+    onSuccess: async ({ runId, disposition }) => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: queryKeys.scoped(sessionVersion, `deal:${opportunityId}`)
@@ -34,7 +34,13 @@ export function GenerateBriefAction({
         queryClient.invalidateQueries({ queryKey: queryKeys.scoped(sessionVersion, 'runs') })
       ]);
       advanceGuidedTour('generate-brief');
-      await navigate(`/runs/${encodeURIComponent(runId)}`);
+      // The run page cannot tell from the run itself that this request did not start it, so the
+      // server's disposition travels with the navigation. Without it a request that merely joined
+      // a run already in flight looks exactly like one that started fresh work -- and the user is
+      // left believing they are watching the brief they just asked for.
+      await navigate(`/runs/${encodeURIComponent(runId)}`, {
+        state: { runDisposition: disposition }
+      });
     }
   });
 

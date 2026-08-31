@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { LoaderFunctionArgs } from 'react-router';
-import { Link, useLoaderData, useRouteLoaderData } from 'react-router';
+import { Link, useLoaderData, useLocation, useRouteLoaderData } from 'react-router';
 import { cancelRun, fetchCsrf } from '@/api/client';
 import {
   queryClient,
@@ -63,6 +63,12 @@ export async function runLoader({
 export function RunRoute(): React.JSX.Element {
   const initial = useLoaderData() as RunDetailResponse;
   const session = useRouteLoaderData('protected-root') as DemoSession;
+  // Set only by the navigation Generate Brief performs, and only when the server reported that the
+  // request attached to a run already in flight rather than starting one. Reading it from
+  // navigation state rather than the run itself is deliberate: "you did not get a new run" is a
+  // fact about this request, not about the run, which looks identical however you arrived at it.
+  const joinedExistingRun =
+    (useLocation().state as { runDisposition?: unknown } | null)?.runDisposition === 'joined';
   const query = useQuery({
     ...runDetailQueryOptions(session.version, initial.runId),
     initialData: initial
@@ -256,6 +262,13 @@ export function RunRoute(): React.JSX.Element {
         )}
       </header>
 
+      {joinedExistingRun && (
+        <Notice
+          icon={AlertTriangle}
+          title="No new brief was started"
+          text="A run for this deal was already in flight when you chose Generate Brief, so your request joined that run instead of starting another. What you are watching below is the existing run, at whatever stage it had already reached. Cancel it if you want a brief generated from scratch."
+        />
+      )}
       <RunStateNotice detail={detail} stalled={stalled} />
 
       <section
