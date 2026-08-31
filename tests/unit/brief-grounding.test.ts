@@ -141,6 +141,18 @@ describe('deal brief grounding', () => {
     );
   });
 
+  it('leaves an already-grounded brief untouched when it is grounded again', () => {
+    // edit_and_approve re-runs this validator over the payload the approver submitted and refuses
+    // the decision unless the result hashes identically -- that is what stops an approver
+    // smuggling ungrounded claims into an approved brief. The check is only usable because
+    // grounding is a fixed point: every persisted approval subject is itself validator output, so
+    // re-grounding an unedited section has to return it byte-for-byte. A normalization that only
+    // applies on the first pass (capturedAt is stamped this way) would make every "Edit and
+    // approve" click fail with a 400 while every other test still passed.
+    const grounded = validateDealBrief(generatedBrief(), evidence, CONTEXT);
+    expect(validateDealBrief(grounded, evidence, CONTEXT)).toEqual(grounded);
+  });
+
   it('lets retrieved Slack account-team updates reach Source Evidence', () => {
     const brief = validateDealBrief(generatedBrief(), evidence, CONTEXT);
     expect(brief.sourceEvidence.evidence.map((entry) => entry.sourceType)).toContain('slack');
