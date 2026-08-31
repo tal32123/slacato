@@ -11,7 +11,7 @@ const count = z.number().int().min(0).max(10_000_000);
 export const sandboxResetTallySchema = z
   .object({
     runs: count,
-    activeRuns: count,
+    runsInFlight: count,
     approvalSubjects: count,
     approvalDecisions: count,
     briefs: count,

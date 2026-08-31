@@ -134,7 +134,7 @@ const report: SandboxResetReport = {
   database: 'slacato_demo',
   tally: {
     runs: 2,
-    activeRuns: 1,
+    runsInFlight: 1,
     approvalSubjects: 1,
     approvalDecisions: 0,
     briefs: 1,

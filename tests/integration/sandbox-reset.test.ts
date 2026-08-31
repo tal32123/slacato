@@ -145,7 +145,7 @@ describe('sandbox reset against a real database', () => {
     expect(preview.database).toBe(databaseName);
     expect(preview.tally).toMatchObject({
       runs: 1,
-      activeRuns: 1,
+      runsInFlight: 1,
       approvalSubjects: 1,
       approvalDecisions: 1
     });
@@ -196,7 +196,7 @@ describe('sandbox reset against a real database', () => {
     const repeated = await reset.execute({ actorId: requestedBy });
     expect(repeated.tally).toEqual({
       runs: 0,
-      activeRuns: 0,
+      runsInFlight: 0,
       approvalSubjects: 0,
       approvalDecisions: 0,
       briefs: 0,

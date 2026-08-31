@@ -67,20 +67,24 @@ export const SANDBOX_PRESERVED_TABLES = [
 
 type SqlExecutor = Sql | TransactionSql;
 
-/** Statuses a run can still leave on its own; anything else is a resting or finished run. */
-const ACTIVE_RUN_STATUSES = [
+/**
+ * Statuses in which the worker still owes the run a step.
+ *
+ * `awaiting_approval` is absent on purpose: that run is waiting on a person, so erasing it
+ * interrupts nothing that is currently running.
+ */
+const IN_FLIGHT_RUN_STATUSES = [
   'created',
   'retrieving',
   'specialists_running',
   'synthesizing',
   'validating',
-  'awaiting_approval',
   'finalizing'
 ];
 
 const EMPTY_TALLY: SandboxResetTally = {
   runs: 0,
-  activeRuns: 0,
+  runsInFlight: 0,
   approvalSubjects: 0,
   approvalDecisions: 0,
   briefs: 0,
@@ -191,7 +195,7 @@ async function countRunScopedRecords(sql: SqlExecutor): Promise<SandboxResetTall
   const rows = await sql<
     {
       runs: number;
-      active_runs: number;
+      runs_in_flight: number;
       approval_subjects: number;
       approval_decisions: number;
       briefs: number;
@@ -202,7 +206,7 @@ async function countRunScopedRecords(sql: SqlExecutor): Promise<SandboxResetTall
     }[]
   >`select
       (select count(*)::integer from runs) as runs,
-      (select count(*)::integer from runs where status = any(${ACTIVE_RUN_STATUSES}::text[])) as active_runs,
+      (select count(*)::integer from runs where status = any(${IN_FLIGHT_RUN_STATUSES}::text[])) as runs_in_flight,
       (select count(*)::integer from approval_subjects) as approval_subjects,
       (select count(*)::integer from approval_decisions) as approval_decisions,
       (select count(*)::integer from briefs) as briefs,
@@ -214,7 +218,7 @@ async function countRunScopedRecords(sql: SqlExecutor): Promise<SandboxResetTall
   if (row === undefined) return EMPTY_TALLY;
   return {
     runs: row.runs,
-    activeRuns: row.active_runs,
+    runsInFlight: row.runs_in_flight,
     approvalSubjects: row.approval_subjects,
     approvalDecisions: row.approval_decisions,
     briefs: row.briefs,

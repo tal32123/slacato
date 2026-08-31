@@ -2,8 +2,14 @@
 export type SandboxResetTally = Readonly<{
   /** Every run row, in any status, that the sandbox holds. */
   runs: number;
-  /** The subset of those runs that had not reached a terminal status when the reset was measured. */
-  activeRuns: number;
+  /**
+   * The subset with a workflow step still to execute when the reset was measured.
+   *
+   * `awaiting_approval` is excluded deliberately. It is a resting state - the run is waiting on a
+   * person, not on the worker - so counting it here would warn about interrupting work that is not
+   * happening, which is the state most of a finished demo pass is parked in.
+   */
+  runsInFlight: number;
   approvalSubjects: number;
   approvalDecisions: number;
   briefs: number;
