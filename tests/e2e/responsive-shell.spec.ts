@@ -111,6 +111,12 @@ test('completes the desktop and mobile shell journey with keyboard input only', 
 
   const mayaRadio = page.getByRole('radio', { name: /Maya Levin/ });
   await tabTo(page, mayaRadio);
+  // The "Start the demo here" group now lists Maya, Owen, then Nora (Owen Patel is an
+  // interchangeable Scenario 1 owner presented at parity with Maya -- see scenarioOrder in
+  // demo-personas.ts), and native radio-group arrow navigation follows tree order across the
+  // whole `name="persona"` group regardless of fieldset boundaries. One ArrowDown from Maya now
+  // lands on Owen; a second reaches Nora Chen, the persona this journey switches to.
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   const noraRadio = page.getByRole('radio', { name: /Nora Chen/ });
   await expect(noraRadio).toBeChecked();
