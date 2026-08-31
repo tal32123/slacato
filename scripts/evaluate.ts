@@ -215,7 +215,18 @@ async function main(): Promise<void> {
     'utf8'
   );
   process.stdout.write(`${JSON.stringify(report)}\n`);
-  if (report.summary.permissionLeakage !== 0 || report.summary.macroRecallAtK < 0.5)
+  // The macro mean is an average of per-case recalls over a fixed golden set, so it lands on
+  // representable-but-inexact values - the sibling metric reports 0.20000000000000004 for what is
+  // arithmetically 0.2. Recall currently sits exactly on the threshold, so a bare `< 0.5` can fail
+  // on 0.49999999999999994 while nominally at the gate. The tolerance rejects only that
+  // representation noise: a genuine regression moves the mean by a whole case, and with three
+  // scored cases the next reachable value below 0.5 is 0.333, which still fails loudly.
+  const RECALL_FLOOR = 0.5;
+  const RECALL_EPSILON = 1e-9;
+  if (
+    report.summary.permissionLeakage !== 0 ||
+    report.summary.macroRecallAtK < RECALL_FLOOR - RECALL_EPSILON
+  )
     process.exitCode = 1;
 }
 
