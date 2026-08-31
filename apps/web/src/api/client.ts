@@ -29,8 +29,11 @@ import {
   readinessHealthSchema,
   runDetailResponseSchema,
   runListResponseSchema,
+  SANDBOX_RESET_CONFIRMATION,
+  type SandboxResetReportView,
   type StartBriefRequest,
   type StartBriefResponse,
+  sandboxResetReportSchema,
   startBriefRequestSchema,
   startBriefResponseSchema
 } from '@slacato/contracts';
@@ -198,6 +201,30 @@ export function cancelRun(runId: string, csrfToken: string): Promise<CancelRunRe
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: '{}'
+  });
+}
+
+/**
+ * Loads what a sandbox reset would erase, and by answering at all, that resets are available here.
+ *
+ * A deployment that was not designated a sandbox never registers these routes, and a persona
+ * without standing to reset is refused as 404 by the same rule that hides an unauthorized deal.
+ * Both arrive as a failed request, which is why the interface treats any failure here as "this
+ * capability does not exist for you" and renders no control - rather than a disabled one that
+ * advertises a destructive action the caller cannot have.
+ */
+export function fetchSandboxReset(
+  signal: AbortSignal | undefined
+): Promise<SandboxResetReportView> {
+  return requestJson(sandboxResetReportSchema, '/api/sandbox/reset', { signal });
+}
+
+/** Erases the sandbox and reports what was removed and what was kept. */
+export function resetSandbox(csrfToken: string): Promise<SandboxResetReportView> {
+  return requestJson(sandboxResetReportSchema, '/api/sandbox/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify({ confirmation: SANDBOX_RESET_CONFIRMATION })
   });
 }
 

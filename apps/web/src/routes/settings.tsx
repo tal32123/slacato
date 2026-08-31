@@ -17,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { demoPersonaPurpose, groupDemoPersonas } from '@/features/personas/demo-personas';
+import { ResetSandboxCard } from '@/features/sandbox/reset-sandbox-card';
 import { cn } from '@/lib/utils';
 import { throwProtectedLoaderError } from './loader-security';
 
@@ -283,6 +284,10 @@ export function SettingsRoute(): React.JSX.Element {
             </Button>
           </CardContent>
         </Card>
+
+        {/* Renders itself only where the server designated a sandbox and this persona may clear
+            it, so an ordinary deployment shows no destructive control here at all. */}
+        <ResetSandboxCard sessionVersion={session.version} />
       </section>
     </div>
   );

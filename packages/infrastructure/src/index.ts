@@ -2,8 +2,8 @@ export { type Env, envSchema, parseEnv } from './config/env.js';
 export { loadRuntimeEnv } from './config/runtime-env.js';
 export {
   assertResettableDatabase,
-  databaseNameFrom,
   DEMO_DATABASES,
+  databaseNameFrom,
   isRecognizedLocalDemoDatabase,
   RESET_OVERRIDE_ENV,
   RESET_OVERRIDE_FLAG,
