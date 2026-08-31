@@ -6,6 +6,7 @@ export * from './deals.js';
 export * from './diagnostics.js';
 export * from './events.js';
 export * from './runs.js';
+export * from './sandbox.js';
 
 export const liveHealthSchema = z.object({ status: z.literal('live') }).strict();
 export const readyHealthSchema = z
