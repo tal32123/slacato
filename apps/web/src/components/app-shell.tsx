@@ -1,7 +1,14 @@
 import type { DemoSession } from '@slacato/contracts';
 import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Link, Outlet, useLocation, useNavigation, useNavigationType } from 'react-router';
+import {
+  Link,
+  Outlet,
+  ScrollRestoration,
+  useLocation,
+  useNavigation,
+  useNavigationType
+} from 'react-router';
 import { GuidedTour } from '@/components/guided-tour';
 import { MobileNav, primaryDestinations } from '@/components/mobile-nav';
 import { PersonaMenu } from '@/components/persona-menu';
@@ -53,7 +60,10 @@ export function AppShell({
       // approval-status update) makes the next real navigation to that same path look unchanged,
       // so main is never focused and a keyboard user is stranded on the link they just activated.
       previouslyFocusedPathname.current = location.pathname;
-      window.requestAnimationFrame(() => mainRef.current?.focus());
+      // preventScroll keeps this purely a focus move. Without it the browser scrolled <main> to the
+      // top of the viewport, which parked every freshly opened page at scrollY 65 with its first
+      // line hidden under the sticky header. ScrollRestoration below owns scroll position instead.
+      window.requestAnimationFrame(() => mainRef.current?.focus({ preventScroll: true }));
     }
   }, [location.pathname, location.state, navigationType]);
 
@@ -196,6 +206,10 @@ export function AppShell({
           <Outlet />
         </main>
       </div>
+      {/* Keyed by pathname so opening or closing the evidence panel -- which only pushes a search
+          param onto the same path -- restores the reader's position instead of yanking the page to
+          the top, while a genuine move to another page still starts at the top. */}
+      <ScrollRestoration getKey={(location) => location.pathname} />
       <MobileNav />
       <GuidedTour />
     </div>
