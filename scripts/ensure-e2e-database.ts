@@ -12,12 +12,37 @@ import postgres from 'postgres';
  * reads from. The e2e default now points at a distinct `slacato_e2e` database instead; this
  * script provisions it on first use so a fresh clone does not need a manual `createdb` step.
  * `drizzle-kit migrate` does not create databases, only run migrations inside one that exists.
+ *
+ * This tries the TARGET database first and only opens an admin connection to the `postgres`
+ * database as a fallback when that fails. CI (.github/workflows/ci.yml) sets DATABASE_URL
+ * explicitly to its own ephemeral per-job Postgres service, where the database always already
+ * exists -- an unconditional admin-first connection would add an extra, non-target connection to
+ * every CI run for no reason, and any failure of that connection (auth scope, image variant,
+ * timing) would kill the whole `db:ensure && db:migrate && ... && node apps/api/dist/main.js`
+ * chain with an error unrelated to its actual cause, on a workflow file this script cannot fix.
  */
 async function main(): Promise<void> {
   const targetUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato_e2e';
+
+  const target = postgres(targetUrl, { max: 1 });
+  try {
+    await target`select 1`;
+    console.log('[ensure-e2e-database] target database is already reachable');
+    return;
+  } catch {
+    // Falls through to the create-database path below.
+  } finally {
+    await target.end({ timeout: 1 });
+  }
+
   const parsed = new URL(targetUrl);
   const databaseName = parsed.pathname.replace(/^\//, '');
   if (databaseName.length === 0) throw new Error(`DATABASE_URL is missing a database name: ${targetUrl}`);
+  // Database names cannot be parameterized; databaseName is validated as a plain Postgres
+  // identifier below to keep this safe against anything other than a deliberately malformed
+  // DATABASE_URL.
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(databaseName))
+    throw new Error(`Refusing to create a database with an unexpected name: ${databaseName}`);
 
   const adminUrl = new URL(parsed);
   adminUrl.pathname = '/postgres';
@@ -25,14 +50,9 @@ async function main(): Promise<void> {
   try {
     const existing = await admin`select 1 from pg_database where datname = ${databaseName}`;
     if (existing.length > 0) {
-      console.log(`[ensure-e2e-database] "${databaseName}" already exists`);
+      console.log(`[ensure-e2e-database] "${databaseName}" already exists but was not reachable directly`);
       return;
     }
-    // Database names cannot be parameterized; databaseName is validated as a plain Postgres
-    // identifier below to keep this safe against anything other than a deliberately malformed
-    // DATABASE_URL.
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(databaseName))
-      throw new Error(`Refusing to create a database with an unexpected name: ${databaseName}`);
     await admin.unsafe(`create database ${databaseName}`);
     console.log(`[ensure-e2e-database] created "${databaseName}"`);
   } finally {
