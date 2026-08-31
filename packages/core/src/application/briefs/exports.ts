@@ -183,7 +183,9 @@ function renderMarkdown(brief: DealBrief, citations: ReadonlyMap<string, Citatio
     lines.push(
       `### ${escapeMarkdown(evidence.evidenceId)}`,
       `- **Source type:** ${escapeMarkdown(evidence.sourceType)}`,
-      `- **Captured at:** ${escapeMarkdown(evidence.capturedAt)}`,
+      ...(evidence.capturedAt === undefined
+        ? []
+        : [`- **Captured at:** ${escapeMarkdown(evidence.capturedAt)}`]),
       `- **Summary:** ${escapeMarkdown(evidence.summary)}`,
       ...claimLines(evidence.claims, context, '#### Claims')
     );

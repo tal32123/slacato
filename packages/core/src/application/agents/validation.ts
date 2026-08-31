@@ -899,24 +899,30 @@ function safeInformationRequest(value: string): boolean {
 
 /** Accepts bounded internal workflow actions that make no customer-facing or commercial commitment.
  *
- * The action text is forward-looking and is deliberately not evidence-verified (only its rationale
- * is), so this gate is a negative safety filter rather than a sentence-template allowlist. An
- * allowlist of literal phrasings silently deleted every deal-specific recommendation a real model
- * produced, which emptied the section the brief exists to deliver. Commercial commitments are
- * rejected here and remain the approval flow's responsibility. */
-function safeRecommendationAction(value: string): boolean {
+ * The safety filters below - prompt-injection prose, length, commercial commitments, and unsafe
+ * customer-facing verbs - apply to every action and are the point of this gate. The remaining
+ * checks are shape heuristics that stand in for grounding when nothing grounds the text: an action
+ * has to read as one bounded internal instruction so that a subordinate clause cannot smuggle in a
+ * fact no evidence supports. When the action text is itself supported by a retained claim, that
+ * substitute is unnecessary and actively harmful - the deal's own recorded next step, "Send revised
+ * order form and migration success plan by 2026-04-28", was deleted from live briefs purely because
+ * "send" is absent from the verb list, which is grading phrasing rather than evidence. A grounded
+ * action therefore skips the shape heuristics and keeps every safety filter. Commercial commitments
+ * are rejected on both paths and remain the approval flow's responsibility. */
+function safeRecommendationAction(value: string, claims: readonly Claim[]): boolean {
   const normalized = value.trim();
   if (!safeGeneratedProse(normalized)) return false;
   if (safeInformationRequest(normalized)) return true;
   if (normalized.length > MAX_RECOMMENDATION_ACTION_CHARACTERS) return false;
+  // Pricing and concessions belong to the deterministic approval policy, never to raw actions.
+  if (COMMERCIAL_COMMITMENT.test(normalized)) return false;
+  if (UNSAFE_CUSTOMER_FACING_ACTION.test(normalized)) return false;
+  if (assertionSupported(normalized, claims)) return true;
   // A forward-looking instruction, not a narrative: one sentence, opening on an internal verb.
   if (!INTERNAL_ACTION_VERB.test(normalized)) return false;
   if ((normalized.match(/[.!?](?=\s|$)/g) ?? []).length > 1) return false;
   // Subordinate clauses smuggle unverified facts into text nothing grounds.
   if (UNGROUNDED_FACTUAL_CONNECTIVE.test(normalized)) return false;
-  // Pricing and concessions belong to the deterministic approval policy, never to raw actions.
-  if (COMMERCIAL_COMMITMENT.test(normalized)) return false;
-  if (UNSAFE_CUSTOMER_FACING_ACTION.test(normalized)) return false;
   return true;
 }
 
@@ -1112,7 +1118,7 @@ export function validateDealBrief(
     insufficient.push(...result.insufficient);
     if (
       result.kept.length === 0 ||
-      !safeRecommendationAction(action.action) ||
+      !safeRecommendationAction(action.action, result.kept) ||
       !assertionSupported(action.rationale, result.kept)
     )
       return [];
@@ -1163,12 +1169,22 @@ export function validateDealBrief(
     if (
       localClaims.length === 0 ||
       !assertionSupported(summary.summary, localClaims) ||
-      summary.sourceType !== expectedSourceType ||
-      source.eventDate === undefined ||
-      !summary.capturedAt.startsWith(source.eventDate)
+      summary.sourceType !== expectedSourceType
     )
       return [];
-    return [{ ...summary, claims: localClaims }];
+    // capturedAt is code-owned: stamped from the cited record's own event date, never trusted
+    // from the model, and omitted when the record has none. Requiring a match instead deleted
+    // every policy document, pricing note, and Salesforce account or opportunity row from Source
+    // Evidence, because those records carry no capture event and so could never satisfy it.
+    const { capturedAt, ...rest } = summary;
+    void capturedAt;
+    return [
+      {
+        ...rest,
+        ...(source.eventDate === undefined ? {} : { capturedAt: `${source.eventDate}T00:00:00Z` }),
+        claims: localClaims
+      }
+    ];
   });
   const summaryWasReplaced =
     !isExplicitUncertainty(parsed.executiveSummary.narrative) &&

@@ -120,7 +120,13 @@ export const evidenceSummarySchema = immutableSchema(
       evidenceId: evidenceIdSchema,
       sourceType: z.enum(['crm', 'conversation', 'policy', 'pricing', 'slack', 'other']),
       summary: shortTextSchema,
-      capturedAt: z.string().datetime().max(MAX_TIMESTAMP_LENGTH),
+      /**
+       * Present only when the cited record carries an event date, and always stamped from that
+       * record by the validator rather than trusted from the model. Policy documents, pricing
+       * notes, and Salesforce account and opportunity rows have no capture event, so requiring
+       * this field made those source types impossible to list in Source Evidence at all.
+       */
+      capturedAt: z.string().datetime().max(MAX_TIMESTAMP_LENGTH).optional(),
       claims: z.array(claimSchema).max(MAX_LIST_ITEMS)
     })
     .strict()

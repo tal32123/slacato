@@ -149,8 +149,13 @@ export function ApprovalSubjectDetail({
               <li key={evidence.evidenceId} className="rounded-lg border p-3">
                 <p>{evidence.summary}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {label(evidence.sourceType)} ·{' '}
-                  <time dateTime={evidence.capturedAt}>{formatTime(evidence.capturedAt)}</time>
+                  {label(evidence.sourceType)}
+                  {evidence.capturedAt === undefined ? null : (
+                    <>
+                      {' · '}
+                      <time dateTime={evidence.capturedAt}>{formatTime(evidence.capturedAt)}</time>
+                    </>
+                  )}
                 </p>
                 {evidenceIds.has(evidence.evidenceId) && (
                   <Button asChild variant="link" className="h-auto min-h-11 px-0">
