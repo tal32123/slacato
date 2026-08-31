@@ -14,8 +14,10 @@ export type DemoPersonaGroup = Readonly<{
 /**
  * Presentation order for the personas that drive the four graded demo scenarios.
  * The canonical fixture is never filtered server-side; only this ordering is curated.
+ * USR-5001 and USR-5002 are interchangeable Scenario 1 owners (OPP-1001 and OPP-1002),
+ * so both lead the list at parity rather than one of them hiding in a supporting group.
  */
-const scenarioOrder = ['USR-5001', 'USR-5003', 'USR-5007'] as const;
+const scenarioOrder = ['USR-5001', 'USR-5002', 'USR-5003', 'USR-5007'] as const;
 
 /** Presentation order for the authorities that complete the restricted-deal approval quorum. */
 const authorityOrder = ['USR-5005', 'USR-5008', 'USR-5006'] as const;
@@ -25,7 +27,7 @@ const groupDefinitions = [
     id: 'scenario',
     title: 'Start the demo here',
     description:
-      'These three identities drive the graded scenarios: an authorized owner, the restricted-deal owner, and an unauthorized requester.',
+      'These identities drive the graded scenarios: two interchangeable authorized owners, the restricted-deal owner, and an unauthorized requester.',
     collapsed: false,
     order: scenarioOrder
   },

@@ -25,6 +25,7 @@ describe('groupDemoPersonas', () => {
     expect(scenario?.collapsed).toBe(false);
     expect(scenario?.personas.map((persona) => persona.userId)).toEqual([
       'USR-5001',
+      'USR-5002',
       'USR-5003',
       'USR-5007'
     ]);
@@ -48,11 +49,18 @@ describe('groupDemoPersonas', () => {
     const supporting = groups.find((group) => group.id === 'supporting');
 
     expect(supporting?.collapsed).toBe(true);
-    expect(supporting?.personas.map((persona) => persona.userId)).toEqual([
-      'USR-5002',
-      'USR-5004'
-    ]);
+    expect(supporting?.personas.map((persona) => persona.userId)).toEqual(['USR-5004']);
     expect(groups.flatMap((group) => group.personas)).toHaveLength(canonicalPersonas.length);
+  });
+
+  it('promotes both interchangeable Scenario 1 owners to the top-level list, not just one', () => {
+    const [scenario] = groupDemoPersonas(canonicalPersonas);
+    const supporting = groupDemoPersonas(canonicalPersonas).find(
+      (group) => group.id === 'supporting'
+    );
+
+    expect(scenario?.personas.map((persona) => persona.userId)).toContain('USR-5002');
+    expect(supporting?.personas.map((persona) => persona.userId)).not.toContain('USR-5002');
   });
 
   it('never drops an unrecognized canonical identity', () => {
