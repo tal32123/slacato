@@ -11,48 +11,67 @@ h2{margin:0 0 8px;font-size:24px;letter-spacing:-.02em}p{margin:0 0 18px}.links{
 pre{overflow:auto;background:var(--wash);border:1px solid var(--line);border-radius:12px;padding:16px;margin:18px 0 0;color:#31424a;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
 footer{border-top:1px solid var(--line);padding-top:28px;color:var(--muted)}footer a{color:var(--accent)}@media(max-width:620px){main{padding:42px 20px 72px}.card{grid-template-columns:1fr}.number{font-size:14px}}
 </style></head><body><main><header><div class="eyebrow">Take-home assignment · Deliverable D</div><h1>Sample run artifacts</h1>
-<p>Reviewer-readable outputs from real OpenRouter executions, including finalized briefs, a five-entry approval quorum, an opaque access denial, and durable traces.</p>
-<div class="summary"><span class="pill">Generated 2026-08-31T06:00:14.428Z</span><span class="pill">Provider: OpenRouter</span><span class="pill">Model: google/gemini-3.5-flash-lite</span><span class="pill">No external dependencies</span></div></header>
+<p>Reviewer-readable outputs from real OpenRouter executions: finalized briefs for all three fixture opportunities, a 4-entry approval quorum, the Slack-evidence impact comparison, an opaque access denial, and durable traces.</p>
+<div class="summary"><span class="pill">Generated 2026-08-31T19:39:31.124Z</span><span class="pill">Provider: OpenRouter</span><span class="pill">Model: google/gemini-3.5-flash-lite</span><span class="pill">No external dependencies</span></div></header>
 <article class="card">
           <div class="number">01</div>
           <div><h2>Authorized normal opportunity</h2><p>Maya Levin (USR-5001) generated a finalized brief for Northstar Foods Cooperative - Global Access Renewal (OPP-1001).</p>
           <div class="links"><a href="normal-opportunity-brief.json">normal-opportunity-brief.json</a><a href="normal-opportunity-brief.txt">normal-opportunity-brief.txt</a></div>
           <pre>{
-  &quot;runId&quot;: &quot;run_fd58beab2fab37d7595481091a5fe84f9ed616c11a26b8ed312ceb9b03866c0a&quot;,
+  &quot;runId&quot;: &quot;run_4f76c467976b09e19507103a23b5ad689b241ab39c3cc0e1b1b1f488bc460a89&quot;,
   &quot;provider&quot;: &quot;openrouter&quot;,
   &quot;generationModel&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
   &quot;embeddingModel&quot;: &quot;openai/text-embedding-3-small&quot;,
   &quot;tokenUsage&quot;: {
     &quot;calls&quot;: 5,
-    &quot;inputTokens&quot;: 25266,
-    &quot;outputTokens&quot;: 7093,
-    &quot;totalTokens&quot;: 32359
+    &quot;inputTokens&quot;: 23513,
+    &quot;outputTokens&quot;: 8896,
+    &quot;totalTokens&quot;: 32409
   },
-  &quot;runStartedAt&quot;: &quot;2026-08-31T05:40:53.065Z&quot;,
-  &quot;runCompletedAt&quot;: &quot;2026-08-31T05:41:16.197Z&quot;
+  &quot;runStartedAt&quot;: &quot;2026-08-31T19:30:46.599Z&quot;,
+  &quot;runCompletedAt&quot;: &quot;2026-08-31T19:31:19.173Z&quot;
 }</pre></div>
         </article>
 <article class="card">
           <div class="number">02</div>
-          <div><h2>Restricted deal and approval quorum</h2><p>Nora Chen (USR-5003) generated the restricted brief. The routing artifact records all 5 requirements and 5 approval decisions.</p>
-          <div class="links"><a href="restricted-opportunity-brief.json">restricted-opportunity-brief.json</a><a href="restricted-opportunity-brief.txt">restricted-opportunity-brief.txt</a><a href="restricted-approval-flow.json">restricted-approval-flow.json</a></div>
+          <div><h2>Authorized expansion opportunity</h2><p>Owen Patel (USR-5002) generated a finalized brief for Meridian Appliances Group - Factory Connectivity Expansion (OPP-1002), completing sample coverage of all three fixture opportunities.</p>
+          <div class="links"><a href="expansion-opportunity-brief.json">expansion-opportunity-brief.json</a><a href="expansion-opportunity-brief.txt">expansion-opportunity-brief.txt</a></div>
           <pre>{
-  &quot;runId&quot;: &quot;run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7&quot;,
+  &quot;runId&quot;: &quot;run_768cb55a96a0d13ce8df3e42a818082a97227b72521bc055308990635117fb82&quot;,
   &quot;provider&quot;: &quot;openrouter&quot;,
   &quot;generationModel&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
   &quot;embeddingModel&quot;: &quot;openai/text-embedding-3-small&quot;,
   &quot;tokenUsage&quot;: {
     &quot;calls&quot;: 5,
-    &quot;inputTokens&quot;: 25255,
-    &quot;outputTokens&quot;: 8730,
-    &quot;totalTokens&quot;: 33985
+    &quot;inputTokens&quot;: 22757,
+    &quot;outputTokens&quot;: 8593,
+    &quot;totalTokens&quot;: 31350
   },
-  &quot;runStartedAt&quot;: &quot;2026-08-31T05:58:48.644Z&quot;,
-  &quot;runCompletedAt&quot;: &quot;2026-08-31T05:59:22.724Z&quot;
+  &quot;runStartedAt&quot;: &quot;2026-08-31T19:31:29.330Z&quot;,
+  &quot;runCompletedAt&quot;: &quot;2026-08-31T19:31:58.352Z&quot;
 }</pre></div>
         </article>
 <article class="card">
           <div class="number">03</div>
+          <div><h2>Restricted deal and approval quorum</h2><p>Nora Chen (USR-5003) generated the restricted brief. The routing artifact records all 4 requirements, the 4 decisions that cleared them across 4 distinct approvers, the export refused while the run awaited approval, and the dependent gate that only became operable once the others cleared.</p>
+          <div class="links"><a href="restricted-opportunity-brief.json">restricted-opportunity-brief.json</a><a href="restricted-opportunity-brief.txt">restricted-opportunity-brief.txt</a><a href="restricted-approval-flow.json">restricted-approval-flow.json</a></div>
+          <pre>{
+  &quot;runId&quot;: &quot;run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668&quot;,
+  &quot;provider&quot;: &quot;openrouter&quot;,
+  &quot;generationModel&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
+  &quot;embeddingModel&quot;: &quot;openai/text-embedding-3-small&quot;,
+  &quot;tokenUsage&quot;: {
+    &quot;calls&quot;: 5,
+    &quot;inputTokens&quot;: 21934,
+    &quot;outputTokens&quot;: 10413,
+    &quot;totalTokens&quot;: 32347
+  },
+  &quot;runStartedAt&quot;: &quot;2026-08-31T19:35:43.781Z&quot;,
+  &quot;runCompletedAt&quot;: &quot;2026-08-31T19:36:15.032Z&quot;
+}</pre></div>
+        </article>
+<article class="card">
+          <div class="number">04</div>
           <div><h2>Opaque denied access</h2><p>Harper Noor (USR-5007) attempted OPP-1003 and received only the standard opaque 404 response. The artifact contains no account, source, count, or evidence metadata.</p>
           <div class="links"><a href="denied-access.json">denied-access.json</a></div>
           <pre>{
@@ -61,35 +80,31 @@ footer{border-top:1px solid var(--line);padding-top:28px;color:var(--muted)}foot
 }</pre></div>
         </article>
 <article class="card">
-          <div class="number">04</div>
-          <div><h2>Full trace and run events</h2><p>The restricted run export contains 35 spans and 16 durable events, including model calls, retrieval, validation, guardrails, approval routing and decisions, and finalization.</p>
+          <div class="number">05</div>
+          <div><h2>Slack-style evidence impact</h2><p>On OPP-1003 the authorized Slack updates reach the finalized brief and shape it: 3 claim(s) outside Source Evidence cite a Slack update, and the reviewer-facing workspace marks 4 section(s) as account-team-update impacted. Revoking only the requester&#039;s slack read grant removes every Slack entry from retrieval and leaves 0 such claim(s).</p>
+          <div class="links"><a href="slack-impact-comparison.json">slack-impact-comparison.json</a><a href="slack-impact-comparison.md">slack-impact-comparison.md</a></div>
+          <pre>{
+  &quot;runsUsed&quot;: 4,
+  &quot;withSlackRunId&quot;: &quot;run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668&quot;,
+  &quot;withoutSlackRunId&quot;: &quot;run_ea1c3ed1a0de789547e8adf408f7f1b340df41b65e83dd669e15ab381a4d7e23&quot;
+}</pre></div>
+        </article>
+<article class="card">
+          <div class="number">06</div>
+          <div><h2>Full trace and run events</h2><p>The restricted run export contains 33 spans and 15 durable events, including model calls, retrieval, validation, guardrails, approval routing and decisions, and finalization.</p>
           <div class="links"><a href="restricted-run-trace.json">restricted-run-trace.json</a><a href="restricted-run-events.json">restricted-run-events.json</a></div>
           <pre>{
-  &quot;runId&quot;: &quot;run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7&quot;,
+  &quot;runId&quot;: &quot;run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668&quot;,
   &quot;provider&quot;: &quot;openrouter&quot;,
   &quot;generationModel&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
   &quot;embeddingModel&quot;: &quot;openai/text-embedding-3-small&quot;,
   &quot;tokenUsage&quot;: {
     &quot;calls&quot;: 5,
-    &quot;inputTokens&quot;: 25255,
-    &quot;outputTokens&quot;: 8730,
-    &quot;totalTokens&quot;: 33985
+    &quot;inputTokens&quot;: 21934,
+    &quot;outputTokens&quot;: 10413,
+    &quot;totalTokens&quot;: 32347
   },
-  &quot;runStartedAt&quot;: &quot;2026-08-31T05:58:48.644Z&quot;,
-  &quot;runCompletedAt&quot;: &quot;2026-08-31T05:59:22.724Z&quot;
-}</pre></div>
-        </article>
-<article class="card">
-          <div class="number">05</div>
-          <div><h2>Slack-style evidence impact demonstration</h2><p>Mandatory Data-Generation Subtask: an authorization-scope with/without comparison for OPP-1001 (Maya Levin, USR-5001), a secondary OPP-1002 check, and a cross-reference to the OPP-1003 run above, showing exactly where generated Slack evidence is retrieved, ranked, claimed, and validated, and the pipeline stage where it drops out before the shipped brief.</p>
-          <div class="links"><a href="slack-impact-comparison.md">slack-impact-comparison.md</a><a href="slack-impact-comparison.json">slack-impact-comparison.json</a></div>
-          <pre>{
-  &quot;withSlackRunId&quot;: &quot;run_a12bd817a6d8a3746358cc958a7c66af329782cf1ecb5273402d7e8bfd660103&quot;,
-  &quot;withoutSlackRunId&quot;: &quot;run_1ed98d7135fdf21c62052f9bcf78582d8ffd7f8992d218df0493cd73e390dbd4&quot;,
-  &quot;provider&quot;: &quot;openrouter&quot;,
-  &quot;generationModel&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
-  &quot;runsUsed&quot;: 4,
-  &quot;slackClaimedAndValidated&quot;: true,
-  &quot;slackCitedInFinalBrief&quot;: false
+  &quot;runStartedAt&quot;: &quot;2026-08-31T19:35:43.781Z&quot;,
+  &quot;runCompletedAt&quot;: &quot;2026-08-31T19:36:15.032Z&quot;
 }</pre></div>
         </article><footer>Machine-readable provenance and scenario mapping: <a href="manifest.json">manifest.json</a>. Re-run instructions are embedded in the manifest.</footer></main></body></html>

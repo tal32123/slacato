@@ -1,0 +1,251 @@
+# Deal Brief
+
+## 1. Deal Snapshot
+- **Account:** Meridian Appliances Group
+- **Opportunity:** Meridian Appliances Group \- Factory Connectivity Expansion
+- **Stage:** 3\.0 Prove
+### Claims
+- Expansion depends on proof success, reporting gaps, and confidence in operational support for factories\. (confidence: 1.00) [^citation_d80c24bff3959d49107e5cdd1a7a3e652693a5f2]
+
+## 2. Executive Summary
+Executive buyer linked expansion decision to measurable proof outcomes and staged payment terms\.
+### Claims
+- Executive buyer linked expansion decision to measurable proof outcomes and staged payment terms\. (confidence: 0.95) [^citation_0271d05f2df2af487fb2b7239033bdbf139ae3f0]
+
+## 3. Buyer Goals and Business Drivers
+### Goals
+- Finance proposed payment tied to proof acceptance and first factory rollout
+### Business Drivers
+- Meridian described production\-line connectivity risks and asked for proof that failover visibility works during shift changes\.
+### Claims
+- Finance proposed payment tied to proof acceptance and first factory rollout\. (confidence: 0.95) [^citation_29a90b21149f09facd28774c617c1ca6d5a3ca2b]
+- Meridian described production\-line connectivity risks and asked for proof that failover visibility works during shift changes\. (confidence: 0.95) [^citation_02c89dc1b30887143b9feff2d8c2388ecbb8d30d]
+
+## 4. Stakeholder Map
+### Julian Maro
+- **Title:** CIO
+- **Organization:** Meridian Appliances Group
+- **Role:** economic\_buyer
+- **Influence:** high
+- **Relationship:** neutral
+### Goals
+- None
+### Concerns
+- None
+#### Claims
+- Julian Maro, CIO (confidence: 1.00) [^citation_f78fc94a120c2160cbcbe9fbf51688bb9f8c4f71]
+### Clara Esteves
+- **Title:** Director of Plant Systems
+- **Organization:** Meridian Appliances Group
+- **Role:** champion
+- **Influence:** high
+- **Relationship:** positive
+### Goals
+- None
+### Concerns
+- None
+#### Claims
+- Clara Esteves, Director of Plant Systems (confidence: 1.00) [^citation_07dabcbc5832aa5ed140e631f6f9ae821e209578]
+### Lena Frost
+- **Title:** Finance Controller
+- **Organization:** Meridian Appliances Group
+- **Role:** decision\_maker
+- **Influence:** medium
+- **Relationship:** neutral
+### Goals
+- None
+### Concerns
+- None
+#### Claims
+- Lena Frost, Finance Controller (confidence: 1.00) [^citation_18f06e864e3e8450f6b4ae0825f1bfcf49f6ba3a]
+### Niko Hart
+- **Title:** Network Operations Manager
+- **Organization:** Meridian Appliances Group
+- **Role:** evaluator
+- **Influence:** medium
+- **Relationship:** negative
+### Goals
+- None
+### Concerns
+- None
+#### Claims
+- Niko Hart, Network Operations Manager (confidence: 1.00) [^citation_924dec6b22ae49ac904117ad9ced6992d308efae]
+### Henrik Vale
+- **Title:** Security Architect
+- **Organization:** Meridian Appliances Group
+- **Role:** evaluator
+- **Influence:** medium
+- **Relationship:** positive
+### Goals
+- None
+### Concerns
+- None
+#### Claims
+- Henrik Vale, Security Architect (confidence: 1.00) [^citation_8dde58fe1119de87f4230fa0d4301650d1a02669]
+### Claims
+- Training gaps for night\-shift staff during troubleshooting workflows remain unaddressed\. (confidence: 0.95) [^citation_ad38d7099badf2ef4ab597481d6b1257192a74cd]
+
+## 5. Negotiation State
+Finance proposed payment tied to proof acceptance and first factory rollout\.
+### Leverage
+- Initial pilot results confirm positive latency and policy consistency across operations\.
+### Risks
+- Training gaps for night\-shift staff during troubleshooting workflows remain unaddressed\.
+### Claims
+- Finance proposed payment tied to proof acceptance and first factory rollout\. (confidence: 0.95) [^citation_29a90b21149f09facd28774c617c1ca6d5a3ca2b]
+- Initial pilot results confirm positive latency and policy consistency across operations\. (confidence: 0.95) [^citation_b240a9ee6b2aab180c62b17701d458020d0bc36e]
+- Training gaps for night\-shift staff during troubleshooting workflows remain unaddressed\. (confidence: 0.95) [^citation_ad38d7099badf2ef4ab597481d6b1257192a74cd]
+
+## 6. Recommended Next Actions
+### 1. Schedule delivery of the reporting proof pack and factory cutover risk register\.
+- **Priority:** high
+- **Due date:** 2026\-05\-08
+- **Rationale:** Deliver reporting proof pack and factory cutover risk register by 2026\-05\-08
+#### Claims
+- Deliver reporting proof pack and factory cutover risk register by 2026\-05\-08 (confidence: 1.00) [^citation_e35230ffda5ca9cea900357c000c003d9ef19638]
+
+## 7. Missing Information
+- None
+
+## 8. Source Evidence
+### policy:deal\-desk\-policy:OPP\-1002:2
+- **Source type:** policy
+- **Summary:** Low\-confidence recommendations, conflicting evidence, or missing source data must be routed to a human reviewer\.
+#### Claims
+- Low\-confidence recommendations, conflicting evidence, or missing source data must be routed to a human reviewer\. (confidence: 1.00) [^citation_738fd42e7763ffa046513e8aab2d92c39ed01ee9]
+### salesforce:OPP\-1002:0
+- **Source type:** crm
+- **Summary:** Deliver reporting proof pack and factory cutover risk register by 2026\-05\-08
+#### Claims
+- Deliver reporting proof pack and factory cutover risk register by 2026\-05\-08 (confidence: 1.00) [^citation_e35230ffda5ca9cea900357c000c003d9ef19638]
+### salesforce:CON\-3009:OPP\-1002:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-19T00:00:00Z
+- **Summary:** Asks for staged payment milestones tied to proof results\.
+#### Claims
+- Asks for staged payment milestones tied to proof results\. (confidence: 1.00) [^citation_18f06e864e3e8450f6b4ae0825f1bfcf49f6ba3a]
+### salesforce:ACC\-2002:OPP\-1002:account:0
+- **Source type:** crm
+- **Summary:** Expansion depends on proof success, reporting gaps, and confidence in operational support for factories\.
+#### Claims
+- Expansion depends on proof success, reporting gaps, and confidence in operational support for factories\. (confidence: 1.00) [^citation_d80c24bff3959d49107e5cdd1a7a3e652693a5f2]
+### salesforce:CON\-3008:OPP\-1002:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-20T00:00:00Z
+- **Summary:** Concerned about visibility gaps during failover drills\.
+#### Claims
+- Concerned about visibility gaps during failover drills\. (confidence: 1.00) [^citation_924dec6b22ae49ac904117ad9ced6992d308efae]
+### salesforce:CON\-3010:OPP\-1002:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-21T00:00:00Z
+- **Summary:** Interested in policy templates and data protection reporting\.
+#### Claims
+- Interested in policy templates and data protection reporting\. (confidence: 1.00) [^citation_8dde58fe1119de87f4230fa0d4301650d1a02669]
+### salesforce:CON\-3006:OPP\-1002:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-22T00:00:00Z
+- **Summary:** Supports expansion if factory downtime risk is handled and reporting improves\.
+#### Claims
+- Supports expansion if factory downtime risk is handled and reporting improves\. (confidence: 1.00) [^citation_f78fc94a120c2160cbcbe9fbf51688bb9f8c4f71]
+### salesforce:CON\-3007:OPP\-1002:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-23T00:00:00Z
+- **Summary:** Strong champion for factory rollout, needs shift\-friendly troubleshooting playbooks\.
+#### Claims
+- Strong champion for factory rollout, needs shift\-friendly troubleshooting playbooks\. (confidence: 1.00) [^citation_07dabcbc5832aa5ed140e631f6f9ae821e209578]
+### gong\_summary:CALL\-013:summary:0
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-04T00:00:00Z
+- **Summary:** Executive buyer linked expansion decision to measurable proof outcomes and staged payment terms\.
+#### Claims
+- Executive buyer linked expansion decision to measurable proof outcomes and staged payment terms\. (confidence: 0.95) [^citation_0271d05f2df2af487fb2b7239033bdbf139ae3f0]
+### slack:SLK\-9005:0
+- **Source type:** slack
+- **Captured at:** 2026\-05\-08T00:00:00Z
+- **Summary:** Training gaps for night\-shift staff during troubleshooting workflows remain unaddressed\.
+#### Claims
+- Training gaps for night\-shift staff during troubleshooting workflows remain unaddressed\. (confidence: 0.95) [^citation_ad38d7099badf2ef4ab597481d6b1257192a74cd]
+### slack:SLK\-9004:0
+- **Source type:** slack
+- **Captured at:** 2026\-05\-02T00:00:00Z
+- **Summary:** Initial pilot results confirm positive latency and policy consistency across operations\.
+#### Claims
+- Initial pilot results confirm positive latency and policy consistency across operations\. (confidence: 0.95) [^citation_b240a9ee6b2aab180c62b17701d458020d0bc36e]
+### gong\_transcript:CALL\-018:transcript:5
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-25T00:00:00Z
+- **Summary:** Clara Esteves: I can support a conditional approval if the retest has a date and owner\.
+#### Claims
+- Clara Esteves: I can support a conditional approval if the retest has a date and owner\. (confidence: 1.00) [^citation_cd56ef825d473e447f1af0dffb0d01300e45f335]
+### pricing:PN\-4003:0
+- **Source type:** pricing
+- **Summary:** Expansion price assumes staged factory rollout and includes minimum enablement scope\.
+#### Claims
+- Expansion price assumes staged factory rollout and includes minimum enablement scope\. (confidence: 1.00) [^citation_906da08b2b8515f7b0b384567d46d21f6591c99c]
+### gong\_summary:CALL\-017:summary:0
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-22T00:00:00Z
+- **Summary:** Finance proposed payment tied to proof acceptance and first factory rollout\.
+#### Claims
+- Finance proposed payment tied to proof acceptance and first factory rollout\. (confidence: 0.95) [^citation_29a90b21149f09facd28774c617c1ca6d5a3ca2b]
+### gong\_summary:CALL\-012:summary:0
+- **Source type:** conversation
+- **Captured at:** 2026\-03\-28T00:00:00Z
+- **Summary:** Buyer ran through failover scenario and found gaps in incident ownership and alert interpretation\.
+#### Claims
+- Buyer ran through failover scenario and found gaps in incident ownership and alert interpretation\. (confidence: 0.95) [^citation_ee30027b71adb89f8902eca3932f0daa8c7f2423]
+### gong\_summary:CALL\-010:summary:0
+- **Source type:** conversation
+- **Captured at:** 2026\-03\-14T00:00:00Z
+- **Summary:** Meridian described production\-line connectivity risks and asked for proof that failover visibility works during shift changes\.
+#### Claims
+- Meridian described production\-line connectivity risks and asked for proof that failover visibility works during shift changes\. (confidence: 0.95) [^citation_02c89dc1b30887143b9feff2d8c2388ecbb8d30d]
+### gong\_transcript:CALL\-018:transcript:0
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-25T00:00:00Z
+- **Summary:** Julian Maro, CIO: Directionally, the proof passed\.
+#### Claims
+- Julian Maro, CIO: Directionally, the proof passed\. (confidence: 1.00) [^citation_ebea4a778ae00c10a09944c1495127ce3e21830b]
+### gong\_transcript:CALL\-018:transcript:6
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-25T00:00:00Z
+- **Summary:** Clara Esteves: Yes\.
+#### Claims
+- Clara Esteves: Yes\. (confidence: 1.00) [^citation_2927b8e811bc1655c2432675e30ce444d97d543b]
+### gong\_transcript:CALL\-018:transcript:4
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-25T00:00:00Z
+- **Summary:** Clara Esteves: And mark what is ready now versus what is a roadmap item\.
+#### Claims
+- Clara Esteves: And mark what is ready now versus what is a roadmap item\. (confidence: 1.00) [^citation_908d19c5dd70edec1b820aae0ef8b01089b32d60]
+### gong\_summary:CALL\-018:summary:0
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-25T00:00:00Z
+- **Summary:** callId: CALL\-018
+#### Claims
+- callId: CALL\-018 (confidence: 1.00) [^citation_9bb35181e1c3b910732d442928f7af172ed4e2cb]
+### Citation Labels
+[^citation_0271d05f2df2af487fb2b7239033bdbf139ae3f0]: source=gong/gong_call_summaries.tsv, call_id=CALL-013
+[^citation_02c89dc1b30887143b9feff2d8c2388ecbb8d30d]: source=gong/gong_call_summaries.tsv, call_id=CALL-010
+[^citation_07dabcbc5832aa5ed140e631f6f9ae821e209578]: source=salesforce/contacts.tsv, contact_id=CON-3007
+[^citation_18f06e864e3e8450f6b4ae0825f1bfcf49f6ba3a]: source=salesforce/contacts.tsv, contact_id=CON-3009
+[^citation_2927b8e811bc1655c2432675e30ce444d97d543b]: source=gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
+[^citation_29a90b21149f09facd28774c617c1ca6d5a3ca2b]: source=gong/gong_call_summaries.tsv, call_id=CALL-017
+[^citation_738fd42e7763ffa046513e8aab2d92c39ed01ee9]: source=policies/deal_desk_policy.md, policy_id=deal-desk-policy
+[^citation_8dde58fe1119de87f4230fa0d4301650d1a02669]: source=salesforce/contacts.tsv, contact_id=CON-3010
+[^citation_906da08b2b8515f7b0b384567d46d21f6591c99c]: source=pricing/pricing_notes.tsv, pricing_note_id=PN-4003
+[^citation_908d19c5dd70edec1b820aae0ef8b01089b32d60]: source=gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
+[^citation_924dec6b22ae49ac904117ad9ced6992d308efae]: source=salesforce/contacts.tsv, contact_id=CON-3008
+[^citation_9bb35181e1c3b910732d442928f7af172ed4e2cb]: source=gong/gong_call_summaries.tsv, call_id=CALL-018
+[^citation_ad38d7099badf2ef4ab597481d6b1257192a74cd]: source=slack/account_team_updates.tsv, update_id=SLK-9005
+[^citation_b240a9ee6b2aab180c62b17701d458020d0bc36e]: source=slack/account_team_updates.tsv, update_id=SLK-9004
+[^citation_cd56ef825d473e447f1af0dffb0d01300e45f335]: source=gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
+[^citation_d80c24bff3959d49107e5cdd1a7a3e652693a5f2]: source=salesforce/accounts.tsv, account_id=ACC-2002
+[^citation_e35230ffda5ca9cea900357c000c003d9ef19638]: source=salesforce/opportunities.tsv, opportunity_id=OPP-1002
+[^citation_ebea4a778ae00c10a09944c1495127ce3e21830b]: source=gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
+[^citation_ee30027b71adb89f8902eca3932f0daa8c7f2423]: source=gong/gong_call_summaries.tsv, call_id=CALL-012
+[^citation_f78fc94a120c2160cbcbe9fbf51688bb9f8c4f71]: source=salesforce/contacts.tsv, contact_id=CON-3006
+
+## 9. Confidence and Review Warnings
+- **Overall confidence:** 0.95
+- **TRAINING_GAPS_UNADDRESSED (warning):** Training gaps for night\-shift staff during troubleshooting workflows remain unaddressed\. — affects: Training gaps for night\-shift staff during troubleshooting workflows remain unaddressed\.

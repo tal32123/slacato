@@ -5,21 +5,21 @@
 - **Opportunity:** Eclipse BioMaterials Ltd \- Restricted Renewal and Data Protection
 - **Stage:** 5\.0 Negotiate
 ### Claims
-- Restricted account with sensitive pricing notes, legal constraints, and board\-level cost pressure\. (confidence: 1.00) [^citation_02e28cbc6e6662124af57133f8475326dbae432b]
+- stage: 5\.0 Negotiate (confidence: 1.00) [^citation_274f141f84ce630d610ef6246a9f498d04f97bd4]
 
 ## 2. Executive Summary
-Route discount, liability language, and restricted data access request for approval by 2026\-05\-14
+Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations\.
 ### Claims
-- Route discount, liability language, and restricted data access request for approval by 2026\-05\-14 (confidence: 1.00) [^citation_6114ccdd24bc29d042fba4922f273129d5329419]
+- Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations\. (confidence: 1.00) [^citation_f735c84da94a78934e442361d4313f6d27160a59]
 
 ## 3. Buyer Goals and Business Drivers
 ### Goals
-- Pushing for renewal certainty but under board pressure to reduce run\-rate spend\.
+- Executives aligned on strategic need but disagreed on whether discount or risk mitigation should lead negotiation\.
 ### Business Drivers
-- Values the platform but flagged sensitive research access controls as non\-negotiable\.
+- Data protection controls and segmentation models are fully accepted by the security architect\.
 ### Claims
-- Pushing for renewal certainty but under board pressure to reduce run\-rate spend\. (confidence: 1.00) [^citation_f1db274277df8cd977b001b3482f52f64177c84b]
-- Values the platform but flagged sensitive research access controls as non\-negotiable\. (confidence: 1.00) [^citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee]
+- Executives aligned on strategic need but disagreed on whether discount or risk mitigation should lead negotiation\. (confidence: 1.00) [^citation_6d0f5f973910d40e11a1b7b15af9196ed27a9618]
+- Data protection controls and segmentation models are fully accepted by the security architect\. (confidence: 1.00) [^citation_39ca03d6d61fdb8bf87b697e3272ed75d2c32127]
 
 ## 4. Stakeholder Map
 ### Priya Sato
@@ -29,13 +29,12 @@ Route discount, liability language, and restricted data access request for appro
 - **Influence:** high
 - **Relationship:** neutral
 ### Goals
-- Pushing for renewal certainty but under board pressure to reduce run\-rate spend\.
+- None
 ### Concerns
-- If the internal package is clear, I can decide what to take to the board sponsor\.
+- None
 #### Claims
-- Priya Sato is the Chief Digital Officer\. (confidence: 1.00) [^citation_f1db274277df8cd977b001b3482f52f64177c84b]
-- Pushing for renewal certainty but under board pressure to reduce run\-rate spend\. (confidence: 1.00) [^citation_f1db274277df8cd977b001b3482f52f64177c84b]
-- If the internal package is clear, I can decide what to take to the board sponsor\. (confidence: 1.00) [^citation_e4fcfea46972cdfdd7fd58302a8461f97309156c]
+- fullName: Priya Sato (confidence: 1.00) [^citation_6504fc6da85f941e1d8f9d8f125536f56f48226d]
+- title: Chief Digital Officer (confidence: 1.00) [^citation_6504fc6da85f941e1d8f9d8f125536f56f48226d]
 ### Mateo Ruan
 - **Title:** Head of Security
 - **Organization:** Eclipse BioMaterials Ltd
@@ -43,12 +42,12 @@ Route discount, liability language, and restricted data access request for appro
 - **Influence:** high
 - **Relationship:** positive
 ### Goals
-- Values the platform but flagged sensitive research access controls as non\-negotiable\.
+- None
 ### Concerns
 - None
 #### Claims
-- Mateo Ruan is the Head of Security\. (confidence: 1.00) [^citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee]
-- Values the platform but flagged sensitive research access controls as non\-negotiable\. (confidence: 1.00) [^citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee]
+- fullName: Mateo Ruan (confidence: 1.00) [^citation_94d2887e11d4bfb6b1eadccb11ed0ce7692c6687]
+- title: Head of Security (confidence: 1.00) [^citation_94d2887e11d4bfb6b1eadccb11ed0ce7692c6687]
 ### Leah Tan
 - **Title:** General Counsel
 - **Organization:** Eclipse BioMaterials Ltd
@@ -56,13 +55,12 @@ Route discount, liability language, and restricted data access request for appro
 - **Influence:** high
 - **Relationship:** neutral
 ### Goals
-- Requests liability language changes and strict review before customer\-facing concessions\.
+- None
 ### Concerns
-- That is acceptable if the label is impossible to miss\.
+- None
 #### Claims
-- Leah Tan is the General Counsel\. (confidence: 1.00) [^citation_4a0c42ed879dc2884d6df8552cb4950c6a90971f]
-- Requests liability language changes and strict review before customer\-facing concessions\. (confidence: 1.00) [^citation_4a0c42ed879dc2884d6df8552cb4950c6a90971f]
-- That is acceptable if the label is impossible to miss\. (confidence: 1.00) [^citation_e4fcfea46972cdfdd7fd58302a8461f97309156c]
+- fullName: Leah Tan (confidence: 1.00) [^citation_b6d9b98ac1318de9ff9d47ec7487cd28ff10e97f]
+- title: General Counsel (confidence: 1.00) [^citation_b6d9b98ac1318de9ff9d47ec7487cd28ff10e97f]
 ### Darin Holt
 - **Title:** Procurement Lead
 - **Organization:** Eclipse BioMaterials Ltd
@@ -70,12 +68,12 @@ Route discount, liability language, and restricted data access request for appro
 - **Influence:** medium
 - **Relationship:** negative
 ### Goals
-- Pressing for aggressive discount and shorter renewal term\.
+- None
 ### Concerns
 - None
 #### Claims
-- Darin Holt is the Procurement Lead\. (confidence: 1.00) [^citation_6dbf463375bc8095ecbab6bb323d597766be4915]
-- Pressing for aggressive discount and shorter renewal term\. (confidence: 1.00) [^citation_6dbf463375bc8095ecbab6bb323d597766be4915]
+- fullName: Darin Holt (confidence: 1.00) [^citation_84a222aa1a88c5ffd8eeab082466a35031263553]
+- title: Procurement Lead (confidence: 1.00) [^citation_84a222aa1a88c5ffd8eeab082466a35031263553]
 ### Mei Arlen
 - **Title:** Research IT Manager
 - **Organization:** Eclipse BioMaterials Ltd
@@ -83,99 +81,172 @@ Route discount, liability language, and restricted data access request for appro
 - **Influence:** medium
 - **Relationship:** neutral
 ### Goals
-- Needs evidence that research data workflows remain segmented by team\.
+- None
 ### Concerns
 - None
 #### Claims
-- Mei Arlen is the Research IT Manager\. (confidence: 1.00) [^citation_9dca3c021ef98b2798c238b3ed1abff7c9ebcc8c]
-- Needs evidence that research data workflows remain segmented by team\. (confidence: 1.00) [^citation_9dca3c021ef98b2798c238b3ed1abff7c9ebcc8c]
+- fullName: Mei Arlen (confidence: 1.00) [^citation_08f11813cd66f6b065f365e1e25238f42352de90]
+- title: Research IT Manager (confidence: 1.00) [^citation_08f11813cd66f6b065f365e1e25238f42352de90]
 
 ## 5. Negotiation State
-Route discount, liability language, and restricted data access request for approval by 2026\-05\-14
+Final prep call identified approval gates for discount, liability language, and restricted\-source use\.
 ### Leverage
-- Values the platform but flagged sensitive research access controls as non\-negotiable\.
+- None
 ### Risks
-- Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\.
-- Customer\-facing concession language must not be generated unless the recommendation has an approved status\.
-- Low\-confidence recommendations, conflicting evidence, or missing source data must be routed to a human reviewer\.
+- Exception handling procedures requested by the research team are still undocumented\.
 ### Claims
-- Route discount, liability language, and restricted data access request for approval by 2026\-05\-14 (confidence: 1.00) [^citation_6114ccdd24bc29d042fba4922f273129d5329419]
-- Values the platform but flagged sensitive research access controls as non\-negotiable\. (confidence: 1.00) [^citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee]
-- Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\. (confidence: 1.00) [^citation_89220c1feb63bfbd470dff62aa8ee9ccd3ffad31]
-- Customer\-facing concession language must not be generated unless the recommendation has an approved status\. (confidence: 1.00) [^citation_89220c1feb63bfbd470dff62aa8ee9ccd3ffad31]
-- Low\-confidence recommendations, conflicting evidence, or missing source data must be routed to a human reviewer\. (confidence: 1.00) [^citation_89220c1feb63bfbd470dff62aa8ee9ccd3ffad31]
+- Final prep call identified approval gates for discount, liability language, and restricted\-source use\. (confidence: 1.00) [^citation_a6a11350a1547c76d74b7f7c53129a572ebae5dd]
+- Exception handling procedures requested by the research team are still undocumented\. (confidence: 1.00) [^citation_5d2d1872d2be1d9e9c546ac450c0b10177f0b090]
 
 ## 6. Recommended Next Actions
-### 1. Schedule internal package comparison
+### 1. Schedule internal review for pricing packages\.
 - **Priority:** high
-- **Rationale:** So next action is internal package comparison with approval flags, not an external proposal\.
+- **Rationale:** Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\.
 #### Claims
-- So next action is internal package comparison with approval flags, not an external proposal\. (confidence: 1.00) [^citation_e4fcfea46972cdfdd7fd58302a8461f97309156c]
+- Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\. (confidence: 1.00) [^citation_30943d4bc05d195461dd50d9b3dc1addd0d2ac66]
 
 ## 7. Missing Information
-### 1. Verify evidence for claim claim\_st\_16\.
-- **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 2. Verify evidence for claim claim\_st\_6\.
-- **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 3. Verify evidence for claim claim\_st\_12\.
-- **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 4. Verify evidence for claim claim\_st\_15\.
-- **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 5. Verify evidence for claim claim\_ev\_10\.
-- **Why it matters:** No single cited evidence unit supports the complete material relation\.
-### 6. Verify evidence for claim claim\_ev\_11\.
-- **Why it matters:** No single cited evidence unit supports the complete material relation\.
+- None
 
 ## 8. Source Evidence
-### salesforce:CON\-3011:OPP\-1003:contact:0
-- **Source type:** crm
-- **Captured at:** 2026\-04\-26T00:00:00Z
-- **Summary:** Pushing for renewal certainty but under board pressure to reduce run\-rate spend\.
+### policy:deal\-desk\-policy:OPP\-1003:2
+- **Source type:** policy
+- **Summary:** Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\.
 #### Claims
-- Pushing for renewal certainty but under board pressure to reduce run\-rate spend\. (confidence: 1.00) [^citation_f1db274277df8cd977b001b3482f52f64177c84b]
-### salesforce:CON\-3012:OPP\-1003:contact:0
+- Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\. (confidence: 1.00) [^citation_30943d4bc05d195461dd50d9b3dc1addd0d2ac66]
+### salesforce:OPP\-1003:0
 - **Source type:** crm
-- **Captured at:** 2026\-04\-25T00:00:00Z
-- **Summary:** Values the platform but flagged sensitive research access controls as non\-negotiable\.
+- **Summary:** opportunityId: OPP\-1003
 #### Claims
-- Values the platform but flagged sensitive research access controls as non\-negotiable\. (confidence: 1.00) [^citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee]
+- opportunityId: OPP\-1003 (confidence: 1.00) [^citation_274f141f84ce630d610ef6246a9f498d04f97bd4]
 ### salesforce:CON\-3013:OPP\-1003:contact:0
 - **Source type:** crm
 - **Captured at:** 2026\-04\-24T00:00:00Z
-- **Summary:** Requests liability language changes and strict review before customer\-facing concessions\.
+- **Summary:** contactId: CON\-3013
 #### Claims
-- Requests liability language changes and strict review before customer\-facing concessions\. (confidence: 1.00) [^citation_4a0c42ed879dc2884d6df8552cb4950c6a90971f]
+- contactId: CON\-3013 (confidence: 1.00) [^citation_b6d9b98ac1318de9ff9d47ec7487cd28ff10e97f]
 ### salesforce:CON\-3014:OPP\-1003:contact:0
 - **Source type:** crm
 - **Captured at:** 2026\-04\-26T00:00:00Z
-- **Summary:** Pressing for aggressive discount and shorter renewal term\.
+- **Summary:** contactId: CON\-3014
 #### Claims
-- Pressing for aggressive discount and shorter renewal term\. (confidence: 1.00) [^citation_6dbf463375bc8095ecbab6bb323d597766be4915]
+- contactId: CON\-3014 (confidence: 1.00) [^citation_84a222aa1a88c5ffd8eeab082466a35031263553]
+### salesforce:CON\-3011:OPP\-1003:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-26T00:00:00Z
+- **Summary:** contactId: CON\-3011
+#### Claims
+- contactId: CON\-3011 (confidence: 1.00) [^citation_6504fc6da85f941e1d8f9d8f125536f56f48226d]
+### salesforce:ACC\-2003:OPP\-1003:account:0
+- **Source type:** crm
+- **Summary:** accountId: ACC\-2003
+#### Claims
+- accountId: ACC\-2003 (confidence: 1.00) [^citation_8a7682cf2e56a7bcad2eb8104b855221a6bad7ad]
+### salesforce:CON\-3012:OPP\-1003:contact:0
+- **Source type:** crm
+- **Captured at:** 2026\-04\-25T00:00:00Z
+- **Summary:** contactId: CON\-3012
+#### Claims
+- contactId: CON\-3012 (confidence: 1.00) [^citation_94d2887e11d4bfb6b1eadccb11ed0ce7692c6687]
 ### salesforce:CON\-3015:OPP\-1003:contact:0
 - **Source type:** crm
 - **Captured at:** 2026\-04\-23T00:00:00Z
-- **Summary:** Needs evidence that research data workflows remain segmented by team\.
+- **Summary:** contactId: CON\-3015
 #### Claims
-- Needs evidence that research data workflows remain segmented by team\. (confidence: 1.00) [^citation_9dca3c021ef98b2798c238b3ed1abff7c9ebcc8c]
-### gong\_transcript:CALL\-027:transcript:3
+- contactId: CON\-3015 (confidence: 1.00) [^citation_08f11813cd66f6b065f365e1e25238f42352de90]
+### slack:SLK\-9009:0
+- **Source type:** slack
+- **Captured at:** 2026\-05\-18T00:00:00Z
+- **Summary:** Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations\.
+#### Claims
+- Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations\. (confidence: 1.00) [^citation_f735c84da94a78934e442361d4313f6d27160a59]
+### pricing:PN\-4005:0
+- **Source type:** pricing
+- **Summary:** pricingNoteId: PN\-4005
+#### Claims
+- pricingNoteId: PN\-4005 (confidence: 1.00) [^citation_54649f4fe06ff52b315f43b00bfdceb564ad5a11]
+### gong\_summary:CALL\-023:summary:0
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-13T00:00:00Z
+- **Summary:** callId: CALL\-023
+#### Claims
+- callId: CALL\-023 (confidence: 1.00) [^citation_6d0f5f973910d40e11a1b7b15af9196ed27a9618]
+### pricing:PN\-4004:0
+- **Source type:** pricing
+- **Summary:** pricingNoteId: PN\-4004
+#### Claims
+- pricingNoteId: PN\-4004 (confidence: 1.00) [^citation_dab13889d9ae2f22e410ecc107d34ee817da7a44]
+### slack:SLK\-9007:0
+- **Source type:** slack
+- **Captured at:** 2026\-05\-03T00:00:00Z
+- **Summary:** Data protection controls and segmentation models are fully accepted by the security architect\.
+#### Claims
+- Data protection controls and segmentation models are fully accepted by the security architect\. (confidence: 1.00) [^citation_39ca03d6d61fdb8bf87b697e3272ed75d2c32127]
+### gong\_transcript:CALL\-027:transcript:4
 - **Source type:** conversation
 - **Captured at:** 2026\-04\-27T00:00:00Z
-- **Summary:** So next action is internal package comparison with approval flags, not an external proposal\.
+- **Summary:** \# Transcript: CALL\-027 \- Approval path and negotiation prep
 #### Claims
-- So next action is internal package comparison with approval flags, not an external proposal\. (confidence: 1.00) [^citation_e4fcfea46972cdfdd7fd58302a8461f97309156c]
+- \# Transcript: CALL\-027 \- Approval path and negotiation prep (confidence: 1.00) [^citation_0b1dd866a8139a19bc9765b1115103c539a648c0]
+### gong\_summary:CALL\-027:summary:0
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-27T00:00:00Z
+- **Summary:** callId: CALL\-027
+#### Claims
+- callId: CALL\-027 (confidence: 1.00) [^citation_a6a11350a1547c76d74b7f7c53129a572ebae5dd]
+### slack:SLK\-9008:0
+- **Source type:** slack
+- **Captured at:** 2026\-05\-11T00:00:00Z
+- **Summary:** Exception handling procedures requested by the research team are still undocumented\.
+#### Claims
+- Exception handling procedures requested by the research team are still undocumented\. (confidence: 1.00) [^citation_5d2d1872d2be1d9e9c546ac450c0b10177f0b090]
+### gong\_transcript:CALL\-019:transcript:5
+- **Source type:** conversation
+- **Captured at:** 2026\-03\-19T00:00:00Z
+- **Summary:** \# Transcript: CALL\-019 \- Restricted renewal discovery
+#### Claims
+- \# Transcript: CALL\-019 \- Restricted renewal discovery (confidence: 1.00) [^citation_9d32893ba80a8640dbc32960f806500612db0225]
+### gong\_transcript:CALL\-027:transcript:2
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-27T00:00:00Z
+- **Summary:** \# Transcript: CALL\-027 \- Approval path and negotiation prep
+#### Claims
+- \# Transcript: CALL\-027 \- Approval path and negotiation prep (confidence: 1.00) [^citation_b57e757c1b6d62c1b726c8185ada53b8e8166d25]
+### gong\_transcript:CALL\-027:transcript:1
+- **Source type:** conversation
+- **Captured at:** 2026\-04\-27T00:00:00Z
+- **Summary:** \# Transcript: CALL\-027 \- Approval path and negotiation prep
+#### Claims
+- \# Transcript: CALL\-027 \- Approval path and negotiation prep (confidence: 1.00) [^citation_cd01e14fbcb79410ab6b437726c0f91d23a08a4c]
+### gong\_transcript:CALL\-019:transcript:0
+- **Source type:** conversation
+- **Captured at:** 2026\-03\-19T00:00:00Z
+- **Summary:** \# Transcript: CALL\-019 \- Restricted renewal discovery
+#### Claims
+- \# Transcript: CALL\-019 \- Restricted renewal discovery (confidence: 1.00) [^citation_44bae1b9a5b7a29f43fab56317839ce79e732910]
 ### Citation Labels
-[^citation_02e28cbc6e6662124af57133f8475326dbae432b]: source=salesforce/accounts.tsv, account_id=ACC-2003
-[^citation_4a0c42ed879dc2884d6df8552cb4950c6a90971f]: source=salesforce/contacts.tsv, contact_id=CON-3013
-[^citation_6114ccdd24bc29d042fba4922f273129d5329419]: source=salesforce/opportunities.tsv, opportunity_id=OPP-1003
-[^citation_6dbf463375bc8095ecbab6bb323d597766be4915]: source=salesforce/contacts.tsv, contact_id=CON-3014
-[^citation_89220c1feb63bfbd470dff62aa8ee9ccd3ffad31]: source=policies/deal_desk_policy.md, policy_id=deal-desk-policy
-[^citation_9dca3c021ef98b2798c238b3ed1abff7c9ebcc8c]: source=salesforce/contacts.tsv, contact_id=CON-3015
-[^citation_e4fcfea46972cdfdd7fd58302a8461f97309156c]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
-[^citation_f1db274277df8cd977b001b3482f52f64177c84b]: source=salesforce/contacts.tsv, contact_id=CON-3011
-[^citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee]: source=salesforce/contacts.tsv, contact_id=CON-3012
+[^citation_08f11813cd66f6b065f365e1e25238f42352de90]: source=salesforce/contacts.tsv, contact_id=CON-3015
+[^citation_0b1dd866a8139a19bc9765b1115103c539a648c0]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
+[^citation_274f141f84ce630d610ef6246a9f498d04f97bd4]: source=salesforce/opportunities.tsv, opportunity_id=OPP-1003
+[^citation_30943d4bc05d195461dd50d9b3dc1addd0d2ac66]: source=policies/deal_desk_policy.md, policy_id=deal-desk-policy
+[^citation_39ca03d6d61fdb8bf87b697e3272ed75d2c32127]: source=slack/account_team_updates.tsv, update_id=SLK-9007
+[^citation_44bae1b9a5b7a29f43fab56317839ce79e732910]: source=gong/transcripts/OPP-1003_CALL-019.md, call_id=CALL-019
+[^citation_54649f4fe06ff52b315f43b00bfdceb564ad5a11]: source=pricing/pricing_notes.tsv, pricing_note_id=PN-4005
+[^citation_5d2d1872d2be1d9e9c546ac450c0b10177f0b090]: source=slack/account_team_updates.tsv, update_id=SLK-9008
+[^citation_6504fc6da85f941e1d8f9d8f125536f56f48226d]: source=salesforce/contacts.tsv, contact_id=CON-3011
+[^citation_6d0f5f973910d40e11a1b7b15af9196ed27a9618]: source=gong/gong_call_summaries.tsv, call_id=CALL-023
+[^citation_84a222aa1a88c5ffd8eeab082466a35031263553]: source=salesforce/contacts.tsv, contact_id=CON-3014
+[^citation_8a7682cf2e56a7bcad2eb8104b855221a6bad7ad]: source=salesforce/accounts.tsv, account_id=ACC-2003
+[^citation_94d2887e11d4bfb6b1eadccb11ed0ce7692c6687]: source=salesforce/contacts.tsv, contact_id=CON-3012
+[^citation_9d32893ba80a8640dbc32960f806500612db0225]: source=gong/transcripts/OPP-1003_CALL-019.md, call_id=CALL-019
+[^citation_a6a11350a1547c76d74b7f7c53129a572ebae5dd]: source=gong/gong_call_summaries.tsv, call_id=CALL-027
+[^citation_b57e757c1b6d62c1b726c8185ada53b8e8166d25]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
+[^citation_b6d9b98ac1318de9ff9d47ec7487cd28ff10e97f]: source=salesforce/contacts.tsv, contact_id=CON-3013
+[^citation_cd01e14fbcb79410ab6b437726c0f91d23a08a4c]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
+[^citation_dab13889d9ae2f22e410ecc107d34ee817da7a44]: source=pricing/pricing_notes.tsv, pricing_note_id=PN-4004
+[^citation_f735c84da94a78934e442361d4313f6d27160a59]: source=slack/account_team_updates.tsv, update_id=SLK-9009
 
 ## 9. Confidence and Review Warnings
 - **Overall confidence:** 1.00
-- **APPROVAL_REQUIRED (critical):** Approval is required for this restricted opportunity before customer\-facing concessions can be shared\. — claims: `claim_ns_3`, `claim_ns_4`
-- **INSUFFICIENT_CLAIM_SUPPORT (warning):** No single cited evidence unit supports the complete material relation\. — claims: none
-- **EXECUTIVE_DISAGREEMENT (warning):** Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations\. — claims: none
+- **CONCESSION_NOT_APPROVED (critical):** Customer\-facing concession language cannot be generated because the pricing recommendation approval status is pending\. — affects: Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\.
+- **INSUFFICIENT_CLAIM_SUPPORT (warning):** No single cited evidence unit supports the complete material relation\.
