@@ -55,17 +55,27 @@ export function ApprovalSubjectDetail({
           title="Goals"
           values={payload.buyerGoalsAndBusinessDrivers.goals}
           empty="No buyer goals were supported by the validated evidence."
+          claims={payload.buyerGoalsAndBusinessDrivers.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
         />
         <BriefList
           title="Business drivers"
           values={payload.buyerGoalsAndBusinessDrivers.businessDrivers}
           empty="No business drivers were supported by the validated evidence."
+          claims={payload.buyerGoalsAndBusinessDrivers.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
         />
         <ClaimList
           claims={payload.buyerGoalsAndBusinessDrivers.claims ?? []}
           numbers={numbers}
           evidenceIds={evidenceIds}
           empty="No buyer goal claims were supported by the validated evidence."
+          citedInPlace={[
+            ...payload.buyerGoalsAndBusinessDrivers.goals,
+            ...payload.buyerGoalsAndBusinessDrivers.businessDrivers
+          ]}
         />
       </SubjectSection>
       <SubjectSection title="Stakeholder map">
@@ -111,12 +121,16 @@ export function ApprovalSubjectDetail({
           title="Coverage gaps"
           values={payload.stakeholderMap.coverageGaps ?? []}
           empty="No stakeholder coverage gaps were recorded."
+          claims={payload.stakeholderMap.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
         />
         <ClaimList
           claims={payload.stakeholderMap.claims ?? []}
           numbers={numbers}
           evidenceIds={evidenceIds}
           empty="No stakeholder map claims were supported by the validated evidence."
+          citedInPlace={payload.stakeholderMap.coverageGaps ?? []}
         />
       </SubjectSection>
       <SubjectSection title="Negotiation state">
@@ -125,17 +139,27 @@ export function ApprovalSubjectDetail({
           title="Leverage"
           values={payload.negotiationState.leverage ?? []}
           empty="No leverage was supported by the validated evidence."
+          claims={payload.negotiationState.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
         />
         <BriefList
           title="Risks"
           values={payload.negotiationState.risks}
           empty="No negotiation risks were recorded."
+          claims={payload.negotiationState.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
         />
         <ClaimList
           claims={payload.negotiationState.claims ?? []}
           numbers={numbers}
           evidenceIds={evidenceIds}
           empty="No negotiation state claims were supported by the validated evidence."
+          citedInPlace={[
+            ...(payload.negotiationState.leverage ?? []),
+            ...payload.negotiationState.risks
+          ]}
         />
       </SubjectSection>
       <SubjectSection title="Recommended next actions">
@@ -284,12 +308,29 @@ export function BriefFact({
   );
 }
 
-/** Presents a titled list from the approval brief with a meaningful empty state. */
+/**
+ * Presents a titled list from the approval brief, citing each bullet in place.
+ *
+ * Roughly half of a section's claims restate one of its bullets verbatim, so rendering both would
+ * print the same sentence twice. Where a claim and a bullet are the same statement, the bullet is
+ * the claim, and its citation markers belong on it rather than in a list underneath.
+ */
 export function BriefList({
   title,
   values,
-  empty
-}: Readonly<{ title: string; values: readonly string[]; empty: string }>): React.JSX.Element {
+  empty,
+  claims = [],
+  numbers,
+  evidenceIds
+}: Readonly<{
+  title: string;
+  values: readonly string[];
+  empty: string;
+  claims?: readonly ApprovalClaim[];
+  numbers?: ReadonlyMap<string, number>;
+  evidenceIds?: ReadonlySet<string>;
+}>): React.JSX.Element {
+  const cited = new Map(claims.map((claim) => [claim.statement, claim]));
   return (
     <div className="mt-4">
       <h4 className="text-sm font-medium">{title}</h4>
@@ -297,9 +338,24 @@ export function BriefList({
         <EmptyState>{empty}</EmptyState>
       ) : (
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-          {values.map((value) => (
-            <li key={value}>{value}</li>
-          ))}
+          {values.map((value) => {
+            const claim = cited.get(value);
+            return (
+              <li key={value}>
+                {value}
+                {claim !== undefined && numbers !== undefined && evidenceIds !== undefined && (
+                  <>
+                    {' '}
+                    <CitationMarkers
+                      citations={claim.citations}
+                      numbers={numbers}
+                      evidenceIds={evidenceIds}
+                    />
+                  </>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -317,21 +373,28 @@ export function ClaimList({
   claims,
   numbers,
   evidenceIds,
-  empty
+  empty,
+  citedInPlace = []
 }: Readonly<{
   claims: readonly ApprovalClaim[];
   numbers: ReadonlyMap<string, number>;
   evidenceIds: ReadonlySet<string>;
   empty: string;
-}>): React.JSX.Element {
+  citedInPlace?: readonly string[];
+}>): React.JSX.Element | null {
+  // A claim whose statement is already a bullet above has been cited there; repeating it here would
+  // say the same sentence twice. When that accounts for every claim the section has, the section is
+  // fully attributed and needs no list at all - which is not the same as having no claims.
+  const shown = claims.filter((claim) => !citedInPlace.includes(claim.statement));
+  if (claims.length > 0 && shown.length === 0) return null;
   return (
     <div className="mt-4">
       <h4 className="text-sm font-medium">Supporting claims</h4>
-      {claims.length === 0 ? (
+      {shown.length === 0 ? (
         <EmptyState>{empty}</EmptyState>
       ) : (
         <ul className="mt-2 grid gap-2">
-          {claims.map((claim) => (
+          {shown.map((claim) => (
             <li key={claim.id} className="text-sm leading-6">
               <span>{claim.statement}</span>{' '}
               <CitationMarkers

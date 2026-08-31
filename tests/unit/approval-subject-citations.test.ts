@@ -206,6 +206,38 @@ describe('ApprovalSubjectDetail evidence attribution', () => {
     expect(within(warnings).getAllByText(/^Raised against:/)).toHaveLength(1);
   });
 
+  it('cites a bullet in place instead of repeating it as a claim underneath', () => {
+    // Roughly half of a real section's claims restate one of its bullets word for word, so the
+    // page must attribute the bullet rather than print the same sentence twice.
+    const shared = 'Operations wants fewer regional exceptions.';
+    const payload: ApprovalBriefPayload = {
+      ...buildPayload(),
+      buyerGoalsAndBusinessDrivers: {
+        goals: [shared],
+        businessDrivers: [],
+        claims: [buildClaim('claim_goal_1', shared, readableEvidenceId)]
+      }
+    };
+    const { container } = render(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(ApprovalSubjectDetail, {
+          payload,
+          evidenceIds: new Set([readableEvidenceId]),
+          opportunityId: 'OPP-1001'
+        })
+      )
+    );
+    const goals = section(container, 'Buyer goals and business drivers');
+    expect(within(goals).getAllByText(shared)).toHaveLength(1);
+    const bullet = within(goals).getByText(shared).closest('li');
+    if (bullet === null) throw new Error('The goal did not render as a list item.');
+    expect(within(bullet).getByRole('link', { name: 'Evidence 1' })).toBeInTheDocument();
+    // Every claim was cited on a bullet, so the section is fully attributed and needs no list.
+    expect(within(goals).queryByText('Supporting claims')).not.toBeInTheDocument();
+  });
+
   it('says so honestly when a section carries no supported claims', () => {
     const { container } = renderSubject();
 
