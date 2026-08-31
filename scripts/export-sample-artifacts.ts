@@ -199,6 +199,11 @@ async function main(): Promise<void> {
       runsUsed: number;
       runs: { withSlack: { runId: string }; withoutSlack: { runId: string } };
     };
+    if (slackImpact.runs.withSlack.runId !== restrictedRunId) {
+      throw new Error(
+        `${slackImpactName} measures ${slackImpact.runs.withSlack.runId}, not the exported restricted run`
+      );
+    }
 
     const traceSpans = await database.sql`
       select trace_id, span_id, parent_id, run_id, step, attempt, kind, status,
