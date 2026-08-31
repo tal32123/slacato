@@ -9,20 +9,22 @@ are `README.md`, `docs/technical-overview.html` (including its security-notes se
 - Record per-run provider spend. Token usage is persisted per attempt; it is never converted to a
   currency cost, which the technical overview currently discloses as a known limitation.
 
-- Give hybrid retrieval its own Salesforce candidate window. `CANONICAL_CRM_RECORD_LIMIT = 7`
-  (`packages/core/src/application/evidence/retriever.ts`) serves two different jobs: the deliberate
-  "always show every CRM record" guarantee in `searchExactCrmEvidence`, and the per-source-type
-  candidate window that lexical/semantic search use to admit only their top-N *relevant* rows before
-  RRF fusion. Each opportunity has at most seven Salesforce rows, so as a window it is a no-op -
-  every Salesforce record enters every search, while slack and gong_summary are capped at 2. That
-  structural pass-through is why Salesforce contacts crowd the golden-retrieval results. Splitting
-  the constant needs a chosen number for the search window, which is a product decision, so it is
-  left here rather than guessed at.
+- Improve intra-source-type ranking so the golden-retrieval cases resolve. Splitting the Salesforce
+  candidate window from the CRM completeness guarantee is done, and it removed the structural
+  crowding (Salesforce went from filling 2-3 of 5 final slots to zero), but it did NOT move the
+  metrics: windows 1 through 7 all score `macroRecallAtK` 0.5 / `macroPrecisionAtK` 0.2. Instrumented
+  runs showed the two still-missed items, `gong_transcript:CALL-008:transcript:0` and
+  `policy:deal-desk-policy:OPP-1003:1`, ARE admitted as RRF candidates at every window but lose to
+  sibling chunks inside their own source-type partition - `row_number() ... partition by source_type`
+  means one source's candidate count cannot affect another's internal ranking. So the remaining loss
+  is lexical/semantic scoring within a source type, not cross-source crowding.
+
 - Golden-retrieval `macroRecallAtK` now sits at exactly 0.5, the gate boundary (`< 0.5` fails). It
   passes, but with no headroom: any small ranking regression turns CI red. The remaining recall loss
-  is the Salesforce crowding above, plus the mock embedding gateway used in CI - the semantic half of
-  hybrid search is not a meaningful signal under mock embeddings, so this metric mainly exercises the
-  lexical channel today.
+  is the intra-source-type ranking above, plus the mock embedding gateway used in CI - the semantic
+  half of hybrid search is not a meaningful signal under mock embeddings, so this metric mainly
+  exercises the lexical channel today. The comparison carries a 1e-9 tolerance so float
+  representation noise alone cannot turn CI red; the gate itself is unchanged at 0.5.
 - `stakeholderIdentitySupported` (`packages/core/src/application/agents/validation.ts`) documents that
   a stakeholder survives on "a title **or** organization stated by the same record that names them",
   but builds `profile = [title, organization]` and requires *both*. Currently unreachable, because
