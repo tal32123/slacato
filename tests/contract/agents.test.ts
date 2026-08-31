@@ -662,6 +662,141 @@ describe('specialized agents', () => {
     ]);
   });
 
+  it('retains a stakeholder via the grounded-title profile path when organization is ungrounded', async () => {
+    // A Salesforce contact record carries the person's name and title but never the account's
+    // display name (accountId only). stakeholderIdentitySupported must accept name+title alone
+    // rather than requiring name+title+organization together in one record.
+    const cited = evidence(
+      'evidence_priya_contact',
+      'salesforce',
+      ['fullName: Priya Rao', 'title: VP Finance'].join('\n')
+    );
+    const citation = {
+      id: cited.citationId,
+      evidenceId: cited.evidenceId,
+      locator: cited.sourceLocator
+    };
+    const claims = [
+      { id: 'claim_priya_name', statement: 'Priya Rao', confidence: 0.9, citations: [citation] },
+      { id: 'claim_priya_title', statement: 'VP Finance', confidence: 0.9, citations: [citation] }
+    ];
+    const gateway = new RecordingGateway([
+      {
+        ...emptyStakeholder,
+        stakeholders: [
+          {
+            name: 'Priya Rao',
+            title: 'VP Finance',
+            organization: 'Meridian Appliances Group', // never restated by any grounded claim
+            role: 'unknown',
+            influence: 'medium', // not grounded by any claim either
+            relationship: 'unknown',
+            goals: [],
+            concerns: [],
+            claims
+          }
+        ]
+      }
+    ]);
+
+    const artifact = await new StakeholderAgent(gateway).run(context([cited]));
+
+    // The grounded title alone is enough to accept the record; the ungrounded organization name
+    // rides along on the accepted stakeholder rather than being independently verified. That is
+    // the documented contract (name+title OR name+organization, not both), not an oversight.
+    expect(artifact.stakeholders).toEqual([
+      expect.objectContaining({
+        name: 'Priya Rao',
+        title: 'VP Finance',
+        organization: 'Meridian Appliances Group'
+      })
+    ]);
+  });
+
+  it('retains a stakeholder via the grounded-organization profile path when title is ungrounded', async () => {
+    // Symmetric case: the record grounds name+organization but never the (ungrounded) title the
+    // model produced. The organization path alone must be sufficient.
+    const cited = evidence(
+      'evidence_jordan_contact',
+      'salesforce',
+      ['fullName: Jordan Blake', 'accountName: Roric Systems'].join('\n')
+    );
+    const citation = {
+      id: cited.citationId,
+      evidenceId: cited.evidenceId,
+      locator: cited.sourceLocator
+    };
+    const claims = [
+      { id: 'claim_jordan_name', statement: 'Jordan Blake', confidence: 0.9, citations: [citation] },
+      {
+        id: 'claim_jordan_org',
+        statement: 'Roric Systems',
+        confidence: 0.9,
+        citations: [citation]
+      }
+    ];
+    const gateway = new RecordingGateway([
+      {
+        ...emptyStakeholder,
+        stakeholders: [
+          {
+            name: 'Jordan Blake',
+            title: 'VP Engineering', // never restated by any grounded claim
+            organization: 'Roric Systems',
+            role: 'unknown',
+            influence: 'medium', // not grounded by any claim either
+            relationship: 'unknown',
+            goals: [],
+            concerns: [],
+            claims
+          }
+        ]
+      }
+    ]);
+
+    const artifact = await new StakeholderAgent(gateway).run(context([cited]));
+
+    expect(artifact.stakeholders).toEqual([
+      expect.objectContaining({ name: 'Jordan Blake', organization: 'Roric Systems' })
+    ]);
+  });
+
+  it('drops a bare grounded name with no title, organization, or restated classification', async () => {
+    // Safety property: a claim that grounds only a person's name must never be sufficient to
+    // carry an inferred role/influence/relationship. "Attended the call" can never become
+    // "economic buyer, high influence" without a grounded professional identity or a claim that
+    // restates the classification itself.
+    const cited = evidence('evidence_sam_contact', 'salesforce', 'fullName: Sam Rivera');
+    const citation = {
+      id: cited.citationId,
+      evidenceId: cited.evidenceId,
+      locator: cited.sourceLocator
+    };
+    const claims = [
+      { id: 'claim_sam_name', statement: 'Sam Rivera', confidence: 0.9, citations: [citation] }
+    ];
+    const gateway = new RecordingGateway([
+      {
+        ...emptyStakeholder,
+        stakeholders: [
+          {
+            name: 'Sam Rivera',
+            role: 'economic_buyer',
+            influence: 'high',
+            relationship: 'positive',
+            goals: [],
+            concerns: [],
+            claims
+          }
+        ]
+      }
+    ]);
+
+    const artifact = await new StakeholderAgent(gateway).run(context([cited]));
+
+    expect(artifact.stakeholders).toEqual([]);
+  });
+
   it('retains a formatted ACV when the numeric value matches one structured field', async () => {
     const cited = evidence(
       'evidence_opp_1001_value',

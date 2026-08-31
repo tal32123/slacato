@@ -713,7 +713,7 @@ function stakeholderIdentitySupported(
   ];
   const supported = (values: readonly string[]): boolean =>
     tupleSupportedByOneEvidenceRecord([stakeholder.name, ...values], claims, evidenceById);
-  return supported(classification) || (profile.length > 0 && supported(profile));
+  return supported(classification) || profile.some((attribute) => supported([attribute]));
 }
 
 /** Confirms separately claimed fields resolve to one record without unrelated extra citations joining records. */
