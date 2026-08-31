@@ -37,10 +37,8 @@ are `README.md`, `docs/technical-overview.html` (including its security-notes se
   synthetic run insert (`runs.start_request_hash` is now `NOT NULL`, and `runs_one_active_opportunity_uq`
   rejects two concurrent active runs on the same opportunity, which the golden set's two
   `OPP-1003` cases triggered); both are fixed in `scripts/evaluate.ts`. With those fixed the harness
-  now runs and gates correctly, but it currently reports `macroRecallAtK` of ~0.33 (below the 0.5
-  gate) because of one golden case, `eclipse-discount-risk-routing`, which expects
-  `slack:SLK-9009:0` and `policy:deal-desk-policy:OPP-1003:1` but the retriever currently returns
-  Salesforce contacts plus `policy:deal-desk-policy:OPP-1003:3` instead. This looks like a real,
-  reproducible retrieval-quality gap (confirmed deterministic across repeated runs), not a flake —
-  it needs a follow-up look at `PostgresHybridEvidenceRetriever` or the golden fixture before this
-  CI check will go green.
+  now runs and gates correctly. Its first real run failed at `macroRecallAtK` ~0.33, which turned out
+  to be a genuine retrieval defect rather than a stale fixture: the lexical channel gated on a
+  conjunctive `websearch_to_tsquery`, matching zero rows in the whole corpus for the golden query.
+  Fixed by scoring partial lexical matches; the gate now passes at `macroRecallAtK` 0.5,
+  `permissionLeakage` 0. Recall sits exactly on the boundary — see the open item above.
