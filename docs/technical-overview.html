@@ -287,19 +287,19 @@
       </div>
     </section>
 
-    <section id="agents">
+    <section id="agents" class="change-zone" data-change-id="fifth-review-agents" data-change="Each agent card now separates the evidence it receives from the model and validation tools it uses.">
       <div class="section-number">03 · Agent roles</div>
       <h2>Four focused agents. One negotiation brief.</h2>
-      <p>Each agent has one clear job, which makes its output easier to review and prevents one model prompt from trying to solve the entire deal.</p>
+      <p>Agents do not query databases or source systems directly. The workflow gives each one a permission-checked evidence bundle, access to the shared model gateway, and code-owned output and citation validation.</p>
       <div class="grid-2">
-        <div class="card"><h4>Conversation Intelligence</h4><p><strong>What:</strong> finds buyer goals, objections, urgency, and open questions in calls and Slack updates.<br><strong>Why:</strong> the buyer’s own signals should shape the negotiation plan.</p></div>
-        <div class="card"><h4>Stakeholder Map</h4><p><strong>What:</strong> identifies champions, decision-makers, blockers, and missing relationships.<br><strong>Why:</strong> a good commercial plan fails if the wrong people are engaged.</p></div>
-        <div class="card"><h4>Commercial Analysis</h4><p><strong>What:</strong> reviews pricing, policy, legal concerns, and sensitive concessions.<br><strong>Why:</strong> high-impact terms need focused scrutiny and human approval.</p></div>
-        <div class="card"><h4>Negotiation Strategy</h4><p><strong>What:</strong> combines the three specialist views into the final brief and next actions.<br><strong>Why:</strong> the seller needs one prioritized, evidence-backed view of the deal.</p></div>
+        <div class="card"><h4>Conversation Intelligence</h4><p><strong>What:</strong> finds buyer goals, objections, urgency, and open questions in calls and Slack updates.<br><strong>Why:</strong> the buyer’s own signals should shape the negotiation plan.<br><strong>Inputs:</strong> authorized Gong call summaries, Gong transcripts, and Slack updates.<br><strong>Tools:</strong> shared model gateway with structured output, plus artifact and citation validation.</p></div>
+        <div class="card"><h4>Stakeholder Map</h4><p><strong>What:</strong> identifies champions, decision-makers, blockers, and missing relationships.<br><strong>Why:</strong> a good commercial plan fails if the wrong people are engaged.<br><strong>Inputs:</strong> authorized Salesforce contacts, Gong summaries and transcripts, and Slack updates.<br><strong>Tools:</strong> shared model gateway with a stakeholder output schema, plus artifact and citation validation.</p></div>
+        <div class="card"><h4>Commercial Analysis</h4><p><strong>What:</strong> reviews pricing, policy, legal concerns, and sensitive concessions.<br><strong>Why:</strong> high-impact terms need focused scrutiny and human approval.<br><strong>Inputs:</strong> authorized Salesforce records, pricing notes, and Deal Desk policy evidence.<br><strong>Tools:</strong> shared model gateway with a commercial output schema, plus policy, artifact, and citation validation.</p></div>
+        <div class="card"><h4>Negotiation Strategy</h4><p><strong>What:</strong> combines the three specialist views into the final brief and next actions.<br><strong>Why:</strong> the seller needs one prioritized, evidence-backed view of the deal.<br><strong>Inputs:</strong> all three validated specialist outputs and the full authorized evidence list.<br><strong>Tools:</strong> shared model gateway with the final brief schema, plus final artifact and citation validation.</p></div>
       </div>
     </section>
 
-    <section id="lifecycle" class="change-zone" data-change-id="third-review-lifecycle" data-change="The first diagram now explains how each stage works; the second now shows how evidence is routed through the four agents.">
+    <section id="lifecycle" class="change-zone" data-change-id="fifth-review-lifecycle" data-change="A new table explains whether and why every evidence source is split before retrieval.">
       <div class="section-number">04 · Run lifecycle</div>
       <h2>A clear path from request to reviewed brief.</h2>
 
@@ -326,6 +326,20 @@
           <g><rect class="fl-box" x="40" y="245" width="300" height="155" rx="16"/><text x="190" y="282" text-anchor="middle" class="fl-title">6 · Brief delivered</text><text x="190" y="318" text-anchor="middle" class="fl-copy">Stores the brief, citations, and timeline</text><text x="190" y="340" text-anchor="middle" class="fl-copy">for review in the web app.</text></g>
         </svg>
       </div>
+
+      <h3>How each source is chunked</h3>
+      <p>Chunking follows the source’s natural structure rather than applying one arbitrary text size to every document.</p>
+      <table>
+        <thead><tr><th>Source</th><th>Chunking</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Salesforce records</td><td>One account, opportunity, or contact record per chunk; no further splitting.</td><td>Keeps related fields together and gives each structured record a stable citation target.</td></tr>
+          <tr><td>Gong summaries</td><td>One call-summary record per chunk; no further splitting.</td><td>The summary is already a concise, structured unit for one call.</td></tr>
+          <tr><td>Gong transcripts</td><td>Six-turn windows with a one-turn overlap; every window repeats the transcript heading and metadata.</td><td>Preserves conversational context at window boundaries and keeps each excerpt attributable.</td></tr>
+          <tr><td>Slack updates</td><td>One dated account-team update per chunk; no further splitting.</td><td>The short update remains intact and attributable to its source record.</td></tr>
+          <tr><td>Pricing notes</td><td>One pricing-note record per chunk; no further splitting.</td><td>Keeps requested terms, approval status, and commercial context together.</td></tr>
+          <tr><td>Deal Desk policy</td><td>Split at Markdown headings. Sections over 512 characters become smaller rule groups that repeat the heading.</td><td>Makes each rule group self-contained and small enough to quote in full without losing its policy context.</td></tr>
+        </tbody>
+      </table>
 
       <h3>How work is routed between agents</h3>
       <p>After evidence is selected, three specialist agents run in parallel. Their saved findings flow into the strategy agent, then code validates the draft and routes any required approval.</p>
@@ -357,12 +371,12 @@
     </section>
 
 
-    <section id="security" class="change-zone" data-change-id="third-review-security" data-change="All four trust cards now explain the concrete business rule, business risk, and implementation mechanism.">
+    <section id="security">
       <div class="section-number">05 · Trust and security</div>
       <h2>Protect the data. Verify the answer. Keep people accountable.</h2>
       <div class="grid-2">
         <div class="card"><h4>Deal and source access</h4><p><strong>What:</strong> a user may open only deals and source types assigned to them.<br><strong>Why:</strong> strategic deals contain restricted customer, pricing, and legal information.<br><strong>How:</strong> PostgreSQL permission grants are checked before search and again before evidence reaches an AI model; denied requests reveal no deal details.</p></div>
-        <div class="card"><h4>Evidence-backed claims</h4><p><strong>What:</strong> every factual statement shown to the seller must cite an allowed source.<br><strong>Why:</strong> invented amounts, dates, stakeholders, or commitments can damage a live negotiation.<br><strong>How:</strong> the system checks each citation against the selected evidence and removes unsupported or unsafe statements.</p></div>
+        <div class="card"><h4>Evidence-backed claims</h4><p><strong>What:</strong> every factual statement shown to the seller must cite an allowed source.<br><strong>Why:</strong> invented amounts, dates, stakeholders, or commitments can damage a live negotiation.<br><strong>How:</strong> the agent returns each claim with a citation ID. Code matches it to the run’s frozen authorized evidence list, restores the trusted source label and locator, and checks that material names, amounts, dates, and meaning are supported by the cited text. Missing, unauthorized, or unsupported claims are removed.</p></div>
         <div class="card"><h4>Human approval before action</h4><p><strong>What:</strong> an accountable person must approve sensitive recommendations before the brief can finalize.<br><strong>Why:</strong> these are high-value deals with real pricing, legal, and customer commitments.<br><strong>How:</strong> the workflow pauses and routes each issue to Deal Desk, Sales leadership, legal, or the account owner; it continues only after every required approval is recorded.</p></div>
         <div class="card"><h4>Review and recovery history</h4><p><strong>What:</strong> reviewers can see which evidence, agents, and decisions produced the brief.<br><strong>Why:</strong> the business must explain outcomes and recover interrupted work without repeating approvals.<br><strong>How:</strong> PostgreSQL stores run progress, retrieved evidence, model calls, approvals, and the final brief; a replacement worker resumes from the last saved stage.</p></div>
       </div>
@@ -370,7 +384,7 @@
       <div class="callout danger"><p><strong>Before production:</strong> add enterprise identity, managed secrets and rotation, rate limits, spending controls, high availability, monitoring and alerting, operational support, and stronger personal-data protection. <a href="#production">Production readiness</a> covers these gaps.</p></div>
     </section>
 
-    <section id="deliverables" class="change-zone" data-change-id="third-review-deliverables" data-change="Section numbering and architecture wording were updated after removing the redundant design section.">
+    <section id="deliverables">
       <div class="section-number">06 · Deliverables and demo</div>
       <h2>What the submission must show.</h2>
       <div class="callout"><p><strong>The brief covers all nine required sections:</strong> Deal Snapshot, Executive Summary, Buyer Goals and Business Drivers, Stakeholder Map, Negotiation State, Recommended Next Actions, Missing Information, Source Evidence, and Confidence and Review Warnings.</p></div>
@@ -394,7 +408,7 @@
       </table>
     </section>
 
-    <section id="production" class="change-zone" data-change-id="third-review-production" data-change="The detailed production-readiness cards were restored from the prior version.">
+    <section id="production">
       <div class="section-number">07 · Production readiness</div>
       <h2>A strong recovery core; an intentionally incomplete operating envelope.</h2>
       <div class="readiness-list">

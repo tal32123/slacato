@@ -36,8 +36,6 @@ import {
 
 const DEFAULT_DATABASE_URL = 'postgres://slacato:slacato@127.0.0.1:54329/slacato_demo';
 
-export { assertResettableDatabase } from '../packages/infrastructure/src/index.js';
-
 /**
  * Erases, or counts, everything a demo pass produced in a sandbox database.
  *
