@@ -1,5 +1,5 @@
 import { dealListItemSchema } from '@slacato/contracts';
-import type { DealQueryRepository, EvidenceCategory } from '@slacato/core';
+import type { DealQueryRepository, EvidenceCategory, OpaqueDenialEvent } from '@slacato/core';
 import { describe, expect, it } from 'vitest';
 import { DealsService } from '../../apps/api/src/modules/deals/deals.service';
 
@@ -48,6 +48,7 @@ const unprovenancedEvidence = {
   sourceLocator: null,
   content: 'updateText: private legacy row without a stable source record'
 } as const;
+const denials = { recordOpaqueDenial: async () => undefined };
 const session = {
   claims: { version: 'session-version' },
   persona: {
@@ -71,7 +72,7 @@ describe('DealsService workspace fan-out', () => {
         return category === 'opportunity' ? [opportunityEvidence] : [];
       }
     };
-    const pending = new DealsService({ repository }).getAuthorizedDealWorkspace(session, 'OPP-TEST');
+    const pending = new DealsService({ repository, denials }).getAuthorizedDealWorkspace(session, 'OPP-TEST');
     await Promise.resolve();
     await Promise.resolve();
     const beforeRelease = [...started];
@@ -90,7 +91,7 @@ describe('DealsService workspace fan-out', () => {
         ? [opportunityEvidence]
         : category === 'supplemental' ? [reinforcingSlackEvidence] : []
     };
-    const workspace = await new DealsService({ repository }).getAuthorizedDealWorkspace({
+    const workspace = await new DealsService({ repository, denials }).getAuthorizedDealWorkspace({
       ...session,
       persona: {
         ...session.persona,
@@ -115,7 +116,7 @@ describe('DealsService workspace fan-out', () => {
         ? [opportunityEvidence]
         : category === 'supplemental' ? [resolvingSlackEvidence] : []
     };
-    const workspace = await new DealsService({ repository }).getAuthorizedDealWorkspace({
+    const workspace = await new DealsService({ repository, denials }).getAuthorizedDealWorkspace({
       ...session,
       persona: {
         ...session.persona,
@@ -140,7 +141,7 @@ describe('DealsService workspace fan-out', () => {
         ? [opportunityEvidence]
         : category === 'supplemental' ? [unprovenancedEvidence] : []
     };
-    const workspace = await new DealsService({ repository }).getAuthorizedDealWorkspace(session, 'OPP-TEST');
+    const workspace = await new DealsService({ repository, denials }).getAuthorizedDealWorkspace(session, 'OPP-TEST');
     expect(workspace.evidence.map((item) => item.id)).not.toContain(unprovenancedEvidence.id);
     expect(JSON.stringify(workspace)).not.toContain('source/unavailable');
   });
@@ -163,7 +164,7 @@ describe('DealsService workspace fan-out', () => {
       findLatestRun: async () => undefined,
       listEvidence: async (_scope, category) => category === 'opportunity' ? [invalidDateEvidence] : []
     };
-    const workspace = await new DealsService({ repository }).getAuthorizedDealWorkspace(session, 'OPP-TEST');
+    const workspace = await new DealsService({ repository, denials }).getAuthorizedDealWorkspace(session, 'OPP-TEST');
     expect(workspace.deal.closeDate).toBeNull();
     expect(workspace.brief.actions[0]?.dueDate).toBeNull();
   });
@@ -181,7 +182,7 @@ describe('DealsService workspace fan-out', () => {
         category === 'opportunity' ? [invalidDateEvidence] : []
     };
 
-    const workspace = await new DealsService({ repository }).getAuthorizedDealWorkspace(
+    const workspace = await new DealsService({ repository, denials }).getAuthorizedDealWorkspace(
       session,
       'OPP-TEST'
     );
@@ -204,7 +205,7 @@ describe('DealsService workspace fan-out', () => {
     };
 
     await expect(
-      new DealsService({ repository }).getAuthorizedDealWorkspace(session, 'OPP-TEST')
+      new DealsService({ repository, denials }).getAuthorizedDealWorkspace(session, 'OPP-TEST')
     ).rejects.toThrow(RangeError);
   });
 });
@@ -235,7 +236,7 @@ describe('DealsService list date serialization', () => {
       listEvidence: async () => []
     };
 
-    const deals = await new DealsService({ repository }).listAuthorizedDeals(session);
+    const deals = await new DealsService({ repository, denials }).listAuthorizedDeals(session);
 
     expect(deals.map(({ createdAt, latestRun }) => ({ createdAt, latestRun }))).toEqual([
       {
@@ -257,8 +258,76 @@ describe('DealsService list date serialization', () => {
       listEvidence: async () => []
     };
 
-    await expect(new DealsService({ repository }).listAuthorizedDeals(session)).rejects.toThrow(
+    await expect(new DealsService({ repository, denials }).listAuthorizedDeals(session)).rejects.toThrow(
       RangeError
+    );
+  });
+});
+
+describe('DealsService denial auditing', () => {
+  const unauthorizedRepository: DealQueryRepository = {
+    listAuthorizedDeals: async () => [],
+    findAuthorizedDeal: async () => undefined,
+    findLatestRun: async () => undefined,
+    listEvidence: async () => []
+  };
+
+  it('records exactly one denial carrying nothing about the record it protects', async () => {
+    const recorded: OpaqueDenialEvent[] = [];
+    const service = new DealsService({
+      repository: unauthorizedRepository,
+      denials: {
+        recordOpaqueDenial: async (event) => {
+          recorded.push(event);
+        }
+      }
+    });
+
+    await expect(service.getAuthorizedDealWorkspace(session, 'OPP-RESTRICTED')).rejects.toMatchObject(
+      { status: 403 }
+    );
+
+    expect(recorded).toEqual([{ actorId: 'USR-TEST', reason: 'forbidden' }]);
+    expect(JSON.stringify(recorded)).not.toContain('OPP-RESTRICTED');
+    expect(JSON.stringify(recorded)).not.toContain('ACC-');
+  });
+
+  it('cannot be used to tell an existing restricted deal from one that does not exist', async () => {
+    const recorded: OpaqueDenialEvent[] = [];
+    const service = new DealsService({
+      repository: unauthorizedRepository,
+      denials: {
+        recordOpaqueDenial: async (event) => {
+          recorded.push(event);
+        }
+      }
+    });
+
+    const responses = await Promise.all(
+      ['OPP-RESTRICTED', 'OPP-DOES-NOT-EXIST'].map((opportunityId) =>
+        service.getAuthorizedDealWorkspace(session, opportunityId).catch((error: unknown) => error)
+      )
+    );
+
+    const [restricted, absent] = responses.map((error) =>
+      JSON.stringify((error as { getResponse: () => unknown }).getResponse())
+    );
+    expect(restricted).toEqual(absent);
+    expect(recorded[0]).toEqual(recorded[1]);
+  });
+
+  it('still refuses the request when the denial audit write fails', async () => {
+    const service = new DealsService({
+      repository: unauthorizedRepository,
+      denials: {
+        recordOpaqueDenial: async () => {
+          throw new Error('audit sink unavailable');
+        }
+      }
+    });
+
+    await expect(service.getAuthorizedDealWorkspace(session, 'OPP-RESTRICTED')).rejects.toMatchObject(
+      { status: 403 }
     );
   });
 });
