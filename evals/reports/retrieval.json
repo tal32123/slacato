@@ -12,9 +12,9 @@
       ],
       "retrievedEvidenceIds": [
         "slack:SLK-9002:0",
-        "gong_transcript:CALL-008:transcript:5",
-        "gong_transcript:CALL-004:transcript:5",
+        "pricing:PN-4002:0",
         "slack:SLK-9001:0",
+        "salesforce:CON-3002:OPP-1001:contact:0",
         "policy:deal-desk-policy:OPP-1001:2"
       ]
     },
@@ -30,9 +30,9 @@
       ],
       "retrievedEvidenceIds": [
         "slack:SLK-9005:0",
-        "gong_transcript:CALL-018:transcript:3",
-        "gong_summary:CALL-013:summary:0",
         "slack:SLK-9004:0",
+        "gong_summary:CALL-013:summary:0",
+        "salesforce:CON-3009:OPP-1002:contact:0",
         "policy:deal-desk-policy:OPP-1002:2"
       ]
     },
@@ -50,7 +50,7 @@
         "slack:SLK-9009:0",
         "gong_summary:CALL-023:summary:0",
         "pricing:PN-4005:0",
-        "gong_transcript:CALL-027:transcript:0",
+        "salesforce:CON-3014:OPP-1003:contact:0",
         "policy:deal-desk-policy:OPP-1003:2"
       ]
     },

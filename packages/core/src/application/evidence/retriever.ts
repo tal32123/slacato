@@ -18,6 +18,20 @@ const CANONICAL_CRM_RECORD_LIMIT = 1 + 1 + 5; // Account, opportunity, and every
 // of 1-7 were compared against `pnpm eval:deterministic` and none regressed macroRecallAtK or
 // permissionLeakage, so this is the smallest, most consistent choice available.
 const SALESFORCE_CANDIDATE_WINDOW = 2;
+// gong_transcript was the last source type still passed input.limit directly as its hybrid-search
+// candidate window, uncapped relative to every other non-primary source type (gong_summary,
+// pricing, salesforce, slack all cap at 2). Since input.limit is 20 in production, gong_transcript
+// admitted up to 10x as many candidates into RRF fusion as any other source -- measured on a real
+// run, it filled 84.6% of prompt context versus Slack's 1.26%, structurally outgunning Slack before
+// synthesis ever weighed the evidence, even though Slack's chunk was validated and cited. This is
+// the same bug class as CANONICAL_CRM_RECORD_LIMIT/SALESFORCE_CANDIDATE_WINDOW above: an unbounded
+// candidate window lets one source type accumulate RRF mass by sheer count rather than relevance.
+// Set to 2 to match the shared cap already used for every other non-primary source type; values 1-5
+// were compared against `pnpm eval:deterministic` and none regressed macroRecallAtK,
+// macroPrecisionAtK, or permissionLeakage (row_number() partitions RRF candidates by source_type, so
+// this window cannot affect intra-source ranking of other source types -- see the Salesforce
+// window's history for the same structural constraint).
+const GONG_TRANSCRIPT_CANDIDATE_WINDOW = 2;
 const CANONICAL_POLICY_SECTION_LIMIT = 1 + 3; // Policy preamble and every bounded rule section.
 const RELIABILITY_ADJUSTMENTS: Readonly<Record<string, number>> = Object.freeze({
   authoritative_policy: 0.02,
@@ -76,7 +90,7 @@ export function buildEvidencePlan(
     ],
     sourceLimits: {
       gong_summary: Math.min(input.limit, 2),
-      gong_transcript: input.limit,
+      gong_transcript: Math.min(input.limit, GONG_TRANSCRIPT_CANDIDATE_WINDOW),
       policy: CANONICAL_POLICY_SECTION_LIMIT,
       pricing: Math.min(input.limit, 2),
       salesforce: Math.min(input.limit, SALESFORCE_CANDIDATE_WINDOW),
