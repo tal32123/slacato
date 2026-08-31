@@ -6,6 +6,22 @@ import { defineConfig } from '@playwright/test';
 // process so this suite never fights another session for the port.
 const apiPort = process.env.E2E_API_PORT ?? '3000';
 
+// Defaults to a database DISTINCT from .env.example's own default
+// (postgres://slacato:slacato@127.0.0.1:54329/slacato), which is also the one database
+// docker-compose.yml provisions with a persistent named volume. Before this, a local e2e run and
+// a local `pnpm dev` session shared that exact connection string, so e2e's fixture rows -- many of
+// them permanently undeletable (approval_requirement_entries' rows are immutable by trigger) --
+// accumulated straight into the database a developer's manual demo/review session reads from.
+// This reproduces on a fresh clone; it is not specific to this shared environment. CI is
+// unaffected: it sets DATABASE_URL explicitly to its own ephemeral per-job Postgres service, so
+// this fallback is never reached there.
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato_e2e';
+// Fill in the environment for this process (and anything it spawns) so that the existing specs'
+// own `process.env.DATABASE_URL ?? 'postgres://.../slacato'` fallbacks -- which this config file
+// cannot rewrite -- resolve to the SAME database as the API server below, rather than quietly
+// reading/writing the old shared default while the server they're driving talks to the new one.
+process.env.DATABASE_URL = databaseUrl;
+
 // Reusing a pre-existing server is only safe when we know what port configuration it was started
 // with. A stale web dev server left running from a PREVIOUS local run may have its Vite proxy
 // wired to a different API port than this run's `apiPort` (e.g. one run used the default :3000,
@@ -21,7 +37,7 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:4173', trace: 'retain-on-failure' },
   webServer: [
     {
-      command: `DATABASE_URL=\${DATABASE_URL:-postgres://slacato:slacato@127.0.0.1:54329/slacato} pnpm db:migrate && DATABASE_URL=\${DATABASE_URL:-postgres://slacato:slacato@127.0.0.1:54329/slacato} pnpm ingest:records && pnpm build && DATABASE_URL=\${DATABASE_URL:-postgres://slacato:slacato@127.0.0.1:54329/slacato} SESSION_SECRET=playwright-session-secret-that-is-long-enough AI_PROVIDER=mock WEB_ORIGIN=http://127.0.0.1:4173 SLACATO_BOOTSTRAP=1 PORT=${apiPort} node apps/api/dist/main.js`,
+      command: `DATABASE_URL=${databaseUrl} pnpm db:ensure && DATABASE_URL=${databaseUrl} pnpm db:migrate && DATABASE_URL=${databaseUrl} pnpm ingest:records && pnpm build && DATABASE_URL=${databaseUrl} SESSION_SECRET=playwright-session-secret-that-is-long-enough AI_PROVIDER=mock WEB_ORIGIN=http://127.0.0.1:4173 SLACATO_BOOTSTRAP=1 PORT=${apiPort} node apps/api/dist/main.js`,
       url: `http://127.0.0.1:${apiPort}/api/health/live`,
       reuseExistingServer,
       timeout: 120_000
