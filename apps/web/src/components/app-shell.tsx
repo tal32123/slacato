@@ -141,6 +141,23 @@ export function AppShell({
 
       <div className="min-w-0">
         <header className="sticky top-0 z-30 border-b bg-background/95">
+          {/* The route-loading notice is a permanently mounted live region so assistive technology
+              announces it (a region that mounts together with its text is often missed), and it is
+              painted as an overlay hanging off the header's bottom edge rather than as a block in
+              the document flow. Inserting a block here used to push <main> down ~37px the instant a
+              link was activated and pull it back when the loader resolved, so the control under the
+              pointer jumped on every navigation. */}
+          <div
+            role="status"
+            aria-label="Loading destination"
+            className="pointer-events-none absolute inset-x-0 top-full z-10 flex justify-center px-4"
+          >
+            {navigation.state !== 'idle' && (
+              <span className="rounded-b-md border border-t-0 bg-secondary px-4 py-2 text-sm text-secondary-foreground shadow-sm">
+                Loading destination…
+              </span>
+            )}
+          </div>
           <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="min-w-0">
               <Link
@@ -165,16 +182,6 @@ export function AppShell({
             </div>
           </div>
         </header>
-
-        {navigation.state !== 'idle' && (
-          <div
-            role="status"
-            aria-label="Loading destination"
-            className="border-b bg-secondary px-4 py-2 text-center text-sm text-secondary-foreground"
-          >
-            Loading destination…
-          </div>
-        )}
 
         <main
           ref={mainRef}
