@@ -82,8 +82,9 @@ function containsBounded(haystack: string, needle: string): boolean {
 function containsAnchor(haystack: string, anchor: string): boolean {
   if (containsBounded(haystack, anchor)) return true;
   const words = anchor.split(' ');
-  if (words.length < 4) return false;
-  for (let split = 2; split <= words.length - 2; split += 1) {
+  // Two words stay exact: splitting a personal name would let any two records supply its halves.
+  if (words.length < 3) return false;
+  for (let split = 1; split < words.length; split += 1) {
     if (
       containsBounded(haystack, words.slice(0, split).join(' ')) &&
       containsBounded(haystack, words.slice(split).join(' '))
