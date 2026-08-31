@@ -1,4 +1,4 @@
-import type { ApprovalBriefPayload } from '@slacato/contracts';
+import type { ApprovalBriefPayload, ApprovalCitation, ApprovalClaim } from '@slacato/contracts';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 
@@ -12,6 +12,8 @@ export function ApprovalSubjectDetail({
   evidenceIds: ReadonlySet<string>;
   opportunityId: string;
 }>): React.JSX.Element {
+  const numbers = numberEvidence(payload);
+  const claims = indexClaims(payload);
   return (
     <div className="mt-5 grid gap-5">
       <SubjectSection title="Deal snapshot">
@@ -32,9 +34,21 @@ export function ApprovalSubjectDetail({
             />
           )}
         </dl>
+        <ClaimList
+          claims={payload.dealSnapshot.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
+          empty="No deal snapshot claims were supported by the validated evidence."
+        />
       </SubjectSection>
       <SubjectSection title="Executive summary">
         <p className="leading-7">{payload.executiveSummary.narrative}</p>
+        <ClaimList
+          claims={payload.executiveSummary.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
+          empty="No executive summary claims were supported by the validated evidence."
+        />
       </SubjectSection>
       <SubjectSection title="Buyer goals and business drivers">
         <BriefList
@@ -46,6 +60,12 @@ export function ApprovalSubjectDetail({
           title="Business drivers"
           values={payload.buyerGoalsAndBusinessDrivers.businessDrivers}
           empty="No business drivers were supported by the validated evidence."
+        />
+        <ClaimList
+          claims={payload.buyerGoalsAndBusinessDrivers.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
+          empty="No buyer goal claims were supported by the validated evidence."
         />
       </SubjectSection>
       <SubjectSection title="Stakeholder map">
@@ -77,6 +97,12 @@ export function ApprovalSubjectDetail({
                     <strong>Concerns:</strong> {stakeholder.concerns.join('; ')}
                   </p>
                 )}
+                <ClaimList
+                  claims={stakeholder.claims}
+                  numbers={numbers}
+                  evidenceIds={evidenceIds}
+                  empty="No claims about this stakeholder were supported by the validated evidence."
+                />
               </li>
             ))}
           </ul>
@@ -85,6 +111,12 @@ export function ApprovalSubjectDetail({
           title="Coverage gaps"
           values={payload.stakeholderMap.coverageGaps ?? []}
           empty="No stakeholder coverage gaps were recorded."
+        />
+        <ClaimList
+          claims={payload.stakeholderMap.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
+          empty="No stakeholder map claims were supported by the validated evidence."
         />
       </SubjectSection>
       <SubjectSection title="Negotiation state">
@@ -98,6 +130,12 @@ export function ApprovalSubjectDetail({
           title="Risks"
           values={payload.negotiationState.risks}
           empty="No negotiation risks were recorded."
+        />
+        <ClaimList
+          claims={payload.negotiationState.claims ?? []}
+          numbers={numbers}
+          evidenceIds={evidenceIds}
+          empty="No negotiation state claims were supported by the validated evidence."
         />
       </SubjectSection>
       <SubjectSection title="Recommended next actions">
@@ -118,6 +156,12 @@ export function ApprovalSubjectDetail({
                     .join(' · ')}
                 </p>
                 <p className="mt-2 text-sm">{action.rationale}</p>
+                <ClaimList
+                  claims={action.claims}
+                  numbers={numbers}
+                  evidenceIds={evidenceIds}
+                  empty="No claims behind this action were supported by the validated evidence."
+                />
               </li>
             ))}
           </ul>
@@ -141,13 +185,26 @@ export function ApprovalSubjectDetail({
         )}
       </SubjectSection>
       <SubjectSection title="Authorized evidence summaries">
+        <p className="text-sm text-muted-foreground">
+          Attribution lives beside each claim above. This is the roll-up those numbered citations
+          point into: one entry per authorized evidence version the brief cites.
+        </p>
         {payload.sourceEvidence.evidence.length === 0 ? (
           <EmptyState>No evidence summaries were included.</EmptyState>
         ) : (
-          <ul className="grid gap-3">
-            {payload.sourceEvidence.evidence.map((evidence) => (
-              <li key={evidence.evidenceId} className="rounded-lg border p-3">
-                <p>{evidence.summary}</p>
+          <ul className="mt-3 grid gap-3">
+            {payload.sourceEvidence.evidence.map((evidence, index) => (
+              // Numbered from the row's own position rather than from the lookup map, so a payload
+              // that ever repeated an evidence id still yields one anchor per row.
+              <li
+                key={evidence.evidenceId}
+                id={evidenceAnchorId(index + 1)}
+                className="rounded-lg border p-3 scroll-mt-24 target:border-primary"
+              >
+                <p>
+                  <span className="mr-2 font-medium text-primary">[{index + 1}]</span>
+                  {evidence.summary}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {label(evidence.sourceType)}
                   {evidence.capturedAt === undefined ? null : (
@@ -182,13 +239,14 @@ export function ApprovalSubjectDetail({
           <ul className="mt-3 grid gap-3">
             {payload.confidenceAndReviewWarnings.warnings.map((warning) => (
               <li
-                key={warning.code}
+                key={`${warning.code}:${warning.message}`}
                 className="rounded-lg border border-attention bg-attention/10 p-3"
               >
                 <p className="font-medium">
                   {label(warning.severity)} · {warning.code}
                 </p>
                 <p className="mt-1 text-sm">{warning.message}</p>
+                <WarningClaims claimIds={warning.claimIds} claims={claims} />
               </li>
             ))}
           </ul>
@@ -248,11 +306,176 @@ export function BriefList({
   );
 }
 
+/**
+ * Attaches the claims that support one part of the brief to that part, with their citations.
+ *
+ * The reviewer's question is "what backs this?", asked section by section. A pooled evidence list
+ * cannot answer it, so every claim keeps its own statement, its own confidence, and footnote
+ * markers pointing at the evidence entries it cites.
+ */
+export function ClaimList({
+  claims,
+  numbers,
+  evidenceIds,
+  empty
+}: Readonly<{
+  claims: readonly ApprovalClaim[];
+  numbers: ReadonlyMap<string, number>;
+  evidenceIds: ReadonlySet<string>;
+  empty: string;
+}>): React.JSX.Element {
+  return (
+    <div className="mt-4">
+      <h4 className="text-sm font-medium">Supporting claims</h4>
+      {claims.length === 0 ? (
+        <EmptyState>{empty}</EmptyState>
+      ) : (
+        <ul className="mt-2 grid gap-2">
+          {claims.map((claim) => (
+            <li key={claim.id} className="text-sm leading-6">
+              <span>{claim.statement}</span>{' '}
+              <CitationMarkers
+                citations={claim.citations}
+                numbers={numbers}
+                evidenceIds={evidenceIds}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {Math.round(claim.confidence * 100)}% confidence
+              </p>
+              <CitationRationales citations={claim.citations} numbers={numbers} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Points a claim at the numbered evidence entries that support it.
+ *
+ * A marker is interactive only for evidence this reviewer is authorized to open. An unauthorized
+ * citation still numbers the claim honestly, but as plain text: never a dead control, and never a
+ * separate cue that would describe records the reviewer cannot read.
+ */
+export function CitationMarkers({
+  citations,
+  numbers,
+  evidenceIds
+}: Readonly<{
+  citations: readonly ApprovalCitation[];
+  numbers: ReadonlyMap<string, number>;
+  evidenceIds: ReadonlySet<string>;
+}>): React.JSX.Element | null {
+  const markers = citations
+    .map((citation) => ({ citation, number: numbers.get(citation.evidenceId) }))
+    .filter(
+      (marker): marker is { citation: ApprovalCitation; number: number } =>
+        marker.number !== undefined
+    );
+  if (markers.length === 0) return null;
+  return (
+    <ul className="inline-flex flex-wrap gap-1 align-baseline" aria-label="Claim citations">
+      {markers.map(({ citation, number }) => (
+        <li key={citation.id} className="inline">
+          {evidenceIds.has(citation.evidenceId) ? (
+            <a
+              href={`#${evidenceAnchorId(number)}`}
+              aria-label={`Evidence ${number}`}
+              className="rounded border px-1.5 text-xs font-medium text-primary underline-offset-4 hover:underline"
+            >
+              [{number}]
+            </a>
+          ) : (
+            <span className="rounded border px-1.5 text-xs font-medium text-muted-foreground">
+              [{number}]
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Repeats a citation's stated reason for supporting the claim, when the brief recorded one. */
+export function CitationRationales({
+  citations,
+  numbers
+}: Readonly<{
+  citations: readonly ApprovalCitation[];
+  numbers: ReadonlyMap<string, number>;
+}>): React.JSX.Element | null {
+  const explained = citations.filter((citation) => citation.rationale !== undefined);
+  if (explained.length === 0) return null;
+  return (
+    <ul className="mt-1 grid gap-1 text-xs text-muted-foreground" aria-label="Citation rationales">
+      {explained.map((citation) => (
+        <li key={citation.id}>
+          <span className="font-medium">[{numbers.get(citation.evidenceId) ?? '—'}]</span>{' '}
+          {citation.rationale}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Names the claims a review warning was raised against.
+ *
+ * Warnings carry claim ids rather than text, so on their own they say a section is weak without
+ * saying which assertion is weak. Resolving the ids keeps the warning checkable; ids that no longer
+ * resolve are dropped rather than shown raw.
+ */
+export function WarningClaims({
+  claimIds,
+  claims
+}: Readonly<{
+  claimIds: readonly string[];
+  claims: ReadonlyMap<string, ApprovalClaim>;
+}>): React.JSX.Element | null {
+  const statements = claimIds
+    .map((claimId) => claims.get(claimId)?.statement)
+    .filter((statement): statement is string => statement !== undefined);
+  if (statements.length === 0) return null;
+  return (
+    <p className="mt-2 text-xs text-muted-foreground">Raised against: {statements.join(' · ')}</p>
+  );
+}
+
 /** Explains when an approval-brief section has no recorded content. */
 export function EmptyState({
   children
 }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
   return <p className="mt-2 text-sm text-muted-foreground">{children}</p>;
+}
+
+/** Numbers each evidence summary so inline claim markers can point into that one roll-up list. */
+function numberEvidence(payload: ApprovalBriefPayload): ReadonlyMap<string, number> {
+  return new Map(
+    payload.sourceEvidence.evidence.map((evidence, index) => [evidence.evidenceId, index + 1])
+  );
+}
+
+/** Indexes every claim the brief carries by id, so a warning can name what it was raised against. */
+function indexClaims(payload: ApprovalBriefPayload): ReadonlyMap<string, ApprovalClaim> {
+  const sections = [
+    payload.dealSnapshot.claims,
+    payload.executiveSummary.claims,
+    payload.buyerGoalsAndBusinessDrivers.claims,
+    payload.stakeholderMap.claims,
+    payload.negotiationState.claims,
+    ...payload.stakeholderMap.stakeholders.map((stakeholder) => stakeholder.claims),
+    ...payload.recommendedNextActions.actions.map((action) => action.claims),
+    ...payload.sourceEvidence.evidence.map((evidence) => evidence.claims)
+  ];
+  return new Map(
+    sections.flatMap((claims) => (claims ?? []).map((claim) => [claim.id, claim] as const))
+  );
+}
+
+/** Builds the in-page anchor an evidence entry answers to, so a citation marker can reach it. */
+function evidenceAnchorId(number: number): string {
+  return `approval-evidence-${number}`;
 }
 
 /** Converts an internal approval value into a user-facing label. */
