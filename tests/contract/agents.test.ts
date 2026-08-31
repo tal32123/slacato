@@ -475,12 +475,14 @@ describe('specialized agents', () => {
     const artifact = await new ConversationAgent(gateway).run(context([cited]));
 
     expect(artifact.claims).toEqual([]);
-    expect(artifact.missingContext).toContain('Verify evidence for claim claim_discount.');
+    expect(artifact.missingContext).toContain(
+      'Confirm against the authorized sources: 35%, discount.'
+    );
     expect(artifact.reviewWarnings).toEqual(expect.arrayContaining([
       {
         code: 'INSUFFICIENT_CLAIM_SUPPORT',
         severity: 'warning',
-        message: 'Material anchors are absent: 35%, discount',
+        message: 'One cited record does not state: 35%, discount',
         claimIds: ['claim_discount']
       }
     ]));
@@ -1082,8 +1084,8 @@ describe('specialized agents', () => {
 
     expect(artifact.claims).toEqual([]);
     expect(artifact.missingContext).toEqual([
-      'Verify evidence for claim claim_wrong_opportunity.',
-      'Verify evidence for claim claim_wrong_close_date.'
+      'Confirm against the authorized sources: 1002, opportunity opp-1002.',
+      'Confirm against the authorized sources: 2026-05-18, 18, opportunity opp-1001.'
     ]);
   });
 
@@ -1100,7 +1102,9 @@ describe('specialized agents', () => {
     const artifact = await new ConversationAgent(gateway).run(context([cited]));
 
     expect(artifact.claims).toEqual([]);
-    expect(artifact.missingContext).toContain('Verify evidence for claim claim_commitment.');
+    expect(artifact.missingContext).toContain(
+      'Confirm a generated statement that its cited record did not support in full.'
+    );
   });
 
   it('supports a normalized local assertion without cross-clause synthesis', async () => {
@@ -1265,8 +1269,8 @@ describe('specialized agents', () => {
 
     expect(artifact.claims).toEqual([]);
     expect(artifact.missingContext).toEqual([
-      'Verify evidence for claim claim_wrong_name.',
-      'Verify evidence for claim claim_wrong_date.'
+      'Confirm against the authorized sources: bob jones.',
+      'Confirm against the authorized sources: 2026-09-10, 10.'
     ]);
   });
 
@@ -1440,7 +1444,7 @@ describe('specialized agents', () => {
     expect(request?.context?.evidence?.reduce((sum, entry) => sum + entry.content.length, 0)).toBeLessThan(24_000);
     expect(brief.recommendedNextActions.actions).toEqual([]);
     expect(brief.missingInformation.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ question: 'Verify evidence for claim claim_offer.' })
+      expect.objectContaining({ question: 'Confirm against the authorized sources: 45%, discount.' })
     ]));
   });
 
@@ -1700,7 +1704,7 @@ describe('specialized agents', () => {
 
     expect(conversation.missingContext).toEqual([
       ...fullGeneratedList.slice(0, 49),
-      'Verify evidence for claim claim_overflow.'
+      'Confirm the source for a generated statement that carried no authorized citation.'
     ]);
     expect(stakeholder.coverageGaps).toEqual([
       ...fullGeneratedList.slice(0, 49),

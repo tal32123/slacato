@@ -592,7 +592,10 @@ export function assessClaimSupport(
     return {
       claimId: claim.id,
       support: 'insufficient',
-      reason: `Material anchors are absent: ${missing.join(', ')}`
+      // Scoped to this claim's own citation on purpose. Phrased as an absolute absence, the same
+      // sentence surfaced as a brief-level warning that contradicted a stakeholder the brief was
+      // presenting as supported, because one weak claim about a person says nothing about another.
+      reason: `One cited record does not state: ${displayableAnchors(missing)}`
     };
   const completeRelationSupported = (
     support: string,
@@ -673,6 +676,33 @@ function pruneClaims(
   return { kept, insufficient };
 }
 
+/** Renders rejected anchors as reviewer-readable text, withholding anything identifier-shaped. */
+function displayableAnchors(anchors: readonly string[]): string {
+  const readable = anchors.filter(
+    (anchor) => anchor.length <= 80 && /^[\p{L}\p{N}][\p{L}\p{N} .,'%$€£-]*$/u.test(anchor)
+  );
+  return readable.length === 0 ? 'one material detail of the claim' : readable.join(', ');
+}
+
+/** Restates a rejection reason as follow-up a reviewer can act on, naming no internal identifier.
+ *
+ * The previous wording asked the reviewer to "Verify evidence for claim claim_stk_elena", naming a
+ * claim that by construction no longer exists in the brief they are holding. */
+function reviewerFollowUp(reason: string): string {
+  const anchors = /^One cited record does not state: (.+)$/u.exec(reason)?.[1];
+  if (anchors !== undefined) return `Confirm against the authorized sources: ${anchors}.`;
+  if (reason.includes('no authorized citations'))
+    return 'Confirm the source for a generated statement that carried no authorized citation.';
+  if (reason.includes('unsafe instruction-like prose'))
+    return 'Review a generated statement that was rejected as unsafe prose.';
+  return 'Confirm a generated statement that its cited record did not support in full.';
+}
+
+/** Collects the distinct reviewer follow-ups implied by a set of rejected claims. */
+function reviewerFollowUps(claims: readonly RejectedClaim[]): readonly string[] {
+  return [...new Set(claims.map(({ assessment }) => reviewerFollowUp(assessment.reason)))];
+}
+
 /** Converts unsupported claim assessments into actionable review warnings. */
 function supportWarnings(claims: readonly RejectedClaim[]): readonly ReviewWarning[] {
   return claims.map(({ assessment, claim }) => ({
@@ -681,6 +711,27 @@ function supportWarnings(claims: readonly RejectedClaim[]): readonly ReviewWarni
     message: assessment.reason,
     claimIds: [claim.id]
   }));
+}
+
+/** Wording that asserts something is missing, unsupported, or otherwise absent. */
+const ABSENCE_ASSERTION =
+  /\b(?:absent|missing|unsupported|not supported|no support|lacks|lacking|insufficient|without support|no evidence|unavailable)\b/i;
+
+/** Drops warnings that report a person absent while the same brief presents them as supported.
+ *
+ * A brief that lists Amara Quinn as a cited stakeholder and then warns that "legal counsel amara
+ * quinn" is absent cannot be acted on: whichever half is wrong, the reviewer cannot tell which.
+ * The generated warning is the half with no evidence behind it, so it is the half that is removed;
+ * genuinely unsupported claims still produce their own claim-scoped warnings. */
+export function withoutSelfContradictoryWarnings(
+  warnings: readonly ReviewWarning[],
+  supportedNames: readonly string[]
+): readonly ReviewWarning[] {
+  return warnings.filter((warning) => {
+    if (!ABSENCE_ASSERTION.test(warning.message)) return true;
+    const message = normalize(warning.message);
+    return !supportedNames.some((name) => containsBounded(message, normalize(name)));
+  });
 }
 
 /** Keeps generated warnings in order while adding required local warnings within schema limits. */
@@ -981,9 +1032,7 @@ export function validateConversationArtifact(
     objections: parsed.objections.filter((assertion) => assertionSupported(assertion, result.kept)),
     claims: result.kept,
     missingContext: boundedWithDeterministic(parsed.missingContext.filter(safeInformationRequest), [
-      ...result.insufficient.map(
-        ({ assessment }) => `Verify evidence for claim ${assessment.claimId}.`
-      ),
+      ...reviewerFollowUps(result.insufficient),
       ...(unsupportedAssertions.length === 0 ? [] : ['Verify unsupported conversation details.'])
     ]),
     reviewWarnings: mergeReviewWarnings(parsed.reviewWarnings, warnings, validClaimIds)
@@ -1044,7 +1093,7 @@ export function validateStakeholderArtifact(
     claims: top.kept,
     stakeholders: supportedStakeholders.map(withoutInsufficient),
     coverageGaps: boundedWithDeterministic(parsed.coverageGaps.filter(safeInformationRequest), [
-      ...insufficient.map(({ assessment }) => `Verify evidence for claim ${assessment.claimId}.`),
+      ...reviewerFollowUps(insufficient),
       ...(unsupportedStakeholders.length === 0 ? [] : ['Verify unsupported stakeholder records.'])
     ]),
     reviewWarnings: mergeReviewWarnings(parsed.reviewWarnings, warnings, validClaimIds)
@@ -1333,10 +1382,14 @@ export function validateDealBrief(
               : { owner: item.owner })
           })),
         [
-          ...insufficient.map(({ assessment }) => ({
-            question: `Verify evidence for claim ${assessment.claimId}.`,
-            whyItMatters: assessment.reason
-          })),
+          ...[
+            ...new Map(
+              insufficient.map(({ assessment }) => [
+                reviewerFollowUp(assessment.reason),
+                assessment.reason
+              ])
+            )
+          ].map(([question, whyItMatters]) => ({ question, whyItMatters })),
           ...(nakedAssertions.length === 0
             ? []
             : [
@@ -1355,7 +1408,10 @@ export function validateDealBrief(
     confidenceAndReviewWarnings: {
       ...parsed.confidenceAndReviewWarnings,
       warnings: mergeReviewWarnings(
-        parsed.confidenceAndReviewWarnings.warnings,
+        withoutSelfContradictoryWarnings(
+          parsed.confidenceAndReviewWarnings.warnings,
+          supportedStakeholders.map((stakeholder) => stakeholder.name)
+        ),
         warnings,
         validClaimIds
       )
