@@ -48,9 +48,13 @@ function normalize(value: string): string {
     .replace(/(?:[$€£]\s*)?\b\d[\d,.]*(?:\s*%)?/gu, canonicalNumber);
 }
 
-/** Rejects generated prose that resembles instructions or prompt-control markers. */
+/** Rejects generated prose that resembles instructions or prompt-control markers.
+ *
+ * The chat-role marker is anchored on a word boundary. Without it, `role\s*:` also matched the
+ * ordinary field labels that authorized evidence uses - `authorRole:` on every Slack account-team
+ * update - so quoting a Slack record was treated as prompt injection and the claim was discarded. */
 function safeGeneratedProse(value: string): boolean {
-  return !/(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|role\s*:/i.test(
+  return !/(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|\brole\s*:/i.test(
     value
   );
 }
@@ -606,7 +610,11 @@ export function assessClaimSupport(
     !citedEvidence.some((record) =>
       completeRelationSupported(
         record.content,
-        structuredRecordAssertionSupported,
+        // A claim that reproduces its cited record verbatim is the strictest possible grounding,
+        // but it satisfies no single line and no field partition, so it used to be discarded.
+        (assertion, support) =>
+          normalizedAssertion(assertion) === normalizedAssertion(support) ||
+          structuredRecordAssertionSupported(assertion, support),
         contradictedByRelatedUnit
       )
     )

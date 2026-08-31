@@ -240,12 +240,16 @@ describe('specialized agents', () => {
     // must be re-emitted under a fresh id or validateDealBrief's stakeholderIdentitySupported check
     // prunes the stakeholder (and safeRecommendationAction / assertionSupported prune the action).
     expect(strategy).toContain(
-      'mint one fresh claim whose statement names that person in full and restates their title exactly as the cited record states it'
+      'mint one fresh claim naming the person in full and restating their title exactly as the cited record states it'
     );
-    expect(strategy).toContain('never naming the company in that claim');
-    expect(strategy).toContain('mint one fresh claim from the evidence tuple that grounds its rationale');
-    expect(strategy).toContain('copy that claim statement into the rationale');
-    expect(strategy).toContain('bounded verb such as schedule, prepare, confirm, or verify');
+    expect(strategy).toContain('without naming the company');
+    expect(strategy).toContain('mint one fresh claim grounding its rationale');
+    expect(strategy).toContain('copy that statement into the rationale');
+    expect(strategy).toContain('bounded verb such as schedule, prepare, confirm or verify');
+    // Source Evidence must list every cited record, not only the ones a specialist retained, or
+    // the section silently omits the Slack, pricing, and policy sources the run actually used.
+    expect(strategy).toContain('its own sourceEvidence entry');
+    expect(strategy).toContain('never a whole record');
   });
 
   it('cannot let an evidence record close the fixed inert-data delimiter', async () => {
