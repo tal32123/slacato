@@ -67,6 +67,28 @@ function containsBounded(haystack: string, needle: string): boolean {
   );
 }
 
+/** Matches a material anchor, allowing a fused proper-noun run to be stated as two record fields.
+ *
+ * `materialAnchors` extracts a run of capitalized words as one anchor, so "Legal Counsel Amara
+ * Quinn" becomes a single string that a structured record can never contain contiguously: the
+ * record states `title: Legal Counsel` and `fullName: Amara Quinn` on separate lines. Requiring
+ * contiguity there tests transcription, not grounding. A fused run is therefore also satisfied
+ * when it splits into two multi-word halves that both appear in the same evidence text; every
+ * word still has to be present, and single- or two-word anchors stay exact. */
+function containsAnchor(haystack: string, anchor: string): boolean {
+  if (containsBounded(haystack, anchor)) return true;
+  const words = anchor.split(' ');
+  if (words.length < 4) return false;
+  for (let split = 2; split <= words.length - 2; split += 1) {
+    if (
+      containsBounded(haystack, words.slice(0, split).join(' ')) &&
+      containsBounded(haystack, words.slice(split).join(' '))
+    )
+      return true;
+  }
+  return false;
+}
+
 /** Extracts material names, dates, amounts, quoted text, and business terms from a claim. */
 function materialAnchors(statement: string): readonly string[] {
   const patterns = [
@@ -286,25 +308,88 @@ function structuredFieldAssertionSupported(assertion: string, support: string): 
   );
 }
 
-/** Allows complete structured field values to be reordered only inside one evidence record. */
+/**
+ * Verbs of being, holding, or attribution that link two stated field values without asserting a
+ * fact of their own. A record that pairs `fullName: Elena Voss` with `title: Chief Information
+ * Security Officer` already grounds "Elena Voss holds the title Chief Information Security
+ * Officer"; only the copula differs. This is a closed set of contentless words, not a set of
+ * accepted sentence shapes: it constrains which words may be skipped, never how a claim is
+ * phrased, and every word carrying claim content still has to come from a cited field value.
+ */
+const STRUCTURED_ATTRIBUTION_TERMS = new Set(
+  [
+    'has',
+    'have',
+    'had',
+    'hold',
+    'holds',
+    'held',
+    'holding',
+    'serve',
+    'serves',
+    'served',
+    'act',
+    'acts',
+    'acted',
+    'work',
+    'works',
+    'worked',
+    'list',
+    'lists',
+    'listed',
+    'record',
+    'records',
+    'recorded',
+    'state',
+    'states',
+    'stated',
+    'show',
+    'shows',
+    'shown',
+    'name',
+    'names',
+    'named',
+    'identify',
+    'identifies',
+    'identified'
+  ].map((word) => stem(normalize(word)))
+);
+const MAX_STRUCTURED_LINK_TERMS = 3;
+
+/** Allows complete structured field values to be reordered only inside one evidence record.
+ *
+ * Between two field values the assertion may also spend a small number of contentless linking
+ * terms: an attribution verb, or a term from the record's own field labels. Without that, an
+ * exactly faithful restatement failed on its connective alone - "X holds the title Y" was rejected
+ * while "X is Y" passed, because `is` happens to be a stop word and `holds` does not - which made
+ * survival depend on the model's phrasing rather than on the evidence. */
 function structuredRecordAssertionSupported(assertion: string, support: string): boolean {
   const assertionTerms = paraphraseTerms(assertion);
   const fields = structuredFields(support)
     .map((field) => ({ ...field, terms: paraphraseTerms(field.value) }))
     .filter((field) => field.terms.length > 0);
+  const labelTerms = new Set(fields.flatMap((field) => paraphraseTerms(field.name)));
+  const linkable = (term: string): boolean =>
+    STRUCTURED_ATTRIBUTION_TERMS.has(term) || labelTerms.has(term);
   const matches = (offset: number, terms: readonly string[]): boolean =>
     terms.every((term, index) => assertionTerms[offset + index] === term);
-  const visit = (offset: number, used: ReadonlySet<number>): boolean => {
+  const visit = (offset: number, used: ReadonlySet<number>, linked: number): boolean => {
     if (offset === assertionTerms.length) return used.size >= 2;
     for (const [index, field] of fields.entries()) {
       if (used.has(index) || !matches(offset, field.terms)) continue;
       const next = new Set(used);
       next.add(index);
-      if (visit(offset + field.terms.length, next)) return true;
+      if (visit(offset + field.terms.length, next, linked)) return true;
     }
-    return false;
+    const term = assertionTerms[offset];
+    return (
+      term !== undefined &&
+      linked < MAX_STRUCTURED_LINK_TERMS &&
+      linkable(term) &&
+      visit(offset + 1, used, linked + 1)
+    );
   };
-  return assertionTerms.length > 0 && visit(0, new Set<number>());
+  return assertionTerms.length > 0 && visit(0, new Set<number>(), 0);
 }
 
 /** Accepts exact local support plus tightly bounded, same-unit transformations. */
@@ -339,14 +424,17 @@ function unitRelatesToAssertion(assertion: string, unit: string): boolean {
   return [...terms].every((term) => unitTerms.has(term));
 }
 
+/** Splits one evidence excerpt into the individual statements used for support checks. */
+function contentUnits(content: string): readonly string[] {
+  return content
+    .split(/\n+|(?<=[.!?])\s+/u)
+    .map((unit) => unit.trim())
+    .filter(Boolean);
+}
+
 /** Splits cited evidence into the individual statements used for support checks. */
 function evidenceUnits(evidence: readonly AgentEvidenceRecord[]): readonly string[] {
-  return evidence.flatMap((record) =>
-    record.content
-      .split(/\n+|(?<=[.!?])\s+/u)
-      .map((unit) => unit.trim())
-      .filter(Boolean)
-  );
+  return evidence.flatMap((record) => contentUnits(record.content));
 }
 
 /** Detects whether nearby evidence language explicitly negates a material claim anchor. */
@@ -425,6 +513,20 @@ function hasPredicateContradiction(statement: string, evidence: string): boolean
   );
 }
 
+/** Reports contradiction only from the evidence statements that relate to an assertion's subject.
+ *
+ * A retrieved CRM record bundles many independent fields into one excerpt. Evaluating the whole
+ * excerpt at once let a single unrelated field decide unrelated claims: a contact whose `notes`
+ * read "will not support expansion" tripped the negation-parity rule for every claim citing that
+ * contact, silently deleting even her name and title. The unit-level contradiction gate already
+ * requires `unitRelatesToAssertion` before rejecting a claim; this applies the same requirement on
+ * the whole-record path, so evidence that genuinely negates the claim still rejects it. */
+function contradictedByRelatedUnit(statement: string, support: string): boolean {
+  return contentUnits(support).some(
+    (unit) => unitRelatesToAssertion(statement, unit) && hasPredicateContradiction(statement, unit)
+  );
+}
+
 /** Resolves every claim citation to its exact authorized evidence record. */
 function findEvidence(
   claim: Claim,
@@ -481,7 +583,7 @@ export function assessClaimSupport(
       reason: 'Cited evidence explicitly negates a material anchor.'
     };
   }
-  const missing = anchors.filter((anchor) => !containsBounded(combined, anchor));
+  const missing = anchors.filter((anchor) => !containsAnchor(combined, anchor));
   if (missing.length > 0)
     return {
       claimId: claim.id,
@@ -490,16 +592,23 @@ export function assessClaimSupport(
     };
   const completeRelationSupported = (
     support: string,
-    atomsSupported: (assertion: string, evidence: string) => boolean
+    atomsSupported: (assertion: string, evidence: string) => boolean,
+    contradicts: (assertion: string, evidence: string) => boolean
   ): boolean =>
-    anchors.every((anchor) => containsBounded(normalize(support), anchor)) &&
+    anchors.every((anchor) => containsAnchor(normalize(support), anchor)) &&
     materialPredicatesSupported(claim.statement, support) &&
-    !hasPredicateContradiction(claim.statement, support) &&
+    !contradicts(claim.statement, support) &&
     atomsSupported(claim.statement, support);
   if (
-    !units.some((unit) => completeRelationSupported(unit, textAtomsSupported)) &&
+    !units.some((unit) =>
+      completeRelationSupported(unit, textAtomsSupported, hasPredicateContradiction)
+    ) &&
     !citedEvidence.some((record) =>
-      completeRelationSupported(record.content, structuredRecordAssertionSupported)
+      completeRelationSupported(
+        record.content,
+        structuredRecordAssertionSupported,
+        contradictedByRelatedUnit
+      )
     )
   )
     return {
