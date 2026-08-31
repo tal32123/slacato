@@ -109,6 +109,32 @@
         "restricted-run-trace.json",
         "restricted-run-events.json"
       ]
+    },
+    "slackImpactDemonstration": {
+      "description": "Mandatory Data-Generation Subtask demonstration: with/without Slack authorization-scope comparison for OPP-1001/USR-5001, plus a secondary OPP-1002/USR-5002 check and a cross-reference to the OPP-1003 restricted run above.",
+      "addedAt": "2026-08-31T06:30:00.000Z",
+      "persona": {
+        "userId": "USR-5001",
+        "name": "Maya Levin"
+      },
+      "opportunity": {
+        "id": "OPP-1001",
+        "name": "Northstar Foods Cooperative - Global Access Renewal"
+      },
+      "runsUsed": 4,
+      "withoutSlackMechanism": "Scoped can_read=false revocation of permission_grants row 'grant:USR-5001:ACC-2001:slack' in the slacato_samples database, restored after the run. Not a fixture edit.",
+      "provenance": {
+        "withSlackRunId": "run_a12bd817a6d8a3746358cc958a7c66af329782cf1ecb5273402d7e8bfd660103",
+        "withoutSlackRunId": "run_1ed98d7135fdf21c62052f9bcf78582d8ffd7f8992d218df0493cd73e390dbd4",
+        "provider": "openrouter",
+        "generationModel": "google/gemini-3.5-flash-lite",
+        "embeddingModel": "openai/text-embedding-3-small"
+      },
+      "finding": "Slack evidence was retrieved, authorized, ranked competitively, and included in full in every specialist's context on every attempt, and was extracted into one validated, cited claim by the Conversation Intelligence Agent on one attempt -- but no live run produced a finalized brief with a Slack citation, because the Negotiation Strategy Agent re-synthesizes final brief sections from the shared evidence pool rather than forwarding upstream specialist claims. See slack-impact-comparison.json for the full stage-by-stage diagnosis.",
+      "files": [
+        "slack-impact-comparison.json",
+        "slack-impact-comparison.md"
+      ]
     }
   },
   "reproduction": {
