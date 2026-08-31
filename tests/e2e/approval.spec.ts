@@ -285,7 +285,10 @@ test('partial quorum remains awaiting until a distinct authorized persona satisf
   const finalApprove = page.getByRole('button', { name: 'Approve unchanged' });
   await finalApprove.focus();
   await page.keyboard.press('Enter');
-  const success = page.getByRole('status');
+  // The app shell keeps its "Loading destination" live region permanently mounted so assistive
+  // technology announces it, which means a bare status role matches two elements whenever a
+  // navigation is in flight. Scope every status assertion by its text.
+  const success = page.getByRole('status').filter({ hasText: 'Decision recorded' });
   await expect(success).toContainText('Approval quorum is satisfied');
   await expect(success).toBeFocused();
   await expect(page.getByText('Finalizing', { exact: true })).toBeVisible();
@@ -373,7 +376,7 @@ test('reject is terminal, duplicate action is disabled, and history remains insp
   const confirm = page.getByRole('button', { name: 'Confirm rejection' });
   await confirm.focus();
   await page.keyboard.press('Space');
-  const rejectionStatus = page.getByRole('status');
+  const rejectionStatus = page.getByRole('status').filter({ hasText: 'run was rejected' });
   await expect(rejectionStatus).toContainText('run was rejected');
   await expect(rejectionStatus).toBeFocused();
   await expect(page.getByText('Rejected', { exact: true }).first()).toBeVisible();
