@@ -64,6 +64,10 @@
 }
 html {
   background: var(--background);
+  /* Reserve the classic-scrollbar gutter permanently. Without it, a route whose content is shorter
+     than the viewport removes the scrollbar and every centred column slides sideways by its width
+     the moment the page is opened. No effect where the platform uses overlay scrollbars. */
+  scrollbar-gutter: stable;
 }
 body {
   min-width: 0;
