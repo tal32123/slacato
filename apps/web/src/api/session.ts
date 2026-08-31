@@ -7,6 +7,7 @@ import {
   fetchCsrf,
   fetchDiagnostics,
   fetchPersonas,
+  fetchReadiness,
   fetchSession
 } from './client';
 
@@ -20,6 +21,7 @@ export const queryClient = new QueryClient({
 export const queryKeys = {
   session: ['session'] as const,
   personas: ['personas'] as const,
+  readiness: ['readiness'] as const,
   csrf: (version: string) => ['csrf', version] as const,
   scoped: (version: string, resource: string) => ['scoped', version, resource] as const
 };
@@ -46,6 +48,21 @@ export const csrfQueryOptions = (version: string) =>
     queryKey: queryKeys.csrf(version),
     queryFn: ({ signal }) => fetchCsrf(signal),
     staleTime: 0
+  });
+
+/**
+ * Defines how the interface checks whether brief generation can currently succeed.
+ * Unauthenticated and session-independent so it can gate the action before login and
+ * survives persona switches without session-version reconciliation; a failed or slow
+ * check must never permanently disable a working control, so it never retries and
+ * callers should treat "no data yet" as "not known to be blocked".
+ */
+export const readinessQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.readiness,
+    queryFn: ({ signal }) => fetchReadiness(signal),
+    staleTime: 15_000,
+    retry: false
   });
 
 /** Signals that protected data became stale because the signed session changed during loading. */
