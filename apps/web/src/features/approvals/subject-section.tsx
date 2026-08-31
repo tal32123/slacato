@@ -342,7 +342,9 @@ export function BriefList({
             const claim = cited.get(value);
             return (
               <li key={value}>
-                {value}
+                {/* The bullet keeps its own element so its text stands alone: appending markers to
+                    the list item would otherwise fold "[1]" into the sentence's text content. */}
+                <span>{value}</span>
                 {claim !== undefined && numbers !== undefined && evidenceIds !== undefined && (
                   <>
                     {' '}
