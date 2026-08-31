@@ -213,7 +213,7 @@ describe('authorized deal API projection', () => {
       payload: unknown;
     }[]>`select run_id, actor_id, type, payload from audit_events
       where actor_id = 'USR-5007' order by created_at`;
-    expect(denialAudit).toHaveLength(auditedBefore[0]!.count + 2);
+    expect(denialAudit).toHaveLength((auditedBefore[0]?.count ?? 0) + 2);
     const denialRow = { run_id: null, actor_id: 'USR-5007', type: 'deal_brief_access_denied', payload: { reason: 'forbidden' } };
     expect(denialAudit.slice(-2)).toEqual([denialRow, denialRow]);
     expect(JSON.stringify(denialAudit.slice(-2))).not.toMatch(
@@ -225,7 +225,7 @@ describe('authorized deal API projection', () => {
     const auditReadPaths = await seedDatabase<{ count: number }[]>`
       select count(*)::int count from information_schema.view_table_usage
       where table_name = 'audit_events'`;
-    expect(auditReadPaths[0]!.count).toBe(0);
+    expect(auditReadPaths[0]?.count).toBe(0);
   });
 
   it('does not project Salesforce list fields or non-restricted source grants across authorization scopes', async () => {

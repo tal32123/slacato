@@ -106,7 +106,8 @@ describe('demo reset restores a demoable state', () => {
       values ('subject-reset-test', ${first.runId}, 1, ${'a'.repeat(64)}, '{}'::jsonb, ${JSON.stringify(['legal_terms'])}::jsonb)`;
     const eventsBefore = await client.sql<{ count: number }[]>`
       select count(*)::int count from run_events where run_id = ${first.runId}`;
-    expect(eventsBefore[0]!.count).toBeGreaterThan(0);
+    const eventCountBefore = eventsBefore[0]?.count ?? 0;
+    expect(eventCountBefore).toBeGreaterThan(0);
 
     const result = await resetDemoState({ databaseUrl, opportunityIds: [opportunityId] });
     expect(result.cancelled).toEqual([
@@ -125,19 +126,23 @@ describe('demo reset restores a demoable state', () => {
     expect(cancelled?.status).toBe('cancelled');
     const eventsAfter = await client.sql<{ count: number }[]>`
       select count(*)::int count from run_events where run_id = ${first.runId}`;
-    expect(eventsAfter[0]!.count).toBeGreaterThanOrEqual(eventsBefore[0]!.count);
+    expect(eventsAfter[0]?.count ?? 0).toBeGreaterThanOrEqual(eventCountBefore);
     const retainedSubjects = await client.sql<{ id: string }[]>`
       select id from approval_subjects where run_id = ${first.runId}`;
     expect(retainedSubjects.map(({ id }) => id)).toEqual(['subject-reset-test']);
 
     // And the demo is walkable again: the next Generate Brief starts new work rather than joining
     // finished work, which is the precondition for a fresh approval subject the inbox can act on.
-    const second = await start.execute({ opportunityId, requestedBy, idempotencyKey: 'pass-three' });
+    const second = await start.execute({
+      opportunityId,
+      requestedBy,
+      idempotencyKey: 'pass-three'
+    });
     expect(second.disposition).toBe('created');
     expect(second.runId).not.toBe(first.runId);
     const subjectsForFreshRun = await client.sql<{ count: number }[]>`
       select count(*)::int count from approval_subjects where run_id = ${second.runId}`;
-    expect(subjectsForFreshRun[0]!.count).toBe(0);
+    expect(subjectsForFreshRun[0]?.count).toBe(0);
 
     // Running the reset again is safe and reports the state honestly rather than failing.
     const repeated = await resetDemoState({ databaseUrl, opportunityIds: [opportunityId] });
