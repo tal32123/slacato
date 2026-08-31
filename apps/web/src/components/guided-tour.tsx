@@ -295,6 +295,16 @@ export function GuidedTour(): React.JSX.Element {
     if (!active) return;
     let missingTimer: number | undefined;
     let targetFocusPlaced = false;
+    // Tracks which element we have already scrolled into view for this step. `updateTarget` also
+    // runs from the 'scroll' listener below (so the spotlight keeps tracking its target while the
+    // page scrolls) and from a MutationObserver on the content root -- both fire during and
+    // because of the very `scrollIntoView` call below. Re-issuing `scrollIntoView` on every one of
+    // those re-entrant calls fights any scroll a user or test performs on a nested element (e.g.
+    // Playwright bringing a specific control into view before clicking it): each fight restarts
+    // the smooth-scroll and moves the target underneath the pointer, so the element never settles.
+    // Scrolling only when the resolved target element actually changes keeps the initial reveal
+    // while letting subsequent scrolls (from any source) stand.
+    let scrolledTarget: Element | null = null;
     const updateTarget = (): void => {
       if (missingTimer !== undefined) {
         window.clearTimeout(missingTimer);
@@ -322,7 +332,21 @@ export function GuidedTour(): React.JSX.Element {
       targetElRef.current = target;
       if (target.getAttribute('data-tour-active') !== 'true')
         target.setAttribute('data-tour-active', 'true');
-      target.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      if (scrolledTarget !== target) {
+        // `behavior: 'auto'` (instant), not 'smooth': an animated reveal keeps the target's
+        // on-screen position changing for several hundred ms after this call returns. A user (or
+        // Playwright) who tries to act on the target during that window sees it move out from
+        // under the pointer mid-interaction. Confirmed against a real, reproducible failure: with
+        // 'smooth' here, Playwright's actionability retries for a click on a target reached via
+        // this scroll -- e.g. a persona radio inside the settings-personas step's spotlighted
+        // section -- raced the still-running scroll animation and never converged, cycling the
+        // page between unrelated scroll offsets for the full retry budget ("element is not
+        // stable", then permanent pointer-event interception once the animation and the retries
+        // fully decoupled). Jumping straight to the final position removes the race instead of
+        // just narrowing it.
+        target.scrollIntoView?.({ block: 'center', behavior: 'auto' });
+        scrolledTarget = target;
+      }
       if (step.requiresInteraction === true && !targetFocusPlaced) {
         const interactive = collectFocusable(target)[0];
         interactive?.focus();
