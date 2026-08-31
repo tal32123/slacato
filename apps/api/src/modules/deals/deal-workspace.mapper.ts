@@ -515,11 +515,12 @@ function renderSourceBackedDealBrief(
     buyerGoalsAndBusinessDrivers: createBriefSectionView(
       'buyerGoalsAndBusinessDrivers',
       [
-        conversationFields.summary ??
-          'Buyer goals require confirmation from authorized conversation evidence.'
+        isNonEmptyString(fields.primaryCompetitor)
+          ? `The authorized opportunity record names ${fields.primaryCompetitor} as the primary competitive alternative shaping buyer priorities.`
+          : 'No authorized opportunity record identifies a competitive alternative shaping buyer priorities.'
       ],
       splitCommaSeparatedValues(conversationFields.keyPoints),
-      conversationEvidenceIds
+      uniqueEvidenceIds([...conversationEvidenceIds, ...opportunityEvidenceIds])
     ),
     stakeholderMap: createBriefSectionView(
       'stakeholderMap',

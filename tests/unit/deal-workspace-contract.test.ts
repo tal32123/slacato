@@ -97,6 +97,52 @@ it('falls back to the unavailable-stage and unknown-risk placeholders when no au
   expect(workspace.evidence).toEqual([]);
 });
 
+const opportunityEvidenceWithCompetitor: DealEvidence = {
+  id: 'salesforce:OPP-1:1',
+  sourceType: 'salesforce',
+  sensitivity: 'standard',
+  eventDate: null,
+  sourceLocator: 'salesforce/opportunities.tsv#OPP-1/chunk-0',
+  createdAt: '2026-08-29T00:00:00.000Z',
+  content: `${opportunityEvidence.content}\nprimaryCompetitor: Rival Corp`
+};
+
+const conversationEvidence: DealEvidence = {
+  id: 'gong_summary:CALL-1:0',
+  sourceType: 'gong_summary',
+  sensitivity: 'standard',
+  eventDate: '2026-08-20',
+  sourceLocator: 'gong/gong_call_summaries.tsv#CALL-1',
+  createdAt: '2026-08-20T00:00:00.000Z',
+  content:
+    'callId: CALL-1\nsummary: Final document review found no new commercial objections.\nkeyPoints: Executive buyer wants fewer exceptions, infrastructure lead wants a rollout plan\ncustomerSentiment: positive\nrisks: Renewal timing risk if approvals slip\nnextSteps: Confirm approvals by 2026-09-01'
+};
+
+it('derives the executive summary and buyer goals paragraphs from different authorized source material', () => {
+  const workspace = renderDealWorkspace({
+    sessionVersion: 'session-v4',
+    target,
+    latestRun: undefined,
+    opportunityRows: [opportunityEvidenceWithCompetitor],
+    stakeholderRows: [],
+    supplementalRows: [conversationEvidence]
+  });
+
+  const brief = workspace.sourceSnapshot.evidenceOverview;
+  const executiveSummaryParagraph = brief.sections.executiveSummary.paragraphs[0];
+  const buyerGoalsParagraph = brief.sections.buyerGoalsAndBusinessDrivers.paragraphs[0];
+
+  expect(executiveSummaryParagraph).toBe('Final document review found no new commercial objections.');
+  expect(buyerGoalsParagraph).toContain('Rival Corp');
+  expect(buyerGoalsParagraph).not.toBe(executiveSummaryParagraph);
+
+  // No two sections should open with the identical restated sentence: each must add information.
+  const firstParagraphs = Object.values(brief.sections)
+    .map((section) => section.paragraphs[0])
+    .filter((paragraph): paragraph is string => paragraph !== undefined && paragraph.length > 0);
+  expect(new Set(firstParagraphs).size).toBe(firstParagraphs.length);
+});
+
 it('surfaces the latest run status without producing generated output when no draft or finalized brief exists', () => {
   const latestRun: LatestDealRun = {
     runId: 'run-1',
