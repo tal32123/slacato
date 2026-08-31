@@ -23,6 +23,8 @@ import {
   logoutResponseSchema,
   type Persona,
   personaListResponseSchema,
+  type ReadinessHealth,
+  readinessHealthSchema,
   type RunDetailResponse,
   type RunListResponse,
   runDetailResponseSchema,
@@ -94,6 +96,17 @@ export function endSession(csrfToken: string) {
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: '{}'
   });
+}
+
+/**
+ * Loads whether the dependencies brief generation needs are ready to serve traffic.
+ * Reads the response body regardless of HTTP status, because a "not ready" result is
+ * reported with a 503 that still carries the shaped readiness payload.
+ */
+export async function fetchReadiness(signal?: AbortSignal): Promise<ReadinessHealth> {
+  const response = await fetch('/api/health/ready', { signal });
+  const body = await response.json().catch((): undefined => undefined);
+  return readinessHealthSchema.parse(body);
 }
 
 /** Loads demo diagnostics for the active session. */

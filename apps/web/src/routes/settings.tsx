@@ -116,7 +116,7 @@ export function SettingsRoute(): React.JSX.Element {
         </Alert>
       )}
 
-      <section aria-labelledby="persona-heading">
+      <section aria-labelledby="persona-heading" data-tour="settings-personas">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="persona-heading" className="text-xl font-semibold">
@@ -136,7 +136,7 @@ export function SettingsRoute(): React.JSX.Element {
           </Button>
         </div>
 
-        <div data-tour="settings-personas" className="grid gap-6">
+        <div className="grid gap-6">
           {groupDemoPersonas(personas.data ?? []).map((group) => (
             <fieldset key={group.id} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <legend className="col-span-full mb-2 text-sm font-semibold">
