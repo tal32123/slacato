@@ -320,6 +320,7 @@ export function expectationsForOpportunity(
 
 const SAMPLE_TARGETS: readonly Readonly<{ file: string; opportunityId: string }>[] = [
   { file: 'samples/normal-opportunity-brief.json', opportunityId: 'OPP-1001' },
+  { file: 'samples/expansion-opportunity-brief.json', opportunityId: 'OPP-1002' },
   { file: 'samples/restricted-opportunity-brief.json', opportunityId: 'OPP-1003' }
 ];
 
