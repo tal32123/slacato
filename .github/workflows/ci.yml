@@ -69,6 +69,9 @@ jobs:
       - name: Run unit, contract, and integration tests
         run: pnpm test
 
+      - name: Run golden-retrieval regression eval
+        run: pnpm eval:deterministic
+
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
