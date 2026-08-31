@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenario 4 adjudication — do generated Slack updates affect the brief?</title>
+<style>
+  /* Design source: this project's own system (apps/web/src/styles/globals.css).
+     The app ships ONE palette and declares `color-scheme: light` with no dark token set,
+     so this artifact does the same rather than inventing a dark theme the product does not have. */
+  :root {
+    color-scheme: light;
+    --brand-forest: #182d2a;
+    --brand-medium: #0d483d;
+    --brand-mint: #81e5ac;
+    --brand-pale: #def6ef;
+    --background: #f6f6f6;
+    --foreground: #182d2a;
+    --card: #fbfcfb;
+    --primary: #0d483d;
+    --primary-foreground: #def6ef;
+    --secondary: #def6ef;
+    --muted: #e8f1ee;
+    --muted-foreground: #31554f;
+    --accent: #81e5ac;
+    --destructive: #963333;
+    --border: #c8ddd6;
+    --ring: #158864;
+    --attention: #f5c13d;
+    --attention-foreground: #594400;
+    --radius: 0.5rem;
+    --mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, h1, h2, h3, h4, li, dd, td, th, .badge) { overflow-wrap: anywhere; }
+  :where(img, svg) { max-width: 100%; height: auto; }
+  html { background: var(--background); scrollbar-gutter: stable; }
+  body {
+    margin: 0; background: var(--background); color: var(--foreground);
+    font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 96px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.35rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h3 { font-size: 1rem; margin: 0 0 6px; }
+  .eyebrow {
+    font-size: .72rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--muted-foreground); margin: 0 0 10px;
+  }
+  .lede { color: var(--muted-foreground); margin: 0; max-width: 72ch; }
+  section { margin-top: 48px; }
+  .sechead { border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 22px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+  }
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .g3 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .g4 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+
+  /* Verdict */
+  .verdict {
+    background: var(--brand-forest); color: var(--brand-pale);
+    border-radius: var(--radius); padding: 28px 28px 24px; margin-top: 28px;
+  }
+  .verdict h2 { color: #fff; font-size: 1.6rem; margin-bottom: 10px; }
+  .verdict p { margin: 0 0 14px; color: #cfe6dd; max-width: 76ch; }
+  .verdict .stamp {
+    display: inline-block; background: var(--brand-mint); color: var(--brand-forest);
+    font-weight: 700; font-size: .75rem; letter-spacing: .08em; text-transform: uppercase;
+    padding: 5px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .vstats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin-top: 18px; }
+  .vstat { background: rgba(255,255,255,.07); border: 1px solid rgba(129,229,172,.25); border-radius: var(--radius); padding: 12px 14px; }
+  .vstat .n { font-size: 1.5rem; font-weight: 700; color: var(--brand-mint); font-variant-numeric: tabular-nums; }
+  .vstat .l { font-size: .74rem; color: #b9d8cd; letter-spacing: .03em; }
+
+  /* Quote of the decisive evidence */
+  .hero-quote {
+    border-left: 4px solid var(--accent); background: var(--secondary);
+    padding: 20px 22px; border-radius: 0 var(--radius) var(--radius) 0; margin: 0;
+  }
+  .hero-quote blockquote { margin: 0 0 10px; font-size: 1.12rem; line-height: 1.5; font-weight: 500; }
+  .hero-quote .attrib { font-size: .8rem; color: var(--muted-foreground); font-family: var(--mono); }
+
+  code, .mono { font-family: var(--mono); font-size: .86em; }
+  code { background: var(--muted); padding: 1px 5px; border-radius: 4px; }
+
+  blockquote.spec {
+    margin: 0; padding: 14px 16px; background: var(--muted);
+    border-left: 3px solid var(--primary); border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  blockquote.spec p { margin: 0 0 8px; }
+  blockquote.spec p:last-child { margin: 0; }
+  .cite { font-size: .74rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); display: block; margin-bottom: 6px; }
+
+  .badge {
+    display: inline-block; font-size: .7rem; font-weight: 600; padding: 3px 9px;
+    border-radius: 999px; letter-spacing: .03em; white-space: nowrap;
+  }
+  .b-pass { background: var(--brand-pale); color: var(--brand-medium); border: 1px solid #a9dcc9; }
+  .b-warn { background: #fdf3d8; color: var(--attention-foreground); border: 1px solid #eccd7c; }
+  .b-fail { background: #f7e3e3; color: var(--destructive); border: 1px solid #e0b6b6; }
+  .b-neutral { background: var(--muted); color: var(--muted-foreground); border: 1px solid var(--border); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+  table { border-collapse: collapse; width: 100%; font-size: .84rem; }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th {
+    background: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted-foreground); font-weight: 700; position: sticky; top: 0; white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #f2f8f5; }
+  td.num { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+  .rowgroup td { background: var(--brand-pale); font-weight: 700; font-size: .76rem; letter-spacing: .05em; text-transform: uppercase; color: var(--brand-medium); }
+
+  figure { margin: 0; }
+  figcaption { font-size: .8rem; color: var(--muted-foreground); margin-top: 10px; }
+
+  .tl { display: grid; gap: 0; }
+  .tl-item { display: grid; grid-template-columns: 92px 1fr; gap: 16px; padding: 14px 0; border-bottom: 1px dashed var(--border); }
+  .tl-item:last-child { border-bottom: none; }
+  .tl-time { font-family: var(--mono); font-size: .8rem; color: var(--muted-foreground); font-weight: 600; }
+  .tl-item.killer { background: linear-gradient(90deg, var(--brand-pale), transparent 70%); border-radius: var(--radius); padding-left: 12px; margin-left: -12px; }
+
+  .opt { border-left: 4px solid var(--border); }
+  .opt.rec { border-left-color: var(--accent); background: var(--secondary); }
+  .opt.rej { opacity: .92; border-left-color: var(--destructive); }
+  .opt.done { border-left-color: var(--primary); }
+  .opt h3 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .opt ul { margin: 10px 0 0; padding-left: 18px; }
+  .opt li { margin-bottom: 5px; }
+  .verdict-line { font-weight: 600; font-size: .88rem; margin: 10px 0 0; }
+
+  .callout { border: 1px solid var(--attention); background: #fdf8ea; border-radius: var(--radius); padding: 18px 20px; }
+  .callout.ok { border-color: #a9dcc9; background: var(--brand-pale); }
+  .callout h3 { color: var(--attention-foreground); }
+  .callout.ok h3 { color: var(--brand-medium); }
+
+  ul.tight { margin: 8px 0 0; padding-left: 18px; }
+  ul.tight li { margin-bottom: 5px; }
+  .muted { color: var(--muted-foreground); }
+  .small { font-size: .84rem; }
+  hr.soft { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Adjudication · Cato GTM home task · 31 Aug 2026</p>
+  <h1>Does a generated Slack update actually affect the brief?</h1>
+  <p class="lede">
+    A prior agent reported that Required Demo Scenario 4 is unmet: Slack evidence reaches the agents but
+    never survives into a finalized brief. This is an independent re-adjudication against
+    <strong>13 live OpenRouter runs</strong> on current <code>HEAD</code>, measuring each pipeline stage separately.
+    No application code, samples or docs were changed.
+  </p>
+
+  <div class="verdict">
+    <span class="stamp">Requirement met</span>
+    <h2>The claim was true this morning and is false now.</h2>
+    <p>
+      Two commits landed after the report was written and falsify it. On current code, generated Slack
+      updates reach the finalized brief in <strong>13 of 13 runs</strong>, and demonstrably shape a
+      conclusion, risk or action in <strong>10 of 13</strong>. Zero brief-quality violations across all 13.
+      The only thing genuinely broken is the checked-in <code>samples/</code>, which predate the fixes.
+    </p>
+    <div class="vstats">
+      <div class="vstat"><div class="n">13/13</div><div class="l">(a) Slack retrieved</div></div>
+      <div class="vstat"><div class="n">13/13</div><div class="l">(b) In agent context</div></div>
+      <div class="vstat"><div class="n">12/13</div><div class="l">(c) Specialist claim</div></div>
+      <div class="vstat"><div class="n">13/13</div><div class="l">(d) Cited in brief</div></div>
+      <div class="vstat"><div class="n">10/13</div><div class="l">(e) Shapes a conclusion</div></div>
+    </div>
+  </div>
+
+  <!-- ============ THE MEASUREMENT THAT SETTLES IT ============ -->
+  <section>
+    <div class="sechead">
+      <p class="eyebrow">The measurement that settles it</p>
+      <h2>A generated Slack update is the sole citation behind OPP-1003's Executive Summary — in 4 of 4 runs</h2>
+    </div>
+
+    <div class="hero-quote">
+      <blockquote>&ldquo;Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations.&rdquo;</blockquote>
+      <p class="attrib">
+        executiveSummary.claims[0] &nbsp;←&nbsp; <strong>slack:SLK-9009:0</strong><br>
+        locator <code>slack/account_team_updates.tsv#SLK-9009#chunk-0</code> · confidence 1.0 · no other citation on the claim
+      </p>
+    </div>
+
+    <p class="small muted" style="margin-top:14px">
+      <code>fixtures/cato/slack/generation.json</code> records SLK-9009 as the <code>ambiguity_or_conflict</code> row for
+      OPP-1003 — the update the Mandatory Data-Generation Subtask asks for by name. It is candidate-generated content that
+      exists in no Salesforce, Gong, pricing or policy file, and it is carrying the most load-bearing section of the brief.
+    </p>
+
+    <div class="grid g2" style="margin-top:20px">
+      <div class="card">
+        <h3>Second-strongest: OPP-1002</h3>
+        <p class="small muted" style="margin-top:0">One generated update drives both the top risk and the top action.</p>
+        <blockquote class="spec" style="margin-top:10px">
+          <span class="cite">slack:SLK-9005:0 — sole citation on both</span>
+          <p class="small">&ldquo;Training gaps for night-shift staff during troubleshooting workflows remain unaddressed.&rdquo;</p>
+        </blockquote>
+        <ul class="tight small">
+          <li><code>negotiationState.risks[0]</code> — the brief's only listed risk</li>
+          <li><code>recommendedNextActions.actions[0]</code> — priority <strong>high</strong>, rationale copied from the update</li>
+          <li>and <code>slack:SLK-9004:0</code> is the sole citation on <code>negotiationState.leverage[0]</code></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Also in a genuinely finalized export</h3>
+        <p class="small muted" style="margin-top:0">
+          11 of 13 runs ended <code>awaiting_approval</code>, so those numbers come from the
+          <code>strategy:1</code> draft checkpoint — the artifact the approver reads, already past the same
+          grounding validation. Two OPP-1001 runs ran through to <code>completed</code> and produced a real
+          <code>exportFinalized</code> artifact.
+        </p>
+        <p class="small">
+          One of those two finalized exports passes (e): <code>buyerGoalsAndBusinessDrivers.claims[0]</code> ←
+          <code>slack:SLK-9001:0</code> and <code>stakeholderMap.claims[0]</code> ← <code>slack:SLK-9002:0</code>.
+          So the requirement is met in the exact artifact shape §9.D asks for, not only in drafts.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SPEC ============ -->
+  <section>
+    <div class="sechead">
+      <p class="eyebrow">What the spec actually demands</p>
+      <h2>Two conjuncts, and they bind both the artifacts and the demo</h2>
+    </div>
+
+    <div class="grid g2">
+      <blockquote class="spec">
+        <span class="cite">§8 Required Demo Scenarios, item 4</span>
+        <p><strong>&ldquo;Show how the generated Slack-style updates affect the brief, including at least one cited generated update.&rdquo;</strong></p>
+      </blockquote>
+      <blockquote class="spec">
+        <span class="cite">§3 Mandatory Data-Generation Subtask</span>
+        <p>&ldquo;Add useful account-team context that is <strong>not fully duplicated</strong> from the provided Salesforce, Gong, pricing, or policy files.&rdquo;</p>
+        <p>&ldquo;Across the generated updates, include at least one update that reinforces a known fact, one that adds missing context, and one that <strong>introduces ambiguity or a possible conflict</strong> the system must handle.&rdquo;</p>
+      </blockquote>
+      <blockquote class="spec">
+        <span class="cite">§4 System Requirements</span>
+        <p>&ldquo;<strong>Run the system with live LLM calls</strong> to generate the briefs, approval outputs, traces, and other generated artifacts <strong>included in the submission</strong>.&rdquo;</p>
+      </blockquote>
+      <blockquote class="spec">
+        <span class="cite">§9 Deliverables, D · and §6</span>
+        <p>&ldquo;<strong>Sample run artifacts</strong>: generated briefs, generated Slack-style update data, approval-flow output, and trace or log examples.&rdquo;</p>
+        <p>&ldquo;For the interview, be prepared to run a <strong>live demo</strong> that also makes live LLM calls rather than replaying only precomputed or mocked responses.&rdquo;</p>
+      </blockquote>
+    </div>
+
+    <div class="callout" style="margin-top:20px">
+      <h3>Determination — stated plainly, because everything else follows from it</h3>
+      <ul class="tight">
+        <li><strong>A Slack entry appearing in Source Evidence is NOT sufficient.</strong> §8.4 has two conjuncts joined by
+          &ldquo;including&rdquo;. A bibliography row satisfies <em>&ldquo;at least one cited generated update&rdquo;</em> literally and
+          satisfies <em>&ldquo;affect the brief&rdquo;</em> not at all. The bar is stage (e), not stage (d).</li>
+        <li><strong>It must demonstrably change something, and be cited where it does.</strong> A Slack evidenceId must appear
+          on a claim inside a substantive section — an executive summary, a buyer goal, a negotiation risk, a stakeholder,
+          or an action's rationale — not only inside <code>sourceEvidence</code>.</li>
+        <li><strong>It binds BOTH.</strong> §9.D makes the sample artifacts a deliverable and §4 requires they come from live
+          runs, so a shipped brief must carry it; §6 requires the live demo to reproduce it. Passing one and not the other
+          is a partial submission.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ STAGE DIAGRAM ============ -->
+  <section>
+    <div class="sechead">
+      <p class="eyebrow">Stage by stage</p>
+      <h2>Where Slack evidence actually travels — and where it stops</h2>
+    </div>
+
+    <figure class="card">
+      <svg viewBox="0 0 980 320" width="100%" role="img" aria-labelledby="pipe-title pipe-desc" style="display:block">
+        <title id="pipe-title">Five-stage Slack evidence pipeline with pass counts</title>
+        <desc id="pipe-desc">Slack evidence passes retrieval, context admission, specialist claims, Source Evidence citation and section-shaping citation, with pass counts out of thirteen live runs at each stage.</desc>
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#31554f"/>
+          </marker>
+        </defs>
+
+        <!-- stage boxes -->
+        <g id="stage-a">
+          <title>(a) Retrieved into the run manifest — 13 of 13 runs</title>
+          <rect x="8" y="76" width="172" height="118" rx="8" fill="#def6ef" stroke="#0d483d" stroke-width="1.5"/>
+          <text x="24" y="102" font-size="13" font-weight="700" fill="#0d483d">(a) Retrieved</text>
+          <text x="24" y="122" font-size="11" fill="#31554f">into run manifest</text>
+          <text x="24" y="156" font-size="26" font-weight="700" fill="#0d483d">13/13</text>
+          <text x="24" y="176" font-size="10.5" fill="#31554f">best row ranks 1st–3rd of 22</text>
+        </g>
+        <g id="stage-b">
+          <title>(b) Admitted into the agent context window — 13 of 13 runs</title>
+          <rect x="200" y="76" width="172" height="118" rx="8" fill="#def6ef" stroke="#0d483d" stroke-width="1.5"/>
+          <text x="216" y="102" font-size="13" font-weight="700" fill="#0d483d">(b) In context</text>
+          <text x="216" y="122" font-size="11" fill="#31554f">of every agent</text>
+          <text x="216" y="156" font-size="26" font-weight="700" fill="#0d483d">13/13</text>
+          <text x="216" y="176" font-size="10.5" fill="#31554f">3.87–6.88% of chars</text>
+        </g>
+        <g id="stage-c">
+          <title>(c) Extracted into a specialist claim that survives validation — 12 of 13 runs</title>
+          <rect x="392" y="76" width="172" height="118" rx="8" fill="#def6ef" stroke="#0d483d" stroke-width="1.5"/>
+          <text x="408" y="102" font-size="13" font-weight="700" fill="#0d483d">(c) Specialist</text>
+          <text x="408" y="122" font-size="11" fill="#31554f">claim, validated</text>
+          <text x="408" y="156" font-size="26" font-weight="700" fill="#0d483d">12/13</text>
+          <text x="408" y="176" font-size="10.5" fill="#31554f">0–4 claims per run</text>
+        </g>
+        <g id="stage-d">
+          <title>(d) Cited in the finalized brief's Source Evidence — 13 of 13 runs</title>
+          <rect x="584" y="76" width="172" height="118" rx="8" fill="#def6ef" stroke="#0d483d" stroke-width="1.5"/>
+          <text x="600" y="102" font-size="13" font-weight="700" fill="#0d483d">(d) Source</text>
+          <text x="600" y="122" font-size="11" fill="#31554f">Evidence citation</text>
+          <text x="600" y="156" font-size="26" font-weight="700" fill="#0d483d">13/13</text>
+          <text x="600" y="176" font-size="10.5" fill="#31554f">2–3 Slack rows</text>
+        </g>
+        <g id="stage-e">
+          <title>(e) Shapes a conclusion, risk or action — 10 of 13 runs. This is the spec's real bar.</title>
+          <rect x="776" y="66" width="196" height="138" rx="8" fill="#fdf8ea" stroke="#f5c13d" stroke-width="2.5"/>
+          <text x="792" y="94" font-size="13" font-weight="700" fill="#594400">(e) Shapes a</text>
+          <text x="792" y="112" font-size="13" font-weight="700" fill="#594400">conclusion</text>
+          <text x="792" y="130" font-size="11" fill="#594400">the §8.4 bar</text>
+          <text x="792" y="166" font-size="26" font-weight="700" fill="#594400">10/13</text>
+          <text x="792" y="186" font-size="10.5" fill="#594400">exec summary, risks,</text>
+          <text x="792" y="199" font-size="10.5" fill="#594400">actions, goals, people</text>
+        </g>
+
+        <!-- arrows -->
+        <line x1="182" y1="135" x2="196" y2="135" stroke="#31554f" stroke-width="1.6" marker-end="url(#ar)"/>
+        <line x1="374" y1="135" x2="388" y2="135" stroke="#31554f" stroke-width="1.6" marker-end="url(#ar)"/>
+        <line x1="566" y1="135" x2="580" y2="135" stroke="#31554f" stroke-width="1.6" marker-end="url(#ar)"/>
+        <line x1="758" y1="135" x2="772" y2="135" stroke="#31554f" stroke-width="1.6" marker-end="url(#ar)"/>
+
+        <!-- annotation: the prior claim -->
+        <g id="prior-claim">
+          <title>The prior agent's report asserted stages a to c hold and d to e fail</title>
+          <rect x="8" y="16" width="756" height="42" rx="6" fill="#f7e3e3" stroke="#963333" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="22" y="34" font-size="11.5" font-weight="700" fill="#963333">Prior report (09:30): &ldquo;a–c hold, d–e fail — no finalized brief contains a Slack citation.&rdquo;</text>
+          <text x="22" y="50" font-size="11" fill="#963333">Measured pre-fix, at rank 13/27 and 1.26% of context. Both numbers moved before 10:00.</text>
+        </g>
+
+        <!-- footer note -->
+        <g id="note">
+          <title>Stage d is partly instructed by the strategy prompt; stage e is not instructed anywhere</title>
+          <rect x="8" y="228" width="964" height="76" rx="6" fill="#e8f1ee" stroke="#c8ddd6"/>
+          <text x="24" y="250" font-size="11.5" font-weight="700" fill="#182d2a">Read (d) and (e) differently — they are not the same evidence.</text>
+          <text x="24" y="268" font-size="11" fill="#31554f">(d) is partly INSTRUCTED: the strategy task says &ldquo;add one for each remaining record that supports the deal, including the Slack account-team updates&rdquo;.</text>
+          <text x="24" y="284" font-size="11" fill="#31554f">(e) is instructed NOWHERE. The model reaches for the Slack update on relevance alone — which is why 10/13 is an earned result and not a manufactured one.</text>
+        </g>
+      </svg>
+      <figcaption>
+        Counts are over 13 live OpenRouter runs (<code>google/gemini-3.5-flash-lite</code>) on isolated throwaway
+        databases, driven through the production workflow by a probe adapted from <code>scripts/brief-quality-live.ts</code>.
+        Stage (e) is measured by walking every claim in the brief <em>except</em> those inside <code>sourceEvidence</code>
+        and partitioning citations by evidenceId prefix.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ RUN TABLE ============ -->
+  <section>
+    <div class="sechead">
+      <p class="eyebrow">The distribution</p>
+      <h2>All 13 runs, per stage</h2>
+    </div>
+    <p class="small muted" style="margin-top:-6px;margin-bottom:16px">
+      OPP-1002 and OPP-1003 pass (e) in every run. OPP-1001 passes in 2 of 5 — that variance is the only residual
+      risk, and it is explained two sections down.
+    </p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Run</th><th>Artifact measured</th>
+            <th>(a) manifest</th><th>(b) % of context</th><th>(c) specialist claims</th>
+            <th>(d) Source Evidence</th><th>(e) shapes a section</th><th>Quality violations</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="rowgroup"><td colspan="8">OPP-1001 · USR-5001 · (e) 2 of 5</td></tr>
+          <tr><td class="mono">#1</td><td class="small">strategy:1 draft</td><td class="num">2 of 22</td><td class="num">3.87%</td><td class="num">0</td><td class="num">2</td><td><span class="badge b-fail">0</span></td><td class="num">0</td></tr>
+          <tr><td class="mono">#2</td><td class="small">strategy:1 draft</td><td class="num">2 of 22</td><td class="num">3.87%</td><td class="num">1</td><td class="num">2</td><td><span class="badge b-pass">1</span> action rationale</td><td class="num">0</td></tr>
+          <tr><td class="mono">#3</td><td class="small"><strong>finalized export</strong></td><td class="num">2 of 22</td><td class="num">3.87%</td><td class="num">2</td><td class="num">2</td><td><span class="badge b-fail">0</span></td><td class="num">0</td></tr>
+          <tr><td class="mono">#4</td><td class="small"><strong>finalized export</strong></td><td class="num">2 of 22</td><td class="num">3.87%</td><td class="num">3</td><td class="num">2</td><td><span class="badge b-pass">2</span> buyer goals, stakeholder</td><td class="num">0</td></tr>
+          <tr><td class="mono">#5</td><td class="small">strategy:1 draft</td><td class="num">2 of 22</td><td class="num">3.87%</td><td class="num">2</td><td class="num">2</td><td><span class="badge b-fail">0</span></td><td class="num">0</td></tr>
+
+          <tr class="rowgroup"><td colspan="8">OPP-1002 · USR-5002 · (e) 4 of 4</td></tr>
+          <tr><td class="mono">#1</td><td class="small">strategy:1 draft</td><td class="num">2 of 22</td><td class="num">4.36%</td><td class="num">3</td><td class="num">2</td><td><span class="badge b-pass">3</span> negotiation ×2, action</td><td class="num">0</td></tr>
+          <tr><td class="mono">#2</td><td class="small">strategy:1 draft</td><td class="num">2 of 22</td><td class="num">4.36%</td><td class="num">3</td><td class="num">2</td><td><span class="badge b-pass">2</span> negotiation, action</td><td class="num">0</td></tr>
+          <tr><td class="mono">#3</td><td class="small">strategy:1 draft</td><td class="num">2 of 22</td><td class="num">4.36%</td><td class="num">2</td><td class="num">2</td><td><span class="badge b-pass">2</span> negotiation, goals</td><td class="num">0</td></tr>
+          <tr><td class="mono">#4</td><td class="small">strategy:1 draft</td><td class="num">2 of 22</td><td class="num">4.36%</td><td class="num">2</td><td class="num">2</td><td><span class="badge b-pass">2</span> negotiation ×2</td><td class="num">0</td></tr>
+
+          <tr class="rowgroup"><td colspan="8">OPP-1003 · USR-5003 · (e) 4 of 4</td></tr>
+          <tr><td class="mono">#1</td><td class="small">strategy:1 draft</td><td class="num">3 of 22</td><td class="num">6.88%</td><td class="num">4</td><td class="num">3</td><td><span class="badge b-pass">3</span> exec summary, negotiation, stakeholder</td><td class="num">0</td></tr>
+          <tr><td class="mono">#2</td><td class="small">strategy:1 draft</td><td class="num">3 of 22</td><td class="num">6.88%</td><td class="num">3</td><td class="num">3</td><td><span class="badge b-pass">3</span> exec summary, negotiation ×2</td><td class="num">0</td></tr>
+          <tr><td class="mono">#3</td><td class="small">strategy:1 draft</td><td class="num">3 of 22</td><td class="num">6.88%</td><td class="num">2</td><td class="num">2</td><td><span class="badge b-pass">3</span> exec summary, negotiation, buyer goals</td><td class="num">0</td></tr>
+          <tr><td class="mono">#4</td><td class="small">strategy:1 draft</td><td class="num">3 of 22</td><td class="num">6.88%</td><td class="num">1</td><td class="num">3</td><td><span class="badge b-pass">3</span> exec summary, negotiation, stakeholder</td><td class="num">0</td></tr>
+        </tbody>
+        <tfoot>
+          <tr style="background:var(--muted);font-weight:700">
+            <td colspan="2" class="small">13 live runs · totals</td>
+            <td class="num">13/13</td><td class="num">3.87–6.88%</td><td class="num">12/13</td><td class="num">13/13</td>
+            <td class="num">10/13 · 24 claims</td><td class="num">0</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="grid g2" style="margin-top:18px">
+      <div class="card">
+        <h3>Two soundness checks worth stating</h3>
+        <ul class="tight small">
+          <li><strong>(d) cannot be faked by the model.</strong> <code>validation.ts:1284–1300</code> drops any
+            <code>sourceEvidence</code> entry whose <code>evidenceId</code> is absent from the manifest, whose claims are not
+            supported by <em>that specific record</em>, or whose declared <code>sourceType</code> disagrees with the record's
+            real type. A surviving <code>sourceType: 'slack'</code> row provably cites a real Slack record.</li>
+          <li><strong>(e) is measured from evidenceIds, not from any self-declared field</strong> — every citation's
+            <code>evidenceId</code> prefix, resolved against the run manifest, outside <code>sourceEvidence</code>.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Where Slack lands when it lands</h3>
+        <p class="small muted" style="margin-top:0">Section distribution of the 24 Slack-cited claims found outside Source Evidence across the 13 runs:</p>
+        <ul class="tight small">
+          <li><code>negotiationState</code> — 11 (risks and leverage)</li>
+          <li><code>executiveSummary</code> — 4 (all OPP-1003, all SLK-9009)</li>
+          <li><code>stakeholderMap</code> — 3</li>
+          <li><code>buyerGoalsAndBusinessDrivers</code> — 3</li>
+          <li><code>recommendedNextActions</code> — 3 (rationale of the top action)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TIMELINE ============ -->
+  <section>
+    <div class="sechead">
+      <p class="eyebrow">Reconciling the conflicting evidence</p>
+      <h2>Why the prior report was right when written and wrong now</h2>
+    </div>
+
+    <div class="card tl">
+      <div class="tl-item">
+        <div class="tl-time">08:11<br><span class="mono small">8432a39</span></div>
+        <div><strong>Salesforce candidate window split from the CRM completeness guarantee.</strong>
+          <span class="muted small">First of the crowding-out fixes; Salesforce had been accumulating RRF mass by appearing in every candidate list.</span></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">09:30<br><span class="mono small">49d0c97</span></div>
+        <div><strong>The prior report is written and committed</strong> as <code>samples/slack-impact-comparison.md</code>.
+          <span class="muted small">Honest, well-instrumented, and accurate as of that moment: 4 live runs, Slack at rank 13–16 of 27 and 1.26% of context, one validated Slack claim, zero finalized briefs citing Slack. It also correctly diagnosed the cause and named the fix.</span></div>
+      </div>
+      <div class="tl-item killer">
+        <div class="tl-time">09:42<br><span class="mono small">d2cf83d</span></div>
+        <div><strong>The report's own recommended fix ships — 12 minutes later.</strong>
+          <code>GONG_TRANSCRIPT_CANDIDATE_WINDOW = 2</code> in <code>retriever.ts</code>. The commit comment quotes the report's
+          84.6%/1.26% measurement verbatim as its justification.
+          <span class="muted small">Gong transcript chunks 18 → 6–7, manifest 27 → 22, Slack rows admitted 1 → <strong>2–3</strong>,
+          Slack share 1.26% → <strong>3.87–6.88%</strong>, and the best-ranked Slack row per deal moved from rank 13 to
+          rank <strong>1st, 3rd and 1st</strong> for OPP-1001/1002/1003 respectively (all admitted Slack rows now fall in ranks 1–11 of 22).<br>
+          <em>Provenance of these figures: the post-fix half of every pair is measured by this probe. The pre-fix half
+          (18, 27, 1.26%, rank 13) is quoted from <code>slack-impact-comparison.md</code> and was not independently
+          reproduced — pre-fix code was never re-run here.</em></span></div>
+      </div>
+      <div class="tl-item killer">
+        <div class="tl-time">18:44<br><span class="mono small">40d4a0f</span></div>
+        <div><strong>A second, independent Slack-specific claim-killer is fixed.</strong>
+          <code>safeGeneratedProse</code> matched the chat-role marker as <code>role\s*:</code> with no word boundary — so
+          <code>authorRole:</code>, a field on <em>every</em> Slack update, made any claim quoting a Slack record read as prompt
+          injection and get discarded.
+          <span class="muted small">The pre-fix report attributed everything to volume asymmetry; there were in fact two causes, and this one was invisible to it.</span></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">19:14<br><span class="mono small">0bb7d0e</span></div>
+        <div><strong>The grounding-fix merge lands</strong> along with the brief-quality evaluation suite that now enforces
+          &ldquo;Source Evidence must cite <code>slack</code>&rdquo; as a hard rule.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">19:18+<br><span class="mono small">this probe</span></div>
+        <div><strong>13 live runs on current <code>HEAD</code>:</strong> (d) 13/13, (e) 10/13, 0 violations.</div>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:20px">
+      <h3>Reading the parent's two data points against the prior report</h3>
+      <p class="small" style="margin-bottom:0">
+        Both are correct and they are not in conflict. The &ldquo;10 runs cited slack in Source Evidence&rdquo; measurement and
+        the production run citing <code>slack/account_team_updates.tsv</code> were both <strong>post-fix</strong> and both measure
+        stage (d) — which now passes 100%. The prior agent's &ldquo;neither <em>checked-in</em> final brief&rdquo; was also correct,
+        and remains correct: <code>samples/</code> was generated before any of these fixes.
+        <strong>Nobody was wrong; the code changed underneath the claim.</strong>
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ RESIDUAL ============ -->
+  <section>
+    <div class="sechead">
+      <p class="eyebrow">What is genuinely still open</p>
+      <h2>One broken thing, one structural quirk, one honesty note</h2>
+    </div>
+
+    <div class="grid g3">
+      <div class="card" style="border-left:4px solid var(--destructive)">
+        <h3><span class="badge b-fail">Broken</span> The checked-in samples</h3>
+        <p class="small">
+          <code>pnpm eval:brief-quality</code> exits 1 with <strong>16 violations</strong> against
+          <code>samples/</code>. Two of them are literally
+          <em>&ldquo;Source Evidence cites no <code>slack</code> evidence although the authorized manifest reaches
+          it.&rdquo;</em> <code>normal-opportunity-brief.json</code> cites <strong>one</strong> source type (<code>crm</code>).
+        </p>
+        <p class="small muted">These artifacts were exported before every fix above. They are the only reason any part of
+          Scenario 4 is unmet on the submission as it currently stands.</p>
+      </div>
+
+      <div class="card" style="border-left:4px solid var(--attention)">
+        <h3><span class="badge b-warn">Variance</span> OPP-1001 is the weak cell</h3>
+        <p class="small">
+          (e) passes 2 of 5 for OPP-1001 versus 4 of 4 for both other deals — and
+          <code>samples/normal-opportunity-brief.json</code> <em>is</em> OPP-1001.
+        </p>
+        <p class="small">
+          The cause is content, not code. Per <code>generation.json</code>, SLK-9003 is OPP-1001's
+          <code>ambiguity_or_conflict</code> row — and it is <code>source_access_level = sensitive_pricing</code>, while
+          USR-5001 has <code>can_view_sensitive_pricing = false</code>. So OPP-1001's only reachable Slack content is
+          <em>reinforces a known fact</em> and <em>adds missing context</em>: the two least decision-shaping kinds.
+        </p>
+        <p class="small muted"><strong>This is correct permission behaviour, not a defect.</strong> OPP-1003/USR-5003 can
+          see its conflict row, which is exactly why it passes (e) 4/4 on the Executive Summary.</p>
+      </div>
+
+      <div class="card" style="border-left:4px solid var(--primary)">
+        <h3><span class="badge b-neutral">Note</span> Stage (d) is partly instructed</h3>
+        <p class="small">
+          The strategy task added at 18:44 says: <em>&ldquo;add one for each remaining record that supports the deal,
+          <strong>including the Slack account-team updates</strong>&hellip;&rdquo;</em>
+        </p>
+        <p class="small">
+          That is a mild thumb on the scale for the <em>bibliography</em>. It is defensible — each entry must still quote its
+          own record and pass validation, so it produces a complete evidence list, not a fabricated finding. But it means
+          <strong>(d) alone should never be quoted as proof of Scenario 4</strong>.
+        </p>
+        <p class="small muted">Nothing instructs (e). That is what makes 10/13 meaningful.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ OPTIONS ============ -->
+  <section>
+    <div class="sechead">
+      <p class="eyebrow">The decision</p>
+      <h2>Four options — two already shipped, two to reject, one to do</h2>
+    </div>
+
+    <div class="grid" style="gap:16px">
+
+      <div class="card opt rej">
+        <h3>Option 1 — Reserve context for Slack; instruct the strategy agent to preserve a Slack-backed finding
+          <span class="badge b-fail">Reject</span></h3>
+        <p class="small muted" style="margin-top:0">The prior agent's proposal.</p>
+        <ul class="small">
+          <li><strong>It is already half-shipped</strong>, as the <code>sourceEvidence</code> instruction at 18:44 — which is
+            precisely why (d) is not usable as evidence for §8.4.</li>
+          <li><strong>Going further crosses the line.</strong> &ldquo;Preserve a relevant non-duplicative Slack-backed
+            finding&rdquo; sounds conditional, but the model is the only judge of &ldquo;relevant&rdquo;, and it has just been
+            told the answer the operator wants. The condition collapses into a quota.</li>
+          <li><strong>Where the line sits:</strong> instructing <em>coverage of the evidence list</em> is fair representation —
+            it changes what gets enumerated, not what gets concluded. Instructing <em>a finding be carried into a
+            conclusion</em> is a forced citation — it changes the analysis to satisfy a demo.</li>
+          <li><strong>It would destroy the result it is meant to produce.</strong> Right now the honest claim is: the model
+            chose the Slack update on relevance, unprompted, in 10 of 13 runs. Add the instruction and that sentence can
+            never be said again — the project's entire thesis is grounded, unforced output.</li>
+        </ul>
+        <p class="verdict-line">Unnecessary (it already passes without it) and actively harmful to the submission's central claim.</p>
+      </div>
+
+      <div class="card opt done">
+        <h3>Option 2 — Per-source-type retrieval floors, no prompt instruction
+          <span class="badge b-pass">Already shipped, and working</span></h3>
+        <ul class="small">
+          <li>The parent asked whether the existing <code>gong_transcript</code> cap is doing its job.
+            <strong>Measured answer: yes, decisively.</strong> It is the single change that turned this requirement around.</li>
+          <li>Slack moved from rank 13 of 27 to <strong>rank 1–3 of 22</strong>; context share from 1.26% to
+            <strong>3.87–6.88%</strong>; admitted Slack rows from 1 to <strong>2–3</strong>.</li>
+          <li>All six source types now share the same non-primary candidate window of 2, so no source can accumulate
+            fusion mass by sheer count. Retrieval recall was checked against <code>pnpm eval:deterministic</code> when it landed.</li>
+        </ul>
+        <p class="verdict-line">Nothing left to do. This option is spent — it is the fix.</p>
+      </div>
+
+      <div class="card opt rej">
+        <h3>Option 3 — A UI button that regenerates a new Slack evidence set and shows how the brief changes
+          <span class="badge b-fail">Reject for this submission</span></h3>
+        <p class="small muted" style="margin-top:0">Assessed seriously — it is the most <em>direct</em> reading of §8.4, and it would exercise the Mandatory Data-Generation Subtask live. But:</p>
+        <ul class="small">
+          <li><strong>The demonstration already exists at zero cost.</strong>
+            <code>samples/slack-impact-comparison.md</code> documents a real A/B: the same opportunity, same persona, same
+            live pipeline, run twice with only <code>can_read</code> on the Slack permission grant flipped — showing the Slack
+            chunk mechanically leaving the pool and the next-best candidate backfilling it. That is a cleaner controlled
+            experiment than regeneration, because regeneration changes the content <em>and</em> the ranking at once.</li>
+          <li><strong>Cost is not small.</strong> A button means a generation endpoint, fixture write-back, corpus
+            re-embedding, cache invalidation, a diff view, and its own permission story — a day-plus of work touching
+            <code>apps/api</code>, <code>apps/web</code> and the ingest path.</li>
+          <li><strong>The risks are concrete.</strong> Re-embedding mid-demo is slow and can fail live;
+            <code>evals/golden-retrieval.json</code> pins expected retrieval against the current fixtures and would break;
+            <code>runs_one_active_opportunity_uq</code> makes &ldquo;regenerate then immediately re-run&rdquo; collide with an
+            in-flight run; and a fresh generation could produce a Slack set that happens <em>not</em> to change the brief,
+            turning the headline demo into a coin flip in front of a reviewer.</li>
+          <li><strong>It also weakens reproducibility</strong>, which §4 explicitly asks for
+            (&ldquo;replayable traces&hellip; consistently across runs&rdquo;). Mutating the corpus from the UI makes the
+            checked-in artifacts unreproducible.</li>
+        </ul>
+        <p class="verdict-line">Genuinely good post-submission idea; wrong thing to build the day the requirement already passes.</p>
+      </div>
+
+      <div class="card opt rec">
+        <h3>Option 4 — Regenerate the sample artifacts
+          <span class="badge b-pass">Recommended</span></h3>
+        <ul class="small">
+          <li>It is the <strong>only</strong> thing actually broken. 16 violations, two of them the Slack rule itself.</li>
+          <li>It requires no code change, no prompt change, and no new surface — the pipeline that produces a passing
+            artifact already exists and was just measured 13 times.</li>
+        </ul>
+      </div>
+
+      <div class="card opt" style="border-left-color: var(--ring)">
+        <h3>Option 5 — The addition I would make to Option 4 <span class="badge b-neutral">Do this too</span></h3>
+        <ul class="small">
+          <li><strong>Gate sample check-in on stage (e), not stage (d).</strong> The brief-quality eval currently enforces
+            &ldquo;Source Evidence cites <code>slack</code>&rdquo; — that is (d), and (d) is partly instructed. A regenerated
+            OPP-1001 artifact could pass the eval and still fail §8.4, because (e) is 2-in-5 for that deal.</li>
+          <li><strong>Be aware there is no automated gate for (e) today.</strong> <code>brief-quality.ts</code> rule 3 reads
+            <code>entry.sourceType</code> on <code>sourceEvidence</code> entries only — so <code>pnpm eval:brief-quality</code>
+            passing is <em>not</em> evidence that §8.4 is satisfied. Until something checks it, the check is this one-line
+            predicate over the exported brief JSON:
+            <br><code>any claim outside <strong>sourceEvidence</strong> carrying a citation whose evidenceId starts with "slack:"</code>
+            <br><span class="muted">Sections to walk: <code>executiveSummary</code>, <code>buyerGoalsAndBusinessDrivers</code>,
+            <code>negotiationState</code>, <code>stakeholderMap</code> (including each stakeholder's own claims), and
+            <code>recommendedNextActions.actions[].claims</code>. Reporting it as a defect only, per instruction — no eval rule was added.</span></li>
+          <li><strong>(d) is 13/13 at &ldquo;≥1 Slack row&rdquo;, but not at &ldquo;every Slack row&rdquo;.</strong> In one
+            OPP-1003 run, SLK-9008 was cited elsewhere in the brief yet did not get its own Source Evidence entry, despite the
+            prompt asking for one per record. Harmless for §8.4, worth knowing before anyone describes Source Evidence as an
+            exhaustive manifest listing.</li>
+          <li><strong>Source the Scenario 4 evidence from OPP-1003</strong> (or OPP-1002). §8.4 does not name an opportunity,
+            and OPP-1003 passes (e) 4/4 with the <code>ambiguity_or_conflict</code> update carrying the Executive Summary —
+            the strongest possible demonstration, and it doubles as the Scenario 2 approval-routing artifact.</li>
+          <li><strong>Point the reviewer at the existing badge.</strong>
+            <code>deal-workspace.mapper.ts:443</code> already computes <code>accountTeamUpdateImpact</code> per section by
+            resolving citations to <code>sourceType === 'slack'</code>, and <code>deal-brief.tsx</code> renders it as an
+            &ldquo;Account-team update impact&rdquo; badge. On a passing OPP-1003 run that badge lights up on
+            <strong>Executive Summary</strong> and <strong>Negotiation State</strong> — not merely on Source Evidence.
+            That badge <em>is</em> the stage-(e) instrument, already shipped and already wired into the guided tour.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RECOMMENDATION ============ -->
+  <section>
+    <div class="sechead">
+      <p class="eyebrow">Recommendation</p>
+      <h2>Do not change application behaviour. Fix the artifacts, and gate them on the right measurement.</h2>
+    </div>
+
+    <div class="callout ok">
+      <ol style="margin:0;padding-left:20px">
+        <li style="margin-bottom:10px"><strong>Ship no code change for this requirement.</strong> Options 1 and 3 are both
+          rejected. The retrieval fix (Option 2) already landed and is measurably doing the work.</li>
+        <li style="margin-bottom:10px"><strong>Regenerate <code>samples/</code> from live runs on current <code>HEAD</code></strong> — this is
+          already in flight in another session, so this is a message to that work rather than a new task.</li>
+        <li style="margin-bottom:10px"><strong>Tell that agent to check stage (e), not just the eval.</strong> Before checking a
+          brief in, confirm at least one <code>slack:</code> evidenceId appears on a claim <em>outside</em>
+          <code>sourceEvidence</code>. Passing <code>pnpm eval:brief-quality</code> is necessary but not sufficient for §8.4.</li>
+        <li style="margin-bottom:10px"><strong>Make OPP-1003 the Scenario 4 exhibit.</strong> 4/4 on (e), with the conflict-introducing
+          generated update carrying the Executive Summary.</li>
+        <li style="margin-bottom:10px"><strong>Update <code>samples/slack-impact-comparison.md</code>'s conclusion.</strong> Its A/B
+          experiment is still valuable and should be kept, but its headline finding — &ldquo;no finalized brief contains a
+          Slack citation&rdquo; — and its &ldquo;what would change this&rdquo; recommendation both describe a code state that no
+          longer exists. Shipping it as-is tells a reviewer the system fails a requirement it passes.</li>
+        <li><strong>Say the variance out loud in the technical overview.</strong> 10/13 is a real and defensible number for an
+          LLM-synthesised brief, and stating it is far stronger than implying determinism. Presenting the honest
+          distribution is more convincing to this particular reviewer than a suspiciously perfect one.</li>
+      </ol>
+    </div>
+
+    <p class="small muted" style="margin-top:20px">
+      <strong>Method.</strong> 13 live OpenRouter runs (<code>google/gemini-3.5-flash-lite</code>, provider <code>openrouter</code>,
+      nonzero token usage on every call) driven through the production workflow — authorized retrieval, three specialists,
+      strategy synthesis, and the same grounding validation — by a probe adapted from <code>scripts/brief-quality-live.ts</code>
+      onto its own randomly-named throwaway database, migrated and ingested from <code>fixtures/cato</code> and dropped
+      afterwards. Neither <code>slacato_demo</code> nor the Railway deployment was touched. The one measurement mechanic:
+      because <code>runs_one_active_opportunity_uq</code> treats <code>awaiting_approval</code> as active, each run's status was
+      set to <code>cancelled</code> on the throwaway database <em>after</em> all of its data had been captured, so the next
+      iteration for the same opportunity could start. No application source, <code>samples/</code>, docs or README were modified,
+      and nothing was committed.
+    </p>
+    <p class="small muted">
+      <strong>Design source.</strong> Of the three sources the Lavish guidance ranks, this page uses <strong>(2) the subject
+      project's own design system</strong>: the tokens in <code>apps/web/src/styles/globals.css</code> are reproduced verbatim
+      — <code>--brand-forest #182d2a</code>, <code>--primary #0d483d</code>, <code>--accent #81e5ac</code>,
+      <code>--attention #f5c13d</code>, <code>--muted-foreground #31554f</code>, <code>--card #fbfcfb</code>,
+      <code>--radius 0.5rem</code>, Geist with a system-ui fallback. The Lavish DaisyUI CDN fallback was not used because the
+      project does have a design system to match. The app ships a single palette and declares <code>color-scheme: light</code>
+      with no dark token set, so this artifact deliberately does the same rather than inventing a dark theme the product does
+      not have.
+    </p>
+  </section>
+
+</div>
+</body>
+</html>

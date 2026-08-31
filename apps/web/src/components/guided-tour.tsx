@@ -174,7 +174,7 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     route: '/deals/OPP-1001',
     scenario: 'Scenario 4 \u00b7 Generated Slack updates',
     title: 'See the generated Slack updates change the answer',
-    body: 'We added a reviewed, synthetic Slack channel of account-team updates to the supplied CRM, call, and pricing data. The spotlight is on the generated brief’s own Source Evidence: it lists every authorized record the output summarizes, the slack/account_team_updates rows among them, and anything the chatter moved carries an "Account-team update impact" tag so you can tell what it actually changed.'
+    body: 'We added a reviewed, synthetic Slack channel of account-team updates to the supplied CRM, call, and pricing data. The spotlight is on the Source Evidence of the brief you are reading: it lists every authorized record behind that brief, the slack/account_team_updates rows among them, and anywhere on this page that the chatter moved the answer is tagged "Account-team update impact" so you can tell what it actually changed.'
   },
   {
     target: 'persona-USR-5003',

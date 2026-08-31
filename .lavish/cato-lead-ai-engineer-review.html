@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cato GTM AI Engineer Submission Review</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --forest: #182d2a;
+      --medium: #0d483d;
+      --mint: #81e5ac;
+      --pale: #def6ef;
+      --background: #f6f6f6;
+      --card: #fbfcfb;
+      --muted: #e8f1ee;
+      --muted-fg: #31554f;
+      --border: #c8ddd6;
+      --ring: #158864;
+      --danger: #963333;
+      --danger-bg: #f8e8e8;
+      --warning: #7a5900;
+      --warning-bg: #fff3ce;
+      --info: #1f5572;
+      --info-bg: #e8f3f8;
+      --shadow: 0 18px 50px rgba(24, 45, 42, .09);
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--background); }
+    body { margin: 0; color: var(--forest); background: var(--background); font-family: "Geist", "Avenir Next", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; }
+    a { color: var(--medium); }
+    button, input, select, textarea { font: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid var(--mint); outline-offset: 2px; }
+    .shell { width: min(1480px, calc(100% - 32px)); margin: 0 auto; }
+    .topbar { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid rgba(200,221,214,.85); background: rgba(246,246,246,.93); backdrop-filter: blur(14px); }
+    .topbar-inner { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { font-weight: 800; letter-spacing: -.02em; }
+    .nav { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .nav a { color: var(--muted-fg); text-decoration: none; font-size: 13px; font-weight: 700; padding: 7px 10px; border-radius: 999px; }
+    .nav a:hover { background: var(--muted); color: var(--forest); }
+    .hero { margin-top: 26px; background: linear-gradient(130deg, var(--forest) 0%, #0f5145 70%, #19705d 100%); color: #f4fff9; border-radius: 24px; padding: clamp(28px, 5vw, 64px); box-shadow: var(--shadow); overflow: hidden; position: relative; }
+    .hero::after { content: ""; position: absolute; width: 420px; height: 420px; border-radius: 50%; right: -170px; top: -210px; background: rgba(129,229,172,.18); }
+    .eyebrow { text-transform: uppercase; letter-spacing: .13em; font-size: 12px; font-weight: 800; color: var(--mint); }
+    h1 { margin: 10px 0 14px; max-width: 930px; font-size: clamp(34px, 5vw, 66px); line-height: 1.03; letter-spacing: -.05em; }
+    .hero-lede { margin: 0; max-width: 900px; font-size: clamp(17px, 2vw, 22px); color: #d9f4e8; }
+    .verdict-row { margin-top: 34px; display: grid; grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(150px, .5fr)); gap: 12px; position: relative; z-index: 1; }
+    .hero-card { min-width: 0; padding: 18px; border-radius: var(--radius); background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); }
+    .hero-card strong { display: block; font-size: 28px; letter-spacing: -.03em; }
+    .hero-card span { display: block; margin-top: 4px; color: #d9f4e8; font-size: 13px; }
+    .hero-card.verdict strong { font-size: clamp(22px, 3vw, 36px); color: #fff; }
+    main { padding: 28px 0 64px; }
+    section { margin-top: 26px; scroll-margin-top: 84px; }
+    .section-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
+    .section-head h2 { margin: 0; font-size: clamp(25px, 3vw, 38px); letter-spacing: -.035em; }
+    .section-head p { margin: 0; max-width: 720px; color: var(--muted-fg); }
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(24,45,42,.045); }
+    .panel-pad { padding: 22px; }
+    .grid-2, .grid-3, .grid-4 { display: grid; gap: 14px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+    .scorecard { padding: 20px; min-width: 0; }
+    .scorecard .label { color: var(--muted-fg); font-size: 13px; font-weight: 750; }
+    .scorecard .score { font-size: 34px; font-weight: 850; letter-spacing: -.04em; }
+    .bar { height: 8px; border-radius: 99px; overflow: hidden; background: var(--muted); margin: 10px 0 8px; }
+    .bar > span { display: block; height: 100%; background: var(--medium); border-radius: inherit; }
+    .scorecard p { margin: 0; color: var(--muted-fg); font-size: 13px; }
+    .callout { padding: 20px 22px; border-radius: var(--radius); border: 1px solid; }
+    .callout strong { display: block; margin-bottom: 4px; font-size: 17px; }
+    .callout-danger { background: var(--danger-bg); border-color: #e6bcbc; color: #6f2323; }
+    .callout-info { background: var(--info-bg); border-color: #bed8e5; color: #17455d; }
+    .callout-success { background: var(--pale); border-color: #a7ddc0; color: var(--medium); }
+    .axis { padding: 24px; min-width: 0; }
+    .axis h3 { margin: 0 0 4px; font-size: 24px; }
+    .axis .axis-score { font-size: 13px; color: var(--muted-fg); font-weight: 750; }
+    .axis ul { margin: 16px 0 0; padding-left: 19px; }
+    .axis li + li { margin-top: 8px; }
+    .axis .worst { margin-top: 18px; padding: 12px 14px; border-left: 4px solid var(--danger); background: var(--danger-bg); border-radius: 8px; }
+    .consensus { display: grid; grid-template-columns: 1fr 1fr 1fr 1.15fr; gap: 12px; }
+    .consensus .panel { padding: 18px; }
+    .consensus .big { font-size: 29px; font-weight: 850; letter-spacing: -.04em; }
+    .consensus small { color: var(--muted-fg); }
+    .status-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 5px 9px; font-size: 12px; font-weight: 800; background: #fff; white-space: nowrap; }
+    .pill-high { color: #772727; border-color: #e2b4b4; background: var(--danger-bg); }
+    .pill-medium { color: var(--warning); border-color: #ead79d; background: var(--warning-bg); }
+    .pill-low { color: var(--info); border-color: #bdd8e5; background: var(--info-bg); }
+    .pill-complete { color: var(--medium); border-color: #a7ddc0; background: var(--pale); }
+    .pill-partial { color: var(--warning); border-color: #ead79d; background: var(--warning-bg); }
+    .pill-missing { color: #772727; border-color: #e2b4b4; background: var(--danger-bg); }
+    .pill-rejected { color: var(--muted-fg); background: var(--muted); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; padding: 16px; border-bottom: 1px solid var(--border); }
+    .toolbar label { display: grid; gap: 5px; font-size: 12px; font-weight: 750; color: var(--muted-fg); }
+    .toolbar select, .toolbar input { min-height: 38px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--forest); padding: 7px 10px; }
+    .toolbar input { min-width: 250px; }
+    .table-wrap { overflow-x: auto; border-radius: 0 0 var(--radius) var(--radius); }
+    table { width: 100%; border-collapse: collapse; min-width: 980px; }
+    th { position: sticky; top: 64px; z-index: 3; background: #eef5f2; color: var(--muted-fg); text-align: left; text-transform: uppercase; letter-spacing: .06em; font-size: 11px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    td { vertical-align: top; padding: 14px; border-bottom: 1px solid #e3ece9; font-size: 13px; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #f7fbf9; }
+    .finding-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 850; color: var(--medium); }
+    .finding-title { display: block; font-weight: 850; font-size: 14px; margin-bottom: 5px; }
+    .finding-detail { color: var(--muted-fg); }
+    .evidence { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; font-size: 11px; color: #244b44; overflow-wrap: anywhere; }
+    .hidden-row { display: none; }
+    details { border-top: 1px solid var(--border); }
+    details:first-child { border-top: 0; }
+    summary { cursor: pointer; list-style: none; padding: 18px 20px; display: flex; gap: 14px; align-items: center; justify-content: space-between; font-weight: 850; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--muted); }
+    details[open] summary::after { content: "−"; }
+    .detail-body { padding: 0 20px 20px; }
+    .req-list { display: grid; grid-template-columns: 1fr auto; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .req-list > div { padding: 10px 12px; border-bottom: 1px solid #e1ebe7; }
+    .req-list > div:nth-last-child(-n+2) { border-bottom: 0; }
+    .req-list .req { min-width: 0; }
+    .req-list .req strong { display: block; }
+    .req-list .req span { color: var(--muted-fg); font-size: 12px; }
+    .req-list .state { display: flex; align-items: center; justify-content: flex-end; }
+    .validation-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 12px; }
+    .validation-item { padding: 16px; }
+    .validation-item strong { display: block; font-size: 18px; }
+    .validation-item span { color: var(--muted-fg); font-size: 12px; }
+    .pass { border-top: 4px solid var(--ring); }
+    .fail { border-top: 4px solid var(--danger); }
+    .warn { border-top: 4px solid #d5a82b; }
+    .sequence { counter-reset: step; display: grid; gap: 10px; }
+    .sequence .step { counter-increment: step; display: grid; grid-template-columns: 38px 1fr auto; gap: 12px; align-items: center; padding: 16px; }
+    .sequence .step::before { content: counter(step); width: 32px; height: 32px; display: grid; place-items: center; color: white; background: var(--medium); border-radius: 50%; font-weight: 850; }
+    .sequence h4 { margin: 0; }
+    .sequence p { margin: 3px 0 0; color: var(--muted-fg); font-size: 13px; }
+    .feedback { padding: clamp(22px, 4vw, 38px); }
+    .feedback fieldset { border: 0; padding: 0; margin: 0; }
+    .feedback legend { font-size: 18px; font-weight: 850; margin-bottom: 10px; }
+    .choices { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+    .choice { display: flex; align-items: flex-start; gap: 9px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: white; }
+    .choice input { margin-top: 4px; }
+    textarea { width: 100%; min-height: 110px; resize: vertical; border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: white; color: var(--forest); }
+    .btn { border: 0; border-radius: 9px; padding: 11px 16px; font-weight: 850; cursor: pointer; }
+    .btn-primary { background: var(--medium); color: white; }
+    .btn-secondary { background: var(--muted); color: var(--forest); }
+    .feedback-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+    .queued { color: var(--medium); font-size: 13px; font-weight: 750; }
+    footer { padding: 24px 0 44px; color: var(--muted-fg); font-size: 12px; }
+    @media (max-width: 1050px) {
+      .verdict-row, .consensus, .validation-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 20px, 1480px); }
+      .topbar-inner { align-items: flex-start; padding: 12px 0; }
+      .nav { display: none; }
+      .hero { border-radius: 16px; padding: 26px 20px; }
+      .verdict-row, .grid-2, .grid-3, .grid-4, .consensus, .validation-grid, .choices { grid-template-columns: 1fr; }
+      .section-head { align-items: flex-start; flex-direction: column; }
+      .toolbar { align-items: stretch; flex-direction: column; }
+      .toolbar input { min-width: 0; width: 100%; }
+      .req-list { grid-template-columns: 1fr; }
+      .req-list > div { border-bottom: 0; }
+      .req-list .state { justify-content: flex-start; padding-top: 0; border-bottom: 1px solid #e1ebe7; }
+      .req-list > div:last-child { border-bottom: 0; }
+      th { top: 0; }
+      .sequence .step { grid-template-columns: 38px 1fr; }
+      .sequence .step .pill { grid-column: 2; justify-self: start; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <div class="brand">Cato submission review</div>
+      <nav class="nav" aria-label="Report sections">
+        <a href="#verdict">Verdict</a><a href="#axes">Standards vs spec</a><a href="#requirements">Requirements</a><a href="#findings">Findings</a><a href="#verification">Checks</a><a href="#actions">Actions</a><a href="#feedback">Feedback</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="shell">
+    <header class="hero" id="verdict">
+      <div class="eyebrow">Verified review · 9 primary reviewers · 18 independent finding verifiers</div>
+      <h1>Strong engineering foundation. Not yet good enough as a lead-level submission.</h1>
+      <p class="hero-lede">The implementation demonstrates real agentic-AI depth, durable orchestration, scoped retrieval, citations, approvals, and unusually broad testing. The submitted proof is still incomplete, the default CI path is red, and two high-impact safety/reliability defects remain in required flows.</p>
+      <div class="verdict-row">
+        <div class="hero-card verdict"><strong>72 / 100</strong><span>Overall grade · below the 85-point lead bar and blocked by unresolved High findings</span></div>
+        <div class="hero-card"><strong>12</strong><span>Confirmed findings</span></div>
+        <div class="hero-card"><strong>4</strong><span>Partially confirmed</span></div>
+        <div class="hero-card"><strong>1 + 1</strong><span>Rejected false positive + advisory</span></div>
+      </div>
+    </header>
+
+    <main>
+      <section aria-labelledby="decision-title">
+        <div class="section-head"><div><div class="eyebrow" style="color:var(--medium)">Decision</div><h2 id="decision-title">Would I pass this as a Lead AI Engineer home task?</h2></div></div>
+        <div class="grid-2">
+          <div class="callout callout-danger"><strong>No — not in the current snapshot.</strong>Mandatory Slack-citation proof is absent; submitted samples fail their own evaluator; the interview presentation and required diagram elements are incomplete; and grounded customer-facing text can bypass HITL.</div>
+          <div class="callout callout-success"><strong>But the engineer is close on core capability.</strong>The typed multi-agent workflow, permission-bound evidence, hybrid retrieval, durable state, approval quorum, live-model provenance, and 582 passing tests are materially above a typical prototype.</div>
+        </div>
+      </section>
+
+      <section aria-labelledby="score-title">
+        <div class="section-head"><div><div class="eyebrow" style="color:var(--medium)">Weighted grade</div><h2 id="score-title">Lead-level scorecard</h2></div><p>Weights prioritize spec completion, safety, and failure behavior over raw feature volume. A lead-level pass requires 85+ and no unresolved High issue in a mandatory flow.</p></div>
+        <div class="grid-3">
+          <div class="panel scorecard"><div class="label">Spec & deliverables · 25%</div><div class="score">68</div><div class="bar"><span style="width:68%"></span></div><p>Substantial coverage; mandatory Slack demo, diagrams, live artifacts, and presentation remain incomplete.</p></div>
+          <div class="panel scorecard"><div class="label">Agentic architecture · 20%</div><div class="score">82</div><div class="bar"><span style="width:82%"></span></div><p>Deep contracts, orchestration, RAG, state, citations, and real agents. This is the strongest dimension.</p></div>
+          <div class="panel scorecard"><div class="label">Safety & permissions · 20%</div><div class="score">68</div><div class="bar"><span style="width:68%"></span></div><p>Excellent evidence authorization; HITL can still be bypassed by exactly grounded unsafe actions.</p></div>
+          <div class="panel scorecard"><div class="label">Reliability & operations · 15%</div><div class="score">66</div><div class="bar"><span style="width:66%"></span></div><p>Durable workflow is strong; embedding deadlines, silent loops, active-run scoping, and evaluator status handling need work.</p></div>
+          <div class="panel scorecard"><div class="label">Evidence & evaluation · 10%</div><div class="score">70</div><div class="bar"><span style="width:70%"></span></div><p>Good live provenance and regression harness. Current samples are invalid and retrieval evaluation is narrow.</p></div>
+          <div class="panel scorecard"><div class="label">Code & test engineering · 10%</div><div class="score">82</div><div class="bar"><span style="width:82%"></span></div><p>Static quality, build, and 582 tests pass. E2E has a deterministic selector regression; CI evaluator fails.</p></div>
+        </div>
+      </section>
+
+      <section id="axes" aria-labelledby="axes-title">
+        <div class="section-head"><div><div class="eyebrow" style="color:var(--medium)">Two-axis review</div><h2 id="axes-title">Standards and spec stay separate</h2></div><p>A sound architecture can still fail the assignment. A compliant artifact can still hide unsafe behavior. Both views matter.</p></div>
+        <div class="grid-2">
+          <article class="panel axis">
+            <h3>Standards / engineering quality</h3><div class="axis-score">76 / 100 · strongest: module boundaries and durable workflow</div>
+            <ul><li>Typed core/infrastructure split with dependency-boundary linting.</li><li>Transactional outbox, leases, CAS transitions, persisted traces, and provider-attempt accounting.</li><li>Hybrid RAG with metadata scoping, RRF, recency/reliability adjustments, and citation validation.</li><li>Meaningful contract/integration tests; quality and build gates pass.</li></ul>
+            <div class="worst"><strong>Worst standards issue:</strong> an exactly grounded customer-facing action can evade the positive safe-action shape and initial approval policy, allowing unsafe text to finalize without HITL.</div>
+          </article>
+          <article class="panel axis">
+            <h3>Spec / assignment completion</h3><div class="axis-score">68 / 100 · strongest: runnable prototype and core system coverage</div>
+            <ul><li>All three opportunities and all required source families are ingested.</li><li>Four actual LLM-backed agents, nine-section schema, approval simulation, traces, and persistence exist.</li><li>Authorized, restricted, and denied sample scenarios have live-provider provenance.</li><li>Production-readiness gaps are discussed honestly in prose.</li></ul>
+            <div class="worst"><strong>Worst spec issue:</strong> assignment §8 requires a final brief citing generated Slack evidence; all recorded live runs explicitly failed to carry Slack into the finalized brief while the overview and tour claim that proof exists.</div>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="consensus-title">
+        <div class="section-head"><div><div class="eyebrow" style="color:var(--medium)">Independent consensus</div><h2 id="consensus-title">What the primary reviewers scored</h2></div><p>Three reviewers independently covered each axis before findings were deduplicated and verified.</p></div>
+        <div class="consensus">
+          <div class="panel"><small>Spec reviewers</small><div class="big">82 avg</div><div>86 · 82 · 78</div></div>
+          <div class="panel"><small>Lead-quality reviewers</small><div class="big">77 avg</div><div>82 · 72 · 78</div></div>
+          <div class="panel"><small>Adversarial gap reviewers</small><div class="big">63 avg</div><div>68 · 64 · 58</div></div>
+          <div class="panel"><small>Verifier disposition</small><div class="status-pills" style="margin-top:9px"><span class="pill pill-complete">12 confirmed</span><span class="pill pill-partial">4 partial</span><span class="pill pill-rejected">1 rejected</span><span class="pill pill-low">1 advisory</span></div></div>
+        </div>
+      </section>
+
+      <section id="requirements" aria-labelledby="requirements-title">
+        <div class="section-head"><div><div class="eyebrow" style="color:var(--medium)">Assignment coverage</div><h2 id="requirements-title">Every part of the DOCX, mapped</h2></div><p>Complete means implemented and evidenced. Partial means the core exists but proof, safety, or documentation is incomplete. Missing means no satisfactory deliverable exists.</p></div>
+        <div class="panel">
+          <details open><summary>§3 Provided data and mandatory Slack generation <span class="pill pill-complete">Complete</span></summary><div class="detail-body"><div class="req-list">
+            <div class="req"><strong>Salesforce accounts, opportunities, contacts</strong><span>Ingested and bound to stable source IDs.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Gong summaries and transcript snippets</strong><span>Chunked, indexed, retrieved, and available to specialists.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Pricing, permissions, Deal Desk policy</strong><span>Ingested with sensitivity and policy-aware handling.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Synthetic Slack dataset</strong><span>9 generated rows; 3 per opportunity; live OpenRouter provenance; chronology, synthetic notice, and context-kind validation.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+          </div></div></details>
+          <details open><summary>§4 System requirements <span class="pill pill-partial">Partial</span></summary><div class="detail-body"><div class="req-list">
+            <div class="req"><strong>All three opportunities and all source families</strong><span>Canonical fixtures, ingestion, workflow coverage, and live artifacts cover the set.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>At least three actual LLM-backed agents</strong><span>Four distinct agents with structured outputs and live provider evidence.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Deterministic harness and replayable traces</strong><span>Typed schemas, strict parsing, manifests, state machine, validations, persisted events.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Grounded claims and stable citations</strong><span>Strong implementation; checked-in briefs still expose invalid/internal content and weak source coverage.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>Permissions before retrieval and generation</strong><span>Scope-bound retrieval and reauthorization are strong; verifier rejected the alleged workspace disclosure.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>HITL for high-impact/customer-facing recommendations</strong><span>Approval quorum exists, but F05 proves a grounded unsafe action can bypass initial routing.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>Observable and persistent across runs</strong><span>Traces/state are durable; dispatcher/reconciler loop failures lack loop-level observability.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>Nine brief sections</strong><span>Schema and UI cover all nine; sample content quality is not submission-ready.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+          </div></div></details>
+          <details><summary>§5 Agent design and orchestration <span class="pill pill-partial">Partial</span></summary><div class="detail-body"><div class="req-list">
+            <div class="req"><strong>Specialized roles and typed contracts</strong><span>Conversation, stakeholder, commercial, and strategy agents have distinct schemas and source access.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Defined tools, validation, failure modes</strong><span>Implemented in source; current docs reduce this to role cards and generic “stop or degrade safely.”</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>Explicit orchestration/state/partial-failure behavior</strong><span>Durable workflow exists; docs omit the asymmetric degrade-vs-fatal contract.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+          </div></div></details>
+          <details><summary>§6 Implementation scope <span class="pill pill-complete">Complete</span></summary><div class="detail-body"><div class="req-list">
+            <div class="req"><strong>Runnable prototype</strong><span>React web app, NestJS API/worker, PostgreSQL/pgvector, Redis/BullMQ.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Live-provider configuration and run instructions</strong><span>OpenRouter and Ollama settings, inference behavior, setup and reviewer flow are documented.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Live generated artifacts</strong><span>Provider/model/token provenance is checked in; quality is partial, not provenance.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+          </div></div></details>
+          <details><summary>§7 Engineering expectations <span class="pill pill-partial">Partial</span></summary><div class="detail-body"><div class="req-list">
+            <div class="req"><strong>Real RAG with metadata filtering</strong><span>Postgres hybrid lexical/vector search, RRF, source windows, recency and reliability adjustment.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Permission checks and restricted-data guardrails</strong><span>Strong retrieval, manifest, output-projection and denied-flow controls.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Approval simulation</strong><span>Version/hash-bound subjects, dependencies, authority, distinct quorum, edits and re-grounding.</span></div><div class="state"><span class="pill pill-partial">Partial because F05</span></div>
+            <div class="req"><strong>Logs/traces</strong><span>Rich persisted trace model; loop failures are silently retried without loop health signals.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>Cost/token strategy</strong><span>Call/deadline caps and usage accounting exist; no application-enforced output/spend ceiling.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>Missing/malformed/partial failure handling</strong><span>Broad coverage; live embedding requests can ignore the durable deadline.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>Production deployment discussion</strong><span>Scalability, HA, monitoring, secrets, support and safety are covered in prose.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+          </div></div></details>
+          <details open><summary>§8 Required demo scenarios <span class="pill pill-partial">3 of 4</span></summary><div class="detail-body"><div class="req-list">
+            <div class="req"><strong>Authorized OPP-1001/1002 brief</strong><span>Live OPP-1001 artifact with nine-section output and provenance.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Authorized OPP-1003 with approval routing</strong><span>Live restricted brief and multi-entry approval-flow artifact.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Unauthorized OPP-1003 with no leak</strong><span>Opaque 404 artifact and zero-leak deterministic evaluation.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Slack affects final brief, including one cited update</strong><span>Slack reaches retrieval and one specialist claim, but no observed finalized live brief cites it.</span></div><div class="state"><span class="pill pill-missing">Missing</span></div>
+          </div></div></details>
+          <details open><summary>§9 Deliverables <span class="pill pill-partial">Incomplete</span></summary><div class="detail-body"><div class="req-list">
+            <div class="req"><strong>A. Runnable prototype</strong><span>Implemented and documented.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>B. Logical and deployment architecture diagrams</strong><span>Diagrams exist, but required agent/HITL/state/observability, secrets, and monitoring elements are not all diagrammed.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>C. README, technical overview, security notes</strong><span>Strong setup/security prose; per-agent and partial-failure documentation is incomplete.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>D. Sample briefs, Slack data, approval and trace artifacts</strong><span>All artifact classes exist, but live briefs fail 16 quality checks and Slack final proof.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>E. 15-minute interview presentation</strong><span>No timed deck or speaker/demo script with actual evaluation results and failure cues.</span></div><div class="state"><span class="pill pill-missing">Missing</span></div>
+          </div></div></details>
+          <details><summary>§10 Bonus <span class="pill pill-partial">Strong, not complete</span></summary><div class="detail-body"><div class="req-list">
+            <div class="req"><strong>Advanced RAG</strong><span>Hybrid search, metadata, recency, reliability and citation validation are implemented.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Cost-aware routing and token budgeting</strong><span>Budgets exist, but token/spend ceiling and model-value routing are incomplete.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+            <div class="req"><strong>Prompt-injection tests and defenses</strong><span>Untrusted envelopes, strict parsing, prose guards, and adversarial tests exist.</span></div><div class="state"><span class="pill pill-complete">Complete</span></div>
+            <div class="req"><strong>Synthetic evaluation and golden regression</strong><span>Golden retrieval and brief-quality suites exist; retrieval corpus/thresholds are narrow.</span></div><div class="state"><span class="pill pill-partial">Partial</span></div>
+          </div></div></details>
+        </div>
+      </section>
+
+      <section id="findings" aria-labelledby="findings-title">
+        <div class="section-head"><div><div class="eyebrow" style="color:var(--medium)">Independently verified</div><h2 id="findings-title">Finding register</h2></div><p>Each row was assigned to a fresh verifier. F04 was rejected because a later output-projection control was missed by the original reviewer.</p></div>
+        <div class="panel">
+          <div class="toolbar">
+            <label>Severity<select id="severityFilter"><option value="all">All</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="Advisory">Advisory</option><option value="Rejected">Rejected</option></select></label>
+            <label>Verdict<select id="verdictFilter"><option value="all">All</option><option value="Confirmed">Confirmed</option><option value="Partial">Partially confirmed</option><option value="Rejected">Rejected</option><option value="Advisory">Advisory</option></select></label>
+            <label>Search<input id="findingSearch" type="search" placeholder="Search title, evidence, or impact"></label>
+            <button class="btn btn-secondary" id="clearFilters" type="button">Clear filters</button>
+          </div>
+          <div class="table-wrap">
+            <table id="findingTable">
+              <thead><tr><th>ID</th><th>Finding and verified impact</th><th>Verdict</th><th>Grade</th><th>Priority</th><th>Primary evidence</th></tr></thead>
+              <tbody>
+                <tr data-severity="High" data-verdict="Confirmed"><td class="finding-id">F01</td><td><span class="finding-title">Mandatory finalized Slack citation is absent</span><span class="finding-detail">Slack is ingested, authorized, retrieved, and once retained by a specialist; all recorded live final briefs still omit it while overview/tour copy says it appears.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-high">High · 8/10</span></td><td>P1</td><td class="evidence">DOCX 134–140; samples/manifest.json:113–137; slack-impact-comparison.md:39–75; strategy.ts:20–58</td></tr>
+                <tr data-severity="High" data-verdict="Confirmed"><td class="finding-id">F02</td><td><span class="finding-title">Submitted live briefs fail the new CI quality gate</span><span class="finding-detail">The deterministic evaluator reports 16 violations: internal claim IDs, discard markers, missing source families, omitted stakeholder, and contradictory warning.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-high">High · 8/10</span></td><td>P0</td><td class="evidence">.github/workflows/ci.yml:78–85; scripts/brief-quality.ts:324–355; samples/*brief.json; observed eval failure</td></tr>
+                <tr data-severity="Medium" data-verdict="Partial"><td class="finding-id">F03</td><td><span class="finding-title">Active-run reuse is opportunity-wide, not requester/scope-bound</span><span class="finding-detail">A second authorized persona is forced onto another persona’s active run and cannot start a scope-correct one. Verified as availability/scope-integrity, not direct data leakage.</span></td><td><span class="pill pill-partial">Partial</span></td><td><span class="pill pill-medium">Medium · 4/10</span></td><td>P2</td><td class="evidence">workflow.ts:448–479; workflow-store.ts:529–540,581–616; db/schema.ts:315–329</td></tr>
+                <tr data-severity="Rejected" data-verdict="Rejected"><td class="finding-id">F04</td><td><span class="finding-title">Rejected: deal workspace does not leak richer briefs</span><span class="finding-detail">The original review stopped at findLatestRun. The mapper later requires every claim and Source Evidence ID to exist in the viewer’s live authorized evidence set, otherwise generated output is null.</span></td><td><span class="pill pill-rejected">Rejected</span></td><td><span class="pill pill-rejected">No defect</span></td><td>—</td><td class="evidence">deal-query.ts:225–260; deal-workspace.mapper.ts:161–179,191–228,403–414</td></tr>
+                <tr data-severity="High" data-verdict="Confirmed"><td class="finding-id">F05</td><td><span class="finding-title">Exactly grounded unsafe actions can bypass HITL</span><span class="finding-detail">Grounding skips the positive internal-action shape. The initial approval facts omit recommendation prose, so a one-line unsafe customer-facing instruction can finalize without approval.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-high">High · 8/10</span></td><td>P1</td><td class="evidence">validation.ts:954–962,1040–1053; deal-brief-access.ts:203–220,251–268; workflow.ts:855–907</td></tr>
+                <tr data-severity="Medium" data-verdict="Confirmed"><td class="finding-id">F06</td><td><span class="finding-title">Warning filter suppresses valid stakeholder gaps</span><span class="finding-detail">Any absence word plus a supported name is treated as contradiction, hiding valid missing-approval/evidence warnings and possibly a warning-derived review trigger.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-medium">Medium · 5/10</span></td><td>P2</td><td class="evidence">validation.ts:767–785,1477–1484; workflow.ts:285–296; deal-brief-access.ts:252–268</td></tr>
+                <tr data-severity="High" data-verdict="Confirmed"><td class="finding-id">F07</td><td><span class="finding-title">Slack authorRole line passes grounding, then fatally fails approval validation</span><span class="finding-detail">Specialist validation correctly word-bounds role:, but the final canonical-JSON guard matches Role inside authorRole and terminates the run as draft_validation_failed.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-high">High · 7/10</span></td><td>P1</td><td class="evidence">chunk.ts:125–132,255–270; validation.ts:52–59; workflow.ts:364–372,850–860</td></tr>
+                <tr data-severity="High" data-verdict="Confirmed"><td class="finding-id">F08</td><td><span class="finding-title">Live embeddings are not aborted at the persisted run deadline</span><span class="finding-detail">The wrapper checks before/after await, but live embedMany calls receive no abort signal. A hung request can hold the sole worker slot beyond the 10-minute budget.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-high">High · 7/10</span></td><td>P1</td><td class="evidence">model/registry.ts:145–163; openrouter.ts:203–211; ollama.ts:136–144; workflow.ts:606–619</td></tr>
+                <tr data-severity="Medium" data-verdict="Confirmed"><td class="finding-id">F09</td><td><span class="finding-title">Token/output budget claims exceed implemented controls</span><span class="finding-detail">Calls and elapsed time are bounded, but there is no application-defined per-call or aggregate paid-token ceiling; usage is settled only after provider response.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-medium">Medium · 4/10</span></td><td>P2</td><td class="evidence">model/contracts.ts:16–19,90–101; gateway.ts:289–332; provider-attempt-ledger.ts:131–143,190–202</td></tr>
+                <tr data-severity="Medium" data-verdict="Confirmed"><td class="finding-id">F10</td><td><span class="finding-title">Dispatcher and reconciler loop failures lack loop-level signals</span><span class="finding-detail">Both loops catch and retry, while production composition supplies no callback. Process stays alive and generic readiness does not report repeated loop failure or progress staleness.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-medium">Medium · 4/10</span></td><td>P2</td><td class="evidence">outbox-dispatcher.ts:111–141; reconciler.ts:263–293; worker/main.ts:95–103</td></tr>
+                <tr data-severity="Medium" data-verdict="Partial"><td class="finding-id">F11</td><td><span class="finding-title">Live evaluator can print PASS for a failed run’s strategy draft</span><span class="finding-detail">Failed is accepted as terminal, then readBrief loads strategy:1. Rejected/cancelled share the permissive branch but are not reachable in the current evaluator flow.</span></td><td><span class="pill pill-partial">Partial</span></td><td><span class="pill pill-medium">Medium · 4/10</span></td><td>P2</td><td class="evidence">brief-quality-live.ts:76–117,207–225; workflow.ts:798–865</td></tr>
+                <tr data-severity="Medium" data-verdict="Partial"><td class="finding-id">F12</td><td><span class="finding-title">Quality gate does not protect material pricing/policy provenance</span><span class="finding-detail">Reachable families are derived only from CRM, Gong, and Slack. This is an evaluator blind spot, not a rule that every brief must cite every family.</span></td><td><span class="pill pill-partial">Partial</span></td><td><span class="pill pill-medium">Medium · 1.5/10</span></td><td>P2</td><td class="evidence">brief-quality.ts:218–229,297–318; chunk.ts:238–294; validation.ts:1285–1299</td></tr>
+                <tr data-severity="High" data-verdict="Confirmed"><td class="finding-id">F13</td><td><span class="finding-title">Architecture diagrams omit required elements</span><span class="finding-detail">Logical views lack explicit agent nodes, durable state and observability relationships; deployment lacks secret-management and monitoring/telemetry components.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-high">High · 7/10</span></td><td>P1</td><td class="evidence">DOCX 141–148; technical-overview.html:221–282,291–354,389</td></tr>
+                <tr data-severity="Medium" data-verdict="Confirmed"><td class="finding-id">F14</td><td><span class="finding-title">Per-agent and asymmetric failure contracts are missing from docs</span><span class="finding-detail">Source encodes strong contracts, but docs say only “stop or degrade safely” instead of explaining that conversation/stakeholder degrade and commercial fails closed.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-medium">Medium · 4/10</span></td><td>P2</td><td class="evidence">DOCX 99–107; technical-overview.html:291–300,360–371; workflow.ts:724–755</td></tr>
+                <tr data-severity="High" data-verdict="Confirmed"><td class="finding-id">F15</td><td><span class="finding-title">Required 15-minute interview presentation is not delivered</span><span class="finding-detail">The overview is useful support material, but no timed deck/script includes actual metrics, exact live-demo transitions/fallbacks, and concrete production-failure cues.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-high">High · 8/10</span></td><td>P1</td><td class="evidence">DOCX 141–151; technical-overview.html:383–420; README.md:84–129</td></tr>
+                <tr data-severity="High" data-verdict="Confirmed"><td class="finding-id">F16</td><td><span class="finding-title">Fresh E2E suite is red on an ambiguous status locator</span><span class="finding-detail">This is a test regression, not an accessibility defect. Two legitimate status regions coexist; one test assumes role uniqueness. Fresh DB run: 66 passed, 1 failed, 3 did not run.</span></td><td><span class="pill pill-complete">Confirmed</span></td><td><span class="pill pill-high">High · 5/10</span></td><td>P1</td><td class="evidence">app-shell.tsx:151–170; approval-decision-form.tsx:276–286; approval.spec.ts:283–290,373–378</td></tr>
+                <tr data-severity="Low" data-verdict="Partial"><td class="finding-id">F17</td><td><span class="finding-title">Retrieval evaluation is a thin baseline, not strong quality proof</span><span class="finding-detail">Three positive cases each score precision@5=.2 and recall@5=.5. This is transparently described and bonus scope, so the gap is low-severity evaluation maturity.</span></td><td><span class="pill pill-partial">Partial</span></td><td><span class="pill pill-low">Low · .5/10</span></td><td>P3</td><td class="evidence">golden-retrieval.json:5–39; retrieval.json:4–70; evaluate.ts:224–230</td></tr>
+                <tr data-severity="Advisory" data-verdict="Advisory"><td class="finding-id">F18</td><td><span class="finding-title">Local ignored .env contains credential-shaped material</span><span class="finding-detail">No tracked exposure and no grading deduction. Shape does not prove validity; revoke/rotate locally if it is a real credential. Value was never included in this report.</span></td><td><span class="pill pill-low">Advisory</span></td><td><span class="pill pill-low">0 deduction</span></td><td>P2</td><td class="evidence">.gitignore:2; .env ignored and absent from index/HEAD</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="verification" aria-labelledby="verification-title">
+        <div class="section-head"><div><div class="eyebrow" style="color:var(--medium)">Observed evidence</div><h2 id="verification-title">Commands and behavioral checks</h2></div><p>These results were run on the reviewed snapshot. The live-provider tier was not rerun because it spends real tokens; checked-in live provenance was inspected instead.</p></div>
+        <div class="validation-grid">
+          <div class="panel validation-item pass"><strong>PASS</strong><span>quality:ci · Biome 217 files, boundaries, TypeScript</span></div>
+          <div class="panel validation-item pass"><strong>PASS</strong><span>test · 72 files, 582 passed, 1 skipped</span></div>
+          <div class="panel validation-item pass"><strong>PASS</strong><span>build · all 6 workspaces; web chunk warning</span></div>
+          <div class="panel validation-item pass"><strong>PASS</strong><span>deterministic eval · no permission leakage</span></div>
+          <div class="panel validation-item fail"><strong>FAIL</strong><span>brief-quality eval · 16 sample violations</span></div>
+          <div class="panel validation-item fail"><strong>FAIL</strong><span>E2E fresh DB · 66 pass, 1 fail, 3 not run</span></div>
+          <div class="panel validation-item warn"><strong>0.20</strong><span>macro precision@5 on positive retrieval cases</span></div>
+          <div class="panel validation-item warn"><strong>0.50</strong><span>macro recall@5 on positive retrieval cases</span></div>
+          <div class="panel validation-item pass"><strong>0</strong><span>permission leakage in deterministic eval</span></div>
+          <div class="panel validation-item pass"><strong>Live</strong><span>OpenRouter provenance and nonzero token usage checked in</span></div>
+        </div>
+        <div class="callout callout-info" style="margin-top:14px"><strong>Important false-positive correction</strong>The initial security reviewer alleged cross-source disclosure through <code>findLatestRun</code>. Independent verification rejected it: <code>renderGeneratedOutput</code> checks every canonical citation and Source Evidence ID against the current viewer-scoped evidence set and suppresses the generated brief if any reference is unreadable.</div>
+      </section>
+
+      <section id="actions" aria-labelledby="actions-title">
+        <div class="section-head"><div><div class="eyebrow" style="color:var(--medium)">Remediation order</div><h2 id="actions-title">Shortest path to submission-ready</h2></div><p>Sequence minimizes rework: fix behavior before paying for new live runs; regenerate artifacts only after validators and routing are correct.</p></div>
+        <div class="sequence">
+          <div class="panel step"><div><h4>Close the HITL safety bypass</h4><p>Grounding must establish provenance, never action safety. Classify recommendation semantics before initial approval routing and keep positive safe-action constraints.</p></div><span class="pill pill-high">P1 · F05</span></div>
+          <div class="panel step"><div><h4>Unify Slack validation and enforce final carry-through</h4><p>Use the same role-boundary guard at every stage; deterministically validate the required Slack citation in the demo path.</p></div><span class="pill pill-high">P1 · F07, F01</span></div>
+          <div class="panel step"><div><h4>Regenerate all live sample artifacts</h4><p>Re-run normal and restricted flows after fixes; update JSON, text, approvals, traces, manifest and Slack comparison as one coherent artifact set.</p></div><span class="pill pill-high">P0 · F02</span></div>
+          <div class="panel step"><div><h4>Restore green verification</h4><p>Qualify approval status locators, then require quality, unit/integration, build, deterministic eval, sample eval and E2E to pass together.</p></div><span class="pill pill-high">P1 · F16</span></div>
+          <div class="panel step"><div><h4>Complete evaluator-facing deliverables</h4><p>Add missing logical/deployment components, explicit agent/failure contracts, and a timed 15-minute presentation with measured results and demo fallbacks.</p></div><span class="pill pill-high">P1/P2 · F13–F15</span></div>
+          <div class="panel step"><div><h4>Harden runtime boundaries</h4><p>Abort embeddings at durable deadline; expose worker-loop health; enforce token ceilings; scope active runs; reject failed live-eval runs.</p></div><span class="pill pill-medium">P1/P2 · F03, F08–F12</span></div>
+        </div>
+      </section>
+
+      <section id="feedback" aria-labelledby="feedback-title">
+        <div class="section-head"><div><div class="eyebrow" style="color:var(--medium)">Review loop</div><h2 id="feedback-title">What should I do with this review?</h2></div><p>Choose one or more outcomes, add context, then queue a single actionable prompt. You can also annotate any row or selected text directly in Lavish.</p></div>
+        <form class="panel feedback" data-lavish-question="review-next-step" id="feedbackForm">
+          <fieldset><legend>Queue requested next actions</legend><div class="choices">
+            <label class="choice"><input type="checkbox" name="action" value="Create a prioritized implementation plan for every P0 and P1 verified finding."><span><strong>Implementation plan</strong><br>Create a dependency-aware fix plan for P0/P1 items.</span></label>
+            <label class="choice"><input type="checkbox" name="action" value="Turn this into concise candidate feedback suitable for a hiring debrief."><span><strong>Hiring feedback</strong><br>Convert the evidence into fair candidate-facing and panel-facing feedback.</span></label>
+            <label class="choice"><input type="checkbox" name="action" value="Re-review and re-grade the repository after the engineer addresses the findings."><span><strong>Re-review later</strong><br>Use this register as the acceptance baseline after changes.</span></label>
+            <label class="choice"><input type="checkbox" name="action" value="Focus only on assignment compliance and defer production-hardening findings."><span><strong>Assignment-only cut</strong><br>Separate must-fix submission blockers from production follow-ups.</span></label>
+          </div></fieldset>
+          <label for="feedbackText" style="display:block;margin-top:16px;font-weight:850">Additional direction</label>
+          <textarea id="feedbackText" name="notes" placeholder="Examples: change severity on F08; show more proof for F05; prepare a 15-minute deck; fix only mandatory assignment gaps."></textarea>
+          <div class="feedback-actions"><button class="btn btn-primary" type="submit">Queue review response</button><span class="queued" id="queuedState" aria-live="polite"></span></div>
+        </form>
+      </section>
+    </main>
+
+    <footer>
+      Scope: complete current snapshot plus existing uncommitted README and technical-overview edits; branch delta compared with <code>main</code>. Design source: the project’s own light Geist/forest/mint tokens from <code>apps/web/src/styles/globals.css</code>, matched because this report reviews that product. No product source files were modified.
+    </footer>
+  </div>
+
+  <script>
+    const severityFilter = document.getElementById('severityFilter');
+    const verdictFilter = document.getElementById('verdictFilter');
+    const findingSearch = document.getElementById('findingSearch');
+    const rows = [...document.querySelectorAll('#findingTable tbody tr')];
+    function applyFilters() {
+      const severity = severityFilter.value;
+      const verdict = verdictFilter.value;
+      const query = findingSearch.value.trim().toLowerCase();
+      for (const row of rows) {
+        const severityMatch = severity === 'all' || row.dataset.severity === severity;
+        const verdictMatch = verdict === 'all' || row.dataset.verdict === verdict;
+        const queryMatch = !query || row.textContent.toLowerCase().includes(query);
+        row.classList.toggle('hidden-row', !(severityMatch && verdictMatch && queryMatch));
+      }
+    }
+    severityFilter.addEventListener('change', applyFilters);
+    verdictFilter.addEventListener('change', applyFilters);
+    findingSearch.addEventListener('input', applyFilters);
+    document.getElementById('clearFilters').addEventListener('click', () => {
+      severityFilter.value = 'all'; verdictFilter.value = 'all'; findingSearch.value = ''; applyFilters();
+    });
+    document.getElementById('feedbackForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const data = new FormData(event.currentTarget);
+      const actions = data.getAll('action');
+      const notes = String(data.get('notes') || '').trim();
+      if (actions.length === 0 && !notes) {
+        document.getElementById('queuedState').textContent = 'Select an action or add direction first.';
+        return;
+      }
+      const prompt = ['Use the verified Cato submission review as the source of truth.', ...actions, notes ? `Additional direction: ${notes}` : ''].filter(Boolean).join('\n');
+      if (window.lavish?.queuePrompt) {
+        window.lavish.queuePrompt(prompt, { tag: 'review-next-step', text: `Cato review: ${actions.length} action(s) queued`, element: event.currentTarget, queueKey: 'cato-review-next-step', data: { actions, notes } });
+        document.getElementById('queuedState').textContent = 'Queued. Use Send to Agent in Lavish when ready.';
+      } else {
+        document.getElementById('queuedState').textContent = 'Lavish bridge unavailable; copy your selection into chat.';
+      }
+    });
+  </script>
+</body>
+</html>
