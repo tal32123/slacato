@@ -284,6 +284,11 @@ test.describe('guided tour: the dialog never covers the control it names', () =>
       await page.evaluate(() => window.dispatchEvent(new Event('slacato:start-guided-tour')));
       await expect(page).toHaveURL('/login');
       await expect(page.getByText(`Step 1 of ${TOTAL_STEPS}`)).toBeVisible();
+      // The dialog is placed twice: once before the target has been measured, then again from the
+      // measured rectangle. The spotlight ring renders only once a rectangle exists, so waiting
+      // for it is what guarantees the second placement is the one being measured.
+      await page.waitForSelector('[data-tour-active="true"]');
+      await page.waitForSelector('.ring-4');
 
       const measured = await measureStepOne(page);
 
