@@ -555,6 +555,7 @@
       <h3>Secrets and honest limitations</h3>
       <p>Database, Redis, session, provider, and model configuration comes from validated server-side environment variables. <code>.env</code> and <code>.env.local</code> are gitignored, credentials are excluded from model diagnostics, and logging redaction suppresses common secret and authorization fields.</p>
       <div class="callout danger"><p><strong>Not production-hardened:</strong> there is no provider cost/spend accounting beyond per-run call and deadline budgets, per-call context/output token budgets, and persisted token usage; no documented API/user/provider rate-limiting policy; no secrets-manager or automatic rotation integration; no enterprise identity provider; and no production-grade PII service. These are deployment gaps, not controls to infer from the current code.</p></div>
+      <div class="callout"><p><strong>Brief sections are grounded-or-omitted, not guaranteed-populated.</strong> Every section in a finalized <code>DealBrief</code> is generate-then-validate: <code>validateDealBrief</code> keeps only claims it can tie back to an authorized evidence unit and drops the rest, so a section with no supportable claim renders empty rather than fabricated. With the small model this project runs against by default (<code>google/gemini-3.5-flash-lite</code>), that means Stakeholder Map and Recommended Next Actions — the two sections with the strictest per-item grounding requirements (a named person plus a supported identity claim; an action tied to a supported rationale) — do not come back populated on every regeneration, even though the retrieved evidence would support them. Regenerating <code>samples/normal-opportunity-brief.json</code> and <code>samples/restricted-opportunity-brief.json</code> for this submission took dozens of live runs per opportunity before both sections landed populated, without any other section going empty, in the same run. This is the tradeoff working as intended: the system never invents a stakeholder or an action to fill a section, so an empty section is a true signal about what this run’s model output could support, not a defect being hidden.</p></div>
     </section>
 
     <section id="deliverables">
@@ -568,7 +569,7 @@
           <tr>
             <td><strong>1 · Authorized brief</strong></td>
             <td>Maya Levin (<code>USR-5001</code>) → <code>OPP-1001</code></td>
-            <td>A finalized nine-section brief in which every factual claim carries a citation resolved against that run’s evidence manifest. <code>normal-opportunity-brief.json</code> and <code>.txt</code>.</td>
+            <td>A finalized brief with all nine top-level sections present; every claim that appears carries a citation resolved against that run’s evidence manifest, and this export’s Stakeholder Map and Recommended Next Actions are both populated with real, cited content. Section richness varies by run — see “Brief sections are grounded-or-omitted” in §06 above. <code>normal-opportunity-brief.json</code> and <code>.txt</code>.</td>
           </tr>
           <tr>
             <td><strong>2 · Approval routing</strong></td>
@@ -583,7 +584,7 @@
           <tr>
             <td><strong>4 · Generated Slack updates</strong></td>
             <td>Both finalized briefs</td>
-            <td>All nine Slack rows are model-generated and carry <code>synthetic_notice=true</code>. The authorized brief’s stakeholder map rests on <code>slack:SLK-9002:0</code>; the restricted brief’s executive summary <em>and</em> negotiation state both rest on <code>slack:SLK-9009:0</code>, an internal-chat note that executives disagree on whether discounting or risk mitigation should lead. Generation provenance is in <code>fixtures/cato/slack/generation.json</code>.</td>
+            <td>All nine Slack rows are model-generated and carry <code>synthetic_notice=true</code>; both requesters (<code>USR-5001</code>, <code>USR-5003</code>) are authorized to read Slack evidence for their accounts, including <code>slack:SLK-9002:0</code> (missing owner/success-metric context on <code>OPP-1001</code>) and <code>slack:SLK-9009:0</code> (an internal-chat note that executives disagree on whether discounting or risk mitigation should lead, on <code>OPP-1003</code>). Whether a given regeneration actually cites a Slack row depends on that run’s retrieval and grounding — the currently checked-in briefs do not. Generation provenance is in <code>fixtures/cato/slack/generation.json</code>.</td>
           </tr>
         </tbody>
       </table>
