@@ -88,8 +88,16 @@ async function main(): Promise<void> {
   );
   const report = await resetDemoState({ databaseUrl, dryRun });
   const verb = dryRun ? 'would erase' : 'erased';
-  for (const [label, value] of Object.entries(report.tally))
+  for (const [label, value] of Object.entries(report.tally)) {
+    // runsInFlight describes a subset of `runs`, not a family of its own, so reporting it as a
+    // separate erasure would double-count the same rows in the operator's head.
+    if (label === 'runsInFlight') continue;
     process.stdout.write(`  ${verb} ${value} ${label}\n`);
+  }
+  if (report.tally.runsInFlight > 0)
+    process.stdout.write(
+      `  (${report.tally.runsInFlight} of those runs ${dryRun ? 'are' : 'were'} still generating)\n`
+    );
   process.stdout.write(
     `Retained ${report.retained.evidenceVersions} evidence versions, ${report.retained.opportunities} opportunities, ` +
       `and ${report.retained.personas} personas. The next Generate Brief starts a new run.\n`
