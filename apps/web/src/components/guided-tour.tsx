@@ -1,13 +1,25 @@
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Compass, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { readinessQueryOptions } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { describeGenerationReadiness } from '@/features/runs/generation-readiness';
 
 const STORAGE_KEY = 'slacato.guided-tour.v2';
 const START_EVENT = 'slacato:start-guided-tour';
 const ADVANCE_EVENT = 'slacato:guided-tour-advance';
 const TARGET_PADDING = 8;
+const FOCUSABLE_SELECTOR =
+  'button:not(:disabled), [href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
+/** Lists the focusable elements inside a root, including the root itself when it qualifies. */
+function collectFocusable(root: Element | null): HTMLElement[] {
+  if (root === null) return [];
+  const self = root.matches(FOCUSABLE_SELECTOR) ? [root as HTMLElement] : [];
+  return [...self, ...root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)];
+}
 
 type TourStep = Readonly<{
   target: string;
@@ -169,7 +181,20 @@ export function GuidedTour(): React.JSX.Element {
   const dialogRef = useRef<HTMLDivElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
   const routedStep = useRef<number | undefined>(undefined);
+  /** The live page element the spotlight currently frames, so a required-interaction step's focus
+   * trap can admit it -- the one piece of "background" the user must still be able to reach. */
+  const targetElRef = useRef<HTMLElement | null>(null);
   const step = tourSteps[stepIndex] ?? tourSteps[0];
+  // Only checked while a step actually waits on Generate Brief, so the tour never polls
+  // readiness for the steps that have nothing to do with it.
+  const readiness = useQuery({
+    ...readinessQueryOptions(),
+    enabled: active && step.target === 'generate-brief'
+  });
+  const generationGate =
+    step.target === 'generate-brief'
+      ? describeGenerationReadiness(readiness.data, readiness.isError)
+      : { blocked: false };
 
   const settle = useCallback((nextIndex: number): void => {
     const safe = Number.isFinite(nextIndex) ? Math.round(nextIndex) : 0;
@@ -209,20 +234,23 @@ export function GuidedTour(): React.JSX.Element {
     if (!active) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') close();
-      if (event.key === 'Tab' && step.requiresInteraction !== true) {
+      if (event.key === 'Tab') {
+        // The trap always covers the dialog's own controls. On a step that requires acting on
+        // the real page, it also admits whatever the spotlight currently frames -- that target is
+        // the one piece of "background" the user must still be able to reach -- but nothing else:
+        // every other background control (other persona cards, disclosures, the tour launcher
+        // itself) stays out of reach, matching what the spotlight already blocks by mouse.
         const controls = [
-          ...(dialogRef.current?.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])'
-          ) ?? [])
+          ...collectFocusable(dialogRef.current),
+          ...(step.requiresInteraction === true ? collectFocusable(targetElRef.current) : [])
         ];
-        const first = controls[0];
-        const last = controls.at(-1);
-        if (!event.shiftKey && document.activeElement === last && first !== undefined) {
+        if (controls.length > 0) {
           event.preventDefault();
-          first.focus();
-        } else if (event.shiftKey && document.activeElement === first && last !== undefined) {
-          event.preventDefault();
-          last.focus();
+          const current = controls.indexOf(document.activeElement as HTMLElement);
+          const size = controls.length;
+          const nextIndex =
+            current === -1 ? 0 : event.shiftKey ? (current - 1 + size) % size : (current + 1) % size;
+          controls[nextIndex]?.focus();
         }
       }
       if (
@@ -286,23 +314,19 @@ export function GuidedTour(): React.JSX.Element {
         if (element !== target) element.removeAttribute('data-tour-active');
       });
       if (target === null) {
+        targetElRef.current = null;
         setTargetBox(undefined);
         missingTimer = window.setTimeout(() => setTargetMissing(true), 100);
         return;
       }
+      targetElRef.current = target;
       if (target.getAttribute('data-tour-active') !== 'true')
         target.setAttribute('data-tour-active', 'true');
       target.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
       if (step.requiresInteraction === true && !targetFocusPlaced) {
-        const interactive = target.matches(
-          'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])'
-        )
-          ? target
-          : target.querySelector<HTMLElement>(
-              'button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex="-1"])'
-            );
+        const interactive = collectFocusable(target)[0];
         interactive?.focus();
-        targetFocusPlaced = interactive !== null;
+        targetFocusPlaced = interactive !== undefined;
       }
       const rect = target.getBoundingClientRect();
       setTargetBox({
@@ -328,6 +352,7 @@ export function GuidedTour(): React.JSX.Element {
       document.querySelectorAll('[data-tour-active="true"]').forEach((element) => {
         element.removeAttribute('data-tour-active');
       });
+      targetElRef.current = null;
     };
   }, [active, location.pathname, step.requiresInteraction, step.target]);
 
@@ -337,6 +362,21 @@ export function GuidedTour(): React.JSX.Element {
   }, [active, location.pathname, step.requiresInteraction, stepIndex]);
 
   const offPath = targetMissing && step.route !== undefined && location.pathname !== step.route;
+  // Anchor the dialog to whichever half of the viewport the spotlighted target is NOT in, so a
+  // target near the top of a short or narrow page -- the login persona cards on a phone, for
+  // instance -- is never covered by the very tooltip explaining it. Without a target yet, fall
+  // back to the prior default: interactive steps float near the top, everything else near the
+  // bottom.
+  const targetInLowerHalf =
+    targetBox !== undefined && targetBox.top + targetBox.height / 2 > window.innerHeight / 2;
+  const placement =
+    targetBox === undefined
+      ? step.requiresInteraction === true
+        ? 'top-4'
+        : 'bottom-4'
+      : targetInLowerHalf
+        ? 'top-4'
+        : 'bottom-4';
 
   return (
     <>
@@ -366,7 +406,7 @@ export function GuidedTour(): React.JSX.Element {
             aria-modal={step.requiresInteraction === true ? undefined : true}
             aria-labelledby="guided-tour-title"
             aria-describedby="guided-tour-description"
-            className={`pointer-events-auto fixed left-1/2 z-[72] w-[min(92vw,25rem)] -translate-x-1/2 rounded-2xl border border-primary/25 bg-card p-5 text-card-foreground shadow-2xl sm:p-6 ${step.requiresInteraction === true ? 'top-4' : 'bottom-4'}`}
+            className={`pointer-events-auto fixed left-1/2 z-[72] max-h-[calc(100dvh-2rem)] w-[min(92vw,25rem)] overflow-y-auto -translate-x-1/2 rounded-2xl border border-primary/25 bg-card p-5 text-card-foreground shadow-2xl sm:p-6 ${placement}`}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -435,14 +475,36 @@ export function GuidedTour(): React.JSX.Element {
                 </div>
               </div>
             )}
+            {!targetMissing && generationGate.blocked && (
+              <div
+                role="status"
+                className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
+              >
+                <p>
+                  Generate Brief is disabled right now, so this step cannot be completed as
+                  written: {generationGate.reason}
+                </p>
+              </div>
+            )}
             <div className="mt-5 flex items-center justify-between gap-3">
               <Button type="button" variant="ghost" onClick={close}>
                 Skip tour
               </Button>
               {step.requiresInteraction === true ? (
-                <p className="text-right text-sm font-medium text-primary">
-                  {step.waitingFor ?? 'Complete this action to continue.'}
-                </p>
+                generationGate.blocked ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => settle(Math.min(stepIndex + 1, tourSteps.length - 1))}
+                  >
+                    Continue without generating
+                    <ArrowRight aria-hidden="true" />
+                  </Button>
+                ) : (
+                  <p className="text-right text-sm font-medium text-primary">
+                    {step.waitingFor ?? 'Complete this action to continue.'}
+                  </p>
+                )
               ) : (
                 <div className="flex gap-2">
                   <Button

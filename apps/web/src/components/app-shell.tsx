@@ -180,7 +180,11 @@ export function AppShell({
           ref={mainRef}
           id="main-content"
           tabIndex={-1}
-          className="mx-auto w-full max-w-7xl px-4 py-7 pb-24 sm:px-6 sm:py-9 lg:px-8 lg:pb-10"
+          // The guided-tour launcher is a fixed bottom-right control at every breakpoint (it only
+          // moves closer to the edge at lg, once the mobile tab bar it shares space with is gone).
+          // This reserve must clear its full footprint so a page whose content ends flush with the
+          // viewport bottom, like a short approvals inbox, never renders a real action underneath it.
+          className="mx-auto w-full max-w-7xl px-4 py-7 pb-24 sm:px-6 sm:py-9 lg:px-8 lg:pb-20"
         >
           <Outlet />
         </main>

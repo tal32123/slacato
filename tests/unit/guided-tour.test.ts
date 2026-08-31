@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { QueryClient, QueryClientProvider } from '../../apps/web/node_modules/@tanstack/react-query/build/modern/index.js';
 import { createElement } from 'react';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -16,6 +17,18 @@ import { LoginRoute } from '../../apps/web/src/routes/login';
 const STORAGE_KEY = 'slacato.guided-tour.v2';
 const stepCount = tourSteps.length;
 
+const READY_HEALTH = {
+  status: 'ready',
+  checks: { database: 'ready', migration: 'ready', redis: 'ready', index: 'ready', model: 'ready' }
+};
+
+/** Mutable per-test readiness fixture the mocked `readinessQueryOptions` resolves with. */
+let readinessResult: unknown = READY_HEALTH;
+
+const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false, staleTime: 0 } }
+});
+
 vi.mock('@/api/client', () => ({
   fetchCsrf: () => Promise.resolve('csrf-token'),
   fetchPersonas: () => Promise.resolve([
@@ -26,7 +39,12 @@ vi.mock('@/api/client', () => ({
 vi.mock('@/api/session', () => ({
   safeDestination: () => '/deals',
   selectPersonaSession: () => Promise.resolve(),
-  sessionRuntime: { finishTransition: () => undefined }
+  sessionRuntime: { finishTransition: () => undefined },
+  readinessQueryOptions: () => ({
+    queryKey: ['readiness'],
+    queryFn: () => Promise.resolve(readinessResult),
+    retry: false
+  })
 }));
 
 function LocationProbe(): React.JSX.Element {
@@ -38,42 +56,54 @@ function TourHarness({
   initialPath = '/settings',
   target = 'login-personas',
   withTarget = true,
-  manualNavTo
+  manualNavTo,
+  withBackgroundControl = false
 }: Readonly<{
   initialPath?: string;
   target?: string;
   withTarget?: boolean;
   /** When set, renders a real router link the test can click to simulate the user navigating away on their own. */
   manualNavTo?: string;
+  /** Renders a focusable control outside the tour target, standing in for an unrelated background control (another persona card, a disclosure, etc.) that a required-interaction step must not hand focus to. */
+  withBackgroundControl?: boolean;
 }>): React.JSX.Element {
   return createElement(
-    MemoryRouter,
-    { initialEntries: [initialPath] },
+    QueryClientProvider,
+    { client: testQueryClient },
     createElement(
-      'main',
-      { id: 'main-content' },
-      withTarget
-        ? createElement(
-            'div',
-            { 'data-testid': 'tour-target', 'data-tour': target },
-            createElement('button', null, target === 'login-personas' ? 'Continue as Maya Levin' : 'Target control')
-          )
-        : null,
-      manualNavTo !== undefined
-        ? createElement(Link, { to: manualNavTo }, 'Go elsewhere')
-        : null
-    ),
-    createElement(GuidedTour),
-    createElement(LocationProbe)
+      MemoryRouter,
+      { initialEntries: [initialPath] },
+      createElement(
+        'main',
+        { id: 'main-content' },
+        withTarget
+          ? createElement(
+              'div',
+              { 'data-testid': 'tour-target', 'data-tour': target },
+              createElement('button', null, target === 'login-personas' ? 'Continue as Maya Levin' : 'Target control')
+            )
+          : null,
+        withBackgroundControl ? createElement('button', null, 'Background persona') : null,
+        manualNavTo !== undefined
+          ? createElement(Link, { to: manualNavTo }, 'Go elsewhere')
+          : null
+      ),
+      createElement(GuidedTour),
+      createElement(LocationProbe)
+    )
   );
 }
 
 function LoginHarness(): React.JSX.Element {
   return createElement(
-    MemoryRouter,
-    { initialEntries: ['/login'] },
-    createElement(LoginRoute),
-    createElement(LocationProbe)
+    QueryClientProvider,
+    { client: testQueryClient },
+    createElement(
+      MemoryRouter,
+      { initialEntries: ['/login'] },
+      createElement(LoginRoute),
+      createElement(LocationProbe)
+    )
   );
 }
 
@@ -144,7 +174,11 @@ describe('advanceGuidedTour', () => {
 
 describe('GuidedTour', () => {
   beforeEach(() => window.localStorage.clear());
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    testQueryClient.clear();
+    readinessResult = READY_HEALTH;
+  });
 
   it('starts on login and requires an interactive persona choice', async () => {
     render(createElement(TourHarness));
@@ -467,6 +501,126 @@ describe('GuidedTour', () => {
     // A NaN advance must not corrupt the step index; the tour should remain exactly where it was.
     await act(async () => Promise.resolve());
     expect(screen.getByText(`Step 1 of ${stepCount}`)).toBeInTheDocument();
+  });
+
+  it('explains a gated Generate Brief step instead of leaving the user stuck on a disabled control', async () => {
+    readinessResult = {
+      status: 'not_ready',
+      checks: { database: 'ready', migration: 'ready', redis: 'ready', index: 'unavailable', model: 'ready' },
+      detail: { code: 'DEPENDENCY_UNAVAILABLE', generation: 'disabled' }
+    };
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ active: true, stepIndex: 2, dismissed: false })
+    );
+
+    render(createElement(TourHarness, { initialPath: '/deals/OPP-1001', target: 'generate-brief' }));
+
+    expect(await screen.findByText(/evidence index not ready/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+    const proceed = await screen.findByRole('button', { name: 'Continue without generating' });
+
+    fireEvent.click(proceed);
+
+    expect(await screen.findByText(`Step 4 of ${stepCount}`)).toBeInTheDocument();
+  });
+
+  it('leaves an unblocked Generate Brief step waiting for the real action as before', async () => {
+    readinessResult = READY_HEALTH;
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ active: true, stepIndex: 2, dismissed: false })
+    );
+
+    render(createElement(TourHarness, { initialPath: '/deals/OPP-1001', target: 'generate-brief' }));
+
+    expect(await screen.findByText('Choose Generate Brief to continue.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue without generating' })).not.toBeInTheDocument();
+  });
+
+  it('traps Tab within the dialog and the live target on a required-interaction step, never reaching other background controls', async () => {
+    render(createElement(TourHarness, { withBackgroundControl: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start guided tour' }));
+
+    const target = await screen.findByRole('button', { name: 'Continue as Maya Levin' });
+    await waitFor(() => expect(target).toHaveFocus());
+    const background = screen.getByRole('button', { name: 'Background persona' });
+    const closeButton = screen.getByRole('button', { name: 'Close guided tour' });
+    const skipButton = screen.getByRole('button', { name: 'Skip tour' });
+
+    const visited = new Set<Element | null>();
+    for (let step = 0; step < 8; step += 1) {
+      fireEvent.keyDown(document, { key: 'Tab' });
+      visited.add(document.activeElement);
+    }
+
+    expect(visited).not.toContain(background);
+    expect(visited).not.toContain(screen.getByRole('button', { name: 'Start guided tour' }));
+    // A real trap cycles: it must land back on the target and reach the dialog's own controls.
+    expect(visited).toContain(target);
+    expect(visited).toContain(closeButton);
+    expect(visited).toContain(skipButton);
+
+    // Shift+Tab must wrap backwards within the same closed loop, never escaping to <body>.
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).not.toBe(background);
+  });
+
+  it('positions the tooltip clear of a spotlighted target near the top of a short viewport', async () => {
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    const originalInnerHeight = window.innerHeight;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.dataset?.tour === 'login-personas') {
+        return {
+          top: 100, left: 0, right: 200, bottom: 140, width: 200, height: 40, x: 0, y: 100,
+          toJSON: () => ({})
+        } as DOMRect;
+      }
+      return originalRect.call(this);
+    };
+
+    try {
+      render(createElement(TourHarness));
+      fireEvent.click(screen.getByRole('button', { name: 'Start guided tour' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Sign in as the deal owner' });
+
+      // The target sits in the top half of a 700px-tall viewport, so the tooltip must move to the
+      // bottom instead of the old hardcoded `top-4`, which would render directly over it.
+      await waitFor(() => expect(dialog).toHaveClass('bottom-4'));
+      expect(dialog).not.toHaveClass('top-4');
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight });
+    }
+  });
+
+  it('positions the tooltip above a spotlighted target near the bottom of the viewport', async () => {
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    const originalInnerHeight = window.innerHeight;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.dataset?.tour === 'login-personas') {
+        return {
+          top: 600, left: 0, right: 200, bottom: 640, width: 200, height: 40, x: 0, y: 600,
+          toJSON: () => ({})
+        } as DOMRect;
+      }
+      return originalRect.call(this);
+    };
+
+    try {
+      render(createElement(TourHarness));
+      fireEvent.click(screen.getByRole('button', { name: 'Start guided tour' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Sign in as the deal owner' });
+
+      await waitFor(() => expect(dialog).toHaveClass('top-4'));
+      expect(dialog).not.toHaveClass('bottom-4');
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight });
+    }
   });
 });
 
