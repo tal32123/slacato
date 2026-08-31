@@ -48,8 +48,11 @@ export function AppShell({
     document.title = `${title} | SlaCato`;
     const focusOwner = (location.state as { focusOwner?: unknown } | null)?.focusOwner;
     const pathnameChanged = previouslyFocusedPathname.current !== location.pathname;
-    previouslyFocusedPathname.current = location.pathname;
     if (pathnameChanged && navigationType !== 'POP' && focusOwner !== 'approval-status') {
+      // Record only what we actually focused. Updating this on a skipped navigation (a POP, or an
+      // approval-status update) makes the next real navigation to that same path look unchanged,
+      // so main is never focused and a keyboard user is stranded on the link they just activated.
+      previouslyFocusedPathname.current = location.pathname;
       window.requestAnimationFrame(() => mainRef.current?.focus());
     }
   }, [location.pathname, location.state, navigationType]);
