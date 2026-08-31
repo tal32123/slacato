@@ -406,6 +406,26 @@ function structuredRecordAssertionSupported(assertion: string, support: string):
   return assertionTerms.length > 0 && visit(0, new Set<number>(), 0);
 }
 
+/** Recognizes a claim that quotes a run of complete, consecutive lines of its cited record.
+ *
+ * Models quote structured records this way constantly - the whole record, or just the two lines
+ * naming a person and their title. Such a claim satisfies no single line and no field partition,
+ * so it used to be discarded even though a verbatim quotation is the strongest grounding there is;
+ * one live run lost all five stakeholders to it. Only contiguous complete lines qualify, which is
+ * why this cannot assemble a relation the record does not already print. */
+function verbatimRecordSpan(assertion: string, support: string): boolean {
+  const lines = support
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return false;
+  const target = normalizedAssertion(assertion);
+  for (let start = 0; start < lines.length; start += 1)
+    for (let end = start + 2; end <= lines.length; end += 1)
+      if (normalizedAssertion(lines.slice(start, end).join(' ')) === target) return true;
+  return false;
+}
+
 /** Accepts exact local support plus tightly bounded, same-unit transformations. */
 function textAtomsSupported(assertion: string, support: string): boolean {
   if (!safeGeneratedProse(assertion)) return false;
@@ -623,10 +643,8 @@ export function assessClaimSupport(
     !citedEvidence.some((record) =>
       completeRelationSupported(
         record.content,
-        // A claim that reproduces its cited record verbatim is the strictest possible grounding,
-        // but it satisfies no single line and no field partition, so it used to be discarded.
         (assertion, support) =>
-          normalizedAssertion(assertion) === normalizedAssertion(support) ||
+          verbatimRecordSpan(assertion, support) ||
           structuredRecordAssertionSupported(assertion, support),
         contradictedByRelatedUnit
       )
