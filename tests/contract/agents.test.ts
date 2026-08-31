@@ -23,6 +23,8 @@ import {
 } from '@slacato/core';
 import {
   buildAgentPrompt,
+  MAX_SPECIALIST_ARTIFACT_BYTES,
+  MAX_STAKEHOLDER_ARTIFACT_BYTES,
   MIN_AGENT_REQUIRED_EVIDENCE_TOKENS,
   pruneAgentEvidence
 } from '../../packages/core/src/application/briefs/prompts.js';
@@ -139,15 +141,19 @@ function context(records: readonly AgentEvidenceRecord[]): AgentContext {
   };
 }
 
-function artifactNearByteLimit<Value extends Record<string, unknown>>(base: Value, field: keyof Value): Value {
+function artifactNearByteLimit<Value extends Record<string, unknown>>(
+  base: Value,
+  field: keyof Value,
+  limit = 5_980
+): Value {
   const values: string[] = [];
   const encoded = (candidate: Value): number => new TextEncoder().encode(JSON.stringify(candidate)).byteLength;
-  while (encoded({ ...base, [field]: [...values, 'x'.repeat(2_000)] }) <= 5_980) values.push('x'.repeat(2_000));
+  while (encoded({ ...base, [field]: [...values, 'x'.repeat(2_000)] }) <= limit) values.push('x'.repeat(2_000));
   let lower = 1;
   let upper = 2_000;
   while (lower < upper) {
     const candidate = Math.ceil((lower + upper) / 2);
-    if (encoded({ ...base, [field]: [...values, 'x'.repeat(candidate)] }) <= 5_980) lower = candidate;
+    if (encoded({ ...base, [field]: [...values, 'x'.repeat(candidate)] }) <= limit) lower = candidate;
     else upper = candidate - 1;
   }
   return { ...base, [field]: [...values, 'x'.repeat(lower)] };
@@ -2203,6 +2209,129 @@ describe('specialized agents', () => {
     expect(transportedMessages).toHaveLength(2);
     expect(transportedMessages.every((message) => (message.match(/BEGIN_UNTRUSTED_/g)?.length ?? 0)
       === (message.match(/END_UNTRUSTED_/g)?.length ?? 0))).toBe(true);
+  });
+
+  it('accepts a realistic 5-stakeholder artifact within its output cap on the first attempt', async () => {
+    const people = [
+      { name: 'Alice Chen', title: 'Vice President of Engineering', role: 'economic_buyer' as const, influence: 'high' as const, relationship: 'positive' as const },
+      { name: 'Bob Martinez', title: 'Chief Financial Officer', role: 'decision_maker' as const, influence: 'high' as const, relationship: 'neutral' as const },
+      { name: 'Carla Singh', title: 'Director of Global Procurement', role: 'procurement' as const, influence: 'medium' as const, relationship: 'neutral' as const },
+      { name: 'David Osei', title: 'Head of Information Security', role: 'evaluator' as const, influence: 'medium' as const, relationship: 'positive' as const },
+      { name: 'Elena Petrova', title: 'Senior Corporate Legal Counsel', role: 'legal' as const, influence: 'low' as const, relationship: 'unknown' as const }
+    ];
+    const records = people.map((person, index) => evidence(
+      `evidence_contact_${index}`,
+      'salesforce',
+      `fullName: ${person.name}\ntitle: ${person.title}\naccountId: ACC-2001\ninfluenceLevel: ${person.influence}\nsentiment: ${person.relationship}`
+    ));
+    const goals = [
+      'Reduce time to close new enterprise deals across the region',
+      'Consolidate vendor spend across the organization this fiscal year',
+      'Standardize reporting and analytics on a single unified platform',
+      'Improve forecast accuracy ahead of the next board review'
+    ];
+    const concerns = [
+      'Implementation timeline risk given the committed Q3 go-live deadline',
+      'Data residency requirements for customer records originating in the EU',
+      'Integration effort required with the existing CRM and billing stack',
+      'Headcount availability on the buyer side to support onboarding'
+    ];
+    const stakeholders = people.map((person, index) => {
+      const record = records[index]!;
+      const citation = { id: record.citationId, evidenceId: record.evidenceId, locator: record.sourceLocator };
+      return {
+        name: person.name, title: person.title, organization: 'Acme Corporation',
+        role: person.role, influence: person.influence, relationship: person.relationship,
+        goals, concerns,
+        claims: [
+          {
+            id: `claim_stakeholder_${index}_identity`, statement: `${person.name} is ${person.title}.`,
+            confidence: 0.9, citations: [citation]
+          },
+          {
+            id: `claim_stakeholder_${index}_sentiment`,
+            statement: `${person.name}'s recorded account relationship is ${person.relationship}, based on the discovery call notes.`,
+            confidence: 0.75, citations: [citation]
+          }
+        ]
+      };
+    });
+    const realisticArtifact = {
+      evidenceManifestId: 'manifest_agents',
+      stakeholders,
+      coverageGaps: [
+        'No confirmed contact identified for IT security sign-off beyond the initial evaluator.',
+        'Unclear who owns final procurement approval if the CFO is unavailable during signature week.'
+      ],
+      claims: [],
+      reviewWarnings: []
+    };
+    const artifactBytes = new TextEncoder().encode(JSON.stringify(realisticArtifact)).byteLength;
+    // A realistic 5-stakeholder map with nested per-person claims genuinely exceeds the shared
+    // 6_000-byte specialist cap - that gap is exactly what forced the schema-repair retry that
+    // hollowed the Stakeholder Map section. It must still fit the stakeholder-specific cap.
+    expect(artifactBytes).toBeGreaterThan(MAX_SPECIALIST_ARTIFACT_BYTES);
+    expect(artifactBytes).toBeLessThan(MAX_STAKEHOLDER_ARTIFACT_BYTES);
+
+    let transportCalls = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate() {
+        transportCalls += 1;
+        return { text: JSON.stringify(realisticArtifact), usage: { inputTokens: 400, outputTokens: 900 } };
+      }
+    };
+    const ledger: ProviderAttemptLedger = {
+      async beginAttempt(input) {
+        return {
+          reservationId: `reservation_realistic_${transportCalls}`,
+          attemptId: `attempt_realistic_${transportCalls}`,
+          ordinal: transportCalls + 1,
+          grantedOutputTokens: input.requestedOutputTokens
+        };
+      },
+      async settleAttempt() {},
+      async releaseAttempt() {}
+    };
+    // No ContextWindowPolicy, matching every production model adapter (OpenRouter, Ollama, mock).
+    const gateway = createBudgetedModelGateway(transport, undefined, ledger);
+
+    const result = await new StakeholderAgent(gateway).run(context(records));
+
+    expect(transportCalls).toBe(1);
+    expect(result.stakeholders.map((stakeholder) => stakeholder.name)).toEqual(
+      people.map((person) => person.name)
+    );
+  });
+
+  it('retains a fanned-in evidence excerpt when all three specialist artifacts sit at their byte ceilings', async () => {
+    const artifacts = [
+      { id: 'conversation', value: artifactNearByteLimit(emptyConversation, 'missingContext') },
+      {
+        id: 'stakeholder',
+        value: artifactNearByteLimit(emptyStakeholder, 'coverageGaps', MAX_STAKEHOLDER_ARTIFACT_BYTES - 20)
+      },
+      { id: 'commercial', value: artifactNearByteLimit(emptyCommercial, 'policyTriggers') }
+    ];
+    const cited = evidence(
+      'evidence_fanin_floor',
+      'gong_summary',
+      'Verified buyer statement about renewal timing and remaining budget approval steps.'
+    );
+
+    const prompt = buildAgentPrompt({
+      task: 'Build a bounded brief.',
+      trustedContext: { runId: 'run_agents' },
+      evidence: [cited],
+      artifacts
+    });
+
+    // Raising the stakeholder cap must not starve the strategy synthesis prompt of every real
+    // evidence record even when all three specialist artifacts are maxed out simultaneously -
+    // that would trade the hollowed Stakeholder Map bug for an ungrounded brief instead.
+    const retained = prompt.evidence.find((section) => section.id === cited.evidenceId);
+    expect(retained).toBeDefined();
+    expect(retained?.content).toContain('renewal timing');
   });
 
   it('rejects specialist artifacts from a different evidence manifest before strategy generation', async () => {
