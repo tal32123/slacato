@@ -68,11 +68,8 @@ test('adapts one primary navigation across the required responsive viewports', a
 test('completes the desktop and mobile shell journey with keyboard input only', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/diagnostics');
-  await expect(page).toHaveURL('/unauthorized?returnTo=%2Fdiagnostics');
+  await expect(page).toHaveURL('/login?returnTo=%2Fdiagnostics');
 
-  const choosePersona = page.getByRole('link', { name: 'Choose a persona' });
-  await tabTo(page, choosePersona);
-  await page.keyboard.press('Enter');
   const mayaLogin = page.getByRole('button', { name: /Continue as Maya Levin/ });
   await tabTo(page, mayaLogin);
   await page.keyboard.press('Enter');
@@ -181,8 +178,8 @@ test('foreground-refetches the signed session on protected navigation', async ({
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: false }) });
   });
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Runs', exact: true }).click();
-  await expect(page).toHaveURL('/unauthorized?returnTo=%2Fruns');
-  await expect(page.getByRole('heading', { name: 'Sign in to continue' })).toBeVisible();
+  await expect(page).toHaveURL('/login?returnTo=%2Fruns');
+  await expect(page.getByRole('heading', { name: 'Choose your demo persona' })).toBeVisible();
   expect(sessionRequests).toBeGreaterThan(0);
 });
 
