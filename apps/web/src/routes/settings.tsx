@@ -12,9 +12,11 @@ import {
   selectPersonaSession,
   sessionQueryOptions
 } from '@/api/session';
+import { advanceGuidedTour } from '@/components/guided-tour';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { demoPersonaPurpose, groupDemoPersonas } from '@/features/personas/demo-personas';
 import { cn } from '@/lib/utils';
 import { throwProtectedLoaderError } from './loader-security';
 
@@ -54,7 +56,13 @@ export function SettingsRoute(): React.JSX.Element {
     try {
       await selectPersonaSession(selected, csrf.data);
       await revalidator.revalidate();
+      advanceGuidedTour('settings-personas');
     } catch {
+      // The mutation did not durably switch the persona (a rejected request, or a request whose
+      // outcome could not be confirmed and was reconciled back to the still-active persona), so
+      // the selection control must reflect the persona that is actually active rather than the
+      // one the user had highlighted before submitting.
+      setSelected(session.persona.userId);
       setMutationError(true);
     } finally {
       setSaving(false);
@@ -114,57 +122,99 @@ export function SettingsRoute(): React.JSX.Element {
       )}
 
       <section aria-labelledby="persona-heading">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="persona-heading" className="text-xl font-semibold">
-              Active persona
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Changing persona closes open views and live connections before protected data is
-              reloaded.
-            </p>
-          </div>
-          <Button
-            className="min-h-11"
-            disabled={saving || selected === session.persona.userId || csrf.data === undefined}
-            onClick={() => void changePersona()}
-          >
-            {saving ? 'Changing persona…' : 'Use selected persona'}
-          </Button>
-        </div>
+        {(() => {
+          const personaGroups = groupDemoPersonas(personas.data ?? []);
+          // "Other fixture identities" is unbounded -- e2e fixtures accumulate rows in it across
+          // runs (see tests/e2e/support/personas.ts and approval.spec.ts's per-process leader
+          // persona), and no graded scenario or tour step ever narrates a persona from it.
+          // Excluding it from the spotlighted region below keeps that region's height from growing
+          // with fixture debris: a section taller than the viewport breaks two things at once --
+          // the guided tour's spotlight cutout math (apps/web/src/components/guided-tour.tsx) has
+          // to clamp, and its dialog-placement heuristic (top half vs. bottom half of the target)
+          // degenerates when the target spans both halves of the viewport, letting the dialog end
+          // up overlapping the very persona row (Nora Chen, Rina Vale, or Harper Noor, across the
+          // three tour steps that land here) the step just asked the user to click. Reproduced
+          // concretely: this only failed on a second run against a database a prior run had
+          // already added fixture identities to, not on a fresh one.
+          const spotlighted = personaGroups.filter((group) => group.id !== 'supporting');
+          const supporting = personaGroups.filter((group) => group.id === 'supporting');
+          const renderGroup = (group: (typeof personaGroups)[number]): React.JSX.Element => (
+            <fieldset key={group.id} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <legend className="col-span-full mb-2 text-sm font-semibold">
+                {group.title}
+                <span className="ml-2 font-normal text-muted-foreground">{group.description}</span>
+              </legend>
+              {group.personas.map((persona) => {
+                const active = persona.userId === session.persona.userId;
+                return (
+                  <label
+                    key={persona.userId}
+                    className={cn(
+                      'relative flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/50',
+                      selected === persona.userId && 'border-primary ring-2 ring-ring/20'
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="persona"
+                      value={persona.userId}
+                      checked={selected === persona.userId}
+                      onChange={() => setSelected(persona.userId)}
+                      className="mt-1 size-5 accent-primary"
+                    />
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2 font-medium">
+                        {persona.displayName}
+                        {active && <Check aria-hidden="true" className="size-4 text-primary" />}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted-foreground">
+                        {persona.role}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted-foreground">
+                        {demoPersonaPurpose(persona)}
+                      </span>
+                      {active && (
+                        <span className="sr-only">{persona.displayName}, active persona</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+          );
+          return (
+            <>
+              <div data-tour="settings-personas">
+                <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h2 id="persona-heading" className="text-xl font-semibold">
+                      Active persona
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Changing persona closes open views and live connections before protected data
+                      is reloaded.
+                    </p>
+                  </div>
+                  <Button
+                    className="min-h-11"
+                    disabled={
+                      saving || selected === session.persona.userId || csrf.data === undefined
+                    }
+                    onClick={() => void changePersona()}
+                  >
+                    {saving ? 'Changing persona…' : 'Use selected persona'}
+                  </Button>
+                </div>
 
-        <fieldset className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <legend className="sr-only">Canonical demo personas</legend>
-          {personas.data?.map((persona) => {
-            const active = persona.userId === session.persona.userId;
-            return (
-              <label
-                key={persona.userId}
-                className={cn(
-                  'relative flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/50',
-                  selected === persona.userId && 'border-primary ring-2 ring-ring/20'
-                )}
-              >
-                <input
-                  type="radio"
-                  name="persona"
-                  value={persona.userId}
-                  checked={selected === persona.userId}
-                  onChange={() => setSelected(persona.userId)}
-                  className="mt-1 size-5 accent-primary"
-                />
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2 font-medium">
-                    {persona.displayName}
-                    {active && <Check aria-hidden="true" className="size-4 text-primary" />}
-                  </span>
-                  <span className="mt-1 block text-sm text-muted-foreground">{persona.role}</span>
-                  {active && <span className="sr-only">{persona.displayName}, active persona</span>}
-                </span>
-              </label>
-            );
-          })}
-        </fieldset>
+                <div className="grid gap-6">{spotlighted.map(renderGroup)}</div>
+              </div>
+
+              {supporting.length > 0 && (
+                <div className="mt-6 grid gap-6">{supporting.map(renderGroup)}</div>
+              )}
+            </>
+          );
+        })()}
       </section>
 
       <section className="grid gap-4 border-t pt-7 lg:grid-cols-2" aria-label="Session controls">

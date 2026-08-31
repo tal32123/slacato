@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { runStatusSchema as canonicalRunStatusSchema } from './runs.js';
 
 export const opaqueIdSchema = z
   .string()
@@ -12,20 +13,14 @@ const safeTokenSchema = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/);
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const timestampSchema = z.string().datetime();
-const runStatusSchema = z.enum([
-  'created',
-  'retrieving',
-  'specialists_running',
-  'synthesizing',
-  'validating',
-  'awaiting_approval',
-  'finalizing',
-  'completed',
-  'rejected',
-  'failed',
-  'cancelled',
-  'running'
-]);
+/**
+ * Event payloads historically accept one extra value, 'running', beyond the
+ * canonical run-status set exported from ./runs.js. Preserved verbatim here
+ * (not merged into the canonical enum) because narrowing it would be a
+ * behavior change, not a dedup — see run-status-parity.test.ts, which flags
+ * this as a drift to resolve deliberately rather than silently.
+ */
+const runStatusSchema = z.enum([...canonicalRunStatusSchema.options, 'running']);
 const failureReasonSchema = z.enum([
   'conversation_unavailable',
   'stakeholder_unavailable',

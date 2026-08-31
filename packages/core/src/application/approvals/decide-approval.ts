@@ -13,7 +13,7 @@ import { assertApprovableBrief, hashApprovalPayload } from '../briefs/workflow.j
 import type {
   ApprovalAction,
   ApprovalDecisionStoreResult,
-  WorkflowStore
+  ApprovalStore
 } from '../workflow/workflow-store.js';
 
 export type DecideApprovalCommand = Readonly<{
@@ -114,7 +114,7 @@ function structuredApprovalDiff(
 export class DecideApproval {
   /** Provides the workflow store and access policy used to decide approvals. */
   public constructor(
-    private readonly store: WorkflowStore,
+    private readonly store: ApprovalStore,
     private readonly access: DealBriefAccessControl
   ) {}
 

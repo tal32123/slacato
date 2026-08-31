@@ -296,21 +296,35 @@ test('renders safe empty list and workspace states with a persona recovery path'
   const workspacePage = await context.newPage();
   await workspacePage.route('**/api/deals/OPP-1001', async (route) => {
     const body = workspaceResponse as {
-      brief: { sections: Record<string, { items: string[]; citationIds: string[]; accountTeamUpdateImpact: boolean }> };
+      sourceSnapshot: {
+        evidenceOverview: {
+          sections: Record<string, { items: string[]; citationIds: string[]; accountTeamUpdateImpact: boolean }>;
+        };
+      };
     };
-    const sectionsWithoutEvidence = Object.fromEntries(Object.entries(body.brief.sections).map(([id, section]) => [
+    const { evidenceOverview } = body.sourceSnapshot;
+    const sectionsWithoutEvidence = Object.fromEntries(Object.entries(evidenceOverview.sections).map(([id, section]) => [
       id, { ...section, items: [], citationIds: [], accountTeamUpdateImpact: false }
     ]));
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       ...body,
       evidence: [],
-      brief: { ...body.brief, sections: sectionsWithoutEvidence, stakeholders: [], actions: [], warnings: [] }
+      sourceSnapshot: {
+        ...body.sourceSnapshot,
+        evidenceOverview: {
+          ...evidenceOverview,
+          sections: sectionsWithoutEvidence,
+          stakeholders: [],
+          actions: [],
+          warnings: []
+        }
+      }
     }) });
   });
   await workspacePage.goto('/deals/OPP-1001');
   await expect(workspacePage.getByRole('heading', { name: 'Stakeholder Map' })).toBeVisible();
   await expect(workspacePage.getByText('No authorized stakeholder records are available.')).toBeVisible();
-  await expect(workspacePage.getByText('No source-backed actions are available.')).toBeVisible();
+  await expect(workspacePage.getByText('No deterministic source cues are available.')).toBeVisible();
   await expect(workspacePage.getByRole('button', { name: /Open evidence:/ })).toHaveCount(0);
   await expectNoHorizontalOverflow(workspacePage);
   await workspacePage.close();

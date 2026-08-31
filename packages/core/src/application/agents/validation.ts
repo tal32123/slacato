@@ -681,6 +681,41 @@ function claimsSupportedByEvidenceRecord(
   });
 }
 
+/** Confirms a stakeholder's identity, and any inferred classification, resolves to one evidence record.
+ *
+ * Two paths are accepted. Either a grounded claim restates the classification itself, which is the
+ * strictest form of support, or the stakeholder carries a grounded professional identity - a title
+ * or organization stated by the same record that names them. Requiring the first path alone
+ * deleted every stakeholder a real model produced, because "high" and "positive" are enum values
+ * the brief asks the agent to infer rather than quotes a source can supply. Requiring the second
+ * alone would drop someone identified only from a call. A bare grounded name satisfies neither, so
+ * "attended the call" can never become "economic buyer, high influence". */
+function stakeholderIdentitySupported(
+  stakeholder: Readonly<{
+    name: string;
+    title?: string | undefined;
+    organization?: string | undefined;
+    role: string;
+    influence: string;
+    relationship: string;
+  }>,
+  claims: readonly Claim[],
+  evidenceById: ReadonlyMap<string, AgentEvidenceRecord>
+): boolean {
+  const profile = [
+    ...(stakeholder.title === undefined ? [] : [stakeholder.title]),
+    ...(stakeholder.organization === undefined ? [] : [stakeholder.organization])
+  ];
+  const classification = [
+    stakeholder.influence,
+    ...(stakeholder.relationship === 'unknown' ? [] : [stakeholder.relationship]),
+    ...(stakeholder.role === 'unknown' ? [] : [stakeholder.role.replaceAll('_', ' ')])
+  ];
+  const supported = (values: readonly string[]): boolean =>
+    tupleSupportedByOneEvidenceRecord([stakeholder.name, ...values], claims, evidenceById);
+  return supported(classification) || profile.some((attribute) => supported([attribute]));
+}
+
 /** Confirms separately claimed fields resolve to one record without unrelated extra citations joining records. */
 function tupleSupportedByOneEvidenceRecord(
   values: readonly (string | number)[],
@@ -696,6 +731,16 @@ function tupleSupportedByOneEvidenceRecord(
   }
   return false;
 }
+
+const MAX_RECOMMENDATION_ACTION_CHARACTERS = 200;
+const INTERNAL_ACTION_VERB =
+  /^(?:schedule|arrange|prepare|draft|document|review|validate|confirm|reconfirm|verify|clarify|determine|check|follow up|coordinate|escalate|align|summarize|identify|assess|plan|brief|map|track|request)\b/i;
+const UNGROUNDED_FACTUAL_CONNECTIVE =
+  /\b(?:because|since|after|given|that|according to|already|definitely|certainly)\b/i;
+const COMMERCIAL_COMMITMENT =
+  /\b(?:discount|concession|concede|credit|rebate|waiver|waive|refund|price reduction|free of charge)\b/i;
+const UNSAFE_CUSTOMER_FACING_ACTION =
+  /\b(?:promise|guarantee|bypass|conceal|mislead|fabricate|disclose|reveal|leak)\b/i;
 
 /** Recognizes approved language that explicitly communicates evidence uncertainty. */
 function isExplicitUncertainty(value: string): boolean {
@@ -743,28 +788,27 @@ function safeInformationRequest(value: string): boolean {
   );
 }
 
-/** Accepts only bounded internal workflow actions that make no customer-facing promise. */
+/** Accepts bounded internal workflow actions that make no customer-facing or commercial commitment.
+ *
+ * The action text is forward-looking and is deliberately not evidence-verified (only its rationale
+ * is), so this gate is a negative safety filter rather than a sentence-template allowlist. An
+ * allowlist of literal phrasings silently deleted every deal-specific recommendation a real model
+ * produced, which emptied the section the brief exists to deliver. Commercial commitments are
+ * rejected here and remain the approval flow's responsibility. */
 function safeRecommendationAction(value: string): boolean {
-  if (
-    !safeGeneratedProse(value) ||
-    /\b(?:promise|guarantee|bypass|conceal|mislead|fabricate)\b/i.test(value)
-  )
-    return false;
   const normalized = value.trim();
-  const boundedMeeting =
-    /^(?:schedule|arrange) (?:a|an|the) (?:technical )?(?:workshop|meeting|review|follow-up|call)(?: to (?:review|discuss|clarify|address|confirm|coordinate) (?:open questions|technical requirements|commercial requirements|next steps))?\.?$/i;
-  const boundedPreparation =
-    /^(?:prepare|document|review|validate) (?:a|an|the) (?:agenda|question list|evidence summary|deal brief|open issues)\.?$/i;
-  const boundedCoordination =
-    /^(?:follow up|coordinate) with (?:the )?(?:buyer|account executive|sales engineer|legal|procurement|deal owner)\.?$/i;
-  const boundedEscalation = /^escalate to (?:legal|procurement|the deal owner)\.?$/i;
-  return (
-    boundedMeeting.test(normalized) ||
-    boundedPreparation.test(normalized) ||
-    boundedCoordination.test(normalized) ||
-    boundedEscalation.test(normalized) ||
-    safeInformationRequest(normalized)
-  );
+  if (!safeGeneratedProse(normalized)) return false;
+  if (safeInformationRequest(normalized)) return true;
+  if (normalized.length > MAX_RECOMMENDATION_ACTION_CHARACTERS) return false;
+  // A forward-looking instruction, not a narrative: one sentence, opening on an internal verb.
+  if (!INTERNAL_ACTION_VERB.test(normalized)) return false;
+  if ((normalized.match(/[.!?](?=\s|$)/g) ?? []).length > 1) return false;
+  // Subordinate clauses smuggle unverified facts into text nothing grounds.
+  if (UNGROUNDED_FACTUAL_CONNECTIVE.test(normalized)) return false;
+  // Pricing and concessions belong to the deterministic approval policy, never to raw actions.
+  if (COMMERCIAL_COMMITMENT.test(normalized)) return false;
+  if (UNSAFE_CUSTOMER_FACING_ACTION.test(normalized)) return false;
+  return true;
 }
 
 /** Accepts only generic internal roles that do not require factual evidence. */
@@ -843,18 +887,9 @@ export function validateStakeholderArtifact(
     return { ...stakeholder, claims: claims.kept, insufficient: claims.insufficient };
   });
   const supportedStakeholders = stakeholders.flatMap((stakeholder) => {
-    const role = stakeholder.role.replaceAll('_', ' ');
-    const identity = [
-      stakeholder.name,
-      stakeholder.influence,
-      ...(stakeholder.relationship === 'unknown' ? [] : [stakeholder.relationship]),
-      ...(stakeholder.role === 'unknown' ? [] : [role]),
-      ...(stakeholder.title === undefined ? [] : [stakeholder.title]),
-      ...(stakeholder.organization === undefined ? [] : [stakeholder.organization])
-    ];
     if (
       stakeholder.claims.length === 0 ||
-      !tupleSupportedByOneEvidenceRecord(identity, stakeholder.claims, map)
+      !stakeholderIdentitySupported(stakeholder, stakeholder.claims, map)
     )
       return [];
     return [
@@ -995,16 +1030,7 @@ export function validateDealBrief(
   const negotiationClaims = process(parsed.negotiationState.claims) ?? [];
   const supportedStakeholders = parsed.stakeholderMap.stakeholders.flatMap((stakeholder) => {
     const claims = process(stakeholder.claims) ?? [];
-    const role = stakeholder.role.replaceAll('_', ' ');
-    const identity = [
-      stakeholder.name,
-      stakeholder.influence,
-      ...(stakeholder.relationship === 'unknown' ? [] : [stakeholder.relationship]),
-      ...(stakeholder.role === 'unknown' ? [] : [role]),
-      ...(stakeholder.title === undefined ? [] : [stakeholder.title]),
-      ...(stakeholder.organization === undefined ? [] : [stakeholder.organization])
-    ];
-    if (claims.length === 0 || !tupleSupportedByOneEvidenceRecord(identity, claims, map)) return [];
+    if (claims.length === 0 || !stakeholderIdentitySupported(stakeholder, claims, map)) return [];
     return [
       {
         ...stakeholder,

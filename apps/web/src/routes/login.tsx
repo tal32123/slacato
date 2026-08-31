@@ -12,7 +12,11 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { fetchCsrf, fetchPersonas } from '@/api/client';
 import { safeDestination, selectPersonaSession, sessionRuntime } from '@/api/session';
-import { advanceGuidedTourFromLogin, GuidedTour } from '@/components/guided-tour';
+import {
+  advanceGuidedTourFromLogin,
+  GuidedTour,
+  GuidedTourInvitation
+} from '@/components/guided-tour';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,14 +28,7 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-
-const roleDescriptions: Readonly<Record<string, string>> = {
-  'Account Owner': 'Work the accounts assigned to this seller and request deal support.',
-  'Restricted Account Owner': 'Work the assigned restricted account with sensitive access.',
-  'Sales Leader': 'Review the sales team’s permitted accounts and active deal work.',
-  'Deal Desk Approver': 'Review commercial decisions across assigned accounts.',
-  'Unauthorized Requester': 'Demonstrate default-deny behavior for restricted work.'
-};
+import { demoPersonaPurpose, groupDemoPersonas } from '@/features/personas/demo-personas';
 
 type LoginState =
   | Readonly<{ status: 'loading' }>
@@ -126,6 +123,8 @@ export function LoginRoute(): React.JSX.Element {
           </p>
         </div>
 
+        <GuidedTourInvitation />
+
         {state.status === 'loading' && <LoadingState />}
         {state.status === 'error' && (
           <Alert variant="destructive">
@@ -139,52 +138,50 @@ export function LoginRoute(): React.JSX.Element {
           </Alert>
         )}
         {state.status === 'ready' && (
-          <div data-tour="login-personas" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {state.personas.map((persona) => (
-              <Card
-                key={persona.userId}
-                className="gap-4 border-border/90 py-5 transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-md"
-              >
-                <CardHeader className="px-5">
-                  <div className="mb-2 flex items-start justify-between gap-3">
-                    <span className="grid size-11 place-items-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
-                      {initials(persona.displayName)}
-                    </span>
-                    {persona.role === 'Deal Desk Approver' && (
-                      <Badge className="bg-attention/25 text-attention-foreground">Approver</Badge>
-                    )}
-                  </div>
-                  <CardTitle className="text-lg">
-                    <h3>{persona.displayName}</h3>
-                  </CardTitle>
-                  <CardDescription className="font-medium text-primary">
-                    {persona.role}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="min-h-14 px-5 text-sm leading-5 text-muted-foreground">
-                  {roleDescriptions[persona.role] ??
-                    'Use the canonical permissions assigned to this demo identity.'}
-                </CardContent>
-                <CardFooter className="px-5">
-                  <Button
-                    className="min-h-11 w-full justify-between"
-                    disabled={submitting !== undefined}
-                    onClick={() => void choose(persona)}
+          <div className="grid gap-8">
+            {groupDemoPersonas(state.personas).map((group) => {
+              const cards = (
+                <div
+                  data-tour={group.id === 'scenario' ? 'login-personas' : undefined}
+                  className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+                >
+                  {group.personas.map((persona) => (
+                    <PersonaChoice
+                      key={persona.userId}
+                      persona={persona}
+                      submitting={submitting}
+                      onChoose={choose}
+                    />
+                  ))}
+                </div>
+              );
+              if (group.collapsed)
+                return (
+                  <details key={group.id} className="rounded-xl border bg-card/60 px-5 py-4">
+                    <summary className="min-h-11 cursor-pointer text-sm font-medium">
+                      {group.title}
+                    </summary>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                      {group.description}
+                    </p>
+                    <div className="mt-4">{cards}</div>
+                  </details>
+                );
+              return (
+                <section key={group.id} aria-labelledby={`persona-group-${group.id}`}>
+                  <h3
+                    id={`persona-group-${group.id}`}
+                    className="text-lg font-semibold tracking-tight"
                   >
-                    <span>
-                      {submitting === persona.userId
-                        ? 'Opening workspace…'
-                        : `Continue as ${persona.displayName}`}
-                    </span>
-                    {submitting === persona.userId ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <ArrowRight />
-                    )}
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
+                    {group.title}
+                  </h3>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    {group.description}
+                  </p>
+                  <div className="mt-4">{cards}</div>
+                </section>
+              );
+            })}
           </div>
         )}
         <p className="mt-7 flex items-center gap-2 text-xs text-muted-foreground">
@@ -193,6 +190,57 @@ export function LoginRoute(): React.JSX.Element {
       </section>
       <GuidedTour />
     </main>
+  );
+}
+
+/** Presents one canonical identity, why the demo keeps it, and its sign-in control. */
+function PersonaChoice({
+  persona,
+  submitting,
+  onChoose
+}: Readonly<{
+  persona: Persona;
+  submitting: string | undefined;
+  onChoose: (persona: Persona) => Promise<void>;
+}>): React.JSX.Element {
+  return (
+    <Card className="gap-4 border-border/90 py-5 transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-md">
+      <CardHeader className="px-5">
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <span className="grid size-11 place-items-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
+            {initials(persona.displayName)}
+          </span>
+          {persona.role === 'Deal Desk Approver' && (
+            <Badge className="bg-attention/25 text-attention-foreground">Approver</Badge>
+          )}
+        </div>
+        <CardTitle className="text-lg">
+          <h4>{persona.displayName}</h4>
+        </CardTitle>
+        <CardDescription className="font-medium text-primary">{persona.role}</CardDescription>
+      </CardHeader>
+      <CardContent className="min-h-14 px-5 text-sm leading-5 text-muted-foreground">
+        {demoPersonaPurpose(persona)}
+      </CardContent>
+      <CardFooter className="px-5">
+        <Button
+          className="min-h-11 w-full justify-between"
+          disabled={submitting !== undefined}
+          onClick={() => void onChoose(persona)}
+        >
+          <span>
+            {submitting === persona.userId
+              ? 'Opening workspace…'
+              : `Continue as ${persona.displayName}`}
+          </span>
+          {submitting === persona.userId ? (
+            <LoaderCircle className="animate-spin" />
+          ) : (
+            <ArrowRight />
+          )}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 

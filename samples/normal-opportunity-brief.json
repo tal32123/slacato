@@ -7,27 +7,41 @@
       {
         "citations": [
           {
+            "evidenceId": "salesforce:CON-3001:OPP-1001:contact:0",
+            "id": "citation_f96455e01192ceceefd4e1e0f6e1cdcb12e0eb75",
+            "locator": "salesforce/contacts.tsv#CON-3001/opportunity/OPP-1001#chunk-0"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_bg_1",
+        "statement": "Wants a clean renewal path but will not support expansion unless regional exception handling is reduced."
+      },
+      {
+        "citations": [
+          {
             "evidenceId": "salesforce:ACC-2001:OPP-1001:account:0",
-            "id": "citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a",
+            "id": "citation_bfd11c393a4cfb47c9a932d0850edfce2b1a1557",
             "locator": "salesforce/accounts.tsv#ACC-2001/opportunity/OPP-1001#chunk-0"
           }
         ],
         "confidence": 1,
-        "id": "claim_bg_02",
+        "id": "claim_bg_2",
         "statement": "Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership."
       }
     ],
-    "goals": []
+    "goals": [
+      "Wants a clean renewal path but will not support expansion unless regional exception handling is reduced."
+    ]
   },
   "confidenceAndReviewWarnings": {
     "overallConfidence": 1,
     "warnings": [
       {
         "claimIds": [
-          "claim_st_06"
+          "claim_ns_2"
         ],
-        "code": "PENDING_STAKEHOLDER_CONFIRMATION",
-        "message": "We still need the final owner matrix and success metrics confirmed by the client stakeholders.",
+        "code": "POLICY_LEGAL_APPROVAL",
+        "message": "Data retention, restricted research data, or customer-specific security language requires legal approval before it is shared externally.",
         "severity": "warning"
       },
       {
@@ -35,25 +49,17 @@
         "code": "INSUFFICIENT_CLAIM_SUPPORT",
         "message": "No single cited evidence unit supports the complete material relation.",
         "severity": "warning"
+      },
+      {
+        "claimIds": [],
+        "code": "INSUFFICIENT_CLAIM_SUPPORT",
+        "message": "Material anchors are absent: legal counsel amara quinn",
+        "severity": "warning"
       }
     ]
   },
   "dealSnapshot": {
     "accountName": "Northstar Foods Cooperative",
-    "claims": [
-      {
-        "citations": [
-          {
-            "evidenceId": "salesforce:ACC-2001:OPP-1001:account:0",
-            "id": "citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a",
-            "locator": "salesforce/accounts.tsv#ACC-2001/opportunity/OPP-1001#chunk-0"
-          }
-        ],
-        "confidence": 1,
-        "id": "claim_ds_01",
-        "statement": "Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership."
-      }
-    ],
     "opportunityName": "Northstar Foods Cooperative - Global Access Renewal",
     "stage": "6.0 Order Review"
   },
@@ -63,12 +69,12 @@
         "citations": [
           {
             "evidenceId": "salesforce:ACC-2001:OPP-1001:account:0",
-            "id": "citation_267f20fa1827d30e7d4d1f750ea5eed497467e5a",
+            "id": "citation_bfd11c393a4cfb47c9a932d0850edfce2b1a1557",
             "locator": "salesforce/accounts.tsv#ACC-2001/opportunity/OPP-1001#chunk-0"
           }
         ],
         "confidence": 1,
-        "id": "claim_es_01",
+        "id": "claim_es_1",
         "statement": "Strategic renewal with executive visibility, operations team wants fewer regional exceptions and clearer migration ownership."
       }
     ],
@@ -77,23 +83,11 @@
   "missingInformation": {
     "items": [
       {
-        "question": "Verify evidence for claim claim_bg_01.",
+        "question": "Verify evidence for claim claim_ds_1.",
         "whyItMatters": "No single cited evidence unit supports the complete material relation."
       },
       {
-        "question": "Verify evidence for claim claim_ns_01.",
-        "whyItMatters": "No single cited evidence unit supports the complete material relation."
-      },
-      {
-        "question": "Verify evidence for claim claim_ns_02.",
-        "whyItMatters": "No single cited evidence unit supports the complete material relation."
-      },
-      {
-        "question": "Verify evidence for claim claim_sev_03.",
-        "whyItMatters": "No single cited evidence unit supports the complete material relation."
-      },
-      {
-        "question": "Verify evidence for claim claim_sev_10.",
+        "question": "Verify evidence for claim claim_stk_elena.",
         "whyItMatters": "No single cited evidence unit supports the complete material relation."
       },
       {
@@ -107,24 +101,59 @@
       {
         "citations": [
           {
-            "evidenceId": "gong_transcript:CALL-008:transcript:1",
-            "id": "citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800",
-            "locator": "gong/transcripts/OPP-1001_CALL-008.md#chunk-1"
+            "evidenceId": "salesforce:OPP-1001:0",
+            "id": "citation_31509f3fc6d7cc1fac357d2971dc93c10c545976",
+            "locator": "salesforce/opportunities.tsv#OPP-1001#chunk-0"
           }
         ],
         "confidence": 1,
-        "id": "claim_ns_03",
-        "statement": "Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate."
+        "id": "claim_ns_1",
+        "statement": "Send revised order form and migration success plan by 2026-04-28"
+      },
+      {
+        "citations": [
+          {
+            "evidenceId": "policy:deal-desk-policy:OPP-1001:2",
+            "id": "citation_c454929763baca67f063df14782ff9d0bd8e48f1",
+            "locator": "policies/deal_desk_policy.md#opportunity/OPP-1001#chunk-2"
+          }
+        ],
+        "confidence": 1,
+        "id": "claim_ns_2",
+        "statement": "Data retention, restricted research data, or customer-specific security language requires legal approval before it is shared externally."
       }
     ],
-    "currentState": "Insufficient supported evidence is available for a negotiation-state assessment.",
-    "leverage": [],
+    "currentState": "Send revised order form and migration success plan by 2026-04-28",
+    "leverage": [
+      "Send revised order form and migration success plan by 2026-04-28"
+    ],
     "risks": [
-      "Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate."
+      "Data retention, restricted research data, or customer-specific security language requires legal approval before it is shared externally."
     ]
   },
   "recommendedNextActions": {
-    "actions": []
+    "actions": [
+      {
+        "action": "Schedule the revised order form and migration success plan dispatch.",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:OPP-1001:0",
+                "id": "citation_31509f3fc6d7cc1fac357d2971dc93c10c545976",
+                "locator": "salesforce/opportunities.tsv#OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_act_1",
+            "statement": "Send revised order form and migration success plan by 2026-04-28"
+          }
+        ],
+        "dueDate": "2026-04-28",
+        "priority": "high",
+        "rationale": "Send revised order form and migration success plan by 2026-04-28"
+      }
+    ]
   },
   "sourceEvidence": {
     "evidence": [
@@ -134,13 +163,33 @@
           {
             "citations": [
               {
+                "evidenceId": "salesforce:CON-3001:OPP-1001:contact:0",
+                "id": "citation_f96455e01192ceceefd4e1e0f6e1cdcb12e0eb75",
+                "locator": "salesforce/contacts.tsv#CON-3001/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_4",
+            "statement": "Wants a clean renewal path but will not support expansion unless regional exception handling is reduced."
+          }
+        ],
+        "evidenceId": "salesforce:CON-3001:OPP-1001:contact:0",
+        "sourceType": "crm",
+        "summary": "Wants a clean renewal path but will not support expansion unless regional exception handling is reduced."
+      },
+      {
+        "capturedAt": "2026-04-18T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
                 "evidenceId": "salesforce:CON-3002:OPP-1001:contact:0",
-                "id": "citation_24eef038997ced1746e5bea4a772beb4751b10ac",
+                "id": "citation_29af71561c79b01568e4d4d56e9ce76ea4ac8919",
                 "locator": "salesforce/contacts.tsv#CON-3002/opportunity/OPP-1001#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_sev_04",
+            "id": "claim_ev_5",
             "statement": "Owns branch migration plan and wants named escalation owners for rollout."
           }
         ],
@@ -155,12 +204,12 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3003:OPP-1001:contact:0",
-                "id": "citation_619fe5d577cbbf7d6ffdda1e2728d6ed295e6b6a",
+                "id": "citation_2174b8ecac26b3505e618ffb06347cf2bc4601a1",
                 "locator": "salesforce/contacts.tsv#CON-3003/opportunity/OPP-1001#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_sev_05",
+            "id": "claim_ev_6",
             "statement": "Focused on renewal uplift, payment schedule, and keeping final order form simple."
           }
         ],
@@ -175,12 +224,12 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3004:OPP-1001:contact:0",
-                "id": "citation_1f1f502b3907db41bb68e3fbc260d89a7de810d6",
+                "id": "citation_58bc41f104d36734cd5f7e3eb74694776e7111ac",
                 "locator": "salesforce/contacts.tsv#CON-3004/opportunity/OPP-1001#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_sev_06",
+            "id": "claim_ev_7",
             "statement": "Advocates for reducing bypass exceptions but needs reporting on migration progress."
           }
         ],
@@ -195,79 +244,186 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3005:OPP-1001:contact:0",
-                "id": "citation_6778a31e8b4cfabeecbb519bb254a7fceae98f09",
+                "id": "citation_b331cfd61e6d72638476ca84dc7211a0f87c13f7",
                 "locator": "salesforce/contacts.tsv#CON-3005/opportunity/OPP-1001#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_sev_07",
+            "id": "claim_ev_8",
             "statement": "Reviewing liability language and data processing addendum."
           }
         ],
         "evidenceId": "salesforce:CON-3005:OPP-1001:contact:0",
         "sourceType": "crm",
         "summary": "Reviewing liability language and data processing addendum."
-      },
-      {
-        "capturedAt": "2026-05-05T00:00:00Z",
-        "claims": [
-          {
-            "citations": [
-              {
-                "evidenceId": "slack:SLK-9002:0",
-                "id": "citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6",
-                "locator": "slack/account_team_updates.tsv#SLK-9002#chunk-0"
-              }
-            ],
-            "confidence": 1,
-            "id": "claim_sev_08",
-            "statement": "We still need the final owner matrix and success metrics confirmed by the client stakeholders."
-          }
-        ],
-        "evidenceId": "slack:SLK-9002:0",
-        "sourceType": "slack",
-        "summary": "We still need the final owner matrix and success metrics confirmed by the client stakeholders."
-      },
-      {
-        "capturedAt": "2026-04-18T00:00:00Z",
-        "claims": [
-          {
-            "citations": [
-              {
-                "evidenceId": "gong_transcript:CALL-008:transcript:1",
-                "id": "citation_61dc8c2a6d3587d7e04ffee0636fdab79d7db800",
-                "locator": "gong/transcripts/OPP-1001_CALL-008.md#chunk-1"
-              }
-            ],
-            "confidence": 1,
-            "id": "claim_sev_09",
-            "statement": "Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate."
-          }
-        ],
-        "evidenceId": "gong_transcript:CALL-008:transcript:1",
-        "sourceType": "conversation",
-        "summary": "Legal still needs the data retention citation, but Amara told me it is not a business blocker if the citation is accurate."
       }
     ]
   },
   "stakeholderMap": {
-    "claims": [
-      {
-        "citations": [
-          {
-            "evidenceId": "slack:SLK-9002:0",
-            "id": "citation_ad13a2e64b16bb1fe2b4c2f0e19b105af2c54da6",
-            "locator": "slack/account_team_updates.tsv#SLK-9002#chunk-0"
-          }
-        ],
-        "confidence": 1,
-        "id": "claim_st_06",
-        "statement": "We still need the final owner matrix and success metrics confirmed by the client stakeholders."
-      }
-    ],
     "coverageGaps": [
       "Verify unsupported stakeholder records."
     ],
-    "stakeholders": []
+    "stakeholders": [
+      {
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3002:OPP-1001:contact:0",
+                "id": "citation_29af71561c79b01568e4d4d56e9ce76ea4ac8919",
+                "locator": "salesforce/contacts.tsv#CON-3002/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_stk_marco",
+            "statement": "Marco Devlin is VP Infrastructure"
+          },
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3002:OPP-1001:contact:0",
+                "id": "citation_29af71561c79b01568e4d4d56e9ce76ea4ac8919",
+                "locator": "salesforce/contacts.tsv#CON-3002/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_stk_marco_goal",
+            "statement": "Owns branch migration plan and wants named escalation owners for rollout."
+          }
+        ],
+        "concerns": [
+          "Owns branch migration plan and wants named escalation owners for rollout."
+        ],
+        "goals": [
+          "Owns branch migration plan and wants named escalation owners for rollout."
+        ],
+        "influence": "high",
+        "name": "Marco Devlin",
+        "organization": "Northstar Foods Cooperative",
+        "relationship": "positive",
+        "role": "decision_maker",
+        "title": "VP Infrastructure"
+      },
+      {
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3003:OPP-1001:contact:0",
+                "id": "citation_2174b8ecac26b3505e618ffb06347cf2bc4601a1",
+                "locator": "salesforce/contacts.tsv#CON-3003/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_stk_iris",
+            "statement": "Iris Calder is Procurement Director"
+          },
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3003:OPP-1001:contact:0",
+                "id": "citation_2174b8ecac26b3505e618ffb06347cf2bc4601a1",
+                "locator": "salesforce/contacts.tsv#CON-3003/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_stk_iris_goal",
+            "statement": "Focused on renewal uplift, payment schedule, and keeping final order form simple."
+          }
+        ],
+        "concerns": [
+          "Focused on renewal uplift, payment schedule, and keeping final order form simple."
+        ],
+        "goals": [
+          "Focused on renewal uplift, payment schedule, and keeping final order form simple."
+        ],
+        "influence": "medium",
+        "name": "Iris Calder",
+        "organization": "Northstar Foods Cooperative",
+        "relationship": "neutral",
+        "role": "procurement",
+        "title": "Procurement Director"
+      },
+      {
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3004:OPP-1001:contact:0",
+                "id": "citation_58bc41f104d36734cd5f7e3eb74694776e7111ac",
+                "locator": "salesforce/contacts.tsv#CON-3004/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_stk_pavel",
+            "statement": "Pavel Stone is Global Network Lead"
+          },
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3004:OPP-1001:contact:0",
+                "id": "citation_58bc41f104d36734cd5f7e3eb74694776e7111ac",
+                "locator": "salesforce/contacts.tsv#CON-3004/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_stk_pavel_goal",
+            "statement": "Advocates for reducing bypass exceptions but needs reporting on migration progress."
+          }
+        ],
+        "concerns": [
+          "Advocates for reducing bypass exceptions but needs reporting on migration progress."
+        ],
+        "goals": [
+          "Advocates for reducing bypass exceptions but needs reporting on migration progress."
+        ],
+        "influence": "medium",
+        "name": "Pavel Stone",
+        "organization": "Northstar Foods Cooperative",
+        "relationship": "positive",
+        "role": "evaluator",
+        "title": "Global Network Lead"
+      },
+      {
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3005:OPP-1001:contact:0",
+                "id": "citation_b331cfd61e6d72638476ca84dc7211a0f87c13f7",
+                "locator": "salesforce/contacts.tsv#CON-3005/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_stk_amara",
+            "statement": "Amara Quinn is Legal Counsel"
+          },
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3005:OPP-1001:contact:0",
+                "id": "citation_b331cfd61e6d72638476ca84dc7211a0f87c13f7",
+                "locator": "salesforce/contacts.tsv#CON-3005/opportunity/OPP-1001#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_stk_amara_goal",
+            "statement": "Reviewing liability language and data processing addendum."
+          }
+        ],
+        "concerns": [
+          "Reviewing liability language and data processing addendum."
+        ],
+        "goals": [
+          "Reviewing liability language and data processing addendum."
+        ],
+        "influence": "medium",
+        "name": "Amara Quinn",
+        "organization": "Northstar Foods Cooperative",
+        "relationship": "neutral",
+        "role": "legal",
+        "title": "Legal Counsel"
+      }
+    ]
   }
 }

@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import postgres, { type Sql } from 'postgres';
+import { MOCK_EMBEDDING_PROFILE_COLUMNS, mockEmbeddingVectorLiteral } from './support/mock-embeddings';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const suffix = `task13e2e-${process.pid}-${Date.now()}`;
@@ -154,16 +155,44 @@ async function seedApproval(opportunityId: string, runId: string, subjectId: str
       restricted_research_language, customer_specific_security_language, customer_facing_concession_language,
       conflicting_evidence, missing_material_evidence, source_commit)
     values (${opportunityId}, 12, 0, false, false, false, false, false, false, false, 'task-13-e2e') on conflict (opportunity_id) do nothing`;
-  await sql`insert into document_versions (id, external_id, version, source_type, content_hash, content)
+  // document_versions.*_ck requires reliability_class/source_locator/classification_reason/policy_hash
+  // to be all-null or all-populated, and (independently) the embedding indexer's corpus provenance
+  // check -- which runs unconditionally against every row matching its salesforce/gong/pricing/
+  // slack/policies source-locator prefixes, evidence's own locator included -- requires a complete,
+  // consistent parent document for any such evidence row. Leaving these null let this fixture's
+  // leftover row (approval fixtures are never cleaned up between runs) fail that check on the next
+  // `pnpm index:embeddings`, crashing the e2e webServer on its very next start.
+  await sql`insert into document_versions
+    (id, external_id, version, source_type, content_hash, content, reliability_class, source_locator,
+      classification_reason, policy_hash)
     values (${`document-${runId}`}, ${`external-${runId}`}, 1, 'salesforce',
-      ${`document-hash-${runId}`}, 'The renewal is ready for a documented commercial review.')`;
+      ${`document-hash-${runId}`}, 'The renewal is ready for a documented commercial review.',
+      'authoritative_system', ${localSourceLocator}, 'task-13-e2e', ${'a'.repeat(64)})`;
+  const evidenceContent =
+    'The renewal is ready for a documented commercial review. Complete the renewal with reviewed commercial terms. The commercial position is awaiting authorized approval.';
+  const evidenceContentHash = `evidence-hash-${runId}`;
+  // The e2e webServer indexes the canonical corpus with AI_PROVIDER=mock (see
+  // playwright.config.ts), and packages/infrastructure/src/health/readiness-probes.ts's `index`
+  // readiness check requires every row in evidence_versions -- not just the canonical corpus -- to
+  // carry a single, consistent embedding profile. Leaving this fixture row's embedding columns
+  // null (as a plain approval-routing fixture might reasonably do, since nothing here exercises
+  // retrieval) used to flip that check to "unavailable" for the whole deployment, disabling
+  // Generate Brief for every later spec in the run. Computing a real mock embedding keeps this
+  // fixture from poisoning readiness.
+  const evidenceEmbedding = await mockEmbeddingVectorLiteral(evidenceContent);
   await sql`insert into evidence_versions
     (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash,
-      content, event_date, source_locator, reliability_class, classification_reason, policy_hash)
+      content, event_date, source_locator, reliability_class, classification_reason, policy_hash,
+      embedding, embedding_provider, embedding_model, embedding_dimension, embedding_profile,
+      embedding_version, embedding_normalization, embedding_content_hash)
     values (${localEvidenceId}, ${`document-${runId}`}, 'ACC-2003', ${opportunityId}, 0,
-      'salesforce', 'standard', ${`evidence-hash-${runId}`},
-      'The renewal is ready for a documented commercial review. Complete the renewal with reviewed commercial terms. The commercial position is awaiting authorized approval.',
-      '2026-08-29', ${localSourceLocator}, 'authoritative_system', 'task-13-e2e', ${'a'.repeat(64)})`;
+      'salesforce', 'standard', ${evidenceContentHash},
+      ${evidenceContent},
+      '2026-08-29', ${localSourceLocator}, 'authoritative_system', 'task-13-e2e', ${'a'.repeat(64)},
+      ${evidenceEmbedding}::vector, ${MOCK_EMBEDDING_PROFILE_COLUMNS.embeddingProvider},
+      ${MOCK_EMBEDDING_PROFILE_COLUMNS.embeddingModel}, ${MOCK_EMBEDDING_PROFILE_COLUMNS.embeddingDimension},
+      ${MOCK_EMBEDDING_PROFILE_COLUMNS.embeddingProfile}, ${MOCK_EMBEDDING_PROFILE_COLUMNS.embeddingVersion},
+      ${MOCK_EMBEDDING_PROFILE_COLUMNS.embeddingNormalization}, ${evidenceContentHash})`;
   await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version)
     values (${runId}, ${opportunityId}, 'USR-5003', 'awaiting_approval', 'mock', 'mock-brief', ${hashApprovalPayload(runId)}, 5)`;
   await sql`insert into run_evidence_manifests

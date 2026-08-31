@@ -14,6 +14,7 @@ const rejectedRunId = `run-rejected-${suffix}`;
 
 async function loginAs(page: Page, name: string, returnTo: string): Promise<void> {
   await page.goto(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+  await page.getByText('Other fixture identities', { exact: true }).click();
   await page.getByRole('button', { name: new RegExp(`Continue as ${name}`) }).click();
   await expect(page).toHaveURL(returnTo);
 }

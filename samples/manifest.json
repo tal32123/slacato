@@ -1,6 +1,6 @@
 {
   "deliverable": "Deliverable D: Sample run artifacts",
-  "generatedAt": "2026-08-30T18:40:41.068Z",
+  "generatedAt": "2026-08-31T06:00:14.428Z",
   "database": "slacato_samples",
   "liveLlmVerified": true,
   "scenarios": {
@@ -14,18 +14,18 @@
         "name": "Northstar Foods Cooperative - Global Access Renewal"
       },
       "provenance": {
-        "runId": "run_31c495bb7ef6ab0f2f3bdc210ab546fb96a168acfa6209b5e5e5172334b41f42",
+        "runId": "run_fd58beab2fab37d7595481091a5fe84f9ed616c11a26b8ed312ceb9b03866c0a",
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
         "embeddingModel": "openai/text-embedding-3-small",
         "tokenUsage": {
-          "calls": 6,
-          "inputTokens": 31543,
-          "outputTokens": 9788,
-          "totalTokens": 41331
+          "calls": 5,
+          "inputTokens": 25266,
+          "outputTokens": 7093,
+          "totalTokens": 32359
         },
-        "runStartedAt": "2026-08-30T18:32:24.594Z",
-        "runCompletedAt": "2026-08-30T18:33:36.131Z"
+        "runStartedAt": "2026-08-31T05:40:53.065Z",
+        "runCompletedAt": "2026-08-31T05:41:16.197Z"
       },
       "files": [
         "normal-opportunity-brief.json",
@@ -42,18 +42,18 @@
         "name": "Eclipse BioMaterials Ltd - Restricted Renewal and Data Protection"
       },
       "provenance": {
-        "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+        "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
         "embeddingModel": "openai/text-embedding-3-small",
         "tokenUsage": {
           "calls": 5,
-          "inputTokens": 22984,
-          "outputTokens": 8911,
-          "totalTokens": 31895
+          "inputTokens": 25255,
+          "outputTokens": 8730,
+          "totalTokens": 33985
         },
-        "runStartedAt": "2026-08-30T18:34:01.436Z",
-        "runCompletedAt": "2026-08-30T18:35:47.741Z"
+        "runStartedAt": "2026-08-31T05:58:48.644Z",
+        "runCompletedAt": "2026-08-31T05:59:22.724Z"
       },
       "files": [
         "restricted-opportunity-brief.json",
@@ -81,20 +81,20 @@
       ]
     },
     "traceAndLogExamples": {
-      "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "provenance": {
-        "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+        "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
         "embeddingModel": "openai/text-embedding-3-small",
         "tokenUsage": {
           "calls": 5,
-          "inputTokens": 22984,
-          "outputTokens": 8911,
-          "totalTokens": 31895
+          "inputTokens": 25255,
+          "outputTokens": 8730,
+          "totalTokens": 33985
         },
-        "runStartedAt": "2026-08-30T18:34:01.436Z",
-        "runCompletedAt": "2026-08-30T18:35:47.741Z"
+        "runStartedAt": "2026-08-31T05:58:48.644Z",
+        "runCompletedAt": "2026-08-31T05:59:22.724Z"
       },
       "requiredSpanKinds": [
         "model_call",
@@ -108,6 +108,32 @@
       "files": [
         "restricted-run-trace.json",
         "restricted-run-events.json"
+      ]
+    },
+    "slackImpactDemonstration": {
+      "description": "Mandatory Data-Generation Subtask demonstration: with/without Slack authorization-scope comparison for OPP-1001/USR-5001, plus a secondary OPP-1002/USR-5002 check and a cross-reference to the OPP-1003 restricted run above.",
+      "addedAt": "2026-08-31T06:30:00.000Z",
+      "persona": {
+        "userId": "USR-5001",
+        "name": "Maya Levin"
+      },
+      "opportunity": {
+        "id": "OPP-1001",
+        "name": "Northstar Foods Cooperative - Global Access Renewal"
+      },
+      "runsUsed": 4,
+      "withoutSlackMechanism": "Scoped can_read=false revocation of permission_grants row 'grant:USR-5001:ACC-2001:slack' in the slacato_samples database, restored after the run. Not a fixture edit.",
+      "provenance": {
+        "withSlackRunId": "run_a12bd817a6d8a3746358cc958a7c66af329782cf1ecb5273402d7e8bfd660103",
+        "withoutSlackRunId": "run_1ed98d7135fdf21c62052f9bcf78582d8ffd7f8992d218df0493cd73e390dbd4",
+        "provider": "openrouter",
+        "generationModel": "google/gemini-3.5-flash-lite",
+        "embeddingModel": "openai/text-embedding-3-small"
+      },
+      "finding": "Slack evidence was retrieved, authorized, ranked competitively, and included in full in every specialist's context on every attempt, and was extracted into one validated, cited claim by the Conversation Intelligence Agent on one attempt -- but no live run produced a finalized brief with a Slack citation, because the Negotiation Strategy Agent re-synthesizes final brief sections from the shared evidence pool rather than forwarding upstream specialist claims. See slack-impact-comparison.json for the full stage-by-stage diagnosis.",
+      "files": [
+        "slack-impact-comparison.json",
+        "slack-impact-comparison.md"
       ]
     }
   },

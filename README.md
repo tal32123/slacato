@@ -3,7 +3,7 @@
 This pnpm monorepo builds a negotiation-preparation brief for a seller from synthetic Salesforce, Gong, pricing, policy, and Slack-style account-team data. A durable multi-agent workflow retrieves only evidence the requester may access, asks specialist agents to analyze it, synthesizes a nine-section deal brief, validates every factual claim against its citations, and routes sensitive recommendations for human approval before finalization.
 
 > [!IMPORTANT]
-> **Load `.env` into the shell before every database, indexing, test, or development command.** pnpm and Drizzle do not load it automatically:
+> **Load `.env` into the shell before running tests or starting the app.** Most of this repo's scripts and test files read `process.env.DATABASE_URL` (and other settings such as the provider, session secret, and web origin) directly, and pnpm does not load `.env` for them automatically:
 >
 > ```bash
 > set -a
@@ -11,7 +11,7 @@ This pnpm monorepo builds a negotiation-preparation brief for a seller from synt
 > set +a
 > ```
 >
-> This is not optional. `drizzle.config.ts` falls back to the default `slacato` Compose database, which lags behind the migrations the test suite expects. Skipping this step is measurably broken: `pnpm test` reports **15 failed / 441 passed** with confusing schema errors (`column "source_commit" ... does not exist`, a `run_budgets.max_input_tokens` NOT NULL violation). With `.env` sourced, the same suite reports **456 passed, 1 skipped, 0 failed**. Sourcing it also selects the correct provider, session, and origin settings.
+> `drizzle.config.ts` loads `.env` itself (via Node's built-in `process.loadEnvFile`), so `pnpm db:generate` and `pnpm db:migrate` no longer need this step, and — instead of silently falling back to a plausible-but-wrong database and lagging behind the schema other commands expect — now fail immediately with a clear error if `DATABASE_URL` is unset everywhere. Everything else (`pnpm dev`, `pnpm test`, `pnpm ingest:records`, `pnpm index:embeddings`) still needs the shell sourced first.
 
 ## Technical overview
 

@@ -17,6 +17,9 @@ export type EvidencePlan = Readonly<{
     sourceTypes: readonly AuthorizedSourceType[];
   }>[];
   sourceLimits: Readonly<Record<AuthorizedSourceType, number>>;
+  /** Always-surface guarantee for canonical CRM records (account, opportunity, every contact);
+   *  distinct from `sourceLimits.salesforce`, which bounds the hybrid-search candidate window. */
+  crmRecordLimit: number;
   mandatorySourceTypes: readonly ['policy'];
   policyReservation: Readonly<{ resultSlots: 1; contextCharacters: number }>;
   maxContextCharacters: number;

@@ -190,16 +190,40 @@ export type FinalizeRunInput = Readonly<{
   payload: DealBrief;
 }>;
 
-/** Atomic workflow transition seam. Implementations persist state, events and commands in one transaction. */
-export interface WorkflowStore {
+/**
+ * Shared base seam every role depends on: looking up a run by ID.
+ * Every other role interface below extends this.
+ */
+export interface RunReader {
+  getRun(runId: RunId): Promise<WorkflowRun | undefined>;
+}
+
+/**
+ * Starts, regenerates, and cancels runs. Consumed by `StartDealBrief`, `RegenerateDealBrief`,
+ * and `CancelDealBrief` (see `application/briefs/workflow.ts`).
+ */
+export interface RunLifecycleStore extends RunReader {
   findRunByIdempotencyKey(
     input: Readonly<{ idempotencyKey: string; requestedBy: UserId; opportunityId: OpportunityId }>
   ): Promise<WorkflowRun | undefined>;
   findActiveRun(
     input: Readonly<{ opportunityId: OpportunityId; requestedBy: UserId }>
   ): Promise<WorkflowRun | undefined>;
-  getRun(runId: RunId): Promise<WorkflowRun | undefined>;
   startRun(input: StartRunInput): Promise<WorkflowRun>;
+  regenerateRun(input: RegenerateRunInput): Promise<WorkflowRun>;
+  findRegenerationByIdempotencyKey(
+    input: RegenerationReplayInput
+  ): Promise<WorkflowRun | undefined>;
+  cancelRun(
+    input: Readonly<{ runId: RunId; expectedVersion: number; cancelledBy: UserId }>
+  ): Promise<WorkflowRun>;
+}
+
+/**
+ * Claims and advances individual workflow steps: leases, checkpoints, commits, and terminal
+ * step outcomes. Consumed by `ProcessDealBriefStep` (see `application/briefs/workflow.ts`).
+ */
+export interface StepExecutionStore extends RunReader {
   claimStep(
     input: Readonly<{
       runId: RunId;
@@ -227,22 +251,6 @@ export interface WorkflowStore {
   saveCheckpoint(input: SaveCheckpointInput): Promise<Readonly<Record<string, unknown>>>;
   commitStepAndEnqueueNext(input: CommitStepInput): Promise<WorkflowRun>;
   awaitApproval(input: AwaitApprovalInput): Promise<WorkflowRun>;
-  getApprovalSubject(
-    input: Readonly<{ runId: RunId; approvalSubjectId?: string | undefined }>
-  ): Promise<ApprovalSubject | undefined>;
-  findDecisionByIdempotencyKey(
-    input: Readonly<{ idempotencyKey: string; requestHash: string }>
-  ): Promise<ApprovalDecisionReplay | undefined>;
-  recordDecisionAndEnqueueFinalization(
-    input: ApprovalDecisionInput
-  ): Promise<ApprovalDecisionStoreResult>;
-  replaceApprovalSubject(
-    input: ReplaceApprovalSubjectInput
-  ): Promise<Readonly<{ run: WorkflowRun; subject: ApprovalSubject; replayed: boolean }>>;
-  regenerateRun(input: RegenerateRunInput): Promise<WorkflowRun>;
-  findRegenerationByIdempotencyKey(
-    input: RegenerationReplayInput
-  ): Promise<WorkflowRun | undefined>;
   finalizeRun(input: FinalizeRunInput): Promise<WorkflowRun>;
   failRun(
     input: Readonly<{
@@ -255,7 +263,31 @@ export interface WorkflowStore {
       reason: string;
     }>
   ): Promise<WorkflowRun>;
-  cancelRun(
-    input: Readonly<{ runId: RunId; expectedVersion: number; cancelledBy: UserId }>
-  ): Promise<WorkflowRun>;
 }
+
+/**
+ * Reads and decides approval subjects. Consumed by `DecideApproval`
+ * (see `application/approvals/decide-approval.ts`).
+ */
+export interface ApprovalStore extends RunReader {
+  getApprovalSubject(
+    input: Readonly<{ runId: RunId; approvalSubjectId?: string | undefined }>
+  ): Promise<ApprovalSubject | undefined>;
+  findDecisionByIdempotencyKey(
+    input: Readonly<{ idempotencyKey: string; requestHash: string }>
+  ): Promise<ApprovalDecisionReplay | undefined>;
+  recordDecisionAndEnqueueFinalization(
+    input: ApprovalDecisionInput
+  ): Promise<ApprovalDecisionStoreResult>;
+  replaceApprovalSubject(
+    input: ReplaceApprovalSubjectInput
+  ): Promise<Readonly<{ run: WorkflowRun; subject: ApprovalSubject; replayed: boolean }>>;
+}
+
+/**
+ * Composed alias of every role. The single Postgres adapter implements this so existing wiring
+ * (`new PostgresWorkflowStore(...)` passed into every use case) keeps working unchanged; each
+ * use case's constructor should depend on the narrowest role interface it actually calls,
+ * not on `WorkflowStore` itself.
+ */
+export interface WorkflowStore extends RunLifecycleStore, StepExecutionStore, ApprovalStore {}

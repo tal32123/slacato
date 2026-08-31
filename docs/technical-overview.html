@@ -106,13 +106,48 @@
     .callout.warning { border-left-color: var(--warning); background: var(--warning-soft); }
     .callout.danger { border-left-color: var(--danger); background: var(--danger-soft); }
     .callout p:last-child { margin-bottom: 0; }
-    .diagram { margin: 30px 0 8px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, #fff, #fbfcfb); overflow-x: auto; }
+    .diagram { position: relative; margin: 30px 0 8px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, #fff, #fbfcfb); overflow-x: auto; }
     .diagram svg { display: block; width: 100%; min-width: 850px; height: auto; }
+    .diagram-toolbar { position: sticky; left: 0; z-index: 3; display: flex; justify-content: flex-end; width: 100%; min-width: 0; padding: 10px 12px 0; pointer-events: none; }
+    .diagram-fullscreen { pointer-events: auto; border: 1px solid var(--line-strong); border-radius: 999px; background: rgba(255,255,255,.96); color: var(--ink); padding: 7px 12px; font: 650 12px system-ui; cursor: pointer; box-shadow: 0 4px 16px rgba(10,20,29,.08); }
+    .diagram-fullscreen:hover, .diagram-fullscreen:focus-visible { border-color: var(--teal); color: var(--teal-dark); outline: none; }
+    body.diagram-open { overflow: hidden; }
+    .diagram.diagram-expanded { position: fixed; inset: 0; z-index: 1000; margin: 0; padding: 10px; border: 0; border-radius: 0; background: var(--canvas); overflow: auto; }
+    .diagram.diagram-expanded .diagram-toolbar { top: 0; padding-bottom: 8px; background: linear-gradient(180deg, var(--canvas) 70%, transparent); }
+    .diagram.diagram-expanded svg { width: 100%; min-width: 0; max-height: calc(100vh - 72px); }
     .diagram-note { color: var(--muted); font-size: 14px; }
+    .diagram-guide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0 30px; }
+    .guide-item { min-width: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; }
+    .guide-item h4 { color: var(--teal-dark); }
+    .guide-item p { margin: 4px 0 0; color: #4f5d65; font-size: 14px; line-height: 1.5; }
+    #data .e-title, #data .e-text { cursor: help; }
+    .erd-tooltip { position: fixed; z-index: 1200; max-width: min(360px, calc(100vw - 24px)); padding: 10px 12px; border: 1px solid var(--teal); border-radius: 10px; background: #0A141D; color: #fff; box-shadow: 0 12px 30px rgba(10,20,29,.24); font-size: 13px; line-height: 1.45; pointer-events: none; }
+    .erd-tooltip[hidden] { display: none; }
+    .readiness-list { display: grid; gap: 18px; margin: 24px 0 34px; }
+    .readiness-card { min-width: 0; padding: 24px; border: 1px solid var(--line); border-left: 4px solid var(--teal); border-radius: 14px; background: #fbfcfb; }
+    .readiness-card > h3 { margin: 0 0 6px; }
+    .readiness-card > p { max-width: none; margin: 0; color: #46545c; }
+    .readiness-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+    .readiness-block { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+    .readiness-block h4 { margin-bottom: 8px; color: var(--teal-dark); }
+    .readiness-block ul { max-width: none; margin: 0; padding-left: 1.1em; color: #46545c; font-size: 14px; line-height: 1.5; }
+    .readiness-block strong { color: var(--ink); }
+    .change-marker { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 14px; padding: 10px 12px; border: 1px solid #d8b46b; border-radius: 10px; background: var(--warning-soft); color: #68400e; text-align: left; cursor: pointer; }
+    .change-zone { outline: 2px solid rgba(21,136,100,.28); outline-offset: 4px; }
+    .change-marker strong { flex: 0 0 auto; color: var(--warning); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .change-marker span { min-width: 0; font-size: 13px; line-height: 1.35; }
+    .change-marker small { margin-left: auto; color: #795822; white-space: nowrap; }
+    .change-marker:hover, .change-marker:focus-visible { border-color: var(--warning); outline: none; }
     .legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 14px 0 0; color: var(--muted); font-size: 13px; }
     .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 7px; border-radius: 3px; vertical-align: -1px; background: var(--teal-soft); border: 1px solid var(--teal); }
     .legend .durable::before { background: #eef1f2; border-color: #65737b; }
     .legend .future::before { background: #fff7e8; border-color: #9a5a10; border-style: dashed; }
+    .legend .model::before { background: #fff; border-color: #b8c6bf; }
+    .legend .human::before { background: #fff7e8; border-color: #9a5a10; }
+    .sub { color: var(--muted); }
+    .scenarios td:first-child, .scenarios th:first-child { width: 15%; }
+    .scenarios td:nth-child(2), .scenarios th:nth-child(2) { width: 20%; }
+    .scenarios td:nth-child(2) code { white-space: nowrap; }
     .decision { display: grid; grid-template-columns: 210px 1fr; gap: 28px; padding: 25px 0; border-top: 1px solid var(--line); }
     .decision:first-of-type { border-top: 0; }
     .decision h3 { margin: 2px 0; font-size: 18px; }
@@ -120,13 +155,9 @@
     table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 14px; }
     th, td { padding: 13px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
     th { color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
-    .status { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 760; text-transform: uppercase; letter-spacing: .05em; }
-    .status.now { background: var(--teal-soft); color: var(--teal-dark); }
-    .status.gap { background: var(--warning-soft); color: var(--warning); }
-    .status.no { background: var(--danger-soft); color: var(--danger); }
     footer { max-width: 1180px; margin: -60px auto 60px; padding: 0 24px; color: var(--muted); font-size: 13px; }
     @media (max-width: 800px) {
-      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .grid-2, .grid-3, .diagram-guide, .readiness-columns { grid-template-columns: 1fr; }
       .decision { grid-template-columns: 1fr; gap: 6px; }
       .hero { padding-top: 64px; }
       section { padding: 28px 22px; }
@@ -138,6 +169,7 @@
       .hero { padding-top: 40px; }
       section { box-shadow: none; break-inside: avoid; }
       .diagram { overflow: visible; }
+      .change-marker { display: none; }
     }
   </style>
 </head>
@@ -148,17 +180,18 @@
       <a href="#context">Context</a>
       <a href="#architecture">Architecture</a>
       <a href="#data">Data model</a>
-      <a href="#lifecycle">Lifecycle</a>
+      <a href="#lifecycle">Run lifecycle</a>
       <a href="#decisions">Design</a>
       <a href="#security">Security</a>
+      <a href="#deliverables">Deliverables</a>
       <a href="#production">Production</a>
     </div>
   </nav>
 
-  <header class="hero">
+  <header class="hero change-zone" data-change-id="hero-summary" data-change="The overview sentence is now shorter and uses plain language.">
     <div class="eyebrow">Technical overview · offline artifact</div>
     <h1>Evidence-grounded negotiation preparation.</h1>
-    <p class="lede">A durable, permission-aware assistant that turns fragmented deal signals into a reviewable sales brief—without treating the model as an authorization system, a policy engine, or a source of truth.</p>
+    <p class="lede">Turns scattered deal information into one brief you can review and verify.</p>
     <div class="hero-meta">
       <span class="pill">NestJS + React + BullMQ</span>
       <span class="pill">PostgreSQL + pgvector</span>
@@ -177,52 +210,93 @@
       <div class="grid-3">
         <div class="card"><h4>Reduce preparation time</h4><p>Fan out focused analysis across conversation, stakeholder, and commercial evidence, then synthesize one coherent brief.</p></div>
         <div class="card"><h4>Keep evidence inspectable</h4><p>Claims link to immutable authorized evidence; API and UI render stable labels such as <code>source=&lt;file&gt;, id=&lt;value&gt;</code>.</p></div>
-        <div class="card"><h4>Keep people accountable</h4><p>Recommendations that cross policy thresholds cannot finalize until the required authority entries are decided.</p></div>
+        <div class="card change-zone" data-change-id="approval-example" data-change="The approval rule now includes a concrete example."><h4>Keep people accountable</h4><p>If a recommendation needs approval—for example, a large discount—the brief waits for the right person to approve or reject it.</p></div>
       </div>
     </section>
 
     <section id="architecture">
-      <div class="section-number">02 · Component architecture</div>
+      <div class="section-number">02 · Architecture</div>
       <h2>Thin apps around durable domain and infrastructure seams.</h2>
-      <p>The browser is the reviewer workspace; the API owns authenticated commands and read models; the worker advances durable workflow steps. <code>packages/core</code> contains provider-independent policy, agents, contracts, validation, and orchestration. <code>packages/infrastructure</code> implements PostgreSQL, Redis/BullMQ, retrieval, model adapters, and recovery.</p>
+      <p>The browser requests work. The API checks access. The worker builds the brief. Core holds the business rules; infrastructure connects them to storage, queues, search, and models.</p>
 
-      <div class="diagram" role="img" aria-label="Component architecture showing web, API, worker, core, infrastructure, PostgreSQL, Redis, and model providers">
-        <svg viewBox="0 0 1160 700" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker>
-            <filter id="shadowA" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0A141D" flood-opacity=".08"/></filter>
-          </defs>
-          <rect x="28" y="28" width="1104" height="644" rx="22" fill="#fbfcfb" stroke="#dce3df"/>
-          <text x="58" y="66" font-family="system-ui" font-size="13" font-weight="700" fill="#158864" letter-spacing="1.5">RUNTIME COMPONENTS</text>
+      <h3>Logical view</h3>
 
-          <g filter="url(#shadowA)"><rect x="70" y="102" width="240" height="112" rx="16" fill="#fff" stroke="#158864" stroke-width="2"/><text x="190" y="144" text-anchor="middle" font-family="system-ui" font-size="20" font-weight="700" fill="#0A141D">apps/web</text><text x="190" y="172" text-anchor="middle" font-family="system-ui" font-size="14" fill="#52616a">React reviewer workspace</text><text x="190" y="193" text-anchor="middle" font-family="system-ui" font-size="12" fill="#6b7880">briefs · evidence · approvals</text></g>
-          <g filter="url(#shadowA)"><rect x="460" y="102" width="240" height="112" rx="16" fill="#fff" stroke="#158864" stroke-width="2"/><text x="580" y="144" text-anchor="middle" font-family="system-ui" font-size="20" font-weight="700" fill="#0A141D">apps/api</text><text x="580" y="172" text-anchor="middle" font-family="system-ui" font-size="14" fill="#52616a">NestJS HTTP boundary</text><text x="580" y="193" text-anchor="middle" font-family="system-ui" font-size="12" fill="#6b7880">sessions · commands · queries · SSE</text></g>
-          <g filter="url(#shadowA)"><rect x="850" y="102" width="240" height="112" rx="16" fill="#fff" stroke="#158864" stroke-width="2"/><text x="970" y="144" text-anchor="middle" font-family="system-ui" font-size="20" font-weight="700" fill="#0A141D">apps/worker</text><text x="970" y="172" text-anchor="middle" font-family="system-ui" font-size="14" fill="#52616a">Durable step processor</text><text x="970" y="193" text-anchor="middle" font-family="system-ui" font-size="12" fill="#6b7880">leases · retries · reconciliation</text></g>
-          <path d="M310 158H460" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/><text x="385" y="145" text-anchor="middle" font-family="system-ui" font-size="11" fill="#6b7880">HTTP / SSE</text>
+      <div class="diagram change-zone" data-change-id="logical-diagram" data-change="Every component now explains its job inside the diagram." data-diagram="logical-architecture" role="img" aria-label="Component architecture showing web, API, worker, core, infrastructure, PostgreSQL, Redis, and model providers">
+        <svg viewBox="0 0 1160 760" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
+          <rect x="28" y="28" width="1104" height="704" rx="22" fill="#fbfcfb" stroke="#dce3df"/>
+          <style>
+            .la-app{fill:#fff;stroke:#158864;stroke-width:2}.la-core{fill:#eaf6f1;stroke:#158864;stroke-width:2}.la-infra{fill:#eef1f2;stroke:#65737b;stroke-width:2}.la-store{fill:#fff;stroke:#65737b;stroke-width:1.5}
+            .la-title{font:700 18px system-ui;fill:#0A141D}.la-copy{font:13px system-ui;fill:#4d5b63}.la-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowA)}.la-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}
+          </style>
+          <text x="52" y="64" class="la-g">EACH BOX STATES THE ONE JOB IT OWNS</text>
 
-          <rect x="122" y="282" width="390" height="150" rx="18" fill="#eaf6f1" stroke="#158864" stroke-width="2"/><text x="317" y="321" text-anchor="middle" font-family="system-ui" font-size="19" font-weight="700" fill="#0A141D">packages/core</text><text x="317" y="350" text-anchor="middle" font-family="system-ui" font-size="13" fill="#36564b">domain policy · workflow · agents · validators</text><text x="317" y="378" text-anchor="middle" font-family="system-ui" font-size="13" fill="#36564b">typed brief and agent artifact contracts</text><text x="317" y="406" text-anchor="middle" font-family="system-ui" font-size="13" fill="#36564b">provider-independent ports</text>
-          <rect x="648" y="282" width="390" height="150" rx="18" fill="#eef1f2" stroke="#65737b" stroke-width="2"/><text x="843" y="321" text-anchor="middle" font-family="system-ui" font-size="19" font-weight="700" fill="#0A141D">packages/infrastructure</text><text x="843" y="350" text-anchor="middle" font-family="system-ui" font-size="13" fill="#4d5b63">Drizzle repositories · retrieval SQL · queues</text><text x="843" y="378" text-anchor="middle" font-family="system-ui" font-size="13" fill="#4d5b63">workflow persistence · trace projection</text><text x="843" y="406" text-anchor="middle" font-family="system-ui" font-size="13" fill="#4d5b63">OpenRouter · Ollama · mock adapters</text>
-          <path d="M580 214V250H317V282" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
-          <path d="M970 214V250H843V282" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
-          <path d="M512 357H648" stroke="#63727a" stroke-width="2" marker-start="url(#arrowA)" marker-end="url(#arrowA)"/><text x="580" y="344" text-anchor="middle" font-family="system-ui" font-size="11" fill="#6b7880">ports / adapters</text>
+          <g><rect class="la-app" x="40" y="96" width="300" height="150" rx="16"/><text x="190" y="132" text-anchor="middle" class="la-title">Web reviewer</text><text x="190" y="168" text-anchor="middle" class="la-copy">The seller starts a brief, then reviews</text><text x="190" y="190" text-anchor="middle" class="la-copy">its evidence, timeline, and approvals.</text></g>
+          <g><rect class="la-app" x="430" y="96" width="300" height="150" rx="16"/><text x="580" y="132" text-anchor="middle" class="la-title">API</text><text x="580" y="168" text-anchor="middle" class="la-copy">Checks access, records work, and returns</text><text x="580" y="190" text-anchor="middle" class="la-copy">safe results to the reviewer.</text></g>
+          <g><rect class="la-app" x="820" y="96" width="300" height="150" rx="16"/><text x="970" y="132" text-anchor="middle" class="la-title">Worker</text><text x="970" y="168" text-anchor="middle" class="la-copy">Runs retrieval and model steps, then resumes</text><text x="970" y="190" text-anchor="middle" class="la-copy">interrupted work from checkpoints.</text></g>
+          <path class="la-a" d="M340 171H430"/><path class="la-a" d="M730 171H820"/>
 
-          <rect x="70" y="516" width="260" height="106" rx="15" fill="#fff" stroke="#65737b"/><text x="200" y="554" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#0A141D">PostgreSQL + pgvector</text><text x="200" y="582" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">authoritative state · exact vectors</text><text x="200" y="602" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">FTS · manifests · traces</text>
-          <rect x="450" y="516" width="260" height="106" rx="15" fill="#fff" stroke="#65737b"/><text x="580" y="554" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#0A141D">Redis + BullMQ</text><text x="580" y="582" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">delivery and wake-up mechanism</text><text x="580" y="602" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">Postgres remains recovery source</text>
-          <rect x="830" y="496" width="260" height="146" rx="15" fill="#fff" stroke="#158864"/><text x="960" y="532" text-anchor="middle" font-family="system-ui" font-size="17" font-weight="700" fill="#0A141D">Model gateway</text><text x="960" y="560" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">OpenRouter · Ollama · mock</text><line x1="860" y1="578" x2="1060" y2="578" stroke="#dce3df"/><text x="960" y="602" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">budgets · retries · schema repair</text><text x="960" y="622" text-anchor="middle" font-family="system-ui" font-size="12" fill="#5b6870">usage / attempt ledger</text>
-          <path d="M760 432L300 516" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
-          <path d="M843 432L650 516" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
-          <path d="M920 432L950 496" fill="none" stroke="#63727a" stroke-width="2" marker-end="url(#arrowA)"/>
+          <g><rect class="la-core" x="70" y="310" width="470" height="170" rx="18"/><text x="305" y="350" text-anchor="middle" class="la-title">Core business rules</text><text x="305" y="390" text-anchor="middle" class="la-copy">Defines workflow, approval, and citation rules</text><text x="305" y="412" text-anchor="middle" class="la-copy">without depending on a database or model vendor.</text></g>
+          <g><rect class="la-infra" x="620" y="310" width="470" height="170" rx="18"/><text x="855" y="350" text-anchor="middle" class="la-title">Infrastructure adapters</text><text x="855" y="390" text-anchor="middle" class="la-copy">Connects those rules to Postgres, queues, search,</text><text x="855" y="412" text-anchor="middle" class="la-copy">recovery, and model providers.</text></g>
+          <path class="la-a" d="M580 246V278H305V310"/><path class="la-a" d="M970 246V278H855V310"/>
+          <path d="M540 395H620" stroke="#63727a" stroke-width="2" marker-start="url(#arrowA)" marker-end="url(#arrowA)"/>
+
+          <g><rect class="la-store" x="40" y="550" width="330" height="140" rx="15"/><text x="205" y="588" text-anchor="middle" class="la-title">PostgreSQL + pgvector</text><text x="205" y="624" text-anchor="middle" class="la-copy">Stores permissions, evidence, run state,</text><text x="205" y="646" text-anchor="middle" class="la-copy">checkpoints, approvals, and final briefs.</text></g>
+          <g><rect class="la-store" x="415" y="550" width="330" height="140" rx="15"/><text x="580" y="588" text-anchor="middle" class="la-title">Redis + BullMQ</text><text x="580" y="624" text-anchor="middle" class="la-copy">Delivers queued work to workers; Postgres</text><text x="580" y="646" text-anchor="middle" class="la-copy">can rebuild it after a failure.</text></g>
+          <g><rect class="la-store" x="790" y="550" width="330" height="140" rx="15"/><text x="955" y="588" text-anchor="middle" class="la-title">Model gateway</text><text x="955" y="624" text-anchor="middle" class="la-copy">Controls every model call, retry, budget,</text><text x="955" y="646" text-anchor="middle" class="la-copy">and response validation.</text></g>
+          <path class="la-a" d="M730 480L290 550"/><path class="la-a" d="M855 480L650 550"/><path class="la-a" d="M965 480L955 550"/>
         </svg>
       </div>
-      <p class="diagram-note">Redis transports work; PostgreSQL owns the resumable truth. The worker can reconstruct progress from runs, outbox commands, leases, checkpoints, attempts, and immutable artifacts after a restart.</p>
+
+      <h3>Deployment view</h3>
+      <p>The API proves who may request work, the worker performs it, PostgreSQL preserves the history needed to recover it, and the model gateway contains external model access.</p>
+      <div class="diagram change-zone" data-change-id="deployment-diagram" data-change="The deployment purpose moved above the diagram." data-diagram="deployment" role="img" aria-label="Deployment flow from reviewer browser through the web gateway and API to the worker, PostgreSQL, Redis, and model gateway">
+        <svg viewBox="0 0 1240 560" xmlns="http://www.w3.org/2000/svg">
+          <desc>A request starts in the reviewer browser. The web gateway keeps the browser and API on one trusted origin. The API authorizes and records work, the worker performs it, PostgreSQL preserves recovery state, Redis delivers pending work, and the model gateway controls provider traffic.</desc>
+          <defs><marker id="arrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
+          <rect width="1240" height="560" fill="#fbfcfb"/>
+          <style>
+            .dp-svc{fill:#fff;stroke:#158864;stroke-width:2}.dp-store{fill:#fff;stroke:#65737b;stroke-width:1.6}.dp-ext{fill:#eaf6f1;stroke:#158864;stroke-width:1.6}
+            .dp-h{font:700 16px system-ui;fill:#0A141D}.dp-s{font:12px system-ui;fill:#52616a}.dp-l{font:11px system-ui;fill:#6b7880}.dp-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}.dp-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowD)}
+          </style>
+          <text x="28" y="32" class="dp-g">HOW A REQUEST MOVES THROUGH THE DEPLOYED SYSTEM</text>
+
+          <g><title>The seller’s browser is a review surface only. It never receives database or model-provider credentials.</title><rect class="dp-store" x="30" y="78" width="210" height="132" rx="14"/><text x="48" y="112" class="dp-h">Reviewer browser</text><text x="48" y="142" class="dp-s">Starts a brief and reviews</text><text x="48" y="161" class="dp-s">evidence and approvals.</text><text x="48" y="190" class="dp-s">Holds no provider keys.</text></g>
+          <path class="dp-a" d="M240 144H285"/><text x="262" y="134" text-anchor="middle" class="dp-l">HTTPS</text>
+
+          <g><title>The web gateway serves the interface and forwards API traffic on the same origin, which keeps session cookies out of cross-origin flows.</title><rect class="dp-svc" x="285" y="78" width="220" height="132" rx="14"/><text x="303" y="112" class="dp-h">Web gateway</text><text x="303" y="142" class="dp-s">Serves the React interface</text><text x="303" y="161" class="dp-s">and forwards API requests</text><text x="303" y="180" class="dp-s">on the same trusted origin.</text></g>
+          <path class="dp-a" d="M505 144H550"/>
+
+          <g><title>The API authenticates the requester, applies permissions, records a durable command, and returns read models. It stays responsive because generation runs elsewhere.</title><rect class="dp-svc" x="550" y="68" width="260" height="152" rx="14"/><text x="568" y="102" class="dp-h">API service</text><text x="568" y="132" class="dp-s">Authenticates and authorizes.</text><text x="568" y="151" class="dp-s">Records durable commands.</text><text x="568" y="170" class="dp-s">Returns timelines, briefs,</text><text x="568" y="189" class="dp-s">evidence, and approvals.</text></g>
+          <path class="dp-a" d="M680 220V300"/>
+
+          <g><title>The worker owns retrieval, generation, validation, and recovery. Keeping this work outside the API prevents a slow provider from tying up an HTTP request.</title><rect class="dp-svc" x="550" y="300" width="260" height="152" rx="14"/><text x="568" y="334" class="dp-h">Worker service</text><text x="568" y="364" class="dp-s">Runs retrieval, agents,</text><text x="568" y="383" class="dp-s">validation, and finalization.</text><text x="568" y="412" class="dp-s">Resumes interrupted steps</text><text x="568" y="431" class="dp-s">from saved checkpoints.</text></g>
+
+          <g><title>PostgreSQL is the recovery authority. It stores permissions, evidence, workflow state, checkpoints, approvals, citations, and finalized briefs.</title><rect class="dp-store" x="865" y="62" width="335" height="170" rx="14"/><text x="885" y="98" class="dp-h">PostgreSQL + pgvector</text><text x="885" y="128" class="dp-s">Source of truth for permissions,</text><text x="885" y="147" class="dp-s">evidence, run state, checkpoints,</text><text x="885" y="166" class="dp-s">approvals, citations, and briefs.</text><text x="885" y="200" class="dp-s">A restart can recover from here.</text></g>
+          <path class="dp-a" d="M810 132H865"/>
+          <path class="dp-a" d="M810 330C838 330 838 190 865 190"/>
+
+          <g><title>Redis and BullMQ wake workers and deliver pending commands. They are intentionally not the source of truth, so lost queue state can be reconstructed from PostgreSQL.</title><rect class="dp-store" x="865" y="278" width="335" height="112" rx="14"/><text x="885" y="314" class="dp-h">Redis + BullMQ</text><text x="885" y="344" class="dp-s">Delivers pending work to workers.</text><text x="885" y="363" class="dp-s">Can be rebuilt from PostgreSQL.</text></g>
+          <path class="dp-a" d="M810 354H865"/>
+
+          <g><title>The model gateway is the only path to a model provider. It applies provider-independent request contracts, retries, and output validation.</title><rect class="dp-ext" x="865" y="426" width="335" height="104" rx="14"/><text x="885" y="462" class="dp-h">Model gateway</text><text x="885" y="491" class="dp-s">Single controlled path for model</text><text x="885" y="510" class="dp-s">generation and embeddings.</text></g>
+          <path class="dp-a" d="M810 410C838 410 838 478 865 478"/>
+        </svg>
+      </div>
+      <div class="diagram-guide" aria-label="Deployment diagram explanations">
+        <div class="guide-item"><h4>Why one browser origin?</h4><p>The web gateway serves the interface and forwards API calls under one origin, so secure session cookies do not need cross-origin exceptions.</p></div>
+        <div class="guide-item"><h4>Why split API and worker?</h4><p>The API can answer quickly after recording a command. Slow retrieval and model calls happen in the worker and can retry without holding an HTTP request open.</p></div>
+        <div class="guide-item"><h4>Why does PostgreSQL own recovery?</h4><p>Workflow state and checkpoints survive process or queue loss. Redis can be cleared and rebuilt without losing which step should run next.</p></div>
+        <div class="guide-item"><h4>Why one model gateway?</h4><p>Every provider call crosses one boundary where budgets, retries, validation, and diagnostics can be applied consistently.</p></div>
+      </div>
     </section>
 
     <section id="data">
       <div class="section-number">03 · Persisted data model</div>
       <h2>Actual Drizzle schema, grouped by responsibility.</h2>
-      <p>The ERD below uses table and column names from <code>packages/infrastructure/src/db/schema.ts</code> and migrations <code>drizzle/0000</code> through <code>0021</code>. It shows the key operational entities rather than every audit column. Arrows point from the foreign-key holder to its parent.</p>
+      <p>The model separates permissions, evidence, workflow, and outputs so access is checked before retrieval, interrupted work can resume, and every generated claim can be traced to the exact evidence version that supported it. Read the groups from identity and deals through evidence, workflow, and final artifacts; arrows point from a record to the parent it depends on. Hover over any table name or field row for a plain-language explanation.</p>
 
-      <div class="diagram" role="img" aria-label="Entity relationship diagram of the actual Drizzle schema">
+      <div class="diagram change-zone" data-change-id="data-tooltips" data-change="ERD hover help now uses one tooltip instead of two." data-diagram="data-model" role="img" aria-label="Entity relationship diagram of the actual Drizzle schema">
         <svg viewBox="0 0 1320 1220" xmlns="http://www.w3.org/2000/svg">
           <defs><marker id="arrowE" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#88959b"/></marker></defs>
           <rect width="1320" height="1220" fill="#fbfcfb"/>
@@ -275,20 +349,117 @@
           <g transform="translate(1240 1000)"><rect class="e-box" width="70" height="122" rx="10"/><text x="35" y="25" text-anchor="middle" class="e-title">events</text><text x="7" y="48" class="e-text e-pk">id</text><text x="7" y="67" class="e-text e-fk">run_id</text><text x="7" y="86" class="e-text">sequence</text><text x="7" y="105" class="e-text">payload</text></g>
         </svg>
       </div>
+      <div class="diagram-guide" aria-label="Data model explanations">
+        <div class="guide-item"><h4>Identity and deals</h4><p>People, accounts, opportunities, and permission grants establish who is asking and which deal data they are allowed to use.</p></div>
+        <div class="guide-item"><h4>Evidence and retrieval</h4><p>Source records become immutable evidence versions. A run freezes its authorized search results into a manifest so later citations cannot silently point at different content.</p></div>
+        <div class="guide-item"><h4>Durable workflow</h4><p>Runs, commands, leases, checkpoints, and generation attempts record what should happen, what already happened, and where processing can safely resume.</p></div>
+        <div class="guide-item"><h4>Artifacts and review</h4><p>Specialist outputs become claims and citations. Policy-sensitive drafts create approval requirements and immutable decisions before the final brief is stored.</p></div>
+      </div>
       <div class="callout"><p><strong>Immutability is part of the data model.</strong> Database triggers reject updates/deletes to source and evidence versions, manifests, approval decisions, and approval requirement entries; finalized briefs are immutable. Manifest entries preserve content hashes, citation IDs, locators, source/sensitivity, component ranks, adjustments, and included character counts.</p></div>
-      <p>Additional actual tables omitted from the drawing for legibility include <code>run_budgets</code>, <code>run_budget_reservations</code>, <code>context_checkpoints</code>, <code>approval_authority_grants</code>, <code>opportunity_policy_facts</code>, and <code>audit_events</code>. Authorization views <code>authorized_opportunity_grants</code>, <code>authorized_evidence_grants</code>, and <code>authorized_run_approval_grants</code> are security-barrier, security-invoker views.</p>
+      <p>The drawing deliberately omits bookkeeping tables and authorization views that do not change this core flow. They support budgets, audit history, approval membership, and safe database access without adding another business concept to the diagram.</p>
     </section>
 
     <section id="lifecycle">
-      <div class="section-number">04 · Request lifecycle</div>
-      <h2>Authorization surrounds retrieval and generation.</h2>
-      <p>The workflow is a durable state machine, not a free-running model graph. Every transition checkpoints state and enqueues the next idempotent command through the PostgreSQL outbox; BullMQ workers use leases, heartbeats, and reconciliation to resume safely.</p>
-      <div class="diagram" role="img" aria-label="Request lifecycle from opportunity and requester through permissions, retrieval, agents, validation, approval, and delivery">
-        <svg viewBox="0 0 1320 690" xmlns="http://www.w3.org/2000/svg">
+      <div class="section-number">04 · Run lifecycle</div>
+      <h2>Eleven states, six steps, one command at a time.</h2>
+      <p>A run is a durable state machine, not a free-running model graph. Each step is dispatched as an idempotent command, claimed under a lease, and committed together with the next command in a single transaction. What a model returns decides what the brief <em>says</em>; it never decides what happens <em>next</em>.</p>
+
+      <div class="diagram" data-diagram="run-state" role="img" aria-label="Run state machine: created, retrieving, specialists running, synthesizing and validating on the happy path, branching to awaiting approval or finalizing, ending in completed, rejected, failed or cancelled, with a lease-expiry recovery loop">
+        <svg viewBox="0 0 1320 640" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#617078"/></marker>
+            <marker id="arrowSd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#9a5a10"/></marker>
+          </defs>
+          <rect width="1320" height="640" fill="#fbfcfb"/>
+          <style>
+            .sm-code{fill:#eaf6f1;stroke:#158864;stroke-width:2}
+            .sm-model{fill:#fff;stroke:#b8c6bf;stroke-width:1.7}
+            .sm-human{fill:#fff7e8;stroke:#9a5a10;stroke-width:1.7}
+            .sm-term{fill:#eef1f2;stroke:#65737b;stroke-width:1.5}
+            .sm-note{fill:#fff;stroke:#b8c6bf;stroke-width:1.3;stroke-dasharray:5 5}
+            .sm-name{font:700 15px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#0A141D}
+            .sm-t{font:700 13px system-ui;fill:#0A141D}
+            .sm-s{font:11px system-ui;fill:#52616a}
+            .sm-e{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#158864}
+            .sm-l{font:11px system-ui;fill:#6b7880}
+            .sm-dl{font:11px system-ui;fill:#9a5a10}
+            .sm-a{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowS)}
+            .sm-lane{fill:none;stroke:#9a5a10;stroke-width:1.3;stroke-dasharray:5 5}
+            .sm-loop{stroke:#9a5a10;stroke-width:2;stroke-dasharray:6 5;fill:none;marker-end:url(#arrowSd)}
+            .sm-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}
+            .sm-cap{font:700 11px system-ui;fill:#9a5a10;letter-spacing:1.2px}
+          </style>
+
+          <text x="22" y="26" class="sm-g">RUN STATE MACHINE · packages/core/src/domain/runs/state-machine.ts</text>
+          <text x="22" y="46" class="sm-cap">LEASED, REPLAYABLE STEPS — INTERRUPTED WORK RESUMES FROM A CHECKPOINT</text>
+          <rect class="sm-lane" x="22" y="54" width="1230" height="120" rx="16"/>
+
+          <g><rect class="sm-code" x="40" y="64" width="216" height="100" rx="14"/><text x="56" y="92" class="sm-name">created</text><text x="56" y="114" class="sm-s">step start</text><text x="56" y="132" class="sm-s">claim lease · checkpoint</text><text x="56" y="154" class="sm-e">→ start</text></g>
+          <path class="sm-a" d="M256 114H286"/>
+          <g><rect class="sm-model" x="286" y="64" width="216" height="100" rx="14"/><text x="302" y="92" class="sm-name">retrieving</text><text x="302" y="114" class="sm-s">step retrieve</text><text x="302" y="132" class="sm-s">authorized hybrid search</text><text x="302" y="154" class="sm-e">→ retrieval_completed</text></g>
+          <path class="sm-a" d="M502 114H532"/>
+          <g><rect class="sm-model" x="532" y="64" width="216" height="100" rx="14"/><text x="548" y="92" class="sm-name">specialists_running</text><text x="548" y="114" class="sm-s">step specialists · 3 LLM calls</text><text x="548" y="132" class="sm-s">frozen evidence manifest</text><text x="548" y="154" class="sm-e">→ specialists_completed</text></g>
+          <path class="sm-a" d="M748 114H778"/>
+          <g><rect class="sm-model" x="778" y="64" width="216" height="100" rx="14"/><text x="794" y="92" class="sm-name">synthesizing</text><text x="794" y="114" class="sm-s">step synthesize · 1 LLM call</text><text x="794" y="132" class="sm-s">StrategyAgent fans in artifacts</text><text x="794" y="154" class="sm-e">→ synthesis_completed</text></g>
+          <path class="sm-a" d="M994 114H1024"/>
+          <g><rect class="sm-code" x="1024" y="64" width="216" height="100" rx="14"/><text x="1040" y="92" class="sm-name">validating</text><text x="1040" y="114" class="sm-s">step validate · no model call</text><text x="1040" y="132" class="sm-s">schema, safety, approval policy</text><text x="1040" y="154" class="sm-l">→ branches below</text></g>
+
+          <path class="sm-loop" d="M1252 150H1290V78H1252"/>
+          <text x="30" y="196" class="sm-dl">A dead worker’s lease expires → ReconcilerLoop requeues the command → the step replays from its checkpoint</text>
+
+          <path class="sm-a" d="M1080 164V222H575V268"/>
+          <text x="828" y="214" text-anchor="middle" class="sm-l">validation_requires_approval · one or more approval entries</text>
+          <path class="sm-a" d="M1180 164V244H905V268"/>
+          <text x="1045" y="238" text-anchor="middle" class="sm-l">validation_completed · no entries</text>
+
+          <g><rect class="sm-human" x="430" y="268" width="290" height="100" rx="14"/><text x="448" y="296" class="sm-name">awaiting_approval</text><text x="448" y="318" class="sm-s">human decision · one per requirement entry</text><text x="448" y="336" class="sm-s">distinct actors, immutable subject hash</text><text x="448" y="358" class="sm-e">→ approval_granted / approval_rejected</text></g>
+          <path class="sm-a" d="M720 318H790"/>
+          <text x="755" y="262" text-anchor="middle" class="sm-l">approval_granted</text>
+          <g><rect class="sm-code" x="790" y="268" width="230" height="100" rx="14"/><text x="808" y="296" class="sm-name">finalizing</text><text x="808" y="318" class="sm-s">step finalize · no model call</text><text x="808" y="336" class="sm-s">re-verify quorum + subject hash</text><text x="808" y="358" class="sm-e">→ complete</text></g>
+          <path class="sm-a" d="M1020 318H1080"/>
+          <text x="1050" y="262" text-anchor="middle" class="sm-l">complete</text>
+          <g><rect class="sm-code" x="1080" y="268" width="170" height="100" rx="14"/><text x="1096" y="296" class="sm-name">completed</text><text x="1096" y="318" class="sm-s">immutable brief</text><text x="1096" y="336" class="sm-s">json / markdown export</text></g>
+
+          <path class="sm-a" d="M575 368V410"/>
+          <text x="590" y="392" class="sm-l">approval_rejected</text>
+
+          <rect class="sm-note" x="22" y="410" width="380" height="72" rx="12"/>
+          <text x="42" y="438" class="sm-t">fail and cancel are legal from every live state</text>
+          <text x="42" y="462" class="sm-s">Terminal states accept no further events at all.</text>
+
+          <g><rect class="sm-term" x="430" y="410" width="200" height="72" rx="12"/><text x="448" y="440" class="sm-name">rejected</text><text x="448" y="464" class="sm-s">any authority rejects</text></g>
+          <g><rect class="sm-term" x="680" y="410" width="200" height="72" rx="12"/><text x="698" y="440" class="sm-name">failed</text><text x="698" y="464" class="sm-s">fatal, non-retryable step error</text></g>
+          <g><rect class="sm-term" x="930" y="410" width="200" height="72" rx="12"/><text x="948" y="440" class="sm-name">cancelled</text><text x="948" y="464" class="sm-s">requester cancels the run</text></g>
+
+          <rect x="22" y="510" width="1274" height="104" rx="14" fill="#eef1f2" stroke="#65737b"/>
+          <text x="48" y="540" class="sm-t">One PostgreSQL transaction per transition</text>
+          <text x="48" y="564" class="sm-s">The state change, its checkpoint, and the next command commit together. The system never records a new state without also recording how work continues.</text>
+          <text x="48" y="586" class="sm-s">A worker temporarily owns one step. A recoverable error releases it for retry; a fatal error moves the run to failed.</text>
+          <text x="48" y="608" class="sm-s">If a worker disappears, its ownership expires and another worker replays the command from the saved checkpoint instead of starting the whole run again.</text>
+        </svg>
+      </div>
+      <div class="diagram-guide" aria-label="Run state explanations">
+        <div class="guide-item"><h4>Created</h4><p>The system accepts the authorized request, creates the run, and records the first durable command. No model is involved.</p></div>
+        <div class="guide-item"><h4>Retrieving</h4><p>The worker searches only evidence the requester may read and freezes the selected versions into a manifest for this run.</p></div>
+        <div class="guide-item"><h4>Specialists running</h4><p>Conversation, stakeholder, and commercial specialists analyze the same frozen evidence in parallel and save their outputs separately.</p></div>
+        <div class="guide-item"><h4>Synthesizing</h4><p>The strategy agent combines those specialist outputs and authorized evidence into one structured draft brief.</p></div>
+        <div class="guide-item"><h4>Validating</h4><p>Ordinary code checks the draft’s schema, citations, safety rules, and approval policy. The model cannot choose the next state.</p></div>
+        <div class="guide-item"><h4>Awaiting approval</h4><p>If policy requires human authority, the run pauses until every required decision is recorded against the unchanged draft.</p></div>
+        <div class="guide-item"><h4>Finalizing and completed</h4><p>The system rechecks the approved draft, stores an immutable brief, and makes its evidence and timeline available for review or export.</p></div>
+        <div class="guide-item"><h4>Rejected, failed, or cancelled</h4><p>A human rejection, unrecoverable processing error, or requester cancellation ends the run. Terminal runs cannot accept later workflow events.</p></div>
+        <div class="guide-item"><h4>Recovery loop</h4><p>If a worker stops unexpectedly, ownership expires and another worker continues from the saved checkpoint. Completed work is not regenerated unnecessarily.</p></div>
+      </div>
+      <div class="legend"><span>Deterministic code</span><span class="model">Model call</span><span class="human">Human decision</span><span class="durable">Terminal</span></div>
+      <p class="diagram-note">Three of the six steps touch a model — <code>retrieve</code> embeds the query, <code>specialists</code> and <code>synthesize</code> generate. <code>start</code>, <code>validate</code>, and <code>finalize</code> are ordinary code. Nothing a model returns can change which state comes next — the transition table above is exhaustive, and an event that is not in it raises <code>InvalidRunTransitionError</code> instead of moving the run.</p>
+
+      <h3>Where authorization sits in the run</h3>
+      <p>This view follows the information rather than the worker states. The request is authorized before search, the selected evidence is checked again before any model sees it, and the generated draft must pass citation and policy checks before delivery.</p>
+      <div class="diagram" data-diagram="authorization-flow" role="img" aria-label="Request lifecycle from opportunity and requester through permissions, retrieval, agents, validation, approval, and delivery">
+        <svg viewBox="0 0 1320 520" xmlns="http://www.w3.org/2000/svg">
           <defs><marker id="arrowL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#617078"/></marker></defs>
-          <rect width="1320" height="690" fill="#fbfcfb"/>
-          <style>.lb{fill:#fff;stroke:#b8c6bf;stroke-width:1.5}.lg{fill:#eaf6f1;stroke:#158864;stroke-width:2}.lw{fill:#fff7e8;stroke:#9a5a10;stroke-width:1.7}.lt{font:700 14px system-ui;fill:#0A141D}.ls{font:11px system-ui;fill:#52616a}.la{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowL)}.ld{stroke:#9a5a10;stroke-width:2;stroke-dasharray:6 5;fill:none;marker-end:url(#arrowL)}</style>
-          <g transform="translate(35 56)"><rect class="lb" width="170" height="92" rx="14"/><text x="85" y="34" text-anchor="middle" class="lt">Opportunity ID</text><text x="85" y="56" text-anchor="middle" class="lt">+ requester</text><text x="85" y="76" text-anchor="middle" class="ls">authenticated persona</text></g>
+          <rect width="1320" height="520" fill="#fbfcfb"/>
+          <style>.lb{fill:#fff;stroke:#b8c6bf;stroke-width:1.5}.lg{fill:#eaf6f1;stroke:#158864;stroke-width:2}.lw{fill:#fff7e8;stroke:#9a5a10;stroke-width:1.7}.lio{fill:#eef1f2;stroke:#65737b;stroke-width:1.5}.lt{font:700 14px system-ui;fill:#0A141D}.ls{font:11px system-ui;fill:#52616a}.la{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowL)}.ld{stroke:#9a5a10;stroke-width:2;stroke-dasharray:6 5;fill:none;marker-end:url(#arrowL)}</style>
+          <g transform="translate(35 56)"><rect class="lio" width="170" height="92" rx="14"/><text x="85" y="34" text-anchor="middle" class="lt">Opportunity ID</text><text x="85" y="56" text-anchor="middle" class="lt">+ requester</text><text x="85" y="76" text-anchor="middle" class="ls">authenticated persona</text></g>
           <path class="la" d="M205 102H250"/>
           <g transform="translate(250 44)"><rect class="lg" width="190" height="116" rx="14"/><text x="95" y="30" text-anchor="middle" class="lt">Permission gate 1</text><text x="95" y="55" text-anchor="middle" class="ls">authorize run binding</text><text x="95" y="75" text-anchor="middle" class="ls">SQL-scoped account, source,</text><text x="95" y="94" text-anchor="middle" class="ls">opportunity &amp; sensitivity</text></g>
           <path class="la" d="M440 102H485"/>
@@ -305,27 +476,35 @@
           <path class="la" d="M640 274H575"/>
           <g transform="translate(315 218)"><rect class="lw" width="260" height="112" rx="14"/><text x="130" y="31" text-anchor="middle" class="lt">Deterministic policy</text><text x="130" y="55" text-anchor="middle" class="ls">discount · legal · concession</text><text x="130" y="75" text-anchor="middle" class="ls">low confidence · conflict</text><text x="130" y="95" text-anchor="middle" class="ls">approval entries + dependencies</text></g>
           <path class="la" d="M315 274H250"/>
-          <g transform="translate(35 218)"><rect class="lb" width="215" height="112" rx="14"/><text x="107" y="31" text-anchor="middle" class="lt">Approval required?</text><text x="107" y="58" text-anchor="middle" class="ls">no → finalization</text><text x="107" y="81" text-anchor="middle" class="ls">yes → await authorities</text></g>
+          <g transform="translate(35 218)"><rect class="lg" width="215" height="112" rx="14"/><text x="107" y="31" text-anchor="middle" class="lt">Approval required?</text><text x="107" y="58" text-anchor="middle" class="ls">no → finalization</text><text x="107" y="81" text-anchor="middle" class="ls">yes → await authorities</text></g>
 
           <path class="ld" d="M142 330V410H348"/>
           <g transform="translate(348 380)"><rect class="lw" width="290" height="106" rx="14"/><text x="145" y="30" text-anchor="middle" class="lt">Human-in-the-loop decisions</text><text x="145" y="54" text-anchor="middle" class="ls">membership + category authority</text><text x="145" y="74" text-anchor="middle" class="ls">quorum + dependencies + immutable diff</text><text x="145" y="93" text-anchor="middle" class="ls">approve · edit-and-approve · reject</text></g>
           <path class="la" d="M638 433H720"/>
           <g transform="translate(720 380)"><rect class="lg" width="225" height="106" rx="14"/><text x="112" y="31" text-anchor="middle" class="lt">Finalize</text><text x="112" y="57" text-anchor="middle" class="ls">verify subject hash</text><text x="112" y="78" text-anchor="middle" class="ls">persist immutable brief</text></g>
           <path class="la" d="M945 433H1015"/>
-          <g transform="translate(1015 380)"><rect class="lb" width="270" height="106" rx="14"/><text x="135" y="31" text-anchor="middle" class="lt">Brief delivered</text><text x="135" y="55" text-anchor="middle" class="ls">9 sections · stable citations</text><text x="135" y="76" text-anchor="middle" class="ls">run timeline · evidence detail</text></g>
-          <path class="la" d="M142 330V433H720"/>
+          <g transform="translate(1015 380)"><rect class="lio" width="270" height="106" rx="14"/><text x="135" y="31" text-anchor="middle" class="lt">Brief delivered</text><text x="135" y="55" text-anchor="middle" class="ls">9 sections · stable citations</text><text x="135" y="76" text-anchor="middle" class="ls">run timeline · evidence detail</text></g>
+          <path class="la" d="M142 330V355H760V380"/>
 
-          <rect x="35" y="545" width="1250" height="100" rx="14" fill="#eef1f2" stroke="#65737b"/><text x="60" y="575" class="lt">Durability underneath every arrow</text><text x="60" y="600" class="ls">runs · outbox_commands · step_invocations · workflow_checkpoints · generation_attempts · run_events · trace_spans</text><text x="60" y="622" class="ls">Idempotency keys, version checks, leases, causal command linkage, append-only events, and reconciliation make restart/replay behavior explicit.</text>
-          <text x="975" y="185" class="ls" fill="#9a5a10">Degradation boundary: conversation and stakeholder may degrade; commercial is fail-closed.</text>
+          <text x="1285" y="185" text-anchor="end" class="ls" fill="#9a5a10">Degradation boundary: conversation and stakeholder may degrade; commercial is fail-closed.</text>
         </svg>
       </div>
+      <div class="diagram-guide" aria-label="Authorization flow explanations">
+        <div class="guide-item"><h4>Request and first permission check</h4><p>The API binds the authenticated person to the requested opportunity and limits eligible evidence by account, source, restriction, and sensitivity.</p></div>
+        <div class="guide-item"><h4>Authorized retrieval</h4><p>Keyword and semantic search run only over allowed rows. Ranking improves relevance; it never expands what the requester may see.</p></div>
+        <div class="guide-item"><h4>Second permission check</h4><p>Immediately before a model call, the worker recomputes the authorization binding and compares it with the frozen manifest to catch stale or substituted context.</p></div>
+        <div class="guide-item"><h4>Specialists and synthesis</h4><p>Three specialists produce focused analyses, then the strategy agent combines them with the authorized evidence into one draft.</p></div>
+        <div class="guide-item"><h4>Citation and policy checks</h4><p>Code verifies that every claim is supported and determines whether pricing, legal, concession, conflict, or confidence rules require human approval.</p></div>
+        <div class="guide-item"><h4>Human decision and delivery</h4><p>Required authorities approve, edit, or reject the unchanged subject. Only a valid decision set can produce the immutable brief shown to the seller.</p></div>
+      </div>
+      <div class="legend"><span>Deterministic code</span><span class="model">Model call</span><span class="human">Policy and human decisions</span><span class="durable">Request / delivered brief</span></div>
       <div class="callout warning"><p><strong>Partial failure is intentionally asymmetric.</strong> Conversation and stakeholder failures become schema-valid degraded artifacts with warnings and omitted dependent claims. The commercial specialist is policy-critical; its failure stops the run rather than allowing pricing/legal analysis to disappear silently.</p></div>
     </section>
 
     <section id="decisions">
       <div class="section-number">05 · How and why</div>
       <h2>Models propose. Deterministic code governs.</h2>
-      <div class="decision"><h3>Durable workflow over model orchestration</h3><p>The fixed sequence—retrieve, specialists, synthesize, validate, finalize—is encoded in a Postgres-backed workflow/outbox with checkpoints and versioned transitions. This makes retries, recovery, idempotency, and operator inspection testable without asking a model to decide what should run next.</p></div>
+      <div class="decision"><h3>Durable workflow over model orchestration</h3><p>The fixed sequence—start, retrieve, specialists, synthesize, validate, finalize—lives in a Postgres-backed workflow and outbox with checkpoints and versioned transitions, so retries, recovery, idempotency, and operator inspection are testable. No model is ever asked what should run next.</p></div>
       <div class="decision"><h3>Two independent permission gates</h3><p>Authorized SQL relations and predicates restrict rows before lexical or vector search. Immediately before every LLM call, <code>assertAgentContextBindings</code> recomputes the binding and compares its scope hash to the immutable manifest, catching stale or substituted contexts.</p></div>
       <div class="decision"><h3>Rule-based approval triggers</h3><p>Discount thresholds, renewal uplift, legal concepts, customer-facing concessions, confidence, conflict, and missing evidence are classified by provider-independent code. A model cannot self-declare that its recommendation is safe enough to skip approval.</p></div>
       <div class="decision"><h3>Per-claim citation validation</h3><p>Generated citation tuples are canonicalized to code-owned manifest values. <code>assessClaimSupport</code> checks that referenced evidence exists and that the claim’s material names, amounts, dates, predicates, polarity, and bounded paraphrase are supported; unsupported claims are rejected or removed.</p></div>
@@ -333,15 +512,15 @@
       <div class="decision"><h3>Typed, schema-validated artifacts</h3><p>Conversation, stakeholder, commercial, and strategy outputs have strict Zod contracts, bounded arrays/text/serialized size, structured repair, and provider-neutral model interfaces. Strategy returns the canonical nine-section <code>DealBrief</code> rather than a second divergent format.</p></div>
       <div class="callout"><p><strong>Citation shape, precisely:</strong> the brief contract has nine required top-level sections. Factual sections expose claims directly or through their typed child records (stakeholders, recommended actions, and evidence summaries). <code>missingInformation</code> is intentionally questions, not asserted claims; review warnings reference existing claim IDs. The renderer only exposes generated output after every referenced evidence ID is authorized.</p></div>
 
-      <h3>Retrieval details retained from the internal design notes</h3>
+      <h3>Retrieval details</h3>
       <ul>
         <li>An immutable manifest binds the run, requester/deal scope hash, policy hash, full query/plan hash, embedding provider/model/dimension/version/normalization, context limit, and diagnostics.</li>
-        <li>Distinct per-source quotas prevent a high-volume source from consuming the candidate set. The plan runs the user query plus fixed section-oriented searches, then fuses their results.</li>
+        <li>The plan runs the requester’s query plus six fixed section-oriented searches (deal snapshot, buyer goals, stakeholders, negotiation state, next actions, missing information), each scoped to the source types that can answer it, then fuses the results. Per-source quotas stop a high-volume source from consuming the candidate set.</li>
         <li>Policy evidence reserves a result slot when authorized. Exact account, opportunity, and contact records are included as cited grounding without displacing the ranked quality set.</li>
         <li>Context packing reserves at least eight characters for each ranked or mandatory grounding item; an impossible budget fails explicitly rather than silently dropping evidence.</li>
         <li>Citation resolution reauthorizes the current evidence row and checks immutable manifest membership. Missing, stale, unauthorized, and out-of-manifest citations share one opaque denial.</li>
       </ul>
-      <div class="callout warning"><p><strong>HNSW is planned, not shipped.</strong> The current operative semantic path is exact cosine over the authorized subset. The removed HNSW note described a gated future optimization: profile-specific projections and isolated, stable security domains would remain shadow-only until zero-leakage, policy-inclusion, citation-authorization, recall/overlap, underfill, latency, WAL/replica, rebuild, and recovery gates pass. Any future ANN adapter must return candidate IDs only, rejoin current authorization, rerank by exact cosine, preserve exact search as oracle/fallback/kill switch, and never use one global shared graph.</p></div>
+      <div class="callout warning"><p><strong>HNSW is planned, not shipped.</strong> The shipped semantic path is exact cosine over the authorized subset. Any future ANN adapter must return candidate IDs only, rejoin current authorization, rerank by exact cosine, keep exact search as oracle, fallback, and kill switch, and never share one global graph across security domains. It stays shadow-only until zero-leakage, policy-inclusion, citation-authorization, recall, underfill, latency, replication, rebuild, and recovery gates pass.</p></div>
     </section>
 
     <section id="security">
@@ -365,8 +544,8 @@
       </div>
 
       <h3>State persistence, recovery, and inspection</h3>
-      <p>PostgreSQL durably stores identities and grants, immutable evidence versions and embeddings, run state/version, deadlines and provider-attempt usage, manifests, outbox delivery state, step leases, checkpoints, model attempts, specialist artifacts, claims/citations, approval snapshots and decisions, briefs, audit events, run events, and trace spans. Redis/BullMQ is a delivery layer, not the recovery authority.</p>
-      <p>After interruption, the reconciler examines published/claimed outbox commands and BullMQ state, fences recovery with claim tokens, reopens or republishes safe work, and resumes from existing checkpoints. Operators can inspect the run timeline and persisted spans. Trace projection records authorization, retrieval, model calls, validation, guardrails, usage/repair, degradation, approval requirements/decisions, and finalization; append-only database triggers and stable IDs make projection idempotent.</p>
+      <p>PostgreSQL is the system of record: identities and grants, immutable evidence versions and embeddings, run state and version, budgets and provider attempts, manifests, outbox delivery state, step leases, checkpoints, specialist artifacts, claims and citations, approval snapshots and decisions, briefs, audit events, run events, and trace spans. Redis/BullMQ delivers work; it is never the recovery authority.</p>
+      <p>Recovery is the mechanism drawn in §04: the reconciler inspects published and claimed outbox commands against BullMQ state, fences its recovery with claim tokens, republishes only safe work, and resumes from the checkpoints already written. Trace projection records authorization, retrieval, every model call, validation, guardrails, usage and repair, degradation, approval requirements and decisions, and finalization; append-only triggers and stable IDs make that projection idempotent, so an operator reading the timeline sees the same history a replay would produce.</p>
 
       <h3>Synthetic Slack-style updates: production and ingestion</h3>
       <p><code>scripts/generate-slack-fixtures.ts</code> accepts only live <code>openrouter</code> or <code>ollama</code> configuration—<code>mock</code> is rejected. It asks for exactly three clearly synthetic updates per opportunity: a reinforcing fact, missing context, and ambiguity/conflict. It validates row IDs, account/opportunity bindings, chronology between the latest evidence date and close date, synthetic notices, access levels, control characters, and category coverage before replacing the TSV.</p>
@@ -375,35 +554,358 @@
 
       <h3>Secrets and honest limitations</h3>
       <p>Database, Redis, session, provider, and model configuration comes from validated server-side environment variables. <code>.env</code> and <code>.env.local</code> are gitignored, credentials are excluded from model diagnostics, and logging redaction suppresses common secret and authorization fields.</p>
-      <div class="callout danger"><p><strong>Not production-hardened:</strong> there is no provider cost/spend accounting beyond per-run call/token/deadline budgets and persisted token usage; no documented API/user/provider rate-limiting policy; no secrets-manager or automatic rotation integration; no enterprise identity provider; and no production-grade PII service. These are deployment gaps, not controls to infer from the current code.</p></div>
+      <div class="callout danger"><p><strong>Not production-hardened:</strong> there is no provider cost/spend accounting beyond per-run call and deadline budgets, per-call context/output token budgets, and persisted token usage; no documented API/user/provider rate-limiting policy; no secrets-manager or automatic rotation integration; no enterprise identity provider; and no production-grade PII service. These are deployment gaps, not controls to infer from the current code.</p></div>
+      <div class="callout"><p><strong>Brief sections are grounded-or-omitted, not guaranteed-populated.</strong> Every section in a finalized <code>DealBrief</code> is generate-then-validate: <code>validateDealBrief</code> keeps only claims it can tie back to an authorized evidence unit and drops the rest, so a section with no supportable claim renders empty rather than fabricated. With the small model this project runs against by default (<code>google/gemini-3.5-flash-lite</code>), that means Stakeholder Map and Recommended Next Actions — the two sections with the strictest per-item grounding requirements (a named person plus a supported identity claim; an action tied to a supported rationale) — do not come back populated on every regeneration, even though the retrieved evidence would support them. Regenerating <code>samples/normal-opportunity-brief.json</code> and <code>samples/restricted-opportunity-brief.json</code> for this submission took dozens of live runs per opportunity before both sections landed populated, without any other section going empty, in the same run. This is the tradeoff working as intended: the system never invents a stakeholder or an action to fill a section, so an empty section is a true signal about what this run’s model output could support, not a defect being hidden.</p></div>
     </section>
 
-    <section id="production">
-      <div class="section-number">07 · Production readiness</div>
-      <h2>A strong recovery core; an intentionally incomplete operating envelope.</h2>
-      <table>
-        <thead><tr><th>Area</th><th>Current design</th><th>Production deployment still needs</th></tr></thead>
+    <section id="deliverables">
+      <div class="section-number">07 · Deliverables and demo scenarios</div>
+      <h2>Every required scenario has a checked-in artifact.</h2>
+      <p><code>samples/</code> holds artifacts exported from live-provider runs against a dedicated <code>slacato_samples</code> database by <code>scripts/export-sample-artifacts.ts</code>. <code>samples/manifest.json</code> records the run IDs, provider, generation and embedding models, token usage, and timings; <code>samples/index.html</code> browses them offline. Scenario 1 is interchangeable: Maya Levin (<code>USR-5001</code>) owns <code>OPP-1001</code> and Owen Patel (<code>USR-5002</code>) owns <code>OPP-1002</code>.</p>
+
+      <table class="scenarios">
+        <thead><tr><th>Required scenario</th><th>Request</th><th>What the artifact shows</th></tr></thead>
         <tbody>
-          <tr><td><strong>Scalability</strong></td><td><span class="status now">Handled now</span><br>Stateless API/worker composition; Postgres outbox; BullMQ concurrency; per-source retrieval quotas; exact authorized-subset search; bounded contexts and model calls.</td><td><span class="status gap">Required</span><br>Load/soak tests, queue/backpressure SLOs, connection-pool sizing, database partition/retention strategy, and measured horizontal worker autoscaling. Consider gated HNSW only when authorized subsets make exact cosine a measured bottleneck.</td></tr>
-          <tr><td><strong>High availability</strong></td><td><span class="status now">Handled now</span><br>Idempotent commands, version checks, leases, heartbeats, outbox claims, dead letters, checkpoint replay, and Redis/Postgres reconciliation survive process restarts and at-least-once delivery.</td><td><span class="status gap">Required</span><br>Multi-AZ managed Postgres/Redis, tested failover and point-in-time restore, replica-lag policy, backup drills, schema rollout/rollback procedure, and regional disaster-recovery objectives.</td></tr>
-          <tr><td><strong>Monitoring</strong></td><td><span class="status now">Handled now</span><br>Persisted append-only spans/events cover authorization, retrieval, every model attempt, validation/guardrails, usage, approvals, failures, and finalization; live/readiness endpoints probe dependencies.</td><td><span class="status gap">Required</span><br>Export to a metrics/tracing platform, dashboards and alerts for latency/error/queue depth/dead letters/provider failures/budget exhaustion, retention/redaction policies, SLOs, and on-call runbooks.</td></tr>
-          <tr><td><strong>Secrets</strong></td><td><span class="status now">Handled now</span><br>Validated environment variables; server-only keys; gitignored local env files; safe provider diagnostics and log redaction.</td><td><span class="status no">Missing</span><br>Cloud secrets manager or workload identity, least-privilege database/provider credentials, automatic rotation, access audit, short-lived tokens, and breach-revocation playbooks.</td></tr>
-          <tr><td><strong>Operational support</strong></td><td><span class="status now">Handled now</span><br>Queryable runs, timelines, approvals, trace spans, deterministic diagnostic codes, dead-letter classification, cancellation, and explicit recovery paths.</td><td><span class="status gap">Required</span><br>Admin/support tooling with scoped access, replay/quarantine procedures, data-retention and deletion controls, escalation ownership, customer-support runbooks, and auditable break-glass operations.</td></tr>
-          <tr><td><strong>Safety &amp; governance</strong></td><td><span class="status now">Handled now</span><br>SQL authorization, opaque denials, citation support checks, deterministic approval policy, immutable provenance, synthetic fixture validation, and human review.</td><td><span class="status gap">Required</span><br>Threat modeling and penetration tests, provider/privacy/residency review, production PII detection with custom recognizers, adversarial prompt evaluations, formal policy ownership, and periodic grant/authority recertification.</td></tr>
-          <tr><td><strong>Cost &amp; capacity</strong></td><td><span class="status now">Partial</span><br>Per-run call, token, retry, schema-repair, output, context, and deadline limits plus persisted actual token usage.</td><td><span class="status no">Missing</span><br>Currency-level provider spend accounting, budgets by tenant/team, forecasts, anomaly alerts, chargeback, and model routing only after quality/latency/cost profiles are measured for every agent contract.</td></tr>
+          <tr>
+            <td><strong>1 · Authorized brief</strong></td>
+            <td>Maya Levin (<code>USR-5001</code>) → <code>OPP-1001</code></td>
+            <td>A finalized brief with all nine top-level sections present; every claim that appears carries a citation resolved against that run’s evidence manifest, and this export’s Stakeholder Map and Recommended Next Actions are both populated with real, cited content. Section richness varies by run — see “Brief sections are grounded-or-omitted” in §06 above. <code>normal-opportunity-brief.json</code> and <code>.txt</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>2 · Approval routing</strong></td>
+            <td>Nora Chen (<code>USR-5003</code>) → <code>OPP-1003</code></td>
+            <td>Eight policy triggers produced five approval entries: deal desk (discount above 10% plus negative renewal uplift), sales leader (above 15%), legal reviewer (liability cap, restricted research, customer-specific security language), evidence review (missing material evidence), and a customer-concession entry that depends on the other four. Four distinct actors approved all five before the run could finalize. <code>restricted-approval-flow.json</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>3 · Unauthorized request</strong></td>
+            <td>Harper Noor (<code>USR-5007</code>) → <code>OPP-1003</code></td>
+            <td>An opaque <code>404</code> with no account name, source name, count, or evidence metadata. Harper is granted only <code>ACC-2001</code> and only Salesforce and Gong; <code>OPP-1003</code> belongs to the restricted <code>ACC-2003</code>, so its evidence is never retrieved and therefore cannot be summarized, cited, or leaked. <code>denied-access.json</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>4 · Generated Slack updates</strong></td>
+            <td>Both finalized briefs</td>
+            <td>All nine Slack rows are model-generated and carry <code>synthetic_notice=true</code>; both requesters (<code>USR-5001</code>, <code>USR-5003</code>) are authorized to read Slack evidence for their accounts, including <code>slack:SLK-9002:0</code> (missing owner/success-metric context on <code>OPP-1001</code>) and <code>slack:SLK-9009:0</code> (an internal-chat note that executives disagree on whether discounting or risk mitigation should lead, on <code>OPP-1003</code>). Whether a given regeneration actually cites a Slack row depends on that run’s retrieval and grounding — the currently checked-in briefs do not. Generation provenance is in <code>fixtures/cato/slack/generation.json</code>.</td>
+          </tr>
         </tbody>
       </table>
 
-      <h3>Deliberately deferred enhancements</h3>
+      <h3>Where each deliverable lives</h3>
       <div class="grid-2">
-        <div class="card"><h4>Adaptive ANN / HNSW</h4><p>Future profile-specific, security-domain-isolated candidate search with exact authorization rejoin/rerank and strict activation gates. Exact authorized cosine remains the oracle and fallback.</p></div>
-        <div class="card"><h4>PII defense in depth</h4><p>A private, pinned detector such as Presidio could augment deterministic patterns and human review at ingestion and generated-evidence promotion; it must be evaluated on organization-specific labels and fail closed for risky paths.</p></div>
-        <div class="card"><h4>Cross-encoder reranking</h4><p>Prototype only if measured hybrid retrieval misses relevance goals, and accept it only when incremental quality justifies latency, cost, context exposure, and operational complexity.</p></div>
-        <div class="card"><h4>Synthetic labeled evaluations</h4><p>Add only with explicit label schemas, provenance, contamination controls, independent human review, and acceptance thresholds; generated labels must never silently become ground truth.</p></div>
+        <div class="card"><h4>A · Runnable prototype</h4><p><code>README.md</code> setup, <code>docker-compose.yml</code> for PostgreSQL and Redis, then <code>pnpm db:migrate</code>, <code>pnpm ingest:records</code>, <code>pnpm index:embeddings</code>, <code>pnpm dev</code>. <code>AI_PROVIDER=mock</code> runs the whole workflow with no network.</p></div>
+        <div class="card"><h4>B · Architecture diagrams</h4><p>Logical and deployment views in §02, the persisted schema in §03, and the run state machine plus the authorization pipeline in §04.</p></div>
+        <div class="card"><h4>C · Written overview</h4><p><code>README.md</code> for operation; this document for design; §06 for security, permission enforcement, state persistence, and how the Slack updates are produced and ingested.</p></div>
+        <div class="card"><h4>D · Sample run artifacts</h4><p><code>samples/</code>: two finalized briefs (JSON and Markdown), the approval flow, the denied-access capture, and the trace and event streams for the restricted run.</p></div>
+      </div>
+    </section>
+
+    <section id="production">
+      <div class="section-number">08 · Production readiness</div>
+      <h2>A strong recovery core; an intentionally incomplete operating envelope.</h2>
+      <div class="readiness-list change-zone" data-change-id="production-readiness" data-change="The readiness table is now a set of plain-language cards with defined bullet points.">
+        <article class="readiness-card">
+          <h3>Scalability</h3>
+          <p><strong>What it is:</strong> keeping the system responsive as users, simultaneous briefs, and evidence rows increase.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>A design that works for one demo can slow down or fail when many teams use it together.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Separate API and workers:</strong> web requests stay quick while workers handle slow retrieval and generation.</li><li><strong>Queue:</strong> holds bursts of work until a worker is available.</li><li><strong>Bounded work:</strong> each run has limits, so one brief cannot consume unlimited search or model capacity.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Load test:</strong> run many briefs at once to find the point where response time or errors become unacceptable.</li><li><strong>Soak test:</strong> keep realistic traffic running for hours or days to reveal memory leaks and growing backlogs.</li><li><strong>Safe queue depth:</strong> define how many waiting jobs are acceptable before adding workers or slowing new requests.</li><li><strong>Database capacity:</strong> measure how many connections and searches PostgreSQL can handle safely.</li><li><strong>Worker scaling rules:</strong> define when workers are added or removed from measured queue and latency signals.</li><li><strong>Fast vector index:</strong> yes, ANN/HNSW is likely needed when a user’s authorized search scope reaches millions of rows. If millions of total rows filter down to a small authorized subset, exact search may still be safer and fast enough.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>High availability</h3>
+          <p><strong>What it is:</strong> continuing safely when an application process, queue, or database instance fails.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>A restart must not lose a brief, repeat an approval, or advance the same run twice.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Interrupted work recovery:</strong> yes—if a worker stops, its lease expires and another worker continues from the saved PostgreSQL checkpoint.</li><li><strong>Idempotent commands:</strong> receiving the same command twice does not repeat completed work.</li><li><strong>Version checks:</strong> two workers cannot both commit conflicting state changes.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Redundant databases:</strong> managed PostgreSQL and Redis need standby instances in another availability zone.</li><li><strong>Failover and restore drills:</strong> prove the standby and backups work before an incident.</li><li><strong>Safe schema rollout:</strong> define how database changes are deployed and reversed without breaking live workers.</li><li><strong>Disaster-recovery target:</strong> decide how much data loss and downtime the business can accept.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Monitoring</h3>
+          <p><strong>What it is:</strong> showing operators whether the system is healthy, slow, stuck, or producing errors.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>Saved diagnostic data is useful only if someone can find a problem and act before users report it.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Run timeline:</strong> records authorization, retrieval, model calls, checks, approvals, failures, and completion.</li><li><strong>Health endpoints:</strong> report whether the API and its required dependencies are reachable.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Telemetry export:</strong> send metrics and traces to an operations platform.</li><li><strong>Dashboards and alerts:</strong> make queue growth, errors, slow runs, dead letters, and provider failures visible.</li><li><strong>Service-level objectives:</strong> define acceptable reliability and response-time targets.</li><li><strong>Runbooks:</strong> give on-call staff exact steps for each alert.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Secrets</h3>
+          <p><strong>What it is:</strong> protecting database passwords, session keys, and model-provider credentials.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>A leaked credential can expose customer evidence or let an attacker spend money through a provider account.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Server-only configuration:</strong> credentials are never sent to the browser.</li><li><strong>Startup validation:</strong> the server refuses invalid or missing security settings.</li><li><strong>Redaction:</strong> common secret fields are removed from logs and model diagnostics.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Secret manager or workload identity:</strong> provide credentials without storing long-lived keys in files.</li><li><strong>Least privilege:</strong> each service receives only the access it needs.</li><li><strong>Rotation and audit:</strong> replace keys automatically and record who accessed them.</li><li><strong>Revocation plan:</strong> define how a leaked credential is disabled immediately.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Operational support</h3>
+          <p><strong>What it is:</strong> giving support staff safe tools to inspect and recover customer runs.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>Support should not need direct database access to explain, cancel, recover, or quarantine a bad run.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Inspectable runs:</strong> timelines, approvals, and diagnostic codes show what happened.</li><li><strong>Cancellation:</strong> a requester can stop live work through a defined workflow transition.</li><li><strong>Recovery states:</strong> dead-letter and retry outcomes are recorded rather than hidden.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Scoped support console:</strong> expose only the customer data an operator is allowed to inspect.</li><li><strong>Replay and quarantine:</strong> safely retry recoverable work or isolate suspicious work.</li><li><strong>Retention and deletion:</strong> enforce how long customer data remains stored.</li><li><strong>Escalation and emergency access:</strong> assign owners and audit every exceptional action.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Safety and governance</h3>
+          <p><strong>What it is:</strong> controlling who sees confidential evidence and who is accountable for sensitive recommendations.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>The assistant handles private deal information and can influence pricing, legal, and customer commitments.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Database authorization:</strong> forbidden evidence is filtered before search.</li><li><strong>Citation checks:</strong> unsupported claims are rejected.</li><li><strong>Safety checks:</strong> unsafe instructions in evidence are treated as data, not commands.</li><li><strong>Human approvals:</strong> policy-sensitive recommendations cannot finalize without the required authority.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Threat model and penetration test:</strong> identify attack paths and verify defenses.</li><li><strong>Privacy and residency review:</strong> decide which data may be sent to each provider and region.</li><li><strong>PII evaluation:</strong> measure detection of organization-specific personal information.</li><li><strong>Adversarial prompt testing:</strong> test malicious or misleading evidence at scale.</li><li><strong>Policy ownership:</strong> assign people to review approval rules and user permissions regularly.</li></ul></div>
+          </div>
+        </article>
+
+        <article class="readiness-card">
+          <h3>Cost and capacity</h3>
+          <p><strong>What it is:</strong> keeping model spend and processing time predictable as usage grows.</p>
+          <div class="readiness-columns">
+            <div class="readiness-block"><h4>Why it matters</h4><ul><li>A provider change, retry storm, or traffic spike can increase both latency and cost unexpectedly.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Attempt and time limits:</strong> stop a run from retrying forever.</li><li><strong>Context and output limits:</strong> cap how much text each model call can process or return.</li><li><strong>Usage records:</strong> save actual token counts for later analysis.</li></ul></div>
+            <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Currency-level accounting:</strong> convert provider usage into actual money spent.</li><li><strong>Team budgets:</strong> cap or alert on spend by tenant or team.</li><li><strong>Forecasts and anomaly alerts:</strong> detect unusual growth before a bill arrives.</li><li><strong>Measured model routing:</strong> choose models only after comparing quality, latency, and price for each agent task.</li></ul></div>
+          </div>
+        </article>
+      </div>
+
+      <h3>Possible later improvements</h3>
+      <p>These are useful ideas, not current features. Each card starts with what the idea means, then explains why it should wait.</p>
+      <div class="grid-2 change-zone" data-change-id="deferred-improvements" data-change="Each later improvement now starts with a definition and plain-language reason.">
+        <div class="card deferred-card"><h4>Adaptive ANN / HNSW</h4><p><strong>What it is:</strong> a fast approximate vector index that finds likely matches without comparing every row.</p><p><strong>Why later:</strong> it is probably needed when one authorized search scope reaches millions of rows. It must still recheck permissions and exact similarity before returning evidence; total database size alone is not enough reason to enable it.</p></div>
+        <div class="card deferred-card"><h4>PII defense in depth</h4><p><strong>What it is:</strong> an extra check for names, contact details, identifiers, and other personal information before data reaches a model or final brief.</p><p><strong>Why later:</strong> a private detector such as Presidio and a separate checking agent can both flag possible PII, but neither should make the final decision alone. Deterministic rules and human review remain the authority for risky cases.</p></div>
+        <div class="card deferred-card"><h4>Cross-encoder reranking</h4><p><strong>What it is:</strong> a second model that rereads the query and top search results together to improve their final order.</p><p><strong>Why later:</strong> it adds latency, cost, and more evidence exposure. Add it only if measured retrieval quality is not good enough without it.</p></div>
+        <div class="card deferred-card"><h4>Synthetic labeled evaluations</h4><p><strong>What it is:</strong> model-generated test questions and expected answers used to expand retrieval and brief-quality evaluation.</p><p><strong>Why later:</strong> generated labels can be wrong or copy training data. They need provenance, contamination checks, human review, and clear acceptance thresholds before they influence quality decisions.</p></div>
       </div>
     </section>
   </main>
 
   <footer>Strategic Deal Intelligence Assistant · Technical overview generated from the current repository source and Drizzle migrations · 30 August 2026</footer>
+  <script>
+    const tableDescriptions = {
+      personas: 'People who can request briefs or make approval decisions. A persona supplies the identity and role used by authorization.',
+      permission_grants: 'The readable scope for one persona: which account, source types, restricted records, pricing data, and approval actions they may access.',
+      accounts: 'Customer organizations. Opportunities, contacts, grants, and evidence are scoped back to an account.',
+      opportunities: 'Deals being prepared for negotiation. Each run targets one opportunity and inherits its account and restriction rules.',
+      contacts: 'People associated with a customer account. They ground stakeholder names and contact details used in a brief.',
+      auth_sessions: 'Server-side login sessions. They bind a browser session to a persona and support expiration or revocation.',
+      document_versions: 'Immutable versions of ingested source documents. They preserve original content, provenance, date, and policy context.',
+      evidence_versions: 'Searchable, permission-scoped evidence derived from a document version, including text, vector representation, sensitivity, and reliability.',
+      run_evidence_manifests: 'The frozen evidence selection for one run. It binds authorization, search settings, and context limits so generation can be reproduced and audited.',
+      run_evidence_manifest_entries: 'One selected evidence version inside a run manifest, with its citation identity, ranks, adjustments, locator, and exact included content.',
+      runs: 'The durable top-level workflow record for one requested brief, including its deal, requester, state, version, and generation configuration.',
+      outbox_commands: 'Commands committed with workflow state and later delivered to workers. The outbox prevents a state change from being saved without its next action.',
+      step_invocations: 'One worker attempt to execute a workflow step, including temporary ownership, lease expiry, attempt number, and result.',
+      workflow_checkpoints: 'Saved outputs from completed steps. A retried or restarted worker resumes from these records instead of repeating successful work.',
+      generation_attempts: 'The audit and usage record for each model request, including provider, operation, validation attempts, tokens, status, and provider IDs.',
+      specialist_artifacts: 'Structured outputs from the conversation, stakeholder, commercial, or strategy agents before they become the final brief.',
+      'claims → citations': 'Generated factual claims and their links to exact authorized evidence versions. This relationship makes support inspectable.',
+      approval_subjects: 'A versioned draft that requires review, with the policy reasons and immutable hash of exactly what is being approved.',
+      approval_requirement_entries: 'The individual approval obligations for a subject, including category, eligible authorities, order, and dependencies.',
+      approval_decisions: 'Immutable human decisions for one requirement, recording who acted, their authority, the action, and the payload hashes they reviewed.',
+      briefs: 'The final structured preparation brief. Once finalized, its payload cannot be changed.',
+      trace: 'Detailed technical spans used to explain authorization, retrieval, model, validation, and recovery work inside a run.',
+      events: 'The ordered user-facing timeline of a run, used by live updates and later inspection.'
+    };
+
+    const fieldDescriptions = {
+      'PK id': 'Primary key: the unique identifier for this record.',
+      'PK version': 'Primary key: the session version used to identify and revoke this login.',
+      'PK manifest_id + evidence_version_id': 'Composite primary key: prevents the same evidence version from appearing twice in one manifest.',
+      'PK approval_subject_id + id': 'Composite primary key: identifies one requirement within one approval subject.',
+      'display_name · role': 'display_name is the human-readable person name; role describes their business or approval responsibility.',
+      source_commit: 'The source revision that produced this record, used to reproduce fixture-derived data.',
+      created_at: 'When this record was first stored.',
+      'FK persona_id · account_id': 'Foreign keys to the person receiving the grant and the customer account the grant covers.',
+      'source_type · can_read': 'The evidence source covered by the grant and whether the person may read it.',
+      'can_read_restricted · sensitive_pricing': 'Separate permissions for restricted deals and sensitive pricing evidence.',
+      'can_request_approval · source_commit': 'Whether the person may start an approval flow, plus the source revision for this grant.',
+      'name · created_at': 'The business name and the time this record was created.',
+      'FK account_id': 'Foreign key to the customer account that owns this record.',
+      'name · restricted': 'The opportunity name and whether stricter access rules apply.',
+      'FK account_id · name · email': 'The owning account plus the contact’s name and email address.',
+      'FK persona_id · expires_at · revoked_at': 'The signed-in person, when the session expires, and when it was explicitly revoked.',
+      'external_id · version': 'The source-system identifier and immutable version number for this document.',
+      'source_type · content_hash': 'Where the document came from and a hash that detects any content change.',
+      'content · source_locator': 'The preserved source text and the stable location shown to reviewers.',
+      'event_date · policy_hash': 'When the source event occurred and which policy version applied during ingestion.',
+      'FK document_version_id · account_id': 'Links this evidence to its immutable source document and customer account.',
+      'FK opportunity_id': 'Links the evidence or run to the deal it concerns.',
+      'source_type · sensitivity · content_hash': 'The evidence source, effective sensitivity classification, and immutable content fingerprint.',
+      'lexical_content · embedding': 'The searchable text and numeric vector used for keyword and semantic retrieval.',
+      'embedding_provider · model · dimension': 'Which embedding service and model produced the vector, and the vector size expected during search.',
+      'embedding_profile · version · normalization': 'The versioned preprocessing and normalization rules required to compare vectors consistently.',
+      'reliability_class · classification_reason': 'The evidence trust category and the recorded reason for assigning it.',
+      'FK run_id': 'Foreign key to the run that owns this record.',
+      'scope_hash · policy_hash · query_hash': 'Fingerprints of the authorized scope, policy, and search plan; a mismatch stops generation.',
+      'index_profile · embedding_* profile': 'The exact search-index and embedding configuration used by this run.',
+      'context_limit · diagnostics': 'The maximum evidence context allowed and structured details explaining how it was assembled.',
+      'FK manifest_id · evidence_version_id': 'Links this row to its run manifest and the exact immutable evidence version selected.',
+      'citation_id · source_locator': 'The stable citation label used in generated claims and the reviewer-facing source location.',
+      'lexical_rank · semantic_rank · query_rank': 'The item’s positions in keyword search, semantic search, and the individual query that found it.',
+      'fusion_score · score': 'The combined retrieval score and the final adjusted score used for ordering.',
+      'reliability_adjustment · recency_adjustment': 'Small, recorded score changes for source reliability and age.',
+      'included_characters · content_hash': 'How much of the evidence entered model context and the hash proving which content was used.',
+      'FK opportunity_id · requested_by': 'The target deal and the persona who requested this run.',
+      'status · version': 'The current workflow state and optimistic-lock version that prevents conflicting transitions.',
+      'generation_provider · generation_model': 'The provider and model selected for this run’s generated artifacts.',
+      'idempotency_key · start_request_hash': 'Values that make repeated start requests resolve to the same intended run instead of duplicating work.',
+      'created_at · updated_at': 'When the run was created and when its state last changed.',
+      'type · payload · idempotency_key': 'The command to execute, its input, and the key that makes duplicate delivery safe.',
+      'status · claim_* · consumed_at': 'Delivery state, temporary worker-claim details, and when processing finished.',
+      'FK run_id · causal_command_id': 'The owning run and the command that caused this step attempt.',
+      'step · owner · lease_token': 'Which workflow step is running and the worker’s temporary proof of ownership.',
+      'lease_expires_at · attempt · status': 'When ownership may be reclaimed, how many times the step has run, and its current result.',
+      completed_at: 'When this step finished successfully.',
+      'FK run_id · invocation_id': 'The owning run and the exact step attempt associated with this record.',
+      'step · logical_generation_id': 'The completed workflow step and stable generation identity reused across safe retries.',
+      'payload · created_at': 'The saved step output and when the checkpoint was written.',
+      'provider · model · operation · ordinal': 'The model service, model name, requested task, and attempt order.',
+      'output_mode · validation_attempts': 'The requested response format and how many schema-validation or repair passes occurred.',
+      'input_tokens · output_tokens · status': 'Measured prompt and response usage plus the final attempt outcome.',
+      'request_id · response_id': 'Provider identifiers used to correlate diagnostics without storing secrets.',
+      'FK run_id · evidence_manifest_id': 'The owning run and frozen evidence set used to generate this artifact.',
+      'kind · draft_version · outcome': 'Which specialist produced the artifact, which draft it belongs to, and whether it succeeded or degraded.',
+      'content · content_hash · warnings': 'The structured result, its immutable fingerprint, and any limitations the strategy step must preserve.',
+      generation_metadata: 'Provider, model, usage, and repair metadata explaining how this artifact was generated.',
+      'claims.PK id': 'The unique identifier for one factual claim.',
+      'claims.FK run_id · artifact_id': 'Links the claim to its run and the generated artifact that asserted it.',
+      'citations.FK claim_id · evidence_version_id': 'Links a claim to the exact immutable evidence version that supports it.',
+      'draft_version · subject_hash': 'The draft number and immutable fingerprint of exactly what reviewers are deciding.',
+      'payload · policy_triggers': 'The reviewable draft content and the deterministic policy reasons that required approval.',
+      'quorum_version · superseded_by': 'The approval-rule version and the newer subject that replaces this one, if the draft changed.',
+      'category · eligible_authorities': 'The type of approval needed and the business roles allowed to provide it.',
+      'policy_triggers · depends_on': 'The reasons for this requirement and any earlier decisions that must complete first.',
+      'ordinal · created_at': 'Stable display order and the time the requirement was created.',
+      'FK subject + entry · actor_id': 'Links the decision to the exact approval subject, requirement, and human actor.',
+      'action · authority · payload hashes': 'What the reviewer decided, which authority they exercised, and fingerprints of the original and approved content.',
+      'result_status · quorum flags': 'The resulting approval state and whether all required independent decisions are satisfied.',
+      run_id: 'The run that produced this brief, trace span, or timeline event.',
+      payload: 'The structured content stored for this brief, command, checkpoint, or event.',
+      finalized: 'Whether the brief passed every required check and is now immutable.',
+      id: 'The unique identifier for this record.',
+      span_id: 'The stable identifier for one trace operation within the run.',
+      kind: 'The category of operation represented by this trace span.',
+      sequence: 'The event’s strict order within the run timeline.'
+    };
+
+    const erdTooltip = document.createElement('div');
+    erdTooltip.id = 'erd-tooltip';
+    erdTooltip.className = 'erd-tooltip';
+    erdTooltip.setAttribute('role', 'tooltip');
+    erdTooltip.hidden = true;
+    document.body.append(erdTooltip);
+
+    function positionErdTooltip(target, event) {
+      const bounds = target.getBoundingClientRect();
+      const pointerX = 'clientX' in event ? event.clientX : bounds.left + bounds.width / 2;
+      const pointerY = 'clientY' in event ? event.clientY : bounds.bottom;
+      erdTooltip.style.left = `${Math.max(12, Math.min(pointerX + 14, window.innerWidth - erdTooltip.offsetWidth - 12))}px`;
+      erdTooltip.style.top = `${Math.max(12, Math.min(pointerY + 14, window.innerHeight - erdTooltip.offsetHeight - 12))}px`;
+    }
+
+    function addErdHelp(element, description) {
+      element.setAttribute('tabindex', '0');
+      element.setAttribute('aria-describedby', erdTooltip.id);
+      const show = (event) => {
+        erdTooltip.textContent = description;
+        erdTooltip.hidden = false;
+        positionErdTooltip(element, event);
+      };
+      element.addEventListener('mouseenter', show);
+      element.addEventListener('mousemove', (event) => positionErdTooltip(element, event));
+      element.addEventListener('focus', show);
+      element.addEventListener('mouseleave', () => { erdTooltip.hidden = true; });
+      element.addEventListener('blur', () => { erdTooltip.hidden = true; });
+    }
+
+    for (const entity of document.querySelectorAll('#data svg g')) {
+      const heading = entity.querySelector('.e-title');
+      if (!heading) continue;
+      const tableName = heading.textContent.trim();
+      const tableDescription = tableDescriptions[tableName] ?? `${tableName} stores one part of the system’s durable state.`;
+      addErdHelp(heading, tableDescription);
+
+      for (const field of entity.querySelectorAll('.e-text')) {
+        const label = field.textContent.trim();
+        const fieldDescription = fieldDescriptions[label] ?? `${label.replaceAll('_', ' ')}: stored data used by ${tableName}.`;
+        addErdHelp(field, fieldDescription);
+      }
+    }
+
+    for (const diagram of document.querySelectorAll('.diagram')) {
+      const toolbar = document.createElement('div');
+      toolbar.className = 'diagram-toolbar';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'diagram-fullscreen';
+      button.textContent = 'Fullscreen diagram';
+      button.setAttribute('aria-label', `Open ${diagram.getAttribute('aria-label') ?? 'diagram'} in fullscreen`);
+      button.addEventListener('click', () => {
+        const willExpand = !diagram.classList.contains('diagram-expanded');
+        document.querySelector('.diagram-expanded')?.classList.remove('diagram-expanded');
+        diagram.classList.toggle('diagram-expanded', willExpand);
+        document.body.classList.toggle('diagram-open', willExpand);
+        button.textContent = willExpand ? 'Exit fullscreen' : 'Fullscreen diagram';
+        button.setAttribute('aria-label', willExpand ? 'Exit fullscreen diagram' : `Open ${diagram.getAttribute('aria-label') ?? 'diagram'} in fullscreen`);
+      });
+      toolbar.append(button);
+      diagram.prepend(toolbar);
+    }
+
+    for (const zone of document.querySelectorAll('.change-zone')) {
+      const changeId = zone.dataset.changeId;
+      const storageKey = `technical-overview-change:${changeId}`;
+      let dismissed = false;
+      try {
+        dismissed = sessionStorage.getItem(storageKey) === 'dismissed';
+      } catch {
+        dismissed = false;
+      }
+      if (dismissed) {
+        zone.classList.remove('change-zone');
+        continue;
+      }
+
+      const marker = document.createElement('button');
+      marker.type = 'button';
+      marker.className = 'change-marker';
+      marker.setAttribute('aria-label', `Updated: ${zone.dataset.change}. Click to dismiss this highlight.`);
+      const label = document.createElement('strong');
+      label.textContent = 'Updated';
+      const description = document.createElement('span');
+      description.textContent = zone.dataset.change;
+      const action = document.createElement('small');
+      action.textContent = 'Click to dismiss';
+      marker.append(label, description, action);
+      marker.addEventListener('click', () => {
+        try {
+          sessionStorage.setItem(storageKey, 'dismissed');
+        } catch {
+          // The marker still dismisses when storage is unavailable.
+        }
+        marker.remove();
+        zone.classList.remove('change-zone');
+      });
+      zone.prepend(marker);
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      const expanded = document.querySelector('.diagram-expanded');
+      if (!expanded) return;
+      expanded.classList.remove('diagram-expanded');
+      document.body.classList.remove('diagram-open');
+      const button = expanded.querySelector('.diagram-fullscreen');
+      if (!button) return;
+      button.textContent = 'Fullscreen diagram';
+      button.setAttribute('aria-label', `Open ${expanded.getAttribute('aria-label') ?? 'diagram'} in fullscreen`);
+      button.focus();
+    });
+  </script>
 </body>
 </html>

@@ -84,6 +84,7 @@ type QueryScope = Readonly<{
   allowSensitive: boolean;
   allowRestricted: boolean;
   sourceLimits: Readonly<Record<AuthorizedSourceType, number>>;
+  crmRecordLimit: number;
   candidateLimit: number;
 }>;
 type Identity = Readonly<{
@@ -131,7 +132,10 @@ export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
   public async search(request: RetrievalRequest): Promise<RetrievalResult> {
     const plan = buildEvidencePlan(request);
     await this.assertRunBinding(request);
-    const queryHash = sha256(stableJson({ algorithmVersion: 'authorized-hybrid-v1', plan }));
+    // v2: the lexical channel scores partial matches instead of gating on a conjunctive
+    // tsquery. That changes ranking without changing the plan, so it has to be named here -
+    // otherwise a replayed manifest would silently be validated against different retrieval.
+    const queryHash = sha256(stableJson({ algorithmVersion: 'authorized-hybrid-v2', plan }));
     const binding = createEvidenceScopeBinding(
       { accountId: request.accountId, opportunityId: request.opportunityId },
       request.scope
@@ -152,6 +156,7 @@ export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
       allowSensitive: request.scope.canViewSensitivePricing,
       allowRestricted: request.scope.canViewRestrictedAccounts,
       sourceLimits: plan.sourceLimits,
+      crmRecordLimit: plan.crmRecordLimit,
       candidateLimit: Math.max(
         request.limit * plan.sectionQueries.length * 2,
         request.limit * request.scope.sourceTypes.length
@@ -426,12 +431,29 @@ export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
     return this.database
       .sql`case source_type when 'gong_summary' then ${input.sourceLimits.gong_summary} when 'gong_transcript' then ${input.sourceLimits.gong_transcript} when 'policy' then ${input.sourceLimits.policy} when 'pricing' then ${input.sourceLimits.pricing} when 'salesforce' then ${input.sourceLimits.salesforce} when 'slack' then ${input.sourceLimits.slack} else 0 end`;
   }
+  /** Builds a disjunctive tsquery so partial concept overlap still scores.
+   *
+   * `websearch_to_tsquery` ANDs unquoted terms, which gates a multi-concept retrieval query on a
+   * chunk containing every one of its words. For "aggressive discounting risk mitigation final
+   * negotiations approval" that matched zero rows in the whole corpus, so the lexical half of the
+   * hybrid search contributed nothing and RRF fused on the semantic channel alone. Ranking, not a
+   * membership gate, is what orders these results; `ts_rank_cd` already rewards denser matches.
+   *
+   * Only the spaced ` & ` operator is rewritten. A bare `replace(..., '&', '|')` also corrupts an
+   * `&` living *inside* a lexeme - `'x.com/a?b=1&c=2'` becomes `'x.com/a?b=1|c=2'`, which matches
+   * no indexed tsvector, silently dropping the term. Slack-sourced text carries URLs with query
+   * strings routinely. Serialized tsquery operators are always space-delimited and plainto_tsquery
+   * emits no phrase lexemes, so the spaced form is unambiguous. */
+  private lexicalQuery(query: string) {
+    return this.database
+      .sql`replace(plainto_tsquery('english', ${query})::text, ' & ', ' | ')::tsquery`;
+  }
   /** Finds authorized evidence whose text matches the requested query. */
   private async searchLexical(query: string, input: QueryScope): Promise<SearchRow[]> {
     if (input.sourceTypes.length === 0) return [];
     return this.database.sql<
       SearchRow[]
-    >`with authorized as (${this.authorizedRows(input)}), ranked as (select authorized.*, ts_rank_cd(authorized.lexical_content, websearch_to_tsquery('english', ${query})) as relevance, row_number() over (partition by authorized.source_type order by ts_rank_cd(authorized.lexical_content, websearch_to_tsquery('english', ${query})) desc, authorized.id asc) as source_rank from authorized where authorized.lexical_content @@ websearch_to_tsquery('english', ${query})) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from ranked where source_rank <= ${this.sourceLimit(input)} order by relevance desc, id asc limit ${input.candidateLimit}`;
+    >`with authorized as (${this.authorizedRows(input)}), ranked as (select authorized.*, ts_rank_cd(authorized.lexical_content, ${this.lexicalQuery(query)}) as relevance, row_number() over (partition by authorized.source_type order by ts_rank_cd(authorized.lexical_content, ${this.lexicalQuery(query)}) desc, authorized.id asc) as source_rank from authorized where authorized.lexical_content @@ ${this.lexicalQuery(query)}) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from ranked where source_rank <= ${this.sourceLimit(input)} order by relevance desc, id asc limit ${input.candidateLimit}`;
   }
   /** Finds authorized evidence whose meaning is closest to the query embedding. */
   private async searchSemantic(
@@ -470,7 +492,7 @@ export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
     if (!input.sourceTypes.includes('salesforce')) return [];
     return this.database.sql<
       SearchRow[]
-    >`with authorized as (${this.authorizedRows(input)}) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from authorized where source_type = 'salesforce' and (source_locator like ${`%accounts.tsv#${input.accountId}%`} or source_locator like ${`%opportunities.tsv#${input.opportunityId}%`} or source_locator like '%contacts.tsv#%') order by case when source_locator like ${`%accounts.tsv#${input.accountId}%`} then 0 when source_locator like ${`%opportunities.tsv#${input.opportunityId}%`} then 1 else 2 end, id limit ${input.sourceLimits.salesforce}`;
+    >`with authorized as (${this.authorizedRows(input)}) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from authorized where source_type = 'salesforce' and (source_locator like ${`%accounts.tsv#${input.accountId}%`} or source_locator like ${`%opportunities.tsv#${input.opportunityId}%`} or source_locator like '%contacts.tsv#%') order by case when source_locator like ${`%accounts.tsv#${input.accountId}%`} then 0 when source_locator like ${`%opportunities.tsv#${input.opportunityId}%`} then 1 else 2 end, id limit ${input.crmRecordLimit}`;
   }
   /** Verifies that authorized evidence is consistently indexed with the active embedding profile. */
   private async assertIndexReady(input: QueryScope): Promise<Health> {

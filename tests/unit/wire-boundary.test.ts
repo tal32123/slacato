@@ -57,6 +57,12 @@ it('does not publish an invalid SSE envelope through the shared publisher primit
 
 const payloadSchema = z.object({ id: z.string() }).strict();
 
+const pipeRequestSchema = z
+  .object({ id: z.string() })
+  .strict()
+  .transform((value) => ({ id: value.id, shout: value.id.toUpperCase() }));
+const pipeResponseSchema = z.object({ id: z.string(), shout: z.string() }).strict();
+
 class WireTestController {
   public echo(body: { id: string }): { id: string } {
     return body;
@@ -73,6 +79,14 @@ class WireTestController {
 
   public classDto(body: TestDto): TestDto {
     return body;
+  }
+
+  public pipeEcho(body: { id: string; shout: string }): { id: string; shout: string } {
+    return body;
+  }
+
+  public noRequestSchema(): { id: string } {
+    return { id: 'no-body' };
   }
 
   public validSse() {
@@ -104,6 +118,15 @@ for (const [method, path] of [['echo', 'echo'], ['invalidResponse', 'invalid-res
 const undecoratedDescriptor = Object.getOwnPropertyDescriptor(WireTestController.prototype, 'undecorated')!;
 Post('undecorated')(WireTestController.prototype, 'undecorated', undecoratedDescriptor);
 Body()(WireTestController.prototype, 'undecorated', 0);
+
+const pipeEchoDescriptor = Object.getOwnPropertyDescriptor(WireTestController.prototype, 'pipeEcho')!;
+Post('pipe-echo')(WireTestController.prototype, 'pipeEcho', pipeEchoDescriptor);
+ZodResponse(pipeResponseSchema)(WireTestController.prototype, 'pipeEcho', pipeEchoDescriptor);
+ZodBody(pipeRequestSchema)(WireTestController.prototype, 'pipeEcho', 0);
+
+const noRequestSchemaDescriptor = Object.getOwnPropertyDescriptor(WireTestController.prototype, 'noRequestSchema')!;
+Post('no-request-schema')(WireTestController.prototype, 'noRequestSchema', noRequestSchemaDescriptor);
+ZodResponse(payloadSchema)(WireTestController.prototype, 'noRequestSchema', noRequestSchemaDescriptor);
 
 const classDtoDescriptor = Object.getOwnPropertyDescriptor(WireTestController.prototype, 'classDto')!;
 Post('class-dto')(WireTestController.prototype, 'classDto', classDtoDescriptor);
@@ -144,6 +167,24 @@ describe('configured API wire boundary', () => {
     const extra = await fetch(`${baseUrl}/wire-test/echo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'run-1', unexpected: true }) });
     expect(extra.status).toBe(400);
     await expect(extra.json()).resolves.toMatchObject({ code: 'INVALID_REQUEST' });
+  });
+
+  it('rejects an empty JSON body ({}) against a schema with required fields (fail-closed, not fail-open)', async () => {
+    const response = await fetch(`${baseUrl}/wire-test/echo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ code: 'INVALID_REQUEST' });
+  });
+
+  it('passes the zod-parsed (pipe) value into the handler, not the raw request body', async () => {
+    const response = await fetch(`${baseUrl}/wire-test/pipe-echo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'run-1' }) });
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({ id: 'run-1', shout: 'RUN-1' });
+  });
+
+  it('skips validation silently when no request schema is declared and the body is empty', async () => {
+    const response = await fetch(`${baseUrl}/wire-test/no-request-schema`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({ id: 'no-body' });
   });
 
   it('rejects an undecorated controller body so request validation cannot be bypassed', async () => {

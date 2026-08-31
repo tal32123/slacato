@@ -12,24 +12,24 @@ pre{overflow:auto;background:var(--wash);border:1px solid var(--line);border-rad
 footer{border-top:1px solid var(--line);padding-top:28px;color:var(--muted)}footer a{color:var(--accent)}@media(max-width:620px){main{padding:42px 20px 72px}.card{grid-template-columns:1fr}.number{font-size:14px}}
 </style></head><body><main><header><div class="eyebrow">Take-home assignment · Deliverable D</div><h1>Sample run artifacts</h1>
 <p>Reviewer-readable outputs from real OpenRouter executions, including finalized briefs, a five-entry approval quorum, an opaque access denial, and durable traces.</p>
-<div class="summary"><span class="pill">Generated 2026-08-30T18:40:41.068Z</span><span class="pill">Provider: OpenRouter</span><span class="pill">Model: google/gemini-3.5-flash-lite</span><span class="pill">No external dependencies</span></div></header>
+<div class="summary"><span class="pill">Generated 2026-08-31T06:00:14.428Z</span><span class="pill">Provider: OpenRouter</span><span class="pill">Model: google/gemini-3.5-flash-lite</span><span class="pill">No external dependencies</span></div></header>
 <article class="card">
           <div class="number">01</div>
           <div><h2>Authorized normal opportunity</h2><p>Maya Levin (USR-5001) generated a finalized brief for Northstar Foods Cooperative - Global Access Renewal (OPP-1001).</p>
           <div class="links"><a href="normal-opportunity-brief.json">normal-opportunity-brief.json</a><a href="normal-opportunity-brief.txt">normal-opportunity-brief.txt</a></div>
           <pre>{
-  &quot;runId&quot;: &quot;run_31c495bb7ef6ab0f2f3bdc210ab546fb96a168acfa6209b5e5e5172334b41f42&quot;,
+  &quot;runId&quot;: &quot;run_fd58beab2fab37d7595481091a5fe84f9ed616c11a26b8ed312ceb9b03866c0a&quot;,
   &quot;provider&quot;: &quot;openrouter&quot;,
   &quot;generationModel&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
   &quot;embeddingModel&quot;: &quot;openai/text-embedding-3-small&quot;,
   &quot;tokenUsage&quot;: {
-    &quot;calls&quot;: 6,
-    &quot;inputTokens&quot;: 31543,
-    &quot;outputTokens&quot;: 9788,
-    &quot;totalTokens&quot;: 41331
+    &quot;calls&quot;: 5,
+    &quot;inputTokens&quot;: 25266,
+    &quot;outputTokens&quot;: 7093,
+    &quot;totalTokens&quot;: 32359
   },
-  &quot;runStartedAt&quot;: &quot;2026-08-30T18:32:24.594Z&quot;,
-  &quot;runCompletedAt&quot;: &quot;2026-08-30T18:33:36.131Z&quot;
+  &quot;runStartedAt&quot;: &quot;2026-08-31T05:40:53.065Z&quot;,
+  &quot;runCompletedAt&quot;: &quot;2026-08-31T05:41:16.197Z&quot;
 }</pre></div>
         </article>
 <article class="card">
@@ -37,18 +37,18 @@ footer{border-top:1px solid var(--line);padding-top:28px;color:var(--muted)}foot
           <div><h2>Restricted deal and approval quorum</h2><p>Nora Chen (USR-5003) generated the restricted brief. The routing artifact records all 5 requirements and 5 approval decisions.</p>
           <div class="links"><a href="restricted-opportunity-brief.json">restricted-opportunity-brief.json</a><a href="restricted-opportunity-brief.txt">restricted-opportunity-brief.txt</a><a href="restricted-approval-flow.json">restricted-approval-flow.json</a></div>
           <pre>{
-  &quot;runId&quot;: &quot;run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c&quot;,
+  &quot;runId&quot;: &quot;run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7&quot;,
   &quot;provider&quot;: &quot;openrouter&quot;,
   &quot;generationModel&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
   &quot;embeddingModel&quot;: &quot;openai/text-embedding-3-small&quot;,
   &quot;tokenUsage&quot;: {
     &quot;calls&quot;: 5,
-    &quot;inputTokens&quot;: 22984,
-    &quot;outputTokens&quot;: 8911,
-    &quot;totalTokens&quot;: 31895
+    &quot;inputTokens&quot;: 25255,
+    &quot;outputTokens&quot;: 8730,
+    &quot;totalTokens&quot;: 33985
   },
-  &quot;runStartedAt&quot;: &quot;2026-08-30T18:34:01.436Z&quot;,
-  &quot;runCompletedAt&quot;: &quot;2026-08-30T18:35:47.741Z&quot;
+  &quot;runStartedAt&quot;: &quot;2026-08-31T05:58:48.644Z&quot;,
+  &quot;runCompletedAt&quot;: &quot;2026-08-31T05:59:22.724Z&quot;
 }</pre></div>
         </article>
 <article class="card">
@@ -65,17 +65,31 @@ footer{border-top:1px solid var(--line);padding-top:28px;color:var(--muted)}foot
           <div><h2>Full trace and run events</h2><p>The restricted run export contains 35 spans and 16 durable events, including model calls, retrieval, validation, guardrails, approval routing and decisions, and finalization.</p>
           <div class="links"><a href="restricted-run-trace.json">restricted-run-trace.json</a><a href="restricted-run-events.json">restricted-run-events.json</a></div>
           <pre>{
-  &quot;runId&quot;: &quot;run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c&quot;,
+  &quot;runId&quot;: &quot;run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7&quot;,
   &quot;provider&quot;: &quot;openrouter&quot;,
   &quot;generationModel&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
   &quot;embeddingModel&quot;: &quot;openai/text-embedding-3-small&quot;,
   &quot;tokenUsage&quot;: {
     &quot;calls&quot;: 5,
-    &quot;inputTokens&quot;: 22984,
-    &quot;outputTokens&quot;: 8911,
-    &quot;totalTokens&quot;: 31895
+    &quot;inputTokens&quot;: 25255,
+    &quot;outputTokens&quot;: 8730,
+    &quot;totalTokens&quot;: 33985
   },
-  &quot;runStartedAt&quot;: &quot;2026-08-30T18:34:01.436Z&quot;,
-  &quot;runCompletedAt&quot;: &quot;2026-08-30T18:35:47.741Z&quot;
+  &quot;runStartedAt&quot;: &quot;2026-08-31T05:58:48.644Z&quot;,
+  &quot;runCompletedAt&quot;: &quot;2026-08-31T05:59:22.724Z&quot;
+}</pre></div>
+        </article>
+<article class="card">
+          <div class="number">05</div>
+          <div><h2>Slack-style evidence impact demonstration</h2><p>Mandatory Data-Generation Subtask: an authorization-scope with/without comparison for OPP-1001 (Maya Levin, USR-5001), a secondary OPP-1002 check, and a cross-reference to the OPP-1003 run above, showing exactly where generated Slack evidence is retrieved, ranked, claimed, and validated, and the pipeline stage where it drops out before the shipped brief.</p>
+          <div class="links"><a href="slack-impact-comparison.md">slack-impact-comparison.md</a><a href="slack-impact-comparison.json">slack-impact-comparison.json</a></div>
+          <pre>{
+  &quot;withSlackRunId&quot;: &quot;run_a12bd817a6d8a3746358cc958a7c66af329782cf1ecb5273402d7e8bfd660103&quot;,
+  &quot;withoutSlackRunId&quot;: &quot;run_1ed98d7135fdf21c62052f9bcf78582d8ffd7f8992d218df0493cd73e390dbd4&quot;,
+  &quot;provider&quot;: &quot;openrouter&quot;,
+  &quot;generationModel&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
+  &quot;runsUsed&quot;: 4,
+  &quot;slackClaimedAndValidated&quot;: true,
+  &quot;slackCitedInFinalBrief&quot;: false
 }</pre></div>
         </article><footer>Machine-readable provenance and scenario mapping: <a href="manifest.json">manifest.json</a>. Re-run instructions are embedded in the manifest.</footer></main></body></html>

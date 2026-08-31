@@ -29,7 +29,12 @@ import {
 import type { RunId } from '../../domain/shared/ids.js';
 import type { AgentContext, StrategyArtifacts } from '../agents/contracts.js';
 import type { WorkflowCommand } from '../workflow/command-queue.js';
-import type { StepLease, WorkflowRun, WorkflowStore } from '../workflow/workflow-store.js';
+import type {
+  RunLifecycleStore,
+  StepExecutionStore,
+  StepLease,
+  WorkflowRun
+} from '../workflow/workflow-store.js';
 
 /** Retrieval data retained by the workflow before a per-attempt generation context is attached. */
 export type DealBriefRetrievalContext = Readonly<{
@@ -399,7 +404,7 @@ export function assertApprovableBrief(value: unknown): DealBrief {
 export class StartDealBrief {
   /** Provides persistence, access control, and the selected generation model. */
   public constructor(
-    private readonly store: WorkflowStore,
+    private readonly store: RunLifecycleStore,
     private readonly access: DealBriefAccessControl,
     private readonly model: Readonly<{ provider: string; model: string }>
   ) {}
@@ -473,7 +478,7 @@ export class StartDealBrief {
 export class RegenerateDealBrief {
   /** Provides persistence and access control for regeneration requests. */
   public constructor(
-    private readonly store: WorkflowStore,
+    private readonly store: RunLifecycleStore,
     private readonly access: DealBriefAccessControl
   ) {}
   /** Authorizes regeneration and schedules a new draft for the existing run. */
@@ -521,7 +526,7 @@ export class RegenerateDealBrief {
 export class CancelDealBrief {
   /** Provides the persistence and access checks needed to cancel a run. */
   public constructor(
-    private readonly store: Pick<WorkflowStore, 'getRun' | 'cancelRun'>,
+    private readonly store: Pick<RunLifecycleStore, 'getRun' | 'cancelRun'>,
     private readonly access: Pick<DealBriefAccessControl, 'authorizeStart' | 'recordOpaqueDenial'>
   ) {}
 
@@ -568,7 +573,7 @@ export class ProcessDealBriefStep {
   private readonly leaseMs: number;
   /** Provides workflow persistence, step services, and the lease duration for processing. */
   public constructor(
-    private readonly store: WorkflowStore,
+    private readonly store: StepExecutionStore,
     private readonly services: DealBriefWorkflowServices,
     options: Readonly<{ leaseMs: number }>
   ) {
@@ -649,7 +654,7 @@ export class ProcessDealBriefStep {
     run: WorkflowRun,
     lease: StepLease,
     causal: WorkflowCommand,
-    event: Parameters<WorkflowStore['commitStepAndEnqueueNext']>[0]['event'],
+    event: Parameters<StepExecutionStore['commitStepAndEnqueueNext']>[0]['event'],
     checkpointStep: string,
     checkpoint: Readonly<Record<string, unknown>>,
     next: WorkflowStep,

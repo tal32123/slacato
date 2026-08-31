@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { runStatusSchema } from './runs.js';
 
 /** Confirms that an ISO-formatted date identifies a real calendar day. */
 const isCalendarIsoDate = (value: string): boolean => {
@@ -10,19 +11,6 @@ export const isoDateSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected an ISO date')
   .refine(isCalendarIsoDate, 'Expected a calendar-valid ISO date');
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
-const runStatusSchema = z.enum([
-  'created',
-  'retrieving',
-  'specialists_running',
-  'synthesizing',
-  'validating',
-  'awaiting_approval',
-  'finalizing',
-  'completed',
-  'rejected',
-  'failed',
-  'cancelled'
-]);
 
 export const dealSummarySchema = z
   .object({

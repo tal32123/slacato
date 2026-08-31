@@ -22,6 +22,7 @@ export function AppShell({
   const navigation = useNavigation();
   const navigationType = useNavigationType();
   const mainRef = useRef<HTMLElement>(null);
+  const previouslyFocusedPathname = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const preferredRail = window.matchMedia('(min-width: 1280px)');
@@ -46,7 +47,12 @@ export function AppShell({
                 : 'Deals';
     document.title = `${title} | SlaCato`;
     const focusOwner = (location.state as { focusOwner?: unknown } | null)?.focusOwner;
-    if (navigationType !== 'POP' && focusOwner !== 'approval-status') {
+    const pathnameChanged = previouslyFocusedPathname.current !== location.pathname;
+    if (pathnameChanged && navigationType !== 'POP' && focusOwner !== 'approval-status') {
+      // Record only what we actually focused. Updating this on a skipped navigation (a POP, or an
+      // approval-status update) makes the next real navigation to that same path look unchanged,
+      // so main is never focused and a keyboard user is stranded on the link they just activated.
+      previouslyFocusedPathname.current = location.pathname;
       window.requestAnimationFrame(() => mainRef.current?.focus());
     }
   }, [location.pathname, location.state, navigationType]);
@@ -174,7 +180,11 @@ export function AppShell({
           ref={mainRef}
           id="main-content"
           tabIndex={-1}
-          className="mx-auto w-full max-w-7xl px-4 py-7 pb-24 sm:px-6 sm:py-9 lg:px-8 lg:pb-10"
+          // The guided-tour launcher is a fixed bottom-right control at every breakpoint (it only
+          // moves closer to the edge at lg, once the mobile tab bar it shares space with is gone).
+          // This reserve must clear its full footprint so a page whose content ends flush with the
+          // viewport bottom, like a short approvals inbox, never renders a real action underneath it.
+          className="mx-auto w-full max-w-7xl px-4 py-7 pb-24 sm:px-6 sm:py-9 lg:px-8 lg:pb-20"
         >
           <Outlet />
         </main>

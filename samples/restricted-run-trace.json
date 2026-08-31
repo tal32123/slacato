@@ -1,16 +1,16 @@
 {
-  "runId": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+  "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
   "provider": "openrouter",
   "model": "google/gemini-3.5-flash-lite",
   "tokenUsage": {
-    "inputTokens": 22984,
-    "outputTokens": 8911,
+    "inputTokens": 25255,
+    "outputTokens": 8730,
     "calls": 5
   },
   "providerAttempts": [
     {
-      "id": "f763a676-44e4-4623-b343-ace315c96e51",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "id": "52d4f886-e807-45f8-82a7-69c53236cdb2",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "operation": "retrieval-embedding",
       "ordinal": 1,
       "status": "completed",
@@ -23,33 +23,12 @@
       "possible_duplicate": false,
       "input_tokens": 90,
       "output_tokens": 1,
-      "started_at": "2026-08-30 18:34:03.267289+00",
-      "completed_at": "2026-08-30 18:34:04.390687+00"
+      "started_at": "2026-08-31 05:58:50.603016+00",
+      "completed_at": "2026-08-31 05:58:51.436243+00"
     },
     {
-      "id": "11b2596e-73d1-45ee-9c58-b20c395f69ee",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
-      "operation": "commercial-policy-analysis",
-      "ordinal": 1,
-      "status": "completed",
-      "provider": "openrouter",
-      "model": "google/gemini-3.5-flash-lite",
-      "output_mode": "native_schema",
-      "validation_attempts": 0,
-      "validation_issues": [],
-      "warnings": [
-        "POLICY_TRUNCATED_LIABILITY",
-        "INSUFFICIENT_CLAIM_SUPPORT"
-      ],
-      "possible_duplicate": false,
-      "input_tokens": 2535,
-      "output_tokens": 696,
-      "started_at": "2026-08-30 18:34:05.275179+00",
-      "completed_at": "2026-08-30 18:34:08.330355+00"
-    },
-    {
-      "id": "df2733e6-ea5f-43ee-9817-5391fbbc7522",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "id": "9ba1923e-b262-48c9-93d7-06be3efa0670",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "operation": "conversation-intelligence",
       "ordinal": 1,
       "status": "completed",
@@ -59,17 +38,18 @@
       "validation_attempts": 0,
       "validation_issues": [],
       "warnings": [
+        "EXECUTIVE_DISAGREEMENT",
         "INSUFFICIENT_CLAIM_SUPPORT"
       ],
       "possible_duplicate": false,
-      "input_tokens": 5517,
-      "output_tokens": 669,
-      "started_at": "2026-08-30 18:34:05.279062+00",
-      "completed_at": "2026-08-30 18:34:08.476494+00"
+      "input_tokens": 7185,
+      "output_tokens": 781,
+      "started_at": "2026-08-31 05:58:51.608521+00",
+      "completed_at": "2026-08-31 05:58:55.210176+00"
     },
     {
-      "id": "6a62e53f-e945-40f0-b440-727d893bbcb9",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "id": "cfdd0489-fe9d-4f32-8cd2-c3df35a99ccb",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "operation": "stakeholder-intelligence",
       "ordinal": 1,
       "status": "completed",
@@ -78,19 +58,36 @@
       "output_mode": "native_schema",
       "validation_attempts": 0,
       "validation_issues": [],
-      "warnings": [
-        "PENDING_APPROVAL",
-        "INSUFFICIENT_CLAIM_SUPPORT"
-      ],
+      "warnings": [],
       "possible_duplicate": false,
-      "input_tokens": 7049,
-      "output_tokens": 1346,
-      "started_at": "2026-08-30 18:34:05.279481+00",
-      "completed_at": "2026-08-30 18:34:10.486018+00"
+      "input_tokens": 7201,
+      "output_tokens": 1188,
+      "started_at": "2026-08-31 05:58:51.608526+00",
+      "completed_at": "2026-08-31 05:58:56.388993+00"
     },
     {
-      "id": "attempt_98dbdf0c1865dce70a3b4b5f869d690fc21e79a38031a320cb5bc531f7d6fd1b",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "id": "e49ec18c-7bea-4ddb-89a6-ede6e201211d",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
+      "operation": "commercial-policy-analysis",
+      "ordinal": 1,
+      "status": "completed",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "output_mode": "native_schema",
+      "validation_attempts": 0,
+      "validation_issues": [],
+      "warnings": [
+        "APPROVAL_REQUIRED"
+      ],
+      "possible_duplicate": false,
+      "input_tokens": 2491,
+      "output_tokens": 743,
+      "started_at": "2026-08-31 05:58:51.608822+00",
+      "completed_at": "2026-08-31 05:58:54.819145+00"
+    },
+    {
+      "id": "attempt_7d652c75fa7ef52ad93e2f77b5ffa5b1ee9241b7e7340933282a27175476122d",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "operation": "conversation",
       "ordinal": 1,
       "status": "completed",
@@ -103,12 +100,12 @@
       "possible_duplicate": false,
       "input_tokens": 0,
       "output_tokens": 0,
-      "started_at": "2026-08-30 18:34:10.504412+00",
-      "completed_at": "2026-08-30 18:34:10.504412+00"
+      "started_at": "2026-08-31 05:58:56.407174+00",
+      "completed_at": "2026-08-31 05:58:56.407174+00"
     },
     {
-      "id": "attempt_859f683a4c197530073166dd2e8aa6a206ecdd7cfc56691a214e4b3831af3b09",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "id": "attempt_3a7ee63e61c507a44b0ced5ec03c162f8f35695cfd78eb7d45c02afe5191d20d",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "operation": "stakeholder",
       "ordinal": 1,
       "status": "completed",
@@ -121,12 +118,12 @@
       "possible_duplicate": false,
       "input_tokens": 0,
       "output_tokens": 0,
-      "started_at": "2026-08-30 18:34:10.520683+00",
-      "completed_at": "2026-08-30 18:34:10.520683+00"
+      "started_at": "2026-08-31 05:58:56.422737+00",
+      "completed_at": "2026-08-31 05:58:56.422737+00"
     },
     {
-      "id": "attempt_5afcddb1ebdddbdcc5bf8b0eafb7473cc646b10a971fd675c55e8df3245a9c4e",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "id": "attempt_201f93a5f400565c58aa37cda8603d34774193b36b212ca6d19d441ca2535bee",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "operation": "commercial",
       "ordinal": 1,
       "status": "completed",
@@ -139,12 +136,12 @@
       "possible_duplicate": false,
       "input_tokens": 0,
       "output_tokens": 0,
-      "started_at": "2026-08-30 18:34:10.533815+00",
-      "completed_at": "2026-08-30 18:34:10.533815+00"
+      "started_at": "2026-08-31 05:58:56.435861+00",
+      "completed_at": "2026-08-31 05:58:56.435861+00"
     },
     {
-      "id": "c8702044-938c-47b0-9cd7-6475d940427d",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "id": "8b8fd4a2-ffe1-4af8-8860-eed756b7897f",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "operation": "negotiation-strategy",
       "ordinal": 1,
       "status": "completed",
@@ -154,19 +151,18 @@
       "validation_attempts": 0,
       "validation_issues": [],
       "warnings": [
-        "PENDING_APPROVAL",
-        "POLICY_TRUNCATED_LIABILITY",
+        "APPROVAL_REQUIRED",
         "INSUFFICIENT_CLAIM_SUPPORT"
       ],
       "possible_duplicate": false,
-      "input_tokens": 7793,
-      "output_tokens": 6199,
-      "started_at": "2026-08-30 18:34:11.316499+00",
-      "completed_at": "2026-08-30 18:34:29.644836+00"
+      "input_tokens": 8288,
+      "output_tokens": 6017,
+      "started_at": "2026-08-31 05:58:56.641991+00",
+      "completed_at": "2026-08-31 05:59:15.359074+00"
     },
     {
-      "id": "attempt_15f7574696713dc7c3ceaf9d847839976bd4c6335fa3f5fbe029b7be6c17b42b",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "id": "attempt_17e0cf9b52d3d5dfa0cef73cab18c006f7ee33aeffdb556a1a7bba3a10d00ef4",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "operation": "strategy",
       "ordinal": 1,
       "status": "completed",
@@ -179,16 +175,16 @@
       "possible_duplicate": false,
       "input_tokens": 0,
       "output_tokens": 0,
-      "started_at": "2026-08-30 18:34:29.701415+00",
-      "completed_at": "2026-08-30 18:34:29.701415+00"
+      "started_at": "2026-08-31 05:59:15.390573+00",
+      "completed_at": "2026-08-31 05:59:15.390573+00"
     }
   ],
   "spans": [
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_2f107a32e58046d76c01c54200cf1fd9c415273c1a524a183024c4137bc455a1",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_963042a0030ab8c26ea48ba25beb748f60fb5968c49f9b97718c28e56baab5dc",
       "parent_id": null,
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "authorization",
       "attempt": 1,
       "kind": "authorization_lookup",
@@ -202,95 +198,105 @@
           "requester",
           "permissions"
         ],
-        "correlationHash": "cf6addbc1ebf75520c0210b0560eaee2c652ce99ddc3f5db61d312c22b35c9cc"
+        "correlationHash": "3d62b6b7529efeeb10e96ce561deea50488cc81050fe2b1ee995cae2c05f85f4"
       },
-      "started_at": "2026-08-30 18:34:01.442+00",
-      "ended_at": "2026-08-30 18:34:01.442+00"
+      "started_at": "2026-08-31 05:58:48.647+00",
+      "ended_at": "2026-08-31 05:58:48.647+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
-      "parent_id": "span_2f107a32e58046d76c01c54200cf1fd9c415273c1a524a183024c4137bc455a1",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_b33d510eb0d23559f2c220a32c89caeacc622f6e6a0097a8d27910ac9043b88f",
+      "parent_id": "span_963042a0030ab8c26ea48ba25beb748f60fb5968c49f9b97718c28e56baab5dc",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "retrieval",
       "attempt": 1,
       "kind": "evidence_retrieval",
       "status": "completed",
       "payload": {
         "scores": [
-          0.10996693055786619,
-          0.10205150288618169,
-          0.10071601218219843,
-          0.10048454715342423,
-          0.09917992682296756,
-          0.09880553203476966,
-          0.09807266662397315,
-          0.09600794903329748,
-          0.09582487359328996,
-          0.09529560012941443,
-          0.09460792724150488,
-          0.09374165196592835,
-          0.09326276342666769,
-          0.09265510690737917,
-          0.09159051691112965,
-          0.0911920497930914,
-          0.09106244075098008,
-          0.09103890144738436,
-          0.09089711070003452,
-          0.05298536403963132,
-          0.07867072524275529,
-          0.08922740989538151
+          0.17420986940284616,
+          0.17299210176655885,
+          0.17134368130031183,
+          0.16999641684889574,
+          0.16701518155079867,
+          0.1629019198074778,
+          0.1605981121738102,
+          0.1599817955898598,
+          0.14985024019289547,
+          0.14956401877711847,
+          0.1483109302564626,
+          0.1481113720110818,
+          0.14706523883949968,
+          0.14674446538786826,
+          0.14449424990390314,
+          0.13745986751266048,
+          0.13454356020007568,
+          0.1339467115607527,
+          0.13237925413430118,
+          0.08200922456643281,
+          0.046054405392392875,
+          0.12129279441978244,
+          0.05136486997252061,
+          0.020945292412480974,
+          0.0632147784954106,
+          0.0533129459697059,
+          0.03587762948180434
         ],
         "resultIds": [
-          "slack:SLK-9009:0",
           "gong_transcript:CALL-027:transcript:3",
           "gong_transcript:CALL-027:transcript:6",
-          "gong_transcript:CALL-027:transcript:4",
-          "gong_transcript:CALL-027:transcript:2",
           "gong_transcript:CALL-023:transcript:2",
-          "gong_transcript:CALL-027:transcript:1",
-          "salesforce:CON-3011:OPP-1003:contact:0",
-          "gong_transcript:CALL-023:transcript:0",
-          "salesforce:CON-3013:OPP-1003:contact:0",
-          "gong_transcript:CALL-023:transcript:5",
-          "salesforce:CON-3012:OPP-1003:contact:0",
-          "gong_transcript:CALL-027:transcript:5",
-          "salesforce:CON-3014:OPP-1003:contact:0",
-          "gong_transcript:CALL-023:transcript:4",
-          "gong_transcript:CALL-023:transcript:3",
-          "salesforce:CON-3015:OPP-1003:contact:0",
+          "gong_transcript:CALL-027:transcript:2",
+          "gong_transcript:CALL-019:transcript:5",
           "gong_transcript:CALL-019:transcript:4",
-          "gong_transcript:CALL-023:transcript:1",
-          "policy:deal-desk-policy:OPP-1003:0",
+          "gong_transcript:CALL-027:transcript:4",
+          "gong_transcript:CALL-023:transcript:0",
+          "gong_transcript:CALL-019:transcript:3",
+          "gong_transcript:CALL-023:transcript:3",
+          "gong_transcript:CALL-019:transcript:2",
+          "gong_transcript:CALL-027:transcript:0",
+          "slack:SLK-9009:0",
+          "gong_transcript:CALL-019:transcript:6",
+          "gong_transcript:CALL-027:transcript:1",
+          "gong_transcript:CALL-023:transcript:5",
+          "gong_transcript:CALL-023:transcript:4",
+          "gong_transcript:CALL-027:transcript:5",
+          "gong_transcript:CALL-019:transcript:1",
+          "policy:deal-desk-policy:OPP-1003:2",
           "salesforce:ACC-2003:OPP-1003:account:0",
-          "salesforce:OPP-1003:0"
+          "salesforce:OPP-1003:0",
+          "salesforce:CON-3011:OPP-1003:contact:0",
+          "salesforce:CON-3012:OPP-1003:contact:0",
+          "salesforce:CON-3013:OPP-1003:contact:0",
+          "salesforce:CON-3014:OPP-1003:contact:0",
+          "salesforce:CON-3015:OPP-1003:contact:0"
         ],
-        "evidenceCount": 22
+        "evidenceCount": 27
       },
-      "started_at": "2026-08-30 18:34:04.433+00",
-      "ended_at": "2026-08-30 18:34:04.433+00"
+      "started_at": "2026-08-31 05:58:51.482+00",
+      "ended_at": "2026-08-31 05:58:51.482+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_6011303266673a79b27d86bd0768f5af862037c5d39cf21f9f9ee355da86797b",
-      "parent_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_f50b6c9155a05ecc689952e7c841657f01f481bd4639d1c735f91fba427bb7bb",
+      "parent_id": "span_b33d510eb0d23559f2c220a32c89caeacc622f6e6a0097a8d27910ac9043b88f",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "conversation",
       "attempt": 1,
       "kind": "specialist_attempt",
       "status": "completed",
       "payload": {
         "operation": "conversation",
-        "logicalGenerationId": "generation_ac2c77a00fa64ce666e46547f65eddcb91c4a7b182a26b200f28f353bfa2cec2"
+        "logicalGenerationId": "generation_e26e170fb2496015d7fe08320944bb46621b25b4dbe84c1f3b41fb561d341005"
       },
-      "started_at": "2026-08-30 18:34:10.513+00",
-      "ended_at": "2026-08-30 18:34:10.513+00"
+      "started_at": "2026-08-31 05:58:56.413+00",
+      "ended_at": "2026-08-31 05:58:56.413+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_d9a2da6ddc9d7d24581b1cf63fa7404b29c38a02409e6f40ee966ff9d452f757",
-      "parent_id": "span_6011303266673a79b27d86bd0768f5af862037c5d39cf21f9f9ee355da86797b",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_8f4cbf42f56d8406b2f5d4d4f638a794bd0cc8f732e675fb5b078861e2ccf51d",
+      "parent_id": "span_f50b6c9155a05ecc689952e7c841657f01f481bd4639d1c735f91fba427bb7bb",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "conversation",
       "attempt": 1,
       "kind": "model_call",
@@ -301,18 +307,18 @@
         "provider": "openrouter",
         "outputMode": null,
         "parametersHash": "944db2dc745d75145aaecfbdb8d89aeb787da1799e2121884185ff3401ef5bc1",
-        "durableAttemptId": "attempt_98dbdf0c1865dce70a3b4b5f869d690fc21e79a38031a320cb5bc531f7d6fd1b",
+        "durableAttemptId": "attempt_7d652c75fa7ef52ad93e2f77b5ffa5b1ee9241b7e7340933282a27175476122d",
         "possibleDuplicate": false,
-        "logicalGenerationId": "generation_ac2c77a00fa64ce666e46547f65eddcb91c4a7b182a26b200f28f353bfa2cec2"
+        "logicalGenerationId": "generation_e26e170fb2496015d7fe08320944bb46621b25b4dbe84c1f3b41fb561d341005"
       },
-      "started_at": "2026-08-30 18:34:10.515+00",
-      "ended_at": "2026-08-30 18:34:10.515+00"
+      "started_at": "2026-08-31 05:58:56.416+00",
+      "ended_at": "2026-08-31 05:58:56.416+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_785f4dd00028d3e388c074547cee9c1ccbfbbf971c4b4fb25c540dab5b1438b2",
-      "parent_id": "span_d9a2da6ddc9d7d24581b1cf63fa7404b29c38a02409e6f40ee966ff9d452f757",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_f6912c11cdf569a9832509269e21e87fdca63695749b9c7e4123c229cb0ed9cf",
+      "parent_id": "span_8f4cbf42f56d8406b2f5d4d4f638a794bd0cc8f732e675fb5b078861e2ccf51d",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "conversation",
       "attempt": 1,
       "kind": "validation",
@@ -321,14 +327,14 @@
         "decision": "accepted",
         "validationAttempts": 0
       },
-      "started_at": "2026-08-30 18:34:10.516+00",
-      "ended_at": "2026-08-30 18:34:10.516+00"
+      "started_at": "2026-08-31 05:58:56.417+00",
+      "ended_at": "2026-08-31 05:58:56.417+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_71043573d2ecb2daa2a75ff7a7e0d311c742d5effd20d0d99478ea5ac8fb906e",
-      "parent_id": "span_d9a2da6ddc9d7d24581b1cf63fa7404b29c38a02409e6f40ee966ff9d452f757",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_0437e7d8d2572b2336e68f01ea14b7f542f71f3b631a78b19e01040d63981cbc",
+      "parent_id": "span_8f4cbf42f56d8406b2f5d4d4f638a794bd0cc8f732e675fb5b078861e2ccf51d",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "conversation",
       "attempt": 1,
       "kind": "guardrail",
@@ -336,14 +342,14 @@
       "payload": {
         "decision": "passed"
       },
-      "started_at": "2026-08-30 18:34:10.517+00",
-      "ended_at": "2026-08-30 18:34:10.517+00"
+      "started_at": "2026-08-31 05:58:56.418+00",
+      "ended_at": "2026-08-31 05:58:56.418+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_83109170a729c7a1e32446b80ddddc7e9a448e0b14cd6436708530569c120892",
-      "parent_id": "span_d9a2da6ddc9d7d24581b1cf63fa7404b29c38a02409e6f40ee966ff9d452f757",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_ae2e696d07d3ae6980431712e6eba06644f047c2403fad7648dba521d9c2f2b8",
+      "parent_id": "span_8f4cbf42f56d8406b2f5d4d4f638a794bd0cc8f732e675fb5b078861e2ccf51d",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "conversation",
       "attempt": 1,
       "kind": "usage",
@@ -352,30 +358,30 @@
         "inputTokens": 0,
         "outputTokens": 0
       },
-      "started_at": "2026-08-30 18:34:10.518+00",
-      "ended_at": "2026-08-30 18:34:10.518+00"
+      "started_at": "2026-08-31 05:58:56.419+00",
+      "ended_at": "2026-08-31 05:58:56.419+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_bed64f3e23b0d6e013b3b8d0e7d81b6feb42149a8bb385d43a9e860113a37657",
-      "parent_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_6bca056c34d84982309546458717ad8299d6c6493959935a422f9b994eb48002",
+      "parent_id": "span_b33d510eb0d23559f2c220a32c89caeacc622f6e6a0097a8d27910ac9043b88f",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "stakeholder",
       "attempt": 1,
       "kind": "specialist_attempt",
       "status": "completed",
       "payload": {
         "operation": "stakeholder",
-        "logicalGenerationId": "generation_7055c3e78b83f892f5175bfe8ce9f532731ebaa9b04dc27f308fd52d56276804"
+        "logicalGenerationId": "generation_d2febd187e7787853215972240315433b782e3ec2e258c5db8993baa3b6bd5dc"
       },
-      "started_at": "2026-08-30 18:34:10.527+00",
-      "ended_at": "2026-08-30 18:34:10.527+00"
+      "started_at": "2026-08-31 05:58:56.428+00",
+      "ended_at": "2026-08-31 05:58:56.428+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_ecb60533a38fca68ce2e9ed9768491b0d7698ad3d27e8fe77f3eb6d935acd963",
-      "parent_id": "span_bed64f3e23b0d6e013b3b8d0e7d81b6feb42149a8bb385d43a9e860113a37657",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_d50929041e52ac8402777714c7364dad716402c5df669019174c75b4fad7c8aa",
+      "parent_id": "span_6bca056c34d84982309546458717ad8299d6c6493959935a422f9b994eb48002",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "stakeholder",
       "attempt": 1,
       "kind": "model_call",
@@ -386,33 +392,18 @@
         "provider": "openrouter",
         "outputMode": null,
         "parametersHash": "27e264dfc175c0f55a9559c9c90669b3b54e1a907086800546cf4faa61a26508",
-        "durableAttemptId": "attempt_859f683a4c197530073166dd2e8aa6a206ecdd7cfc56691a214e4b3831af3b09",
+        "durableAttemptId": "attempt_3a7ee63e61c507a44b0ced5ec03c162f8f35695cfd78eb7d45c02afe5191d20d",
         "possibleDuplicate": false,
-        "logicalGenerationId": "generation_7055c3e78b83f892f5175bfe8ce9f532731ebaa9b04dc27f308fd52d56276804"
+        "logicalGenerationId": "generation_d2febd187e7787853215972240315433b782e3ec2e258c5db8993baa3b6bd5dc"
       },
-      "started_at": "2026-08-30 18:34:10.529+00",
-      "ended_at": "2026-08-30 18:34:10.529+00"
+      "started_at": "2026-08-31 05:58:56.43+00",
+      "ended_at": "2026-08-31 05:58:56.43+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_124d1e8de1acc69efc0d5ae792f4c063073df86351075730fa59a1d09f05b1a6",
-      "parent_id": "span_ecb60533a38fca68ce2e9ed9768491b0d7698ad3d27e8fe77f3eb6d935acd963",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
-      "step": "stakeholder",
-      "attempt": 1,
-      "kind": "guardrail",
-      "status": "completed",
-      "payload": {
-        "decision": "passed"
-      },
-      "started_at": "2026-08-30 18:34:10.53+00",
-      "ended_at": "2026-08-30 18:34:10.53+00"
-    },
-    {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_b365783cc54137425cc9e82aaa8dbed7f1315a9bd46f761bf9a42ea94c06d103",
-      "parent_id": "span_ecb60533a38fca68ce2e9ed9768491b0d7698ad3d27e8fe77f3eb6d935acd963",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_4d1278e319b241a390a187f905e04c5918822b496b483b5ec213bb8b26a370cb",
+      "parent_id": "span_d50929041e52ac8402777714c7364dad716402c5df669019174c75b4fad7c8aa",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "stakeholder",
       "attempt": 1,
       "kind": "validation",
@@ -421,14 +412,29 @@
         "decision": "accepted",
         "validationAttempts": 0
       },
-      "started_at": "2026-08-30 18:34:10.53+00",
-      "ended_at": "2026-08-30 18:34:10.53+00"
+      "started_at": "2026-08-31 05:58:56.431+00",
+      "ended_at": "2026-08-31 05:58:56.431+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_140d5e5c289125a8990762459b6023023c4b3ddb5ca898a6070e733791394eb2",
-      "parent_id": "span_ecb60533a38fca68ce2e9ed9768491b0d7698ad3d27e8fe77f3eb6d935acd963",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_ace2ddd41ebb7f6f321992f44f2069b821dcea7e402802cf90cecd71a648353a",
+      "parent_id": "span_d50929041e52ac8402777714c7364dad716402c5df669019174c75b4fad7c8aa",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
+      "step": "stakeholder",
+      "attempt": 1,
+      "kind": "guardrail",
+      "status": "completed",
+      "payload": {
+        "decision": "passed"
+      },
+      "started_at": "2026-08-31 05:58:56.432+00",
+      "ended_at": "2026-08-31 05:58:56.432+00"
+    },
+    {
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_20748a831e05c642e5f713f59030ff6d7e6aaef97ec309369ef0b69276b5282f",
+      "parent_id": "span_d50929041e52ac8402777714c7364dad716402c5df669019174c75b4fad7c8aa",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "stakeholder",
       "attempt": 1,
       "kind": "usage",
@@ -437,46 +443,30 @@
         "inputTokens": 0,
         "outputTokens": 0
       },
-      "started_at": "2026-08-30 18:34:10.531+00",
-      "ended_at": "2026-08-30 18:34:10.531+00"
+      "started_at": "2026-08-31 05:58:56.433+00",
+      "ended_at": "2026-08-31 05:58:56.433+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_717530aef81f1a3fa29d288222794d6f2e58f9694ac963e10c1b133374758c08",
-      "parent_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_eef0bedf08c4b5d1e16bbfc55018de035abebb57718df4a60d19924033c391ca",
+      "parent_id": "span_b33d510eb0d23559f2c220a32c89caeacc622f6e6a0097a8d27910ac9043b88f",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "commercial",
       "attempt": 1,
       "kind": "specialist_attempt",
       "status": "completed",
       "payload": {
         "operation": "commercial",
-        "logicalGenerationId": "generation_06a2460b2255bd0e47395016dc07479750d57bbe13c0e64d7292a04fc23ce549"
+        "logicalGenerationId": "generation_b5d4e47145219251b1b244fc3f0d2a4c8428bfcc6f265a7f309977d3f0d83dd0"
       },
-      "started_at": "2026-08-30 18:34:10.537+00",
-      "ended_at": "2026-08-30 18:34:10.537+00"
+      "started_at": "2026-08-31 05:58:56.44+00",
+      "ended_at": "2026-08-31 05:58:56.44+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_8926b633428366f6ddcca8053b16d9a34010595f8d4a27d2520dd96603708878",
-      "parent_id": "span_d1d7dfbdbf4a08583e843fcd8929f1eaf387af2522d69ef3e6bda9e42a959328",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
-      "step": "commercial",
-      "attempt": 1,
-      "kind": "validation",
-      "status": "completed",
-      "payload": {
-        "decision": "accepted",
-        "validationAttempts": 0
-      },
-      "started_at": "2026-08-30 18:34:10.538+00",
-      "ended_at": "2026-08-30 18:34:10.538+00"
-    },
-    {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_d1d7dfbdbf4a08583e843fcd8929f1eaf387af2522d69ef3e6bda9e42a959328",
-      "parent_id": "span_717530aef81f1a3fa29d288222794d6f2e58f9694ac963e10c1b133374758c08",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_0547382a8ce55c18ccc253feb8e957270cef230ca0e1132e43c5f678614f3f3c",
+      "parent_id": "span_eef0bedf08c4b5d1e16bbfc55018de035abebb57718df4a60d19924033c391ca",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "commercial",
       "attempt": 1,
       "kind": "model_call",
@@ -487,18 +477,49 @@
         "provider": "openrouter",
         "outputMode": null,
         "parametersHash": "2425224822fd7b66558bd266b4c8d1e75b1326151393f476e6fd4e31ee17e0d7",
-        "durableAttemptId": "attempt_5afcddb1ebdddbdcc5bf8b0eafb7473cc646b10a971fd675c55e8df3245a9c4e",
+        "durableAttemptId": "attempt_201f93a5f400565c58aa37cda8603d34774193b36b212ca6d19d441ca2535bee",
         "possibleDuplicate": false,
-        "logicalGenerationId": "generation_06a2460b2255bd0e47395016dc07479750d57bbe13c0e64d7292a04fc23ce549"
+        "logicalGenerationId": "generation_b5d4e47145219251b1b244fc3f0d2a4c8428bfcc6f265a7f309977d3f0d83dd0"
       },
-      "started_at": "2026-08-30 18:34:10.538+00",
-      "ended_at": "2026-08-30 18:34:10.538+00"
+      "started_at": "2026-08-31 05:58:56.442+00",
+      "ended_at": "2026-08-31 05:58:56.442+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_7e8efe3798c7f45dbd1038382aeecb8ca97bc7e6df477501095843c0b25070c4",
-      "parent_id": "span_d1d7dfbdbf4a08583e843fcd8929f1eaf387af2522d69ef3e6bda9e42a959328",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_6fc8211582b841634d6588e599b8c3cfc6de42bc84a5fbd8ce99f8dcc0b0a530",
+      "parent_id": "span_0547382a8ce55c18ccc253feb8e957270cef230ca0e1132e43c5f678614f3f3c",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
+      "step": "commercial",
+      "attempt": 1,
+      "kind": "validation",
+      "status": "completed",
+      "payload": {
+        "decision": "accepted",
+        "validationAttempts": 0
+      },
+      "started_at": "2026-08-31 05:58:56.442+00",
+      "ended_at": "2026-08-31 05:58:56.442+00"
+    },
+    {
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_6a793bc4a0b935fb4a0c5b7fb3457630dbd2033a9e2b4cfd2a8a2b3996b9528a",
+      "parent_id": "span_0547382a8ce55c18ccc253feb8e957270cef230ca0e1132e43c5f678614f3f3c",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
+      "step": "commercial",
+      "attempt": 1,
+      "kind": "guardrail",
+      "status": "completed",
+      "payload": {
+        "decision": "passed"
+      },
+      "started_at": "2026-08-31 05:58:56.443+00",
+      "ended_at": "2026-08-31 05:58:56.443+00"
+    },
+    {
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_a4f8ff2ccdbc93f62673aaf0f8b9955a34c1347c48ce22815c9bed68b36fad9b",
+      "parent_id": "span_0547382a8ce55c18ccc253feb8e957270cef230ca0e1132e43c5f678614f3f3c",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "commercial",
       "attempt": 1,
       "kind": "usage",
@@ -507,45 +528,30 @@
         "inputTokens": 0,
         "outputTokens": 0
       },
-      "started_at": "2026-08-30 18:34:10.539+00",
-      "ended_at": "2026-08-30 18:34:10.539+00"
+      "started_at": "2026-08-31 05:58:56.444+00",
+      "ended_at": "2026-08-31 05:58:56.444+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_df49af8e39bbf8b367bab31ba6cc988afe9052dd0bffc7e8915a8dc05cf0b0d5",
-      "parent_id": "span_d1d7dfbdbf4a08583e843fcd8929f1eaf387af2522d69ef3e6bda9e42a959328",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
-      "step": "commercial",
-      "attempt": 1,
-      "kind": "guardrail",
-      "status": "completed",
-      "payload": {
-        "decision": "passed"
-      },
-      "started_at": "2026-08-30 18:34:10.539+00",
-      "ended_at": "2026-08-30 18:34:10.539+00"
-    },
-    {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_3f616d7583b28b5b67ea95aa072da995c8486c2c8eaa7b1ef6670e5e44a623f5",
-      "parent_id": "span_d4023c6f542e38470da52af23216bed56ac86bac90eb19bd9fb72859f49e12b9",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_4483fab2884feb11759609c43878a0076394fbf7cb4f887d3082c3cc4336c96c",
+      "parent_id": "span_b33d510eb0d23559f2c220a32c89caeacc622f6e6a0097a8d27910ac9043b88f",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "strategy",
       "attempt": 1,
       "kind": "strategy_attempt",
       "status": "completed",
       "payload": {
         "operation": "strategy",
-        "logicalGenerationId": "generation_08dd2f6ce33b5ac7e09d7f1fa8cfb015e3f7b5fcd25963c0eb9b393e784bee20"
+        "logicalGenerationId": "generation_389d12d119315f48f2cfa85d4d03cd11eed38c48ec329157ef9ddfbca780e8ef"
       },
-      "started_at": "2026-08-30 18:34:29.706+00",
-      "ended_at": "2026-08-30 18:34:29.706+00"
+      "started_at": "2026-08-31 05:59:15.397+00",
+      "ended_at": "2026-08-31 05:59:15.397+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_c5372258514aa4ecbef7f09998133518b18f36d5adef23c40835dc5ddd7cbe50",
-      "parent_id": "span_3f616d7583b28b5b67ea95aa072da995c8486c2c8eaa7b1ef6670e5e44a623f5",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_8c6a1bcfd3c1991ed1e72a8ac1d0befafb7329206e168553824d0d852c114553",
+      "parent_id": "span_4483fab2884feb11759609c43878a0076394fbf7cb4f887d3082c3cc4336c96c",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "strategy",
       "attempt": 1,
       "kind": "model_call",
@@ -556,18 +562,18 @@
         "provider": "openrouter",
         "outputMode": null,
         "parametersHash": "5bdad2dcb16f21a896ef8b426eabdf97b826bb3491e00a47cb84b59da22e397d",
-        "durableAttemptId": "attempt_15f7574696713dc7c3ceaf9d847839976bd4c6335fa3f5fbe029b7be6c17b42b",
+        "durableAttemptId": "attempt_17e0cf9b52d3d5dfa0cef73cab18c006f7ee33aeffdb556a1a7bba3a10d00ef4",
         "possibleDuplicate": false,
-        "logicalGenerationId": "generation_08dd2f6ce33b5ac7e09d7f1fa8cfb015e3f7b5fcd25963c0eb9b393e784bee20"
+        "logicalGenerationId": "generation_389d12d119315f48f2cfa85d4d03cd11eed38c48ec329157ef9ddfbca780e8ef"
       },
-      "started_at": "2026-08-30 18:34:29.707+00",
-      "ended_at": "2026-08-30 18:34:29.707+00"
+      "started_at": "2026-08-31 05:59:15.4+00",
+      "ended_at": "2026-08-31 05:59:15.4+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_cf592935b0847097da943aca63d7ce297c67af01e74e2589d47ad1e31f259e47",
-      "parent_id": "span_c5372258514aa4ecbef7f09998133518b18f36d5adef23c40835dc5ddd7cbe50",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_1e35918a79073085917117cf1770a85789be2de504598dfdaff315957ca1b419",
+      "parent_id": "span_8c6a1bcfd3c1991ed1e72a8ac1d0befafb7329206e168553824d0d852c114553",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "strategy",
       "attempt": 1,
       "kind": "validation",
@@ -576,14 +582,29 @@
         "decision": "accepted",
         "validationAttempts": 0
       },
-      "started_at": "2026-08-30 18:34:29.708+00",
-      "ended_at": "2026-08-30 18:34:29.708+00"
+      "started_at": "2026-08-31 05:59:15.401+00",
+      "ended_at": "2026-08-31 05:59:15.401+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_7e68e24ec634e80eb85e8153b6c4628f0a76caf073eb6562d7c9c663cb52e824",
-      "parent_id": "span_c5372258514aa4ecbef7f09998133518b18f36d5adef23c40835dc5ddd7cbe50",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_c3ef6d42999835f13fd28559ffd90b85b6c795debda2c4a1698b6052e44fe59f",
+      "parent_id": "span_8c6a1bcfd3c1991ed1e72a8ac1d0befafb7329206e168553824d0d852c114553",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
+      "step": "strategy",
+      "attempt": 1,
+      "kind": "guardrail",
+      "status": "completed",
+      "payload": {
+        "decision": "passed"
+      },
+      "started_at": "2026-08-31 05:59:15.401+00",
+      "ended_at": "2026-08-31 05:59:15.401+00"
+    },
+    {
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_84740220aac1d6074247d9579c581e84411d71bdacde75ad1689a7ac3a6022b5",
+      "parent_id": "span_8c6a1bcfd3c1991ed1e72a8ac1d0befafb7329206e168553824d0d852c114553",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "strategy",
       "attempt": 1,
       "kind": "usage",
@@ -592,29 +613,14 @@
         "inputTokens": 0,
         "outputTokens": 0
       },
-      "started_at": "2026-08-30 18:34:29.709+00",
-      "ended_at": "2026-08-30 18:34:29.709+00"
+      "started_at": "2026-08-31 05:59:15.402+00",
+      "ended_at": "2026-08-31 05:59:15.402+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_806f891f07ec371bd34df97cd0679595ac42c364cf476322cd01efeecd3914fa",
-      "parent_id": "span_c5372258514aa4ecbef7f09998133518b18f36d5adef23c40835dc5ddd7cbe50",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
-      "step": "strategy",
-      "attempt": 1,
-      "kind": "guardrail",
-      "status": "completed",
-      "payload": {
-        "decision": "passed"
-      },
-      "started_at": "2026-08-30 18:34:29.709+00",
-      "ended_at": "2026-08-30 18:34:29.709+00"
-    },
-    {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
-      "parent_id": "span_3f616d7583b28b5b67ea95aa072da995c8486c2c8eaa7b1ef6670e5e44a623f5",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_776b1cee92f93549bde2e2d8755b36e05ed510024e459149cafdd95f33abf4d5",
+      "parent_id": "span_4483fab2884feb11759609c43878a0076394fbf7cb4f887d3082c3cc4336c96c",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "policy",
       "attempt": 1,
       "kind": "policy_decision",
@@ -622,31 +628,33 @@
       "payload": {
         "decision": "approval_required",
         "policyHash": "332355fd544880ec6441c3ca720f3f0fdca21c41470d6408f849ab4fb6dd618f",
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:34:30.395+00",
-      "ended_at": "2026-08-30 18:34:30.395+00"
+      "started_at": "2026-08-31 05:59:15.69+00",
+      "ended_at": "2026-08-31 05:59:15.69+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_e6dfd9faee09eacc0ba1ed51773be14e991fe55835a4cac1bac9df497d011d00",
-      "parent_id": "span_3f616d7583b28b5b67ea95aa072da995c8486c2c8eaa7b1ef6670e5e44a623f5",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_5d4a07f5512271844d87aeb20c0829dc09feca3af2bb6da4d4a45f2b5b8308dd",
+      "parent_id": "span_4483fab2884feb11759609c43878a0076394fbf7cb4f887d3082c3cc4336c96c",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "recommendation",
       "attempt": 1,
       "kind": "recommendation",
       "status": "completed",
       "payload": {
-        "recommendationIds": []
+        "recommendationIds": [
+          "recommendation:0:ff7259660a06de89"
+        ]
       },
-      "started_at": "2026-08-30 18:34:30.397+00",
-      "ended_at": "2026-08-30 18:34:30.397+00"
+      "started_at": "2026-08-31 05:59:15.692+00",
+      "ended_at": "2026-08-31 05:59:15.692+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_a41b73a0e4b4750bd88fe3970cf3f166a9a443609f5d913b184ba7919b2c88d6",
-      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_2ad1a4602ef7ca2487f3967517e8f435fd46eee513a4b994e41e637b58146d04",
+      "parent_id": "span_776b1cee92f93549bde2e2d8755b36e05ed510024e459149cafdd95f33abf4d5",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_requirement",
@@ -658,16 +666,16 @@
         "authorities": [
           "deal_desk"
         ],
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:34:30.398+00",
-      "ended_at": "2026-08-30 18:34:30.398+00"
+      "started_at": "2026-08-31 05:59:15.693+00",
+      "ended_at": "2026-08-31 05:59:15.693+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_1f77e2a375572d5147c3de96cd9e0b1a6168dc5d15a263a2d83c6fd206260b1e",
-      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_9a153a0f5542b1e9a05ce3bf5cb89bb094ae6b291f38467d5ae14ee347619599",
+      "parent_id": "span_776b1cee92f93549bde2e2d8755b36e05ed510024e459149cafdd95f33abf4d5",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_requirement",
@@ -679,16 +687,16 @@
         "authorities": [
           "sales_leader"
         ],
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:34:30.399+00",
-      "ended_at": "2026-08-30 18:34:30.399+00"
+      "started_at": "2026-08-31 05:59:15.693+00",
+      "ended_at": "2026-08-31 05:59:15.693+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_422ecb776aec80b57e6f0ae98d19e8374e988d989b996e2a82a6f32d034e2fe8",
-      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_80ddbeaeb505411d7ecf865065204d43cdb66d9ada39ca69e2081810ed5505fb",
+      "parent_id": "span_776b1cee92f93549bde2e2d8755b36e05ed510024e459149cafdd95f33abf4d5",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_requirement",
@@ -700,16 +708,16 @@
         "authorities": [
           "legal_reviewer"
         ],
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:34:30.4+00",
-      "ended_at": "2026-08-30 18:34:30.4+00"
+      "started_at": "2026-08-31 05:59:15.694+00",
+      "ended_at": "2026-08-31 05:59:15.694+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_5b2e58f26e8dda16381ecb75acc784fecdafa67f5bbcc57604e5a3cc8148df06",
-      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_9c0490e39e10710b6a8f84cf068376a3d10b34c046b871b4a70a48abdec2d4f4",
+      "parent_id": "span_776b1cee92f93549bde2e2d8755b36e05ed510024e459149cafdd95f33abf4d5",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_requirement",
@@ -722,16 +730,16 @@
           "account_owner",
           "sales_leader"
         ],
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:34:30.4+00",
-      "ended_at": "2026-08-30 18:34:30.4+00"
+      "started_at": "2026-08-31 05:59:15.695+00",
+      "ended_at": "2026-08-31 05:59:15.695+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_10ece9bb8a2bed53e1b17d7006e42dd6fbd2b422ab94286489d34fee93f82c51",
-      "parent_id": "span_00ba5e784f18280e2c9d3d2707f1ca7cae76c78afe870e98f1a610ed88c602d7",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_a5e1c78860ade4429c660a88ca99bec2b9d09f209ac3485fe755c89e5fe29fda",
+      "parent_id": "span_776b1cee92f93549bde2e2d8755b36e05ed510024e459149cafdd95f33abf4d5",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_requirement",
@@ -743,16 +751,16 @@
         "authorities": [
           "account_owner"
         ],
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:34:30.401+00",
-      "ended_at": "2026-08-30 18:34:30.401+00"
+      "started_at": "2026-08-31 05:59:15.695+00",
+      "ended_at": "2026-08-31 05:59:15.695+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_42622e0541fea4b6ec25af17b2f8c59965be70ecb7089865336248378e2cc94a",
-      "parent_id": "span_a41b73a0e4b4750bd88fe3970cf3f166a9a443609f5d913b184ba7919b2c88d6",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_3825916cfc7a6190d60e94abd82d20c3507fb146e3cbec4f4dd0f5dfc2121f38",
+      "parent_id": "span_2ad1a4602ef7ca2487f3967517e8f435fd46eee513a4b994e41e637b58146d04",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_decision",
@@ -762,16 +770,16 @@
         "category": "commercial_discount",
         "decision": "approved",
         "authority": "deal_desk",
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:34:59.447+00",
-      "ended_at": "2026-08-30 18:34:59.447+00"
+      "started_at": "2026-08-31 05:59:16.919+00",
+      "ended_at": "2026-08-31 05:59:16.919+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_26a7a494df962c7246b430d11dfac938f1b9c083f332570a08ebda1070c5eaae",
-      "parent_id": "span_1f77e2a375572d5147c3de96cd9e0b1a6168dc5d15a263a2d83c6fd206260b1e",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_6ab854998674f70afc0db9523e279a45ee08fef73e129ae4f7a2ddcb0928ce16",
+      "parent_id": "span_9a153a0f5542b1e9a05ce3bf5cb89bb094ae6b291f38467d5ae14ee347619599",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_decision",
@@ -781,16 +789,16 @@
         "category": "commercial_discount",
         "decision": "approved",
         "authority": "sales_leader",
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:35:13.624+00",
-      "ended_at": "2026-08-30 18:35:13.624+00"
+      "started_at": "2026-08-31 05:59:18.215+00",
+      "ended_at": "2026-08-31 05:59:18.215+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_66272a862b8d6c2acf0aeff72dd60da7783b4c56d24c50fd5120d7c54b1a32c1",
-      "parent_id": "span_422ecb776aec80b57e6f0ae98d19e8374e988d989b996e2a82a6f32d034e2fe8",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_dcbb1d794bb8ed22da6b97b2ec972e13df95818f8ea7c87887fc8d000d34670b",
+      "parent_id": "span_80ddbeaeb505411d7ecf865065204d43cdb66d9ada39ca69e2081810ed5505fb",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_decision",
@@ -800,16 +808,16 @@
         "category": "legal_terms",
         "decision": "approved",
         "authority": "legal_reviewer",
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:35:28.706+00",
-      "ended_at": "2026-08-30 18:35:28.706+00"
+      "started_at": "2026-08-31 05:59:19.494+00",
+      "ended_at": "2026-08-31 05:59:19.494+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_b6b65d86f5b8fac23acb29c1734c40483422db38c42e9d6397f3c798b36c7402",
-      "parent_id": "span_5b2e58f26e8dda16381ecb75acc784fecdafa67f5bbcc57604e5a3cc8148df06",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_fe69d9533547df6ce443c3e8bf423f9be93da7ef95bc2f0c088d168cdb5821aa",
+      "parent_id": "span_9c0490e39e10710b6a8f84cf068376a3d10b34c046b871b4a70a48abdec2d4f4",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_decision",
@@ -819,16 +827,16 @@
         "category": "evidence_review",
         "decision": "approved",
         "authority": "account_owner",
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:35:46.901+00",
-      "ended_at": "2026-08-30 18:35:46.901+00"
+      "started_at": "2026-08-31 05:59:20.783+00",
+      "ended_at": "2026-08-31 05:59:20.783+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_5daa45f3709499b4a5faae3abf521a250205b89f9809795aafe03d60a5093f96",
-      "parent_id": "span_10ece9bb8a2bed53e1b17d7006e42dd6fbd2b422ab94286489d34fee93f82c51",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_06b46bc76f45f5ca1c2f3f25cc656182cb85a41f1edb155bfbf06f6de6f6ec25",
+      "parent_id": "span_a5e1c78860ade4429c660a88ca99bec2b9d09f209ac3485fe755c89e5fe29fda",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "approval",
       "attempt": 1,
       "kind": "approval_decision",
@@ -838,26 +846,26 @@
         "category": "customer_concession",
         "decision": "approved",
         "authority": "account_owner",
-        "subjectHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:35:47.001+00",
-      "ended_at": "2026-08-30 18:35:47.001+00"
+      "started_at": "2026-08-31 05:59:22.069+00",
+      "ended_at": "2026-08-31 05:59:22.069+00"
     },
     {
-      "trace_id": "trace_d4d525f0e3eafd4f7bf53a9c34b7465838365d5300be43823152d365cd04471b",
-      "span_id": "span_d913c34beb6b3f5225b7c738d5bfde08fb928949ccc08753b605d8a59486c0b8",
-      "parent_id": "span_5daa45f3709499b4a5faae3abf521a250205b89f9809795aafe03d60a5093f96",
-      "run_id": "run_33523ca78bc566a655da2fe6e697267b5f644e5ffafc8e4ed467f32c01cbd76c",
+      "trace_id": "trace_2cf1bc3c77e2507eb8f71aafce11097f08df2415b91550721bf5283eb7d6ee56",
+      "span_id": "span_cdbf010ef04e006e2018ff509c8cf2e42c63e9845c37cf670354063e953df228",
+      "parent_id": "span_06b46bc76f45f5ca1c2f3f25cc656182cb85a41f1edb155bfbf06f6de6f6ec25",
+      "run_id": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
       "step": "finalization",
       "attempt": 1,
       "kind": "finalization",
       "status": "completed",
       "payload": {
         "decision": "completed",
-        "artifactHash": "7be655f5ae904e82f75271a917377257a62b592c6dbcd1486de97397510e07c9"
+        "artifactHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee"
       },
-      "started_at": "2026-08-30 18:35:47.746+00",
-      "ended_at": "2026-08-30 18:35:47.746+00"
+      "started_at": "2026-08-31 05:59:22.731+00",
+      "ended_at": "2026-08-31 05:59:22.731+00"
     }
   ]
 }

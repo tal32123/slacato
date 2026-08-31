@@ -258,7 +258,11 @@ export function RunRoute(): React.JSX.Element {
 
       <RunStateNotice detail={detail} stalled={stalled} />
 
-      <section className="border-b py-7" aria-labelledby="progress-title">
+      <section
+        data-tour="run-progress-detail"
+        className="border-b py-7"
+        aria-labelledby="progress-title"
+      >
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-primary">Current phase</p>

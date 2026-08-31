@@ -1,6 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { z } from 'zod';
 
 /** Builds a validation schema for canonical prefixed fixture identifiers. */
@@ -538,21 +536,19 @@ const booleanKeys = new Set([
 ]);
 const listKeys = new Set(['participants', 'allowedAccountIds', 'allowedSourceTypes']);
 
-/** Parses a fixture TSV into typed primitive values with normalized field names. */
-function parseTsv(path: string): unknown[] {
-  const content = readFileSync(path, 'utf8')
-    .replace(/^\uFEFF/, '')
-    .trimEnd();
+/** Parses fixture TSV content into typed primitive values with normalized field names. Pure: operates on already-read content, never touches disk. */
+function parseTsvRows(rawContent: string, label: string): unknown[] {
+  const content = rawContent.replace(/^\uFEFF/, '').trimEnd();
   const lines = content.split(/\r?\n/);
   const headers = lines.shift()?.split('\t');
   if (headers === undefined || headers.some((header) => header.length === 0))
-    throw new Error(`Invalid TSV header: ${path}`);
+    throw new Error(`Invalid TSV header: ${label}`);
   return lines
     .filter((line) => line.length > 0)
     .map((line, rowIndex) => {
       const cells = line.split('\t');
       if (cells.length !== headers.length)
-        throw new Error(`TSV column mismatch at ${path}:${rowIndex + 2}`);
+        throw new Error(`TSV column mismatch at ${label}:${rowIndex + 2}`);
       const record: Record<string, unknown> = {};
       headers.forEach((header, index) => {
         const key = keyMap[header] ?? header;
@@ -561,10 +557,10 @@ function parseTsv(path: string): unknown[] {
           numericKeys.has(key) &&
           (value.trim().length === 0 || !Number.isFinite(Number(value)))
         ) {
-          throw new Error(`Invalid numeric value at ${path}:${rowIndex + 2}:${header}`);
+          throw new Error(`Invalid numeric value at ${label}:${rowIndex + 2}:${header}`);
         }
         if (booleanKeys.has(key) && value !== 'true' && value !== 'false') {
-          throw new Error(`Invalid boolean value at ${path}:${rowIndex + 2}:${header}`);
+          throw new Error(`Invalid boolean value at ${label}:${rowIndex + 2}:${header}`);
         }
         record[key] = numericKeys.has(key)
           ? Number(value)
@@ -595,11 +591,15 @@ function sha256(content: string): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
-/** Verifies that every canonical fixture file matches its pinned source attribution. */
-function verifySourceAttribution(root: string): z.infer<typeof sourceAttributionSchema> {
-  const attribution = sourceAttributionSchema.parse(
-    JSON.parse(readFileSync(join(root, 'source-attribution.json'), 'utf8'))
-  );
+/**
+ * Verifies that every canonical fixture file matches its pinned source attribution.
+ * Pure: takes already-read file contents keyed by their canonical relative path, never touches disk.
+ */
+function verifyAttribution(
+  attributionJson: unknown,
+  sourceFileContents: ReadonlyMap<string, string>
+): z.infer<typeof sourceAttributionSchema> {
+  const attribution = sourceAttributionSchema.parse(attributionJson);
   if (attribution.repository !== CANONICAL_FIXTURE_REPOSITORY)
     throw new Error('Canonical repository does not match the pinned fixture source');
   if (attribution.commit !== CANONICAL_FIXTURE_COMMIT)
@@ -609,18 +609,18 @@ function verifySourceAttribution(root: string): z.infer<typeof sourceAttribution
     throw new Error('Canonical source attribution contains duplicate or missing paths');
   for (const path of CANONICAL_SOURCE_FILES) {
     const expected = hashes.get(path);
-    const actual = createHash('sha256')
-      .update(readFileSync(join(root, path)))
-      .digest('hex');
+    const content = sourceFileContents.get(path);
+    if (content === undefined) throw new Error(`Missing canonical source content: ${path}`);
+    const actual = sha256(content);
     if (expected !== actual)
       throw new Error(`Canonical source hash does not match pinned attribution: ${path}`);
   }
   return attribution;
 }
 
-/** Parses one canonical transcript and validates its required metadata. */
-function parseTranscript(path: string, locator: string): TranscriptFixture {
-  const content = readFileSync(path, 'utf8').trim();
+/** Parses one canonical transcript's already-read content and validates its required metadata. Pure: never touches disk. */
+function parseTranscriptContent(rawContent: string, locator: string): TranscriptFixture {
+  const content = rawContent.trim();
   const read = (label: string) =>
     new RegExp(`^\\*\\*${label}:\\*\\*\\s*(.+)$`, 'mi').exec(content)?.[1]?.trim();
   const heading = /^# Transcript: (CALL-\d+) - (.+)$/m.exec(content);
@@ -663,41 +663,69 @@ function parseTranscript(path: string, locator: string): TranscriptFixture {
     });
 }
 
-/** Loads and cross-validates the exact canonical fixture layout. */
-export function parseFixtureSet(root: string): FixtureSet {
-  const attribution = verifySourceAttribution(root);
+/**
+ * Raw, already-read inputs for {@link buildFixtureSet}. Every value here is content a caller read from
+ * wherever fixtures live (disk, an archive, a fetch) — this module never performs I/O itself.
+ */
+export type RawFixtureInput = Readonly<{
+  /** Parsed JSON body of `source-attribution.json`. */
+  attributionJson: unknown;
+  /** Raw file content for every path in {@link CANONICAL_SOURCE_FILES}, keyed by that canonical relative path. */
+  sourceFileContents: ReadonlyMap<string, string>;
+  /** File names present under `gong/transcripts/`, as returned by a directory listing (any order). */
+  transcriptFileNames: readonly string[];
+  /** Raw content of `slack/account_team_updates.tsv`. */
+  slackContent: string;
+  /** Parsed JSON body of `slack/generation.json`. */
+  slackGenerationJson: unknown;
+}>;
+
+/** Cross-validates the exact canonical fixture layout from already-read content. Pure: never touches disk. */
+export function buildFixtureSet(input: RawFixtureInput): FixtureSet {
+  const attribution = verifyAttribution(input.attributionJson, input.sourceFileContents);
+  const sourceContent = (path: string): string => {
+    const content = input.sourceFileContents.get(path);
+    if (content === undefined) throw new Error(`Missing canonical source content: ${path}`);
+    return content;
+  };
   const accounts = z
     .array(accountFixtureSchema)
-    .parse(parseTsv(join(root, 'salesforce/accounts.tsv')));
+    .parse(parseTsvRows(sourceContent('salesforce/accounts.tsv'), 'salesforce/accounts.tsv'));
   const opportunities = z
     .array(opportunityFixtureSchema)
-    .parse(parseTsv(join(root, 'salesforce/opportunities.tsv')));
+    .parse(
+      parseTsvRows(sourceContent('salesforce/opportunities.tsv'), 'salesforce/opportunities.tsv')
+    );
   const contacts = z
     .array(contactFixtureSchema)
-    .parse(parseTsv(join(root, 'salesforce/contacts.tsv')));
+    .parse(parseTsvRows(sourceContent('salesforce/contacts.tsv'), 'salesforce/contacts.tsv'));
   const gongSummaries = z
     .array(gongSummaryFixtureSchema)
-    .parse(parseTsv(join(root, 'gong/gong_call_summaries.tsv')));
+    .parse(
+      parseTsvRows(sourceContent('gong/gong_call_summaries.tsv'), 'gong/gong_call_summaries.tsv')
+    );
   const pricingNotes = z
     .array(pricingNoteFixtureSchema)
-    .parse(parseTsv(join(root, 'pricing/pricing_notes.tsv')));
+    .parse(parseTsvRows(sourceContent('pricing/pricing_notes.tsv'), 'pricing/pricing_notes.tsv'));
   const permissions = z
     .array(permissionFixtureSchema)
-    .parse(parseTsv(join(root, 'policies/access_permissions.tsv')));
-  const slackPath = join(root, 'slack/account_team_updates.tsv');
-  const slackContent = readFileSync(slackPath, 'utf8');
-  const slackGeneration = slackGenerationMetadataSchema.parse(
-    JSON.parse(readFileSync(join(root, 'slack/generation.json'), 'utf8'))
-  );
+    .parse(
+      parseTsvRows(
+        sourceContent('policies/access_permissions.tsv'),
+        'policies/access_permissions.tsv'
+      )
+    );
+  const slackGeneration = slackGenerationMetadataSchema.parse(input.slackGenerationJson);
   if (slackGeneration.sourceCommit !== attribution.commit)
     throw new Error('Slack source commit does not match canonical attribution');
-  if (slackGeneration.outputHash !== sha256(slackContent))
+  if (slackGeneration.outputHash !== sha256(input.slackContent))
     throw new Error('Reviewed Slack fixture hash does not match generation provenance');
-  const slackUpdates = slackUpdatesSchema.parse(parseTsv(slackPath));
-  const policyContent = readFileSync(join(root, 'policies/deal_desk_policy.md'), 'utf8').trim();
+  const slackUpdates = slackUpdatesSchema.parse(
+    parseTsvRows(input.slackContent, 'slack/account_team_updates.tsv')
+  );
+  const policyContent = sourceContent('policies/deal_desk_policy.md').trim();
   const policy = { content: policyContent, contentHash: sha256(policyContent) };
-  const transcriptDirectory = join(root, 'gong/transcripts');
-  const transcriptFiles = readdirSync(transcriptDirectory).sort();
+  const transcriptFiles = [...input.transcriptFileNames].sort();
   const expectedTranscriptFiles = CANONICAL_SOURCE_FILES.filter((path) =>
     path.startsWith('gong/transcripts/')
   )
@@ -710,7 +738,7 @@ export function parseFixtureSet(root: string): FixtureSet {
     throw new Error('Transcript inventory does not match the pinned allowlist');
   }
   const transcripts = transcriptFiles.map((file) =>
-    parseTranscript(join(transcriptDirectory, file), `gong/transcripts/${file}`)
+    parseTranscriptContent(sourceContent(`gong/transcripts/${file}`), `gong/transcripts/${file}`)
   );
 
   uniqueBy(accounts, 'accountId', 'account ID');

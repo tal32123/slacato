@@ -23,6 +23,8 @@ import {
 } from '@slacato/core';
 import {
   buildAgentPrompt,
+  MAX_SPECIALIST_ARTIFACT_BYTES,
+  MAX_STAKEHOLDER_ARTIFACT_BYTES,
   MIN_AGENT_REQUIRED_EVIDENCE_TOKENS,
   pruneAgentEvidence
 } from '../../packages/core/src/application/briefs/prompts.js';
@@ -139,15 +141,19 @@ function context(records: readonly AgentEvidenceRecord[]): AgentContext {
   };
 }
 
-function artifactNearByteLimit<Value extends Record<string, unknown>>(base: Value, field: keyof Value): Value {
+function artifactNearByteLimit<Value extends Record<string, unknown>>(
+  base: Value,
+  field: keyof Value,
+  limit = 5_980
+): Value {
   const values: string[] = [];
   const encoded = (candidate: Value): number => new TextEncoder().encode(JSON.stringify(candidate)).byteLength;
-  while (encoded({ ...base, [field]: [...values, 'x'.repeat(2_000)] }) <= 5_980) values.push('x'.repeat(2_000));
+  while (encoded({ ...base, [field]: [...values, 'x'.repeat(2_000)] }) <= limit) values.push('x'.repeat(2_000));
   let lower = 1;
   let upper = 2_000;
   while (lower < upper) {
     const candidate = Math.ceil((lower + upper) / 2);
-    if (encoded({ ...base, [field]: [...values, 'x'.repeat(candidate)] }) <= 5_980) lower = candidate;
+    if (encoded({ ...base, [field]: [...values, 'x'.repeat(candidate)] }) <= limit) lower = candidate;
     else upper = candidate - 1;
   }
   return { ...base, [field]: [...values, 'x'.repeat(lower)] };
@@ -190,6 +196,56 @@ describe('specialized agents', () => {
     expect(stakeholder).toContain(
       'Separately cited stakeholder fields must resolve to one supplied evidence record'
     );
+  });
+
+  it('requires grounded stakeholder identity so a real model can satisfy the claim validator', async () => {
+    const gateway = new RecordingGateway([emptyStakeholder, emptyCommercial]);
+    const records = [
+      evidence('evidence_crm', 'salesforce', 'fullName: Clara Esteves\ntitle: Director of Plant Systems'),
+      evidence('evidence_policy', 'policy', 'Discounts above 20% require approval.')
+    ];
+
+    await new StakeholderAgent(gateway).run(context(records));
+    await new CommercialAgent(gateway).run(context(records));
+
+    const [stakeholder, commercial] = gateway.requests.map((request) =>
+      request.messages.map((message) => message.content).join('\n')
+    );
+    // A claim may only restate what its own cited unit says. Contact records carry an accountId,
+    // never the account name, so an identity claim naming the organization is unsupportable and
+    // the whole stakeholder is dropped. Every specialist needs this, not just the stakeholder one.
+
+    // Without this the model writes true-but-unciteable prose ("Strong champion for factory
+    // rollout"), which never restates the person, so identity support can never resolve.
+    expect(stakeholder).toContain('names that person in full');
+    expect(stakeholder).toContain('restates their title exactly as the record naming them states it');
+    expect(stakeholder).toContain('never name the company in that claim');
+  });
+
+  it('requires the strategy agent to re-ground carried-over stakeholders and actions with fresh claims', async () => {
+    const gateway = new RecordingGateway([emptyBrief]);
+    const cited = evidence('evidence_crm', 'salesforce', 'fullName: Clara Esteves\ntitle: Director of Plant Systems');
+
+    await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: emptyConversation,
+      stakeholder: emptyStakeholder,
+      commercial: emptyCommercial
+    });
+
+    const [strategy] = gateway.requests.map((request) =>
+      request.messages.map((message) => message.content).join('\n')
+    );
+    // The strategy agent must mint brand-new claim ids that never reuse an artifact claim id, so a
+    // specialist's already-grounded stakeholder identity claim cannot simply be carried forward: it
+    // must be re-emitted under a fresh id or validateDealBrief's stakeholderIdentitySupported check
+    // prunes the stakeholder (and safeRecommendationAction / assertionSupported prune the action).
+    expect(strategy).toContain(
+      'mint one fresh claim whose statement names that person in full and restates their title exactly as the cited record states it'
+    );
+    expect(strategy).toContain('never naming the company in that claim');
+    expect(strategy).toContain('mint one fresh claim from the evidence tuple that grounds its rationale');
+    expect(strategy).toContain('copy that claim statement into the rationale');
+    expect(strategy).toContain('bounded verb such as schedule, prepare, confirm, or verify');
   });
 
   it('cannot let an evidence record close the fixed inert-data delimiter', async () => {
@@ -610,6 +666,141 @@ describe('specialized agents', () => {
         influence: 'high'
       })
     ]);
+  });
+
+  it('retains a stakeholder via the grounded-title profile path when organization is ungrounded', async () => {
+    // A Salesforce contact record carries the person's name and title but never the account's
+    // display name (accountId only). stakeholderIdentitySupported must accept name+title alone
+    // rather than requiring name+title+organization together in one record.
+    const cited = evidence(
+      'evidence_priya_contact',
+      'salesforce',
+      ['fullName: Priya Rao', 'title: VP Finance'].join('\n')
+    );
+    const citation = {
+      id: cited.citationId,
+      evidenceId: cited.evidenceId,
+      locator: cited.sourceLocator
+    };
+    const claims = [
+      { id: 'claim_priya_name', statement: 'Priya Rao', confidence: 0.9, citations: [citation] },
+      { id: 'claim_priya_title', statement: 'VP Finance', confidence: 0.9, citations: [citation] }
+    ];
+    const gateway = new RecordingGateway([
+      {
+        ...emptyStakeholder,
+        stakeholders: [
+          {
+            name: 'Priya Rao',
+            title: 'VP Finance',
+            organization: 'Meridian Appliances Group', // never restated by any grounded claim
+            role: 'unknown',
+            influence: 'medium', // not grounded by any claim either
+            relationship: 'unknown',
+            goals: [],
+            concerns: [],
+            claims
+          }
+        ]
+      }
+    ]);
+
+    const artifact = await new StakeholderAgent(gateway).run(context([cited]));
+
+    // The grounded title alone is enough to accept the record; the ungrounded organization name
+    // rides along on the accepted stakeholder rather than being independently verified. That is
+    // the documented contract (name+title OR name+organization, not both), not an oversight.
+    expect(artifact.stakeholders).toEqual([
+      expect.objectContaining({
+        name: 'Priya Rao',
+        title: 'VP Finance',
+        organization: 'Meridian Appliances Group'
+      })
+    ]);
+  });
+
+  it('retains a stakeholder via the grounded-organization profile path when title is ungrounded', async () => {
+    // Symmetric case: the record grounds name+organization but never the (ungrounded) title the
+    // model produced. The organization path alone must be sufficient.
+    const cited = evidence(
+      'evidence_jordan_contact',
+      'salesforce',
+      ['fullName: Jordan Blake', 'accountName: Roric Systems'].join('\n')
+    );
+    const citation = {
+      id: cited.citationId,
+      evidenceId: cited.evidenceId,
+      locator: cited.sourceLocator
+    };
+    const claims = [
+      { id: 'claim_jordan_name', statement: 'Jordan Blake', confidence: 0.9, citations: [citation] },
+      {
+        id: 'claim_jordan_org',
+        statement: 'Roric Systems',
+        confidence: 0.9,
+        citations: [citation]
+      }
+    ];
+    const gateway = new RecordingGateway([
+      {
+        ...emptyStakeholder,
+        stakeholders: [
+          {
+            name: 'Jordan Blake',
+            title: 'VP Engineering', // never restated by any grounded claim
+            organization: 'Roric Systems',
+            role: 'unknown',
+            influence: 'medium', // not grounded by any claim either
+            relationship: 'unknown',
+            goals: [],
+            concerns: [],
+            claims
+          }
+        ]
+      }
+    ]);
+
+    const artifact = await new StakeholderAgent(gateway).run(context([cited]));
+
+    expect(artifact.stakeholders).toEqual([
+      expect.objectContaining({ name: 'Jordan Blake', organization: 'Roric Systems' })
+    ]);
+  });
+
+  it('drops a bare grounded name with no title, organization, or restated classification', async () => {
+    // Safety property: a claim that grounds only a person's name must never be sufficient to
+    // carry an inferred role/influence/relationship. "Attended the call" can never become
+    // "economic buyer, high influence" without a grounded professional identity or a claim that
+    // restates the classification itself.
+    const cited = evidence('evidence_sam_contact', 'salesforce', 'fullName: Sam Rivera');
+    const citation = {
+      id: cited.citationId,
+      evidenceId: cited.evidenceId,
+      locator: cited.sourceLocator
+    };
+    const claims = [
+      { id: 'claim_sam_name', statement: 'Sam Rivera', confidence: 0.9, citations: [citation] }
+    ];
+    const gateway = new RecordingGateway([
+      {
+        ...emptyStakeholder,
+        stakeholders: [
+          {
+            name: 'Sam Rivera',
+            role: 'economic_buyer',
+            influence: 'high',
+            relationship: 'positive',
+            goals: [],
+            concerns: [],
+            claims
+          }
+        ]
+      }
+    ]);
+
+    const artifact = await new StakeholderAgent(gateway).run(context([cited]));
+
+    expect(artifact.stakeholders).toEqual([]);
   });
 
   it('retains a formatted ACV when the numeric value matches one structured field', async () => {
@@ -2020,6 +2211,129 @@ describe('specialized agents', () => {
       === (message.match(/END_UNTRUSTED_/g)?.length ?? 0))).toBe(true);
   });
 
+  it('accepts a realistic 5-stakeholder artifact within its output cap on the first attempt', async () => {
+    const people = [
+      { name: 'Alice Chen', title: 'Vice President of Engineering', role: 'economic_buyer' as const, influence: 'high' as const, relationship: 'positive' as const },
+      { name: 'Bob Martinez', title: 'Chief Financial Officer', role: 'decision_maker' as const, influence: 'high' as const, relationship: 'neutral' as const },
+      { name: 'Carla Singh', title: 'Director of Global Procurement', role: 'procurement' as const, influence: 'medium' as const, relationship: 'neutral' as const },
+      { name: 'David Osei', title: 'Head of Information Security', role: 'evaluator' as const, influence: 'medium' as const, relationship: 'positive' as const },
+      { name: 'Elena Petrova', title: 'Senior Corporate Legal Counsel', role: 'legal' as const, influence: 'low' as const, relationship: 'unknown' as const }
+    ];
+    const records = people.map((person, index) => evidence(
+      `evidence_contact_${index}`,
+      'salesforce',
+      `fullName: ${person.name}\ntitle: ${person.title}\naccountId: ACC-2001\ninfluenceLevel: ${person.influence}\nsentiment: ${person.relationship}`
+    ));
+    const goals = [
+      'Reduce time to close new enterprise deals across the region',
+      'Consolidate vendor spend across the organization this fiscal year',
+      'Standardize reporting and analytics on a single unified platform',
+      'Improve forecast accuracy ahead of the next board review'
+    ];
+    const concerns = [
+      'Implementation timeline risk given the committed Q3 go-live deadline',
+      'Data residency requirements for customer records originating in the EU',
+      'Integration effort required with the existing CRM and billing stack',
+      'Headcount availability on the buyer side to support onboarding'
+    ];
+    const stakeholders = people.map((person, index) => {
+      const record = records[index]!;
+      const citation = { id: record.citationId, evidenceId: record.evidenceId, locator: record.sourceLocator };
+      return {
+        name: person.name, title: person.title, organization: 'Acme Corporation',
+        role: person.role, influence: person.influence, relationship: person.relationship,
+        goals, concerns,
+        claims: [
+          {
+            id: `claim_stakeholder_${index}_identity`, statement: `${person.name} is ${person.title}.`,
+            confidence: 0.9, citations: [citation]
+          },
+          {
+            id: `claim_stakeholder_${index}_sentiment`,
+            statement: `${person.name}'s recorded account relationship is ${person.relationship}, based on the discovery call notes.`,
+            confidence: 0.75, citations: [citation]
+          }
+        ]
+      };
+    });
+    const realisticArtifact = {
+      evidenceManifestId: 'manifest_agents',
+      stakeholders,
+      coverageGaps: [
+        'No confirmed contact identified for IT security sign-off beyond the initial evaluator.',
+        'Unclear who owns final procurement approval if the CFO is unavailable during signature week.'
+      ],
+      claims: [],
+      reviewWarnings: []
+    };
+    const artifactBytes = new TextEncoder().encode(JSON.stringify(realisticArtifact)).byteLength;
+    // A realistic 5-stakeholder map with nested per-person claims genuinely exceeds the shared
+    // 6_000-byte specialist cap - that gap is exactly what forced the schema-repair retry that
+    // hollowed the Stakeholder Map section. It must still fit the stakeholder-specific cap.
+    expect(artifactBytes).toBeGreaterThan(MAX_SPECIALIST_ARTIFACT_BYTES);
+    expect(artifactBytes).toBeLessThan(MAX_STAKEHOLDER_ARTIFACT_BYTES);
+
+    let transportCalls = 0;
+    const transport: ModelTransport = {
+      capabilities: { nativeStructuredOutput: false },
+      async generate() {
+        transportCalls += 1;
+        return { text: JSON.stringify(realisticArtifact), usage: { inputTokens: 400, outputTokens: 900 } };
+      }
+    };
+    const ledger: ProviderAttemptLedger = {
+      async beginAttempt(input) {
+        return {
+          reservationId: `reservation_realistic_${transportCalls}`,
+          attemptId: `attempt_realistic_${transportCalls}`,
+          ordinal: transportCalls + 1,
+          grantedOutputTokens: input.requestedOutputTokens
+        };
+      },
+      async settleAttempt() {},
+      async releaseAttempt() {}
+    };
+    // No ContextWindowPolicy, matching every production model adapter (OpenRouter, Ollama, mock).
+    const gateway = createBudgetedModelGateway(transport, undefined, ledger);
+
+    const result = await new StakeholderAgent(gateway).run(context(records));
+
+    expect(transportCalls).toBe(1);
+    expect(result.stakeholders.map((stakeholder) => stakeholder.name)).toEqual(
+      people.map((person) => person.name)
+    );
+  });
+
+  it('retains a fanned-in evidence excerpt when all three specialist artifacts sit at their byte ceilings', async () => {
+    const artifacts = [
+      { id: 'conversation', value: artifactNearByteLimit(emptyConversation, 'missingContext') },
+      {
+        id: 'stakeholder',
+        value: artifactNearByteLimit(emptyStakeholder, 'coverageGaps', MAX_STAKEHOLDER_ARTIFACT_BYTES - 20)
+      },
+      { id: 'commercial', value: artifactNearByteLimit(emptyCommercial, 'policyTriggers') }
+    ];
+    const cited = evidence(
+      'evidence_fanin_floor',
+      'gong_summary',
+      'Verified buyer statement about renewal timing and remaining budget approval steps.'
+    );
+
+    const prompt = buildAgentPrompt({
+      task: 'Build a bounded brief.',
+      trustedContext: { runId: 'run_agents' },
+      evidence: [cited],
+      artifacts
+    });
+
+    // Raising the stakeholder cap must not starve the strategy synthesis prompt of every real
+    // evidence record even when all three specialist artifacts are maxed out simultaneously -
+    // that would trade the hollowed Stakeholder Map bug for an ungrounded brief instead.
+    const retained = prompt.evidence.find((section) => section.id === cited.evidenceId);
+    expect(retained).toBeDefined();
+    expect(retained?.content).toContain('renewal timing');
+  });
+
   it('rejects specialist artifacts from a different evidence manifest before strategy generation', async () => {
     const gateway = new RecordingGateway([emptyBrief]);
 
@@ -2029,5 +2343,89 @@ describe('specialized agents', () => {
       commercial: emptyCommercial
     })).rejects.toThrow('manifest');
     expect(gateway.requests).toHaveLength(0);
+  });
+
+  it('keeps a realistically classified stakeholder whose identity is grounded in one CRM record', async () => {
+    const cited = evidence(
+      'evidence_contact_marco',
+      'salesforce',
+      [
+        'contactId: CON-3002',
+        'accountId: ACC-2001',
+        'fullName: Marco Devlin',
+        'title: VP Infrastructure',
+        'roleInDeal: Technical decision maker',
+        'influenceLevel: high',
+        'sentiment: positive',
+        'notes: Owns branch migration plan and wants named escalation owners for rollout.'
+      ].join('\n')
+    );
+    const citation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
+    const claims = [{
+      id: 'claim_marco_identity',
+      statement: 'Marco Devlin is VP Infrastructure.',
+      confidence: 0.9,
+      citations: [citation]
+    }];
+    const generatedStakeholder = {
+      name: 'Marco Devlin', title: 'VP Infrastructure', role: 'decision_maker' as const,
+      influence: 'high' as const, relationship: 'positive' as const, goals: [], concerns: [], claims
+    };
+    const gateway = new RecordingGateway([{ ...emptyBrief, stakeholderMap: { stakeholders: [generatedStakeholder] } }]);
+
+    const brief = await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: emptyConversation, stakeholder: emptyStakeholder, commercial: emptyCommercial
+    });
+
+    expect(brief.stakeholderMap.stakeholders).toEqual([
+      expect.objectContaining({ name: 'Marco Devlin', title: 'VP Infrastructure', role: 'decision_maker', influence: 'high' })
+    ]);
+  });
+
+  it('drops a stakeholder whose name is not grounded in any cited evidence record', async () => {
+    const cited = evidence('evidence_contact_only_marco', 'salesforce', 'fullName: Marco Devlin\ntitle: VP Infrastructure');
+    const citation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
+    const claims = [{
+      id: 'claim_marco_only', statement: 'Marco Devlin is VP Infrastructure.', confidence: 0.9, citations: [citation]
+    }];
+    const gateway = new RecordingGateway([{
+      ...emptyBrief,
+      stakeholderMap: { stakeholders: [{
+        name: 'Priya Raman', title: 'Chief Financial Officer', role: 'economic_buyer' as const,
+        influence: 'high' as const, relationship: 'neutral' as const, goals: [], concerns: [], claims
+      }] }
+    }]);
+
+    const brief = await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: emptyConversation, stakeholder: emptyStakeholder, commercial: emptyCommercial
+    });
+
+    expect(brief.stakeholderMap.stakeholders).toEqual([]);
+  });
+
+  it('keeps a deal-specific internal next action that makes no customer-facing commitment', async () => {
+    const cited = evidence('evidence_escalation_owners', 'gong_summary', 'The buyer asked for named escalation owners before rollout.');
+    const citation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
+    const artifactClaim = {
+      id: 'claim_escalation_owners', statement: 'The buyer asked for named escalation owners before rollout.',
+      confidence: 0.9, citations: [citation]
+    };
+    const gateway = new RecordingGateway([{
+      ...emptyBrief,
+      recommendedNextActions: { actions: [{
+        action: 'Confirm the named escalation owners for the branch migration rollout with the account team.',
+        owner: 'account executive', priority: 'high',
+        rationale: 'The buyer asked for named escalation owners before rollout.',
+        claims: [{ ...artifactClaim, id: 'claim_escalation_action' }]
+      }] }
+    }]);
+
+    const brief = await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: { ...emptyConversation, claims: [artifactClaim] }, stakeholder: emptyStakeholder, commercial: emptyCommercial
+    });
+
+    expect(brief.recommendedNextActions.actions).toEqual([expect.objectContaining({
+      action: 'Confirm the named escalation owners for the branch migration rollout with the account team.'
+    })]);
   });
 });

@@ -69,8 +69,19 @@ jobs:
       - name: Run unit, contract, and integration tests
         run: pnpm test
 
+      - name: Run golden-retrieval regression eval
+        run: pnpm eval:deterministic
+
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
+      # A dedicated database, because the unit/integration step above writes evidence rows with no
+      # embeddings into DATABASE_URL (record-ingestion.test.ts asserts ingestion never creates
+      # them). The readiness probe requires every evidence row to carry one consistent embedding
+      # profile, so those leftovers make it report the index unavailable, which correctly disables
+      # Generate Brief - and then e2e fails on a gate that is doing its job. Playwright's own
+      # webServer seeds and indexes this database from scratch via db:ensure.
       - name: Run end-to-end tests
         run: pnpm test:e2e
+        env:
+          DATABASE_URL: postgres://slacato:slacato@127.0.0.1:54329/slacato_e2e

@@ -13,32 +13,30 @@ import {
   runEvidenceManifestEntries, runEvidenceManifests, runEvents, runs, specialistArtifacts, stepInvocations, traceSpans, workflowCheckpoints
 } from '@slacato/infrastructure/db/schema';
 
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+// drizzle-kit's own config loads .env itself (see drizzle.config.ts); this test
+// talks to postgres directly via the `postgres` package, which does not, so do
+// the same here rather than falling back to a guessed connection string.
+try {
+  process.loadEnvFile('.env');
+} catch {
+  // No .env file present — rely on the environment (CI, containers, etc).
+}
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    'DATABASE_URL is not set. Create a .env file (see .env.example) or export ' +
+      'DATABASE_URL before running this test.'
+  );
+}
+const databaseUrl = process.env.DATABASE_URL;
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-const migrationFiles = [
-  '0000_initial',
-  '0001_delivery_claim_leases',
-  '0002_causal_command_consumption',
-  '0003_approval_snapshot_linkage',
-  '0004_persisted_run_budgets',
-  '0005_active_causal_command',
-  '0006_restricted_opportunity_grants',
-  '0007_dead_letter_claim_recovery',
-  '0008_provider_attempt_ledger',
-  '0009_run_budget_deadline',
-  '0010_evidence_provenance',
-  '0011_persona_provenance',
-  '0012_authorized_retrieval',
-  '0013_manifest_replay',
-  '0014_durable_brief_approvals',
-  '0015_immutable_approval_replays',
-  '0016_append_only_run_observability',
-  '0017_canonical_grants_sessions',
-  '0018_run_cancellation',
-  '0019_remove_token_budgets',
-  '0020_canonical_authorization_views'
-].map((migration) => resolve(process.cwd(), 'drizzle', `${migration}.sql`));
+// The migration catalog is a single squashed migration (drizzle/0000_initial.sql,
+// see README/history for why 0000-0021 were combined). There is no longer a
+// meaningful "apply an old subset, then the rest" upgrade path to exercise —
+// a fresh install only ever runs this one file.
+const migrationFiles = ['0000_initial'].map((migration) =>
+  resolve(process.cwd(), 'drizzle', `${migration}.sql`)
+);
 const temporaryDatabases: string[] = [];
 const execFile = promisify(execFileCallback);
 
@@ -88,7 +86,7 @@ async function applyMigrations(database: Sql, files: readonly string[]): Promise
 }
 
 async function catalog(database: Sql): Promise<Record<string, unknown>> {
-  const [tables, columns, constraints, indexes, extensions] = await Promise.all([
+  const [tables, columns, constraints, indexes, extensions, views, triggers, functions] = await Promise.all([
     database<{ table_name: string }[]>`
       select relname as table_name from pg_class join pg_namespace on pg_namespace.oid = pg_class.relnamespace
       where nspname = 'public' and relkind = 'r' order by relname`,
@@ -112,9 +110,28 @@ async function catalog(database: Sql): Promise<Record<string, unknown>> {
       select tablename as table_name, indexname as name, regexp_replace(indexdef, '\\s+', ' ', 'g') as definition
       from pg_indexes where schemaname = 'public' order by tablename, indexname`,
     database<{ name: string; version: string }[]>`
-      select extname as name, extversion as version from pg_extension order by extname`
+      select extname as name, extversion as version from pg_extension order by extname`,
+    database<{ view_name: string; definition: string; options: string[] | null }[]>`
+      select relation.relname as view_name,
+        regexp_replace(pg_get_viewdef(relation.oid, true), '\\s+', ' ', 'g') as definition,
+        relation.reloptions as options
+      from pg_class relation join pg_namespace namespace on namespace.oid = relation.relnamespace
+      where namespace.nspname = 'public' and relation.relkind = 'v' order by relation.relname`,
+    database<{ table_name: string; name: string; definition: string }[]>`
+      select relation.relname as table_name, trigger_entry.tgname as name,
+        regexp_replace(pg_get_triggerdef(trigger_entry.oid, true), '\\s+', ' ', 'g') as definition
+      from pg_trigger trigger_entry join pg_class relation on relation.oid = trigger_entry.tgrelid
+      join pg_namespace namespace on namespace.oid = relation.relnamespace
+      where namespace.nspname = 'public' and not trigger_entry.tgisinternal
+      order by relation.relname, trigger_entry.tgname`,
+    database<{ name: string; definition: string }[]>`
+      select proc.proname as name, regexp_replace(pg_get_functiondef(proc.oid), '\\s+', ' ', 'g') as definition
+      from pg_proc proc join pg_namespace namespace on namespace.oid = proc.pronamespace
+      where namespace.nspname = 'public' and proc.prokind = 'f'
+        and not exists (select 1 from pg_depend dependency where dependency.objid = proc.oid and dependency.deptype = 'e')
+      order by proc.proname`
   ]);
-  return { tables, columns, constraints, indexes, extensions };
+  return { tables, columns, constraints, indexes, extensions, views, triggers, functions };
 }
 
 afterEach(async () => {
@@ -122,66 +139,61 @@ afterEach(async () => {
 });
 
 describe('durable migration catalog', () => {
-  it('keeps the committed base immutable and gives clean installs the same catalog as upgrades', async () => {
-    const originalBase = await readFile(resolve(process.cwd(), 'drizzle/0000_initial.sql'), 'utf8');
-    const { stdout: committedBase } = await execFile('git', ['show', '5b89dce:drizzle/0000_initial.sql'], { cwd: process.cwd() });
-    expect(originalBase).toBe(committedBase);
-    const originalFollowUp = await readFile(resolve(process.cwd(), 'drizzle/0001_delivery_claim_leases.sql'), 'utf8');
-    const { stdout: committedFollowUp } = await execFile('git', ['show', '5b89dce:drizzle/0001_delivery_claim_leases.sql'], { cwd: process.cwd() });
-    expect(originalFollowUp).toBe(committedFollowUp);
-
+  it('gives clean installs the same catalog as pnpm db:migrate produces', async () => {
+    // The migration catalog used to be 22 files (0000-0021), which let this test
+    // exercise a "clean install" path against an "incrementally upgraded" path
+    // built by applying an old subset, seeding legacy rows, then applying the
+    // rest. drizzle/0000-0021 have since been squashed into a single
+    // drizzle/0000_initial.sql (see README) because 0021 was a no-op on a fresh
+    // database and 21 migrations added nothing but churn for a greenfield
+    // project. There is no more intermediate schema state to upgrade from, so
+    // this test now proves the remaining two independent ways of applying the
+    // catalog agree: applying the raw SQL directly, and running it through
+    // drizzle-kit's own migrator (`pnpm db:migrate`, the command a developer
+    // actually runs).
     const cleanName = makeDatabaseName();
-    const upgradeName = makeDatabaseName();
     const runnerName = makeDatabaseName();
-    await Promise.all([
-      createTemporaryDatabase(cleanName), createTemporaryDatabase(upgradeName), createTemporaryDatabase(runnerName)
-    ]);
+    await Promise.all([createTemporaryDatabase(cleanName), createTemporaryDatabase(runnerName)]);
     const clean = postgres(urlForDatabase(cleanName), { max: 1 });
-    const upgrade = postgres(urlForDatabase(upgradeName), { max: 1 });
     const runner = postgres(urlForDatabase(runnerName), { max: 1 });
     try {
       await applyMigrations(clean, migrationFiles);
-      await applyMigrations(upgrade, migrationFiles.slice(0, 8));
       await execFile('pnpm', ['db:migrate'], {
         cwd: process.cwd(),
         env: { ...process.env, DATABASE_URL: urlForDatabase(runnerName) }
       });
-      await upgrade`insert into personas (id, display_name, role) values ('legacy-user', 'Legacy user', 'seller')`;
-      await upgrade`insert into accounts (id, name) values ('legacy-account', 'Legacy account')`;
-      await upgrade`insert into opportunities (id, account_id, name) values ('legacy-opportunity', 'legacy-account', 'Legacy opportunity')`;
-      await upgrade`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values ('legacy-run', 'legacy-opportunity', 'legacy-user', 'created', 'mock', 'mock-chat', 0)`;
-      await upgrade`insert into document_versions (id, external_id, version, source_type, content_hash, content) values ('legacy-document', 'legacy-document', 1, 'salesforce', 'legacy-document-hash', 'legacy content')`;
-      await upgrade`insert into evidence_versions (id, document_version_id, account_id, opportunity_id, chunk_index, source_type, sensitivity, content_hash, content) values ('legacy-evidence', 'legacy-document', 'legacy-account', 'legacy-opportunity', 0, 'salesforce', 'standard', 'legacy-evidence-hash', 'legacy content')`;
-      await upgrade`insert into run_evidence_manifests (id, run_id, scope_hash, policy_hash, index_profile) values ('legacy-manifest', 'legacy-run', 'legacy-scope', 'legacy-policy', 'legacy-profile')`;
-      await upgrade`insert into run_evidence_manifest_entries (manifest_id, evidence_version_id, rank, score, content_hash) values ('legacy-manifest', 'legacy-evidence', 1, 1, 'legacy-evidence-hash')`;
-      await upgrade`insert into run_budget_reservations (id, run_id, reserved_output_tokens, status) values ('legacy-reservation-a', 'legacy-run', 1, 'reserved'), ('legacy-reservation-b', 'legacy-run', 1, 'reserved')`;
-      await applyMigrations(upgrade, migrationFiles.slice(8));
-      expect(await upgrade<{ id: string; operation: string; ordinal: number }[]>`select id, operation, ordinal from run_budget_reservations where run_id = 'legacy-run' order by id`).toEqual([
-        { id: 'legacy-reservation-a', operation: 'legacy:legacy-reservation-a', ordinal: 1 },
-        { id: 'legacy-reservation-b', operation: 'legacy:legacy-reservation-b', ordinal: 1 }
-      ]);
-      const [cleanCatalog, upgradeCatalog, runnerCatalog] = await Promise.all([
-        catalog(clean), catalog(upgrade), catalog(runner)
-      ]);
-      expect(cleanCatalog).toEqual(upgradeCatalog);
+      const [cleanCatalog, runnerCatalog] = await Promise.all([catalog(clean), catalog(runner)]);
       expect(cleanCatalog).toEqual(runnerCatalog);
+
+      // run_budgets.max_input_tokens/max_output_tokens were un-enforced by the old
+      // 0019_remove_token_budgets migration but the columns themselves lingered,
+      // unread by any application code. The squash drops them outright: they must
+      // not exist in the catalog, and schema.ts must not declare them either (see
+      // the runtime-mapping test below).
       const tokenBudgetColumns = (cleanCatalog.columns as readonly {
-        table_name: string; column_name: string; nullable: boolean
+        table_name: string; column_name: string
       }[]).filter((column) =>
         column.table_name === 'run_budgets' &&
         (column.column_name === 'max_input_tokens' || column.column_name === 'max_output_tokens')
       );
-      expect(tokenBudgetColumns.map(({ column_name, nullable }) => ({ column_name, nullable }))).toEqual([
-        { column_name: 'max_input_tokens', nullable: true },
-        { column_name: 'max_output_tokens', nullable: true }
+      expect(tokenBudgetColumns).toEqual([]);
+
+      // The three authorized_*_grants views are hand-written (drizzle-kit cannot
+      // regenerate them from schema.ts) and are the backbone of the app's
+      // authorization model. Prove they survived the squash byte-for-byte.
+      const authorizedViews = (cleanCatalog.views as readonly {
+        view_name: string; definition: string; options: string[] | null
+      }[]).filter((view) => view.view_name.startsWith('authorized_'));
+      expect(authorizedViews.map((view) => view.view_name)).toEqual([
+        'authorized_evidence_grants',
+        'authorized_opportunity_grants',
+        'authorized_run_approval_grants'
       ]);
-      const tokenBudgetConstraints = (cleanCatalog.constraints as readonly {
-        table_name: string; definition: string
-      }[]).filter((constraint) => constraint.table_name === 'run_budgets')
-        .map((constraint) => constraint.definition)
-        .join(' ');
-      expect(tokenBudgetConstraints).not.toContain('max_input_tokens');
-      expect(tokenBudgetConstraints).not.toContain('max_output_tokens');
+      for (const view of authorizedViews) {
+        expect(view.options).toEqual(
+          expect.arrayContaining(['security_barrier=true', 'security_invoker=true'])
+        );
+      }
 
       expect((cleanCatalog.columns as readonly {
         table_name: string; column_name: string; type: string; typmod: number; default: string | null;
@@ -251,27 +263,37 @@ describe('durable migration catalog', () => {
       expect((cleanCatalog.constraints as readonly { table_name: string; name: string; definition: string }[])).toEqual(expect.arrayContaining([
         expect.objectContaining({ table_name: 'run_budget_reservations', name: 'run_budget_reservations_generation_operation_ordinal_uq' })
       ]));
+      // Hand-written trigger functions and triggers (immutability/append-only
+      // enforcement) are, like the views above, not derivable from schema.ts.
+      expect(serialized).toContain('reject_immutable_change');
+      expect(serialized).toContain('reject_observability_mutation');
+      expect(serialized).toContain('bind_embedding_content_hash');
+      expect(serialized).toContain('evidence_versions_immutable');
+      expect(serialized).toContain('run_events_append_only');
       expect(serialized).not.toContain('hnsw');
     } finally {
       await clean.end({ timeout: 1 });
-      await upgrade.end({ timeout: 1 });
       await runner.end({ timeout: 1 });
     }
   });
 
   it('lets a restarted legacy run atomically adopt its previously unknown deadline', async () => {
+    // This used to manufacture a legacy row (created before deadline_ms existed)
+    // by applying an old migration subset, inserting, then applying the rest.
+    // deadline_ms is nullable in the final schema regardless of migration
+    // history, so the same legacy shape — a run_budgets row with no
+    // deadline_ms — is produced directly by omitting it on insert.
     const name = makeDatabaseName();
     await createTemporaryDatabase(name);
     const url = urlForDatabase(name);
     const sql = postgres(url, { max: 1 });
     try {
-      await applyMigrations(sql, migrationFiles.slice(0, 9));
+      await applyMigrations(sql, migrationFiles);
       await sql`insert into personas (id, display_name, role) values ('legacy-deadline-user', 'Legacy deadline user', 'seller')`;
       await sql`insert into accounts (id, name) values ('legacy-deadline-account', 'Legacy deadline account')`;
       await sql`insert into opportunities (id, account_id, name) values ('legacy-deadline-opportunity', 'legacy-deadline-account', 'Legacy deadline opportunity')`;
-      await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version) values ('legacy-deadline-run', 'legacy-deadline-opportunity', 'legacy-deadline-user', 'created', 'mock', 'mock-chat', 0)`;
-      await sql`insert into run_budgets (run_id, max_calls, max_input_tokens, max_output_tokens) values ('legacy-deadline-run', 2, 100, 20)`;
-      await applyMigrations(sql, migrationFiles.slice(9));
+      await sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, version, start_request_hash) values ('legacy-deadline-run', 'legacy-deadline-opportunity', 'legacy-deadline-user', 'created', 'mock', 'mock-chat', 0, 'legacy-deadline-start-hash')`;
+      await sql`insert into run_budgets (run_id, max_calls) values ('legacy-deadline-run', 2)`;
       expect(await sql<{ deadline_ms: number | null }[]>`select deadline_ms from run_budgets where run_id = 'legacy-deadline-run'`).toEqual([{ deadline_ms: null }]);
 
       const firstDatabase = createDatabaseClient(url, 1);
@@ -339,8 +361,11 @@ describe('durable migration catalog', () => {
     expect(runIndexes.find((entry) => entry.config.name === 'runs_idempotency_key_uq')?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['idempotency_key']);
     expect(runIndexes.find((entry) => entry.config.name === 'runs_one_active_opportunity_uq')?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['opportunity_id']);
     expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens', 'deadlineMs', 'deadlineAt']));
-    expect(runBudgets.maxInputTokens.notNull).toBe(false);
-    expect(runBudgets.maxOutputTokens.notNull).toBe(false);
+    // max_input_tokens/max_output_tokens were dead run_budgets columns — never
+    // read by any application code, un-enforced since 0019_remove_token_budgets
+    // — and were dropped from both schema.ts and the migration catalog.
+    expect(Object.keys(runBudgets)).not.toContain('maxInputTokens');
+    expect(Object.keys(runBudgets)).not.toContain('maxOutputTokens');
     const reservationConstraint = getTableConfig(runBudgetReservations).uniqueConstraints.find((entry) => entry.name === 'run_budget_reservations_generation_operation_ordinal_uq');
     expect(reservationConstraint?.columns.map((column) => column.name)).toEqual(['run_id', 'logical_generation_id', 'operation', 'ordinal']);
     expect(Object.keys(runBudgetReservations)).toEqual(expect.arrayContaining([

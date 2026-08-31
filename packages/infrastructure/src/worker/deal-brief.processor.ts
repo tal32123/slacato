@@ -86,6 +86,8 @@ export class DealBriefProcessor {
         status: 'failed',
         durationMs: Date.now() - startedAt,
         retryCount: attempt - 1,
+        step: typeof job.data.payload.step === 'string' ? job.data.payload.step : 'unknown',
+        errorName: error instanceof Error ? error.constructor.name : 'UnknownError',
         errorCode: 'WORKFLOW_COMMAND_FAILED'
       });
       throw error;

@@ -158,25 +158,35 @@ async function runRetrievalEvaluation(): Promise<ReturnType<typeof evaluateRetri
             )
           ].sort();
       const runId = `run_eval_${testCase.id.replaceAll(/[^A-Za-z0-9_-]/g, '_')}`;
-      await database.sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model) values (${runId}, ${testCase.opportunityId}, ${testCase.userId}, 'retrieving', 'mock', 'mock-brief')`;
-      const result = await retriever.search({
-        query: testCase.query,
-        accountId: testCase.accountId,
-        opportunityId: testCase.opportunityId,
-        runId,
-        limit: testCase.limit,
-        maxContextCharacters: 20_000,
-        scope: {
-          personaId: testCase.userId,
-          allowed: true,
-          accountIds: [testCase.accountId],
-          sourceTypes,
-          canViewSensitivePricing: grants.some((grant) => grant.sensitive_pricing),
-          canRequestApproval: grants.some((grant) => grant.can_request_approval),
-          canApprove: grants.some((grant) => grant.can_approve),
-          canViewRestrictedAccounts: grants.some((grant) => grant.can_read_restricted)
-        }
-      });
+      await database.sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash) values (${runId}, ${testCase.opportunityId}, ${testCase.userId}, 'retrieving', 'mock', 'mock-brief', ${`eval:${runId}`})`;
+      let result: Awaited<ReturnType<typeof retriever.search>>;
+      try {
+        result = await retriever.search({
+          query: testCase.query,
+          accountId: testCase.accountId,
+          opportunityId: testCase.opportunityId,
+          runId,
+          limit: testCase.limit,
+          maxContextCharacters: 20_000,
+          scope: {
+            personaId: testCase.userId,
+            allowed: true,
+            accountIds: [testCase.accountId],
+            sourceTypes,
+            canViewSensitivePricing: grants.some((grant) => grant.sensitive_pricing),
+            canRequestApproval: grants.some((grant) => grant.can_request_approval),
+            canApprove: grants.some((grant) => grant.can_approve),
+            canViewRestrictedAccounts: grants.some((grant) => grant.can_read_restricted)
+          }
+        });
+      } catch (error) {
+        // Leaving the run in 'retrieving' would trip runs_one_active_opportunity_uq on the next
+        // case sharing this opportunity (the golden set has two OPP-1003 cases), masking the real
+        // failure behind a confusing unique-constraint violation instead of surfacing it directly.
+        await database.sql`update runs set status = 'failed' where id = ${runId}`;
+        throw error;
+      }
+      await database.sql`update runs set status = 'completed' where id = ${runId}`;
       results.push({
         id: testCase.id,
         k: testCase.limit,
@@ -205,7 +215,18 @@ async function main(): Promise<void> {
     'utf8'
   );
   process.stdout.write(`${JSON.stringify(report)}\n`);
-  if (report.summary.permissionLeakage !== 0 || report.summary.macroRecallAtK < 0.5)
+  // The macro mean is an average of per-case recalls over a fixed golden set, so it lands on
+  // representable-but-inexact values - the sibling metric reports 0.20000000000000004 for what is
+  // arithmetically 0.2. Recall currently sits exactly on the threshold, so a bare `< 0.5` can fail
+  // on 0.49999999999999994 while nominally at the gate. The tolerance rejects only that
+  // representation noise: a genuine regression moves the mean by a whole case, and with three
+  // scored cases the next reachable value below 0.5 is 0.333, which still fails loudly.
+  const RECALL_FLOOR = 0.5;
+  const RECALL_EPSILON = 1e-9;
+  if (
+    report.summary.permissionLeakage !== 0 ||
+    report.summary.macroRecallAtK < RECALL_FLOOR - RECALL_EPSILON
+  )
     process.exitCode = 1;
 }
 
