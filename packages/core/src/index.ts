@@ -24,6 +24,8 @@ export * from './application/model/gateway.js';
 export * from './application/model/provider-attempt-ledger.js';
 export * from './application/model/registry.js';
 export * from './application/model/retry.js';
+export * from './application/sandbox/contracts.js';
+export * from './application/sandbox/reset-sandbox.js';
 export * from './application/workflow/command-queue.js';
 export * from './application/workflow/evidence-repository.js';
 export * from './application/workflow/workflow-store.js';
