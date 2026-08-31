@@ -216,6 +216,32 @@ describe('specialized agents', () => {
     expect(stakeholder).toContain('never name the company in that claim');
   });
 
+  it('requires the strategy agent to re-ground carried-over stakeholders and actions with fresh claims', async () => {
+    const gateway = new RecordingGateway([emptyBrief]);
+    const cited = evidence('evidence_crm', 'salesforce', 'fullName: Clara Esteves\ntitle: Director of Plant Systems');
+
+    await new StrategyAgent(gateway).run(context([cited]), {
+      conversation: emptyConversation,
+      stakeholder: emptyStakeholder,
+      commercial: emptyCommercial
+    });
+
+    const [strategy] = gateway.requests.map((request) =>
+      request.messages.map((message) => message.content).join('\n')
+    );
+    // The strategy agent must mint brand-new claim ids that never reuse an artifact claim id, so a
+    // specialist's already-grounded stakeholder identity claim cannot simply be carried forward: it
+    // must be re-emitted under a fresh id or validateDealBrief's stakeholderIdentitySupported check
+    // prunes the stakeholder (and safeRecommendationAction / assertionSupported prune the action).
+    expect(strategy).toContain(
+      'mint one fresh claim whose statement names that person in full and restates their title exactly as the cited record states it'
+    );
+    expect(strategy).toContain('never naming the company in that claim');
+    expect(strategy).toContain('mint one fresh claim from the evidence tuple that grounds its rationale');
+    expect(strategy).toContain('copy that claim statement into the rationale');
+    expect(strategy).toContain('bounded verb such as schedule, prepare, confirm, or verify');
+  });
+
   it('cannot let an evidence record close the fixed inert-data delimiter', async () => {
     const gateway = new RecordingGateway([emptyConversation]);
     const injected = evidence(
