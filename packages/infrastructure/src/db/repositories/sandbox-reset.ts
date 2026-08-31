@@ -8,13 +8,13 @@ import type { Sql, TransactionSql } from 'postgres';
 import type { DatabaseClient } from '../client.js';
 
 /**
- * Every table whose rows exist only because a run happened, ordered children before parents.
+ * Every table whose rows exist only because a run happened.
  *
- * This is the deletion order, and it is spelled out rather than derived at runtime: a reset that
- * discovered its own scope from the live catalogue would silently widen the moment someone added a
- * table, which is the opposite of what a destructive operation should do. `tests/integration/
- * sandbox-reset.test.ts` closes the other half of that trade by walking `pg_constraint` and failing
- * if the database grows a run-scoped table this list does not name.
+ * The scope is spelled out rather than derived at runtime: a reset that discovered its own reach
+ * from the live catalogue would silently widen the moment someone added a table, which is the
+ * opposite of what a destructive operation should do. `tests/integration/sandbox-reset.test.ts`
+ * closes the other half of that trade by walking `pg_constraint` and failing if the database grows
+ * a run-scoped table this list does not name.
  *
  * `trace_spans` earns its place by column, not by constraint: it carries `run_id` but declares no
  * foreign key to `runs`, so a purely constraint-derived list would leave the traces behind.
@@ -93,12 +93,23 @@ const EMPTY_TALLY: SandboxResetTally = {
 /**
  * Returns a sandbox to a never-run state without disturbing anything that was ingested into it.
  *
- * The reset is a single transaction over the run-scoped tables above. That matters more than it
- * looks: these tables reference one another through fourteen foreign keys, so a reset that failed
- * halfway through a sequence of independent statements would leave briefs pointing at deleted
- * approval subjects and claims pointing at deleted artifacts - a database that is neither the state
- * before nor the state after. Committing once means the sandbox is either fully clean or fully
- * untouched, and pressing the button twice is simply the same transaction finding nothing to do.
+ * The reset is a single transaction, which matters more than it looks: these tables reference one
+ * another through fourteen foreign keys, so a reset that failed halfway through a sequence of
+ * independent statements would leave briefs pointing at removed approval subjects and claims
+ * pointing at removed artifacts - a database that is neither the state before nor the state after.
+ * Committing once means the sandbox is either fully clean or fully untouched, and pressing the
+ * button twice is simply the same transaction finding nothing left to do.
+ *
+ * It clears the tables with `truncate` rather than `delete`, and the reason is a property of this
+ * schema rather than a performance preference. Approval subjects, requirement entries, decisions,
+ * manifests, run events, trace spans and audit rows all carry `BEFORE DELETE` triggers that raise
+ * `rows are immutable`: the application is deliberately incapable of rewriting the record of what
+ * it did, and it should stay that way. `truncate` does not fire row triggers, so clearing a
+ * sandbox is a database-administration act that the application's own code paths still cannot
+ * perform - which is exactly why the capability is confined to a database somebody explicitly
+ * designated a sandbox. It also fails loudly rather than quietly: PostgreSQL refuses to truncate a
+ * table that something outside the list still references, so a missed run-scoped table aborts the
+ * transaction instead of leaving orphans.
  */
 export class PostgresSandboxResetStore implements SandboxResetStore {
   /** Creates the sandbox reset store for a database already designated as a sandbox. */
@@ -158,14 +169,15 @@ export class PostgresSandboxResetStore implements SandboxResetStore {
   public async erase(input: Readonly<{ actorId: string }>): Promise<SandboxResetReport> {
     return this.database.sql.begin(async (sql) => {
       const tally = await countRunScopedRecords(sql);
-      for (const table of RUN_SCOPED_TABLES) {
-        // Run-bound audit rows have to go with their runs to satisfy the foreign key. Rows with no
-        // run - opaque access denials, and the reset records written below - are not run history
-        // and are deliberately kept: `audit_events` is write-only by design, and a reset able to
-        // erase the record of a refused access would make the audit trail worth less than the demo.
-        if (table === 'audit_events') await sql`delete from audit_events where run_id is not null`;
-        else await sql`delete from ${sql(table)}`;
-      }
+      // Run-bound audit rows have to go with their runs, but rows carrying no run - opaque access
+      // denials, and the reset records written below - are not run history and are deliberately
+      // kept. `truncate` cannot be selective, so they are set aside and put back inside the same
+      // transaction: a reset able to erase the record of a refused access would leave an audit
+      // trail worth less than none, because it would still look complete.
+      await sql`create temporary table sandbox_reset_retained_audits on commit drop as
+        select * from audit_events where run_id is null`;
+      await sql`truncate table ${sql([...RUN_SCOPED_TABLES])}`;
+      await sql`insert into audit_events select * from sandbox_reset_retained_audits`;
       await sql`insert into audit_events (id, run_id, actor_id, type, payload) values
         (${`audit_${crypto.randomUUID()}`}, null, ${input.actorId}, 'sandbox_reset',
           ${JSON.stringify({ database: this.databaseName, deleted: tally })}::jsonb)`;
