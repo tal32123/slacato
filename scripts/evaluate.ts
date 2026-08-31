@@ -158,7 +158,7 @@ async function runRetrievalEvaluation(): Promise<ReturnType<typeof evaluateRetri
             )
           ].sort();
       const runId = `run_eval_${testCase.id.replaceAll(/[^A-Za-z0-9_-]/g, '_')}`;
-      await database.sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model) values (${runId}, ${testCase.opportunityId}, ${testCase.userId}, 'retrieving', 'mock', 'mock-brief')`;
+      await database.sql`insert into runs (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash) values (${runId}, ${testCase.opportunityId}, ${testCase.userId}, 'retrieving', 'mock', 'mock-brief', ${`eval:${runId}`})`;
       const result = await retriever.search({
         query: testCase.query,
         accountId: testCase.accountId,
@@ -177,6 +177,7 @@ async function runRetrievalEvaluation(): Promise<ReturnType<typeof evaluateRetri
           canViewRestrictedAccounts: grants.some((grant) => grant.can_read_restricted)
         }
       });
+      await database.sql`update runs set status = 'completed' where id = ${runId}`;
       results.push({
         id: testCase.id,
         k: testCase.limit,
