@@ -76,9 +76,9 @@ function containsBounded(haystack: string, needle: string): boolean {
  * `materialAnchors` extracts a run of capitalized words as one anchor, so "Legal Counsel Amara
  * Quinn" becomes a single string that a structured record can never contain contiguously: the
  * record states `title: Legal Counsel` and `fullName: Amara Quinn` on separate lines. Requiring
- * contiguity there tests transcription, not grounding. A fused run is therefore also satisfied
- * when it splits into two multi-word halves that both appear in the same evidence text; every
- * word still has to be present, and single- or two-word anchors stay exact. */
+ * contiguity there tests transcription, not grounding. A fused run of three or more words is
+ * therefore also satisfied when it splits in two at some point and both halves appear in the same
+ * evidence text; every word still has to be present, and one- or two-word anchors stay exact. */
 function containsAnchor(haystack: string, anchor: string): boolean {
   if (containsBounded(haystack, anchor)) return true;
   const words = anchor.split(' ');
