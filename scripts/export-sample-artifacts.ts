@@ -192,6 +192,7 @@ async function main(): Promise<void> {
     }
 
     const slackImpactName = 'slack-impact-comparison.json';
+    const slackImpactVisualName = 'slack-impact.html';
     const slackImpact = JSON.parse(
       await readFile(resolve(outputDirectory, slackImpactName), 'utf8')
     ) as {
@@ -202,6 +203,15 @@ async function main(): Promise<void> {
     if (slackImpact.runs.withSlack.runId !== restrictedRunId) {
       throw new Error(
         `${slackImpactName} measures ${slackImpact.runs.withSlack.runId}, not the exported restricted run`
+      );
+    }
+    const slackImpactVisual = await readFile(
+      resolve(outputDirectory, slackImpactVisualName),
+      'utf8'
+    );
+    if (!slackImpactVisual.includes(restrictedRunId)) {
+      throw new Error(
+        `${slackImpactVisualName} is stale; re-run scripts/render-slack-impact-visual.ts`
       );
     }
 
@@ -333,7 +343,7 @@ async function main(): Promise<void> {
           withSlackRunId: slackImpact.runs.withSlack.runId,
           withoutSlackRunId: slackImpact.runs.withoutSlack.runId,
           finding: slackImpact.summary,
-          files: [slackImpactName, 'slack-impact-comparison.md']
+          files: [slackImpactVisualName, slackImpactName, 'slack-impact-comparison.md']
         },
         traceAndLogExamples: {
           runId: restrictedRunId,
@@ -355,6 +365,7 @@ async function main(): Promise<void> {
           'pnpm tsx scripts/generate-sample-runs.ts --api=<api-base> --approval-capture=samples/restricted-approval-flow.json OPP-1003',
           'pnpm tsx scripts/generate-sample-runs.ts --api=<api-base> OPP-1001 OPP-1002',
           'pnpm tsx scripts/slack-impact-comparison.ts <with-slack-run-id> <without-slack-run-id>',
+          'pnpm tsx scripts/render-slack-impact-visual.ts',
           'pnpm tsx scripts/export-sample-artifacts.ts <normal-run-id> <expansion-run-id> <restricted-run-id> [api-base]'
         ],
         prerequisites: [
@@ -400,7 +411,7 @@ async function main(): Promise<void> {
         number: '05',
         title: 'Slack-style evidence impact',
         description: slackImpact.summary,
-        files: [slackImpactName, 'slack-impact-comparison.md'],
+        files: [slackImpactVisualName, slackImpactName, 'slack-impact-comparison.md'],
         facts: {
           runsUsed: slackImpact.runsUsed,
           withSlackRunId: slackImpact.runs.withSlack.runId,
