@@ -139,7 +139,8 @@ export async function createApiApplication(
         approvalAuthorities: new PostgresApprovalAuthorityQuery(database)
       },
       {
-        repository: dealQueries
+        repository: dealQueries,
+        denials: workflowAccess
       },
       new PostgresBriefExportService(database),
       {

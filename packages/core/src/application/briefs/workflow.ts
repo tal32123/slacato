@@ -29,6 +29,7 @@ import {
 import type { RunId } from '../../domain/shared/ids.js';
 import type { AgentContext, StrategyArtifacts } from '../agents/contracts.js';
 import { withoutSelfContradictoryWarnings } from '../agents/validation.js';
+import type { OpaqueDenialRecorder } from '../deals/contracts.js';
 import type { WorkflowCommand } from '../workflow/command-queue.js';
 import type {
   RunLifecycleStore,
@@ -50,7 +51,7 @@ export type DealBriefRetrievalContext = Readonly<{
   evidence?: AgentContext['evidence'];
 }>;
 
-export interface DealBriefAccessControl {
+export interface DealBriefAccessControl extends OpaqueDenialRecorder {
   authorizeStart(
     input: Readonly<{ requestedBy: string; opportunityId: string }>
   ): Promise<Readonly<{ allowed: false }> | Readonly<{ allowed: true; accountId: string }>>;
@@ -66,7 +67,6 @@ export interface DealBriefAccessControl {
       payload: DealBrief;
     }>
   ): Promise<ApprovalRequirement>;
-  recordOpaqueDenial(event: Readonly<Record<string, unknown>>): Promise<void>;
 }
 export interface DealBriefWorkflowServices {
   retrieve(run: WorkflowRun, invocationId: string): Promise<DealBriefRetrievalContext>;
@@ -430,11 +430,7 @@ export class StartDealBrief {
       opportunityId: input.opportunityId
     });
     if (!authorization.allowed) {
-      await this.access.recordOpaqueDenial({
-        type: 'deal_brief_start_denied',
-        actorId: input.requestedBy,
-        reason: 'forbidden'
-      });
+      await this.access.recordOpaqueDenial({ actorId: input.requestedBy, reason: 'forbidden' });
       throw new AuthorizationDeniedError('DealBrief start denied');
     }
     const requestHash = hashApprovalPayload({
@@ -497,11 +493,7 @@ export class RegenerateDealBrief {
       opportunityId: run.opportunityId
     });
     if (!authorized.allowed || run.requestedBy !== input.requestedBy) {
-      await this.access.recordOpaqueDenial({
-        type: 'deal_brief_regeneration_denied',
-        actorId: input.requestedBy,
-        reason: 'forbidden'
-      });
+      await this.access.recordOpaqueDenial({ actorId: input.requestedBy, reason: 'forbidden' });
       throw new AuthorizationDeniedError('DealBrief regeneration denied');
     }
     const requestHash = hashApprovalPayload({
@@ -546,11 +538,7 @@ export class CancelDealBrief {
       opportunityId: run.opportunityId
     });
     if (!authorization.allowed || run.requestedBy !== input.requestedBy) {
-      await this.access.recordOpaqueDenial({
-        type: 'deal_brief_cancellation_denied',
-        actorId: input.requestedBy,
-        reason: 'forbidden'
-      });
+      await this.access.recordOpaqueDenial({ actorId: input.requestedBy, reason: 'forbidden' });
       throw new AuthorizationDeniedError('DealBrief cancellation denied');
     }
     if (['completed', 'rejected', 'failed', 'cancelled'].includes(run.status))
