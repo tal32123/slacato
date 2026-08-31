@@ -14,7 +14,7 @@ import {
 } from '../../apps/web/src/components/guided-tour';
 import { LoginRoute } from '../../apps/web/src/routes/login';
 
-const STORAGE_KEY = 'slacato.guided-tour.v2';
+const STORAGE_KEY = 'slacato.guided-tour.v3';
 const stepCount = tourSteps.length;
 
 const READY_HEALTH = {
@@ -39,7 +39,20 @@ vi.mock('@/api/client', () => ({
 vi.mock('@/api/session', () => ({
   safeDestination: () => '/deals',
   selectPersonaSession: () => Promise.resolve(),
-  sessionRuntime: { finishTransition: () => undefined },
+  sessionRuntime: { finishTransition: () => undefined, generation: 0, accepts: () => true, reconcileAuthoritativeSession: () => Promise.resolve() },
+  queryKeys: {
+    session: ['session'],
+    personas: ['personas'],
+    readiness: ['readiness'],
+    csrf: (version: string) => ['csrf', version],
+    scoped: (version: string, resource: string) => ['scoped', version, resource]
+  },
+  SessionInvalidatedError: class SessionInvalidatedError extends Error {},
+  sessionQueryOptions: () => ({
+    queryKey: ['session'],
+    queryFn: () => Promise.resolve({ authenticated: false }),
+    retry: false
+  }),
   readinessQueryOptions: () => ({
     queryKey: ['readiness'],
     queryFn: () => Promise.resolve(readinessResult),
@@ -54,7 +67,7 @@ function LocationProbe(): React.JSX.Element {
 
 function TourHarness({
   initialPath = '/settings',
-  target = 'login-personas',
+  target = 'persona-USR-5001',
   withTarget = true,
   manualNavTo,
   withBackgroundControl = false
@@ -80,7 +93,7 @@ function TourHarness({
           ? createElement(
               'div',
               { 'data-testid': 'tour-target', 'data-tour': target },
-              createElement('button', null, target === 'login-personas' ? 'Continue as Maya Levin' : 'Target control')
+              createElement('button', null, target === 'persona-USR-5001' ? 'Continue as Maya Levin' : 'Target control')
             )
           : null,
         withBackgroundControl ? createElement('button', null, 'Background persona') : null,
@@ -113,7 +126,8 @@ describe('guided tour steps', () => {
     const routes = tourSteps.map((step) => step.route);
     const scenarios = new Set(tourSteps.map((step) => step.scenario));
 
-    expect(targets[0]).toBe('login-personas');
+    expect(targets[0]).toBe('persona-USR-5001');
+    expect(tourSteps[0].action).toBe('login-personas');
     expect(targets.at(-1)).toBe('diagnostics');
     // Scenario 1: an authorized owner generates and inspects a brief for OPP-1001.
     expect(routes).toContain('/deals/OPP-1001');
@@ -137,14 +151,19 @@ describe('guided tour steps', () => {
   it('waits for the user on every step that needs a real product action', () => {
     const gated = tourSteps.filter((step) => step.requiresInteraction === true);
 
+    // Each persona switch is two real clicks -- pick the person, then apply the change -- so it is
+    // two steps, each spotlighting exactly the one control it asks for.
     expect(gated.map((step) => step.target)).toEqual([
-      'login-personas',
+      'persona-USR-5001',
       'generate-brief',
-      'settings-personas',
+      'persona-USR-5003',
+      'settings-apply-persona',
       'generate-brief',
-      'settings-personas',
+      'persona-USR-5005',
+      'settings-apply-persona',
       'approval-decision',
-      'settings-personas'
+      'persona-USR-5007',
+      'settings-apply-persona'
     ]);
     for (const step of gated) expect(step.waitingFor).toBeTruthy();
   });
@@ -230,7 +249,12 @@ describe('GuidedTour', () => {
   });
 
   it('routes itself to the step destination when a persona change resumes the tour', async () => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ active: true, stepIndex: 7, dismissed: false }));
+    // Derived, not hardcoded: the step list is edited often enough that a fixed index silently
+    // starts testing a different step instead of failing.
+    const stepIndex = tourSteps.findIndex(
+      (step) => step.target === 'generate-brief' && step.route === '/deals/OPP-1003'
+    );
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ active: true, stepIndex, dismissed: false }));
     render(createElement(TourHarness, { initialPath: '/settings', target: 'generate-brief' }));
 
     await waitFor(() => expect(screen.getByLabelText('current location')).toHaveTextContent('/deals/OPP-1003'));
@@ -287,7 +311,7 @@ describe('GuidedTour', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Start guided tour' }));
       await act(() => vi.advanceTimersByTimeAsync(50));
       const target = document.createElement('button');
-      target.dataset.tour = 'login-personas';
+      target.dataset.tour = 'persona-USR-5001';
       target.textContent = 'Delayed persona choices';
       document.getElementById('main-content')!.append(target);
       await act(async () => Promise.resolve());

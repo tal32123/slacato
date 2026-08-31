@@ -141,10 +141,7 @@ export function LoginRoute(): React.JSX.Element {
           <div className="grid gap-8">
             {groupDemoPersonas(state.personas).map((group) => {
               const cards = (
-                <div
-                  data-tour={group.id === 'scenario' ? 'login-personas' : undefined}
-                  className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-                >
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {group.personas.map((persona) => (
                     <PersonaChoice
                       key={persona.userId}
@@ -204,7 +201,10 @@ function PersonaChoice({
   onChoose: (persona: Persona) => Promise<void>;
 }>): React.JSX.Element {
   return (
-    <Card className="gap-4 border-border/90 py-5 transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-md">
+    <Card
+      data-tour={`persona-${persona.userId}`}
+      className="gap-4 border-border/90 py-5 transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-md"
+    >
       <CardHeader className="px-5">
         <div className="mb-2 flex items-start justify-between gap-3">
           <span className="grid size-11 place-items-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">

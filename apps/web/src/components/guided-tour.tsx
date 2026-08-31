@@ -1,18 +1,59 @@
+import type { RunDetailResponse, RunStatus } from '@slacato/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Compass, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { readinessQueryOptions } from '@/api/session';
+import { readinessQueryOptions, sessionQueryOptions } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { describeGenerationReadiness } from '@/features/runs/generation-readiness';
+import { runDetailQueryOptions } from '@/features/runs/queries';
 
-const STORAGE_KEY = 'slacato.guided-tour.v2';
+const STORAGE_KEY = 'slacato.guided-tour.v3';
 const START_EVENT = 'slacato:start-guided-tour';
 const ADVANCE_EVENT = 'slacato:guided-tour-advance';
 const TARGET_PADDING = 8;
 const FOCUSABLE_SELECTOR =
   'button:not(:disabled), [href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
+/** Run outcomes that end a run without reaching the state a step narrates. */
+const UNSUCCESSFUL_RUN_STATUSES: readonly RunStatus[] = ['failed', 'cancelled', 'rejected'];
+const RUN_PATH_PATTERN = /^\/runs\/([^/]+)$/;
+
+/** Renders a run status as the plain words the interface uses elsewhere. */
+function readableRunStatus(status: RunStatus): string {
+  return status.replace(/_/g, ' ');
+}
+
+/**
+ * Decides whether a run-narrating step must hold, and what to tell the user while it does.
+ * A step never holds on a run that has stopped: an unreadable state, a failure, a cancellation
+ * and a rejection all release the tour with an honest note, because a user who cannot advance
+ * and cannot see why is stuck in a product that looks broken.
+ */
+function describeRunGate(
+  expected: readonly RunStatus[] | undefined,
+  detail: RunDetailResponse | undefined,
+  failed: boolean
+): Readonly<{ waiting: boolean; notice?: string }> {
+  if (expected === undefined) return { waiting: false };
+  if (failed)
+    return {
+      waiting: false,
+      notice: 'This run’s live state could not be read, so the tour is not holding you here.'
+    };
+  if (detail === undefined) return { waiting: true, notice: 'Checking this run’s state…' };
+  if (expected.includes(detail.status)) return { waiting: false };
+  if (UNSUCCESSFUL_RUN_STATUSES.includes(detail.status))
+    return {
+      waiting: false,
+      notice: `This run ended as "${readableRunStatus(detail.status)}" instead of "${readableRunStatus(expected[0] as RunStatus)}". You can continue, but the next steps describe a run that reached that state.`
+    };
+  return {
+    waiting: true,
+    notice: `Waiting for this run to reach "${readableRunStatus(expected[0] as RunStatus)}" — it is ${readableRunStatus(detail.status)} right now.`
+  };
+}
 
 /** Lists the focusable elements inside a root, including the root itself when it qualifies. */
 function collectFocusable(root: Element | null): HTMLElement[] {
@@ -22,6 +63,7 @@ function collectFocusable(root: Element | null): HTMLElement[] {
 }
 
 type TourStep = Readonly<{
+  /** The single page element the spotlight frames -- the one control the step asks the user to act on. */
   target: string;
   route?: string;
   scenario: string;
@@ -30,29 +72,48 @@ type TourStep = Readonly<{
   /** Instruction shown while the tour waits for the user to perform the step themselves. */
   waitingFor?: string;
   requiresInteraction?: boolean;
+  /**
+   * The action key `advanceGuidedTour` matches for this step, when it differs from `target`.
+   * Targets name a DOM element and change whenever the spotlight is narrowed; action keys name a
+   * completed product action and belong to the call sites that report one, so the two are kept
+   * separate rather than tied together by a shared string.
+   */
+  action?: string;
+  /**
+   * Run states that release this step. While the user is on a run page and the run has reached
+   * none of them, the step holds instead of letting the user walk past work still in progress.
+   */
+  awaitRunStatus?: readonly RunStatus[];
+  /**
+   * Recognises the navigation this step's own body invites. Following an instruction is never
+   * "stepping off the guided path", so a matching route advances the tour instead of warning.
+   */
+  advanceOnPath?: (pathname: string) => boolean;
 }>;
 
 export const tourSteps: readonly [TourStep, ...TourStep[]] = [
   {
-    target: 'login-personas',
+    target: 'persona-USR-5001',
+    action: 'login-personas',
     route: '/login',
-    scenario: 'Scenario 1 · Authorized brief',
+    scenario: 'Scenario 1 \u00b7 Authorized brief',
     title: 'Sign in as the deal owner',
-    body: 'Every result in this product is shaped by who is asking. Choose Maya Levin: she owns opportunity OPP-1001, so she is allowed to see its evidence and ask for a brief.',
-    waitingFor: 'Choose Maya Levin to continue.',
+    body: 'Every result in this product is shaped by who is asking. The spotlight is on Maya Levin: she owns opportunity OPP-1001, so she is allowed to see its evidence and ask for a brief.',
+    waitingFor: 'Choose "Continue as Maya Levin" to continue.',
     requiresInteraction: true
   },
   {
     target: 'deal-list',
     route: '/deals',
-    scenario: 'Scenario 1 · Authorized brief',
+    scenario: 'Scenario 1 \u00b7 Authorized brief',
     title: 'Only the deals this person may see',
-    body: 'This list is filtered by the server, not by the browser. Maya sees OPP-1001 and nothing else, because that is the only account her canonical permissions cover. Continue to open that workspace.'
+    body: 'This list is filtered by the server, not by the browser. Maya sees OPP-1001 and nothing else, because that is the only account her canonical permissions cover. Open that workspace, or choose Next.',
+    advanceOnPath: (pathname) => pathname === '/deals/OPP-1001'
   },
   {
     target: 'generate-brief',
     route: '/deals/OPP-1001',
-    scenario: 'Scenario 1 · Authorized brief',
+    scenario: 'Scenario 1 \u00b7 Authorized brief',
     title: 'Ask the agents for a strategic brief',
     body: 'Choose Generate Brief. The tour never presses it for you, because the whole point is that generation starts from a deliberate human request that the server re-authorizes.',
     waitingFor: 'Choose Generate Brief to continue.',
@@ -60,37 +121,49 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
   },
   {
     target: 'run-progress-detail',
-    scenario: 'Scenario 1 · Authorized brief',
+    scenario: 'Scenario 1 \u00b7 Authorized brief',
     title: 'Watch the work actually happen',
-    body: 'Retrieval, specialists, synthesis, and validation each report their own state. This page has a stable address, so you can close the tab, come back, and rejoin the same run instead of losing it in a spinner. Wait for the run to finish before continuing.'
+    body: 'Retrieval, specialists, synthesis, and validation each report their own state. This page has a stable address, so you can close the tab, come back, and rejoin the same run instead of losing it in a spinner.',
+    awaitRunStatus: ['completed']
   },
   {
     target: 'citations',
     route: '/deals/OPP-1001',
-    scenario: 'Scenario 1 · Authorized brief',
+    scenario: 'Scenario 1 \u00b7 Authorized brief',
     title: 'Check the brief against its sources',
     body: 'Each claim carries citations back to the exact authorized record it came from. Select one to read the excerpt. Citations are re-authorized on open, so a citation can never become a side door into data the current persona may not read.'
   },
   {
     target: 'slack-evidence',
     route: '/deals/OPP-1001',
-    scenario: 'Scenario 4 · Generated Slack updates',
+    scenario: 'Scenario 4 \u00b7 Generated Slack updates',
     title: 'See the generated Slack updates change the answer',
     body: 'We added a reviewed, synthetic Slack channel of account-team updates to the supplied CRM, call, and pricing data. Source Evidence lists the Slack updates that were retrieved, and anything they changed is tagged "Account-team update impact" so you can tell what the chatter actually moved.'
   },
   {
-    target: 'settings-personas',
+    target: 'persona-USR-5003',
+    action: 'persona-selected',
     route: '/settings',
-    scenario: 'Scenario 2 · Restricted deal and approvals',
-    title: 'Switch to the restricted deal owner',
-    body: 'Choose Nora Chen and apply the change. She owns OPP-1003, a restricted renewal with a steep discount, changed liability language, and a customer-facing concession. She is authorized for it; the next screens show what that unlocks and what it still gates.',
-    waitingFor: 'Select Nora Chen and choose "Use selected persona" to continue.',
+    scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
+    title: 'Select the restricted deal owner',
+    body: 'Nora Chen owns OPP-1003, a restricted renewal with a steep discount, changed liability language, and a customer-facing concession. She is authorized for it; the next screens show what that unlocks and what it still gates.',
+    waitingFor: 'Select Nora Chen to continue.',
+    requiresInteraction: true
+  },
+  {
+    target: 'settings-apply-persona',
+    action: 'settings-personas',
+    route: '/settings',
+    scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
+    title: 'Apply the persona change',
+    body: 'Switching persona closes open views and live connections before any protected data is reloaded, so nothing from the previous identity survives the change.',
+    waitingFor: 'Choose "Use selected persona" to continue.',
     requiresInteraction: true
   },
   {
     target: 'generate-brief',
     route: '/deals/OPP-1003',
-    scenario: 'Scenario 2 · Restricted deal and approvals',
+    scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'Generate the restricted brief',
     body: 'Choose Generate Brief. Nora may read this deal, so retrieval succeeds. What she may not do is publish sensitive recommendations on her own, which is what the next screen is about.',
     waitingFor: 'Choose Generate Brief to continue.',
@@ -98,68 +171,92 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
   },
   {
     target: 'run-progress-detail',
-    scenario: 'Scenario 2 · Restricted deal and approvals',
+    scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'The run stops instead of publishing',
-    body: 'This run reaches "awaiting approval" rather than finishing. The discount, the liability wording, and the customer-facing concession each tripped a written policy rule, so the workflow parks the draft instead of releasing it. Wait for that state, then continue.'
+    body: 'This run reaches "awaiting approval" rather than finishing. The discount, the liability wording, and the customer-facing concession each tripped a written policy rule, so the workflow parks the draft instead of releasing it.',
+    awaitRunStatus: ['awaiting_approval']
   },
   {
     target: 'approvals',
     route: '/approvals',
-    scenario: 'Scenario 2 · Restricted deal and approvals',
+    scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'Approval routing, split by authority',
     body: 'Every triggered rule becomes its own entry with its own eligible authority, and each entry shows quorum as "completed of required". Nora sees only the decisions she personally holds authority for, even on her own deal.'
   },
   {
-    target: 'settings-personas',
+    target: 'persona-USR-5005',
+    action: 'persona-selected',
     route: '/settings',
-    scenario: 'Scenario 2 · Restricted deal and approvals',
-    title: 'Now look through an approver’s eyes',
-    body: 'Choose Rina Vale and apply the change. She is the Deal Desk approver for this account. Switching identity is the clearest way to show that the inbox is built from server-side authority, not from a client-side filter.',
-    waitingFor: 'Select Rina Vale and choose "Use selected persona" to continue.',
+    scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
+    title: 'Now look through an approver\u2019s eyes',
+    body: 'Rina Vale is the Deal Desk approver for this account. Switching identity is the clearest way to show that the inbox is built from server-side authority, not from a client-side filter.',
+    waitingFor: 'Select Rina Vale to continue.',
+    requiresInteraction: true
+  },
+  {
+    target: 'settings-apply-persona',
+    action: 'settings-personas',
+    route: '/settings',
+    scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
+    title: 'Apply the persona change',
+    body: 'The same teardown runs again. Nothing Nora could read is carried into Rina\u2019s session; the approvals inbox you are about to see is rebuilt from Rina\u2019s own authority.',
+    waitingFor: 'Choose "Use selected persona" to continue.',
     requiresInteraction: true
   },
   {
     target: 'approvals',
     route: '/approvals',
-    scenario: 'Scenario 2 · Restricted deal and approvals',
+    scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'A different person, a different inbox',
-    body: 'Rina sees the discount decision that is hers to make, and only that one. The legal wording waits for Iris Wynn and the deeper discount waits for Tomas Reed, so no single person can release the recommendation alone. Open her pending entry to make the decision.'
+    body: 'Rina sees the discount decision that is hers to make, and only that one. The legal wording waits for Iris Wynn and the deeper discount waits for Tomas Reed, so no single person can release the recommendation alone. Open her pending entry to make the decision.',
+    advanceOnPath: (pathname) => pathname.startsWith('/approvals/')
   },
   {
     target: 'approval-decision',
-    scenario: 'Scenario 2 · Restricted deal and approvals',
+    scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'Record a real human decision',
     body: 'Approve unchanged, edit and approve, or reject with a reason. The decision is bound to the exact brief snapshot and run version you are looking at, so it cannot silently land on different content. Quorum still needs the other authorities, so the run stays parked until they decide too.',
     waitingFor: 'Record your Deal Desk decision to continue.',
     requiresInteraction: true
   },
   {
-    target: 'settings-personas',
+    target: 'persona-USR-5007',
+    action: 'persona-selected',
     route: '/settings',
-    scenario: 'Scenario 3 · Unauthorized attempt',
-    title: 'Switch to someone with no access',
-    body: 'Choose Harper Noor and apply the change. Harper is a genuine fixture identity with no permission on the restricted account. The next two screens show exactly what she can and cannot learn.',
-    waitingFor: 'Select Harper Noor and choose "Use selected persona" to continue.',
+    scenario: 'Scenario 3 \u00b7 Unauthorized attempt',
+    title: 'Select someone with no access',
+    body: 'Harper Noor is a genuine fixture identity with no permission on the restricted account. The next two screens show exactly what she can and cannot learn.',
+    waitingFor: 'Select Harper Noor to continue.',
+    requiresInteraction: true
+  },
+  {
+    target: 'settings-apply-persona',
+    action: 'settings-personas',
+    route: '/settings',
+    scenario: 'Scenario 3 \u00b7 Unauthorized attempt',
+    title: 'Apply the persona change',
+    body: 'Harper signs in exactly as the other personas did. Nothing about the request changes -- only the identity behind it, which is the whole variable this scenario tests.',
+    waitingFor: 'Choose "Use selected persona" to continue.',
     requiresInteraction: true
   },
   {
     target: 'deal-list',
     route: '/deals',
-    scenario: 'Scenario 3 · Unauthorized attempt',
+    scenario: 'Scenario 3 \u00b7 Unauthorized attempt',
     title: 'The restricted deal simply is not there',
-    body: 'Harper’s list contains no row, no name, no account, and no count for the restricted deal. Nothing about it was retrieved, summarized, or cited, so there is nothing on this page to redact.'
+    body: 'Harper\u2019s list contains no row, no name, no account, and no count for the restricted deal. Nothing about it was retrieved, summarized, or cited, so there is nothing on this page to redact.'
   },
   {
     target: 'denial-notice',
     route: '/deals/OPP-1003',
-    scenario: 'Scenario 3 · Unauthorized attempt',
+    scenario: 'Scenario 3 \u00b7 Unauthorized attempt',
     title: 'A direct link gives nothing away',
     body: 'The tour just requested the restricted deal by its address. The answer is a single opaque refusal: no deal name, no account, no evidence, no hint that the record exists at all. The denial is still audited on the server.'
   },
   {
     target: 'diagnostics',
     route: '/diagnostics',
-    scenario: 'Wrap-up · Verify the setup',
+    scenario: 'Wrap-up \u00b7 Verify the setup',
     title: 'Verify the setup for yourself',
     body: 'Diagnostics reports the live generation model, the embedding profile, index health, and the permission facts behind the boundaries you just watched. Choose Finish, then use Settings to return to any persona.'
   }
@@ -196,6 +293,27 @@ export function GuidedTour(): React.JSX.Element {
       ? describeGenerationReadiness(readiness.data, readiness.isError)
       : { blocked: false };
 
+  // Steps that narrate a run read that run's live state rather than trusting the user to judge
+  // when the work is done. The run page already streams its own updates into this exact query
+  // key, so subscribing here mostly reads a cache another component keeps warm; the refetch
+  // interval is the fallback for a dropped stream, and it stops as soon as the run is terminal.
+  const runId = RUN_PATH_PATTERN.exec(location.pathname)?.[1];
+  const awaitsRun = active && step.awaitRunStatus !== undefined && runId !== undefined;
+  const runSession = useQuery({ ...sessionQueryOptions(), enabled: awaitsRun });
+  const sessionVersion =
+    runSession.data?.authenticated === true ? runSession.data.version : undefined;
+  const runQuery = useQuery({
+    ...runDetailQueryOptions(sessionVersion ?? '', runId ?? ''),
+    enabled: awaitsRun && sessionVersion !== undefined,
+    refetchInterval: (query) =>
+      (query.state.data as RunDetailResponse | undefined)?.terminal === true ? false : 4000
+  });
+  const runGate = describeRunGate(
+    awaitsRun ? step.awaitRunStatus : undefined,
+    runQuery.data,
+    runQuery.isError
+  );
+
   const settle = useCallback((nextIndex: number): void => {
     const safe = Number.isFinite(nextIndex) ? Math.round(nextIndex) : 0;
     const bounded = Math.max(0, Math.min(tourSteps.length - 1, safe));
@@ -218,9 +336,10 @@ export function GuidedTour(): React.JSX.Element {
   const move = useCallback(
     (nextIndex: number): void => {
       if (step.requiresInteraction === true && nextIndex > stepIndex) return;
+      if (runGate.waiting && nextIndex > stepIndex) return;
       settle(nextIndex);
     },
-    [settle, step.requiresInteraction, stepIndex]
+    [runGate.waiting, settle, step.requiresInteraction, stepIndex]
   );
 
   const finish = (): void => {
@@ -260,6 +379,7 @@ export function GuidedTour(): React.JSX.Element {
       if (
         event.key === 'ArrowRight' &&
         step.requiresInteraction !== true &&
+        !runGate.waiting &&
         !event.metaKey &&
         !event.ctrlKey
       )
@@ -269,7 +389,7 @@ export function GuidedTour(): React.JSX.Element {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [active, close, move, step.requiresInteraction, stepIndex]);
+  }, [active, close, move, runGate.waiting, step.requiresInteraction, stepIndex]);
 
   useEffect(() => {
     const start = (): void => open();
@@ -293,6 +413,18 @@ export function GuidedTour(): React.JSX.Element {
     routedStep.current = stepIndex;
     if (location.pathname !== step.route) void navigate(step.route);
   }, [active, location.pathname, navigate, step.route, stepIndex]);
+
+  // A step whose body invites a navigation ("open that workspace", "open her pending entry")
+  // must treat that navigation as progress. Without this the target disappears, the tour decides
+  // the user wandered off, and it accuses them of leaving the path they were just told to follow.
+  // Only fires after this step has routed itself, so arriving at a matching address by some other
+  // route -- a deep link, a reload -- does not skip the step the user has not seen yet.
+  useEffect(() => {
+    if (!active || step.advanceOnPath === undefined) return;
+    if (routedStep.current !== stepIndex || location.pathname === step.route) return;
+    if (!step.advanceOnPath(location.pathname)) return;
+    settle(Math.min(stepIndex + 1, tourSteps.length - 1));
+  }, [active, location.pathname, settle, step.advanceOnPath, step.route, stepIndex]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Route changes must reposition the tour target.
   useLayoutEffect(() => {
@@ -514,6 +646,14 @@ export function GuidedTour(): React.JSX.Element {
                 </p>
               </div>
             )}
+            {!targetMissing && runGate.notice !== undefined && (
+              <div
+                role="status"
+                className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
+              >
+                <p>{runGate.notice}</p>
+              </div>
+            )}
             <div className="mt-5 flex items-center justify-between gap-3">
               <Button type="button" variant="ghost" onClick={close}>
                 Skip tour
@@ -549,7 +689,12 @@ export function GuidedTour(): React.JSX.Element {
                       Finish
                     </Button>
                   ) : (
-                    <Button ref={nextRef} type="button" onClick={() => move(stepIndex + 1)}>
+                    <Button
+                      ref={nextRef}
+                      type="button"
+                      disabled={runGate.waiting}
+                      onClick={() => move(stepIndex + 1)}
+                    >
                       Next
                       <ArrowRight aria-hidden="true" />
                     </Button>
@@ -643,10 +788,15 @@ function Spotlight({ box }: Readonly<{ box: TargetBox }>): React.JSX.Element {
 }
 
 /** Advances an active tour when the user completes the action the current step waits for. */
-export function advanceGuidedTour(completedTarget: string): boolean {
+export function advanceGuidedTour(completedAction: string): boolean {
   const state = readTourState();
   const current = tourSteps[state.stepIndex];
-  if (!state.active || current === undefined || current.target !== completedTarget) return false;
+  if (
+    !state.active ||
+    current === undefined ||
+    (current.action ?? current.target) !== completedAction
+  )
+    return false;
   const stepIndex = Math.min(state.stepIndex + 1, tourSteps.length - 1);
   persistTourState({ active: true, stepIndex, dismissed: false });
   window.dispatchEvent(new CustomEvent(ADVANCE_EVENT, { detail: { stepIndex } }));

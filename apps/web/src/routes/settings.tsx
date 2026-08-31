@@ -149,6 +149,7 @@ export function SettingsRoute(): React.JSX.Element {
                 return (
                   <label
                     key={persona.userId}
+                    data-tour={`persona-${persona.userId}`}
                     className={cn(
                       'relative flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/50',
                       selected === persona.userId && 'border-primary ring-2 ring-ring/20'
@@ -159,7 +160,13 @@ export function SettingsRoute(): React.JSX.Element {
                       name="persona"
                       value={persona.userId}
                       checked={selected === persona.userId}
-                      onChange={() => setSelected(persona.userId)}
+                      onChange={() => {
+                        setSelected(persona.userId);
+                        // Selecting a persona is only half of a switch. Reporting it lets the tour
+                        // move its spotlight onto "Use selected persona" instead of leaving that
+                        // button behind the dimmed backdrop where it cannot be clicked.
+                        advanceGuidedTour('persona-selected');
+                      }}
                       className="mt-1 size-5 accent-primary"
                     />
                     <span className="min-w-0">
@@ -184,7 +191,7 @@ export function SettingsRoute(): React.JSX.Element {
           );
           return (
             <>
-              <div data-tour="settings-personas">
+              <div>
                 <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                   <div>
                     <h2 id="persona-heading" className="text-xl font-semibold">
@@ -196,6 +203,7 @@ export function SettingsRoute(): React.JSX.Element {
                     </p>
                   </div>
                   <Button
+                    data-tour="settings-apply-persona"
                     className="min-h-11"
                     disabled={
                       saving || selected === session.persona.userId || csrf.data === undefined
