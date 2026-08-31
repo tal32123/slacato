@@ -141,4 +141,54 @@ describe('DealBrief', () => {
     // Keyboard operability: the disclosure is a native, focusable summary element (not a div/span).
     expect(summary?.tagName).toBe('SUMMARY');
   });
+
+  it('names an empty generated section instead of leaving a bare heading over blank space', () => {
+    const workspace = buildWorkspace(true);
+    const generated = workspace.generatedOutput;
+    if (generated === null) throw new Error('Generated output fixture is required');
+    const emptied = {
+      ...generated.content,
+      sections: {
+        ...generated.content.sections,
+        missingInformation: { ...generated.content.sections.missingInformation, paragraphs: [], items: [] },
+        buyerGoalsAndBusinessDrivers: {
+          ...generated.content.sections.buyerGoalsAndBusinessDrivers,
+          paragraphs: [],
+          items: []
+        }
+      }
+    };
+    const { container } = renderBrief({
+      ...workspace,
+      generatedOutput: { ...generated, content: emptied },
+      brief: emptied
+    } as DealWorkspaceView);
+
+    const notices = [...container.querySelectorAll('p')].filter((paragraph) =>
+      paragraph.textContent?.startsWith('This section is empty.')
+    );
+    expect(notices).toHaveLength(2);
+  });
+
+  it('names an empty deterministic section in the language of authorized records', () => {
+    const workspace = buildWorkspace(false);
+    const emptied = {
+      ...workspace.sourceSnapshot.evidenceOverview,
+      sections: {
+        ...workspace.sourceSnapshot.evidenceOverview.sections,
+        missingInformation: {
+          ...workspace.sourceSnapshot.evidenceOverview.sections.missingInformation,
+          paragraphs: [],
+          items: []
+        }
+      }
+    };
+    renderBrief({
+      ...workspace,
+      sourceSnapshot: { ...workspace.sourceSnapshot, evidenceOverview: emptied },
+      brief: emptied
+    } as DealWorkspaceView);
+
+    expect(screen.getByText('No authorized records populate this section.')).toBeInTheDocument();
+  });
 });

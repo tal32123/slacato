@@ -69,8 +69,20 @@ jobs:
       - name: Run unit, contract, and integration tests
         run: pnpm test
 
+      # `if: always()` so an intentionally red test step above cannot hide these gates' findings:
+      # both print a full report, and the job still fails overall.
       - name: Run golden-retrieval regression eval
+        if: always()
         run: pnpm eval:deterministic
+
+      # Brief-quality acceptance gate for the checked-in sample artifacts. The rules are unit
+      # tested in tests/unit/brief-quality.test.ts; this step measures the deliverables themselves,
+      # so it stays red until the grounding fix lands and samples/ is regenerated from it. The
+      # live-LLM tier (pnpm eval:brief-quality:live) is deliberately not run here: it spends real
+      # tokens and is opt-in behind BRIEF_QUALITY_LIVE=1.
+      - name: Audit sample brief quality
+        if: always()
+        run: pnpm eval:brief-quality
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium

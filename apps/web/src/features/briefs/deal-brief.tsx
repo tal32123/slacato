@@ -233,6 +233,13 @@ function WorkspaceContent({
                 <p key={paragraph}>{paragraph}</p>
               ))}
             </div>
+            {isEmptySection(section, id) && (
+              <p className="mt-4 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                {sourceCues
+                  ? 'No authorized records populate this section.'
+                  : 'This section is empty. The generated output carried nothing here, so treat it as unanswered rather than as nothing to review.'}
+              </p>
+            )}
             {section.items.length > 0 && (
               <ul className="mt-4 grid gap-2 pl-5 text-sm leading-6 marker:text-primary sm:text-base">
                 {section.items.map((item) => (
@@ -256,6 +263,21 @@ function WorkspaceContent({
       })}
     </div>
   );
+}
+
+/**
+ * Reports whether a section would render as a bare heading with nothing beneath it.
+ *
+ * The stakeholder and next-action sections carry their own empty states, and every other section
+ * that always emits a paragraph is unaffected. This covers the rest, so an empty section reads as
+ * a gap the reviewer must chase rather than as blank space they can skip.
+ */
+function isEmptySection(
+  section: DealWorkspaceView['brief']['sections'][keyof DealWorkspaceView['brief']['sections']],
+  id: (typeof sectionOrder)[number]
+): boolean {
+  if (id === 'stakeholderMap' || id === 'recommendedNextActions') return false;
+  return section.paragraphs.length === 0 && section.items.length === 0;
 }
 
 /** Shows one labeled deal metric in the brief summary. */
