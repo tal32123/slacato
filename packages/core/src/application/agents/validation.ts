@@ -480,8 +480,18 @@ function explicitlyNegates(content: string, anchor: string): boolean {
   ).exec(normalized);
   const at = match?.index ?? -1;
   if (at < 0) return false;
-  const prefix = normalized.slice(Math.max(0, at - 80), at);
-  return /\b(?:not|no|never|denied|declined|rejected|without)\b/.test(prefix);
+  // Only a negation that actually attaches to the anchor counts. Scanning 80 characters back
+  // crossed clause boundaries, so "We will not support expansion, said Chief Information Security
+  // Officer Elena Voss" was read as negating Elena Voss rather than the expansion, and the
+  // resulting "contradicted" verdict throws instead of dropping. The window is now the words
+  // immediately before the anchor within its own clause.
+  const clause =
+    normalized
+      .slice(0, at)
+      .split(/[,;:.!?()\u2014\u2013]|\n/u)
+      .at(-1) ?? '';
+  const adjacent = (clause.match(/[\p{L}\p{N}%$€£-]+/gu) ?? []).slice(-3);
+  return adjacent.some((word) => /^(?:not|no|never|denied|declined|rejected|without)$/.test(word));
 }
 
 const CONTRADICTORY_PREDICATES = [
@@ -507,8 +517,14 @@ const POSITIVE_INTENT =
   /\b(?:need(?:s|ed)?|want(?:s|ed)?|support(?:s|ed)?|prefer(?:s|red)?|accept(?:s|ed)?|approv(?:e|es|ed)|agree(?:s|d)?|request(?:s|ed)?|commit(?:s|ted)?|advocat(?:e|es|ed)|endors(?:e|es|ed)|allow(?:s|ed)?|include(?:s|d)?|enable(?:s|d)?|require(?:s|d)?)\b/i;
 const NEGATIVE_INTENT =
   /\b(?:oppos(?:e|es|ed)|reject(?:s|ed)?|refus(?:e|es|ed)|declin(?:e|es|ed)|object(?:s|ed)?|resist(?:s|ed)?|block(?:s|ed)?|den(?:y|ies|ied)|avoid(?:s|ed)?|cancel(?:s|led)?|prohibit(?:s|ed)?|exclude(?:s|d)?|disable(?:s|d)?)\b/i;
-const NEGATED_MATERIAL_PREDICATE =
-  /\b(?:not|never|no longer|cannot|can't|won't|doesn't|didn't)\b(?:\s+\S+){0,3}\s+(?:need|want|support|prefer|accept|approve|agree|request|commit|allow|include|enable|require)\w*\b/i;
+/** The material predicate verbs whose negation parity is compared between a claim and evidence. */
+const MATERIAL_PREDICATE_VERBS =
+  'need|want|support|prefer|accept|approve|agree|request|commit|allow|include|enable|require';
+const MATERIAL_PREDICATE = new RegExp(`\\b(?:${MATERIAL_PREDICATE_VERBS})\\w*\\b`, 'i');
+const NEGATED_MATERIAL_PREDICATE = new RegExp(
+  `\\b(?:not|never|no longer|cannot|can't|won't|doesn't|didn't)\\b(?:\\s+\\S+){0,3}\\s+(?:${MATERIAL_PREDICATE_VERBS})\\w*\\b`,
+  'i'
+);
 
 /** Detects opposing intent or business predicates between a claim and its evidence. */
 function hasPredicateContradiction(statement: string, evidence: string): boolean {
@@ -523,7 +539,14 @@ function hasPredicateContradiction(statement: string, evidence: string): boolean
     (statementNegative && !statementPositive && evidencePositive && !evidenceNegative)
   )
     return true;
+  // The negation-parity rule compares how a claim and its evidence stand on one material predicate.
+  // Without requiring the claim to assert such a predicate at all, it fired on any claim whose
+  // evidence merely contained a negated one: "Elena Voss is Chief Information Security Officer"
+  // was ruled *contradicted* by the record naming her, because a different sentence in it reads
+  // "will not support expansion". A claim cannot contradict a predicate it never makes, and
+  // "contradicted" throws rather than drops, so this took the whole artifact with it.
   if (
+    MATERIAL_PREDICATE.test(statement) &&
     NEGATED_MATERIAL_PREDICATE.test(statement) !== NEGATED_MATERIAL_PREDICATE.test(evidence) &&
     (POSITIVE_INTENT.test(statement) || POSITIVE_INTENT.test(evidence))
   )
