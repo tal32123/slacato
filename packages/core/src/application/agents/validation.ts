@@ -937,9 +937,8 @@ const COMMERCIAL_COMMITMENT =
   /\b(?:discount|concession|concede|credit|rebate|waiver|waive|refund|price reduction|free of charge)\b/i;
 const UNSAFE_CUSTOMER_FACING_ACTION =
   /\b(?:promise|guarantee|bypass|conceal|mislead|fabricate|disclose|reveal|leak)\b/i;
-/** Sends a commercial term to its deterministic owner instead of settling it in the brief. */
-const ROUTES_FOR_APPROVAL =
-  /\bfor (?:deal desk |legal |commercial |security )?(?:approval|review)\b/i;
+/** Names the approval or review process that owns a commercial term, rather than settling it. */
+const NAMES_APPROVAL_PROCESS = /\b(?:approval|review|deal desk)\b/i;
 /** Verbs that would settle a commercial term rather than route it. */
 const GRANTS_COMMERCIAL_TERM =
   /\b(?:offer|grant|concede|waive|give|extend|apply|honou?r|provide|accept|approve)\w*\b/i;
@@ -1011,11 +1010,13 @@ function safeRecommendationAction(value: string, claims: readonly Claim[]): bool
   // one exception is an action that hands the term to that policy rather than settling it: OPP-1003
   // records "Route discount, liability language, and restricted data access request for approval by
   // 2026-05-14" as its own next step, and rejecting it emptied Recommended Next Actions in two of
-  // three live runs. Routing language plus the absence of any granting verb is what separates the
-  // two; "Offer a 15% discount" and "Approve the 15% discount" are still rejected.
+  // three live runs. Naming the approval or review process that owns the term, together with the
+  // absence of any verb that would grant it, is what separates the two: "Schedule internal review
+  // for discount and liability language" is admitted, while "Offer a 15% discount", "Approve the
+  // 15% discount", and "Confirm the 15% discount with the customer" are all still rejected.
   if (
     COMMERCIAL_COMMITMENT.test(normalized) &&
-    !(ROUTES_FOR_APPROVAL.test(normalized) && !GRANTS_COMMERCIAL_TERM.test(normalized))
+    !(NAMES_APPROVAL_PROCESS.test(normalized) && !GRANTS_COMMERCIAL_TERM.test(normalized))
   )
     return false;
   if (UNSAFE_CUSTOMER_FACING_ACTION.test(normalized)) return false;
@@ -1464,6 +1465,20 @@ export function validateDealBrief(
   });
   const sourceTypeCount = new Set(evidence.map((record) => record.sourceType)).size;
   const richEvidence = evidence.length >= 5 || sourceTypeCount >= 3;
+  // Losing every proposed stakeholder is a correctable generation fault, not a finished brief: it
+  // means each identity claim quoted a title or a record id without naming the person it belongs
+  // to, so nothing tied either to the other. Reporting it as an error routes it to the agent's
+  // repair attempt, where the model can re-mint the claims, instead of silently shipping a brief
+  // with an empty Stakeholder Map beside Source Evidence citing those same contact records.
+  if (
+    richEvidence &&
+    parsed.stakeholderMap.stakeholders.length > 0 &&
+    supportedStakeholders.length === 0
+  )
+    throw new DomainValidationError('No generated stakeholder is supported by its cited evidence', {
+      proposedStakeholders: parsed.stakeholderMap.stakeholders.length,
+      hint: 'Give each stakeholder one claim naming the person in full and restating their title exactly as the cited record states it.'
+    });
   const substantiveSectionCount = countSubstantiveBriefSections(validated);
   if (richEvidence && substantiveSectionCount < MIN_SUBSTANTIVE_BRIEF_SECTIONS)
     throw new DomainValidationError(
