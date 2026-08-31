@@ -1,7 +1,14 @@
 import type { DemoSession } from '@slacato/contracts';
 import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Link, Outlet, useLocation, useNavigation, useNavigationType } from 'react-router';
+import {
+  Link,
+  Outlet,
+  ScrollRestoration,
+  useLocation,
+  useNavigation,
+  useNavigationType
+} from 'react-router';
 import { GuidedTour } from '@/components/guided-tour';
 import { MobileNav, primaryDestinations } from '@/components/mobile-nav';
 import { PersonaMenu } from '@/components/persona-menu';
@@ -53,7 +60,10 @@ export function AppShell({
       // approval-status update) makes the next real navigation to that same path look unchanged,
       // so main is never focused and a keyboard user is stranded on the link they just activated.
       previouslyFocusedPathname.current = location.pathname;
-      window.requestAnimationFrame(() => mainRef.current?.focus());
+      // preventScroll keeps this purely a focus move. Without it the browser scrolled <main> to the
+      // top of the viewport, which parked every freshly opened page at scrollY 65 with its first
+      // line hidden under the sticky header. ScrollRestoration below owns scroll position instead.
+      window.requestAnimationFrame(() => mainRef.current?.focus({ preventScroll: true }));
     }
   }, [location.pathname, location.state, navigationType]);
 
@@ -141,6 +151,23 @@ export function AppShell({
 
       <div className="min-w-0">
         <header className="sticky top-0 z-30 border-b bg-background/95">
+          {/* The route-loading notice is a permanently mounted live region so assistive technology
+              announces it (a region that mounts together with its text is often missed), and it is
+              painted as an overlay hanging off the header's bottom edge rather than as a block in
+              the document flow. Inserting a block here used to push <main> down ~37px the instant a
+              link was activated and pull it back when the loader resolved, so the control under the
+              pointer jumped on every navigation. */}
+          <div
+            role="status"
+            aria-label="Loading destination"
+            className="pointer-events-none absolute inset-x-0 top-full z-10 flex justify-center px-4"
+          >
+            {navigation.state !== 'idle' && (
+              <span className="rounded-b-md border border-t-0 bg-secondary px-4 py-2 text-sm text-secondary-foreground shadow-sm">
+                Loading destination…
+              </span>
+            )}
+          </div>
           <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="min-w-0">
               <Link
@@ -166,16 +193,6 @@ export function AppShell({
           </div>
         </header>
 
-        {navigation.state !== 'idle' && (
-          <div
-            role="status"
-            aria-label="Loading destination"
-            className="border-b bg-secondary px-4 py-2 text-center text-sm text-secondary-foreground"
-          >
-            Loading destination…
-          </div>
-        )}
-
         <main
           ref={mainRef}
           id="main-content"
@@ -189,6 +206,10 @@ export function AppShell({
           <Outlet />
         </main>
       </div>
+      {/* Keyed by pathname so opening or closing the evidence panel -- which only pushes a search
+          param onto the same path -- restores the reader's position instead of yanking the page to
+          the top, while a genuine move to another page still starts at the top. */}
+      <ScrollRestoration getKey={(location) => location.pathname} />
       <MobileNav />
       <GuidedTour />
     </div>

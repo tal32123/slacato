@@ -77,10 +77,16 @@ export function DealList({
 /** Presents one authorized deal as a desktop table row. */
 function DealRow({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Element {
   return (
-    <TableRow>
-      <TableCell>
+    // Now that the wide cells wrap, a row is several lines tall, and vertically centring every
+    // other value against it left the row reading as a scatter. Top-align them instead.
+    <TableRow className="[&>td]:align-top">
+      {/* The table lays its columns out evenly, so the opportunity and account names -- the two
+          things a seller actually reads this row for -- were being cut off mid-word at every
+          desktop width. They wrap here instead. No column changes width, so nothing else in the
+          row loses room. */}
+      <TableCell className="whitespace-normal [&>*]:whitespace-normal">
         <strong className="block font-semibold">{deal.opportunityId}</strong>
-        <span className="block max-w-sm text-sm">{deal.opportunityName}</span>
+        <span className="block text-sm">{deal.opportunityName}</span>
         <span className="block text-xs text-muted-foreground">{deal.accountName}</span>
         <span className="mt-1 block text-xs text-muted-foreground">
           Access: {deal.restricted ? 'Restricted deal — authorized' : 'Standard deal'}
@@ -92,7 +98,7 @@ function DealRow({ deal }: Readonly<{ deal: DealListItem }>): React.JSX.Element 
           Probability: {deal.probability === null ? 'Not recorded' : `${deal.probability}%`}
         </span>
       </TableCell>
-      <TableCell>
+      <TableCell className="whitespace-normal [&>*]:whitespace-normal">
         {deal.owner ?? 'Not recorded'}
         <span className="mt-1 block text-xs text-muted-foreground">
           Latest run:{' '}

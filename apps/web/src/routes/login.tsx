@@ -1,13 +1,5 @@
 import type { Persona } from '@slacato/contracts';
-import {
-  ArrowRight,
-  Check,
-  Database,
-  LoaderCircle,
-  LockKeyhole,
-  ShieldCheck,
-  Sparkles
-} from 'lucide-react';
+import { Check, Database, LoaderCircle, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { fetchCsrf, fetchPersonas } from '@/api/client';
@@ -155,10 +147,12 @@ export function LoginRoute(): React.JSX.Element {
               if (group.collapsed)
                 return (
                   <details key={group.id} className="rounded-xl border bg-card/60 px-5 py-4">
-                    <summary className="min-h-11 cursor-pointer text-sm font-medium">
+                    {/* Typography matches the open groups' <h3> so the three group titles read as
+                        one level rather than the collapsed one looking like a footnote. */}
+                    <summary className="min-h-11 cursor-pointer text-lg font-semibold tracking-tight marker:text-muted-foreground">
                       {group.title}
                     </summary>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                       {group.description}
                     </p>
                     <div className="mt-4">{cards}</div>
@@ -200,10 +194,15 @@ function PersonaChoice({
   submitting: string | undefined;
   onChoose: (persona: Persona) => Promise<void>;
 }>): React.JSX.Element {
+  // min-w-0 keeps the card inside its grid track: a grid item's automatic minimum size is its
+  // min-content width, and the sign-in label used to make that wider than the column, which pushed
+  // the cards past the viewport edge at 390px and past the card edge in the 3-column layout.
+  // h-full plus flex-1 on the body makes every card fill its row and puts the slack above the
+  // footer, so the primary action sits on one baseline whatever the description length.
   return (
     <Card
       data-tour={`persona-${persona.userId}`}
-      className="gap-4 border-border/90 py-5 transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-md"
+      className="h-full min-w-0 gap-4 border-border/90 py-5 transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-md"
     >
       <CardHeader className="px-5">
         <div className="mb-2 flex items-start justify-between gap-3">
@@ -219,25 +218,29 @@ function PersonaChoice({
         </CardTitle>
         <CardDescription className="font-medium text-primary">{persona.role}</CardDescription>
       </CardHeader>
-      <CardContent className="min-h-14 px-5 text-sm leading-5 text-muted-foreground">
+      <CardContent className="min-h-14 flex-1 px-5 text-sm leading-5 text-muted-foreground">
         {demoPersonaPurpose(persona)}
       </CardContent>
       <CardFooter className="px-5">
+        {/* The label carries the persona name, so it is the widest thing in the card and it used to
+            spill out of the button in the 3-column layout. Dropping the decorative arrow and the
+            wide inline padding gives every canonical name a single line down to the narrowest
+            3-column width; whitespace-normal keeps an unusually long fixture name wrapping inside
+            the button instead of overflowing it. The label is centred, so the reduced inline padding
+            is not visible. */}
         <Button
-          className="min-h-11 w-full justify-between"
+          className="h-auto min-h-11 w-full whitespace-normal px-2 py-2 text-center leading-5"
           disabled={submitting !== undefined}
           onClick={() => void onChoose(persona)}
         >
+          {submitting === persona.userId && (
+            <LoaderCircle aria-hidden="true" className="animate-spin" />
+          )}
           <span>
             {submitting === persona.userId
               ? 'Opening workspace…'
               : `Continue as ${persona.displayName}`}
           </span>
-          {submitting === persona.userId ? (
-            <LoaderCircle className="animate-spin" />
-          ) : (
-            <ArrowRight />
-          )}
         </Button>
       </CardFooter>
     </Card>
