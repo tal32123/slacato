@@ -426,12 +426,23 @@ export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
     return this.database
       .sql`case source_type when 'gong_summary' then ${input.sourceLimits.gong_summary} when 'gong_transcript' then ${input.sourceLimits.gong_transcript} when 'policy' then ${input.sourceLimits.policy} when 'pricing' then ${input.sourceLimits.pricing} when 'salesforce' then ${input.sourceLimits.salesforce} when 'slack' then ${input.sourceLimits.slack} else 0 end`;
   }
+  /** Builds a disjunctive tsquery so partial concept overlap still scores.
+   *
+   * `websearch_to_tsquery` ANDs unquoted terms, which gates a multi-concept retrieval query on a
+   * chunk containing every one of its words. For "aggressive discounting risk mitigation final
+   * negotiations approval" that matched zero rows in the whole corpus, so the lexical half of the
+   * hybrid search contributed nothing and RRF fused on the semantic channel alone. Ranking, not a
+   * membership gate, is what orders these results; `ts_rank_cd` already rewards denser matches. */
+  private lexicalQuery(query: string) {
+    return this.database
+      .sql`replace(plainto_tsquery('english', ${query})::text, '&', '|')::tsquery`;
+  }
   /** Finds authorized evidence whose text matches the requested query. */
   private async searchLexical(query: string, input: QueryScope): Promise<SearchRow[]> {
     if (input.sourceTypes.length === 0) return [];
     return this.database.sql<
       SearchRow[]
-    >`with authorized as (${this.authorizedRows(input)}), ranked as (select authorized.*, ts_rank_cd(authorized.lexical_content, websearch_to_tsquery('english', ${query})) as relevance, row_number() over (partition by authorized.source_type order by ts_rank_cd(authorized.lexical_content, websearch_to_tsquery('english', ${query})) desc, authorized.id asc) as source_rank from authorized where authorized.lexical_content @@ websearch_to_tsquery('english', ${query})) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from ranked where source_rank <= ${this.sourceLimit(input)} order by relevance desc, id asc limit ${input.candidateLimit}`;
+    >`with authorized as (${this.authorizedRows(input)}), ranked as (select authorized.*, ts_rank_cd(authorized.lexical_content, ${this.lexicalQuery(query)}) as relevance, row_number() over (partition by authorized.source_type order by ts_rank_cd(authorized.lexical_content, ${this.lexicalQuery(query)}) desc, authorized.id asc) as source_rank from authorized where authorized.lexical_content @@ ${this.lexicalQuery(query)}) select id, content, content_hash, source_type, sensitivity, event_date::text, reliability_class, source_locator, classification_reason, policy_hash from ranked where source_rank <= ${this.sourceLimit(input)} order by relevance desc, id asc limit ${input.candidateLimit}`;
   }
   /** Finds authorized evidence whose meaning is closest to the query embedding. */
   private async searchSemantic(
