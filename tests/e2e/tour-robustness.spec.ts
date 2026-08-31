@@ -229,32 +229,11 @@ test.describe('guided tour: following an instruction is progress, not a detour',
   });
 });
 
-test.describe('guided tour: a run step waits for the run', () => {
-  test('holds Next while a real run is still working, and still offers a way onward', async ({
-    page
-  }) => {
-    // Reported: the tour told the user to wait for the run and then let them walk straight past it.
-    // No worker runs in this suite, so a started run stays non-terminal for the whole test -- which
-    // makes the hold deterministic to assert here. Releasing on a completed, failed or cancelled
-    // run is covered in tests/unit/guided-tour-precision.test.ts, where the run state is staged.
-    await startTourAsMaya(page);
-    await page.getByRole('button', { name: 'Next' }).click();
-    await expect(page).toHaveURL('/deals/OPP-1001');
-
-    await page.getByRole('button', { name: 'Generate Brief' }).click();
-    await expect(page).toHaveURL(/\/runs\/[^/]+$/);
-
-    await expect(page.getByRole('heading', { name: 'Watch the work actually happen' })).toBeVisible();
-    const next = page.getByRole('button', { name: 'Next' });
-    await expect(next).toBeDisabled();
-    await expect(page.getByText(/Waiting for this run to reach "completed"/)).toBeVisible();
-
-    // The arrow-key shortcut is refused for the same reason the button is.
-    await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('heading', { name: 'Watch the work actually happen' })).toBeVisible();
-
-    // Holding is not trapping: a deliberate override is always available.
-    await page.getByRole('button', { name: 'Continue anyway' }).click();
-    await expect(page.getByText(`Step 5 of ${TOTAL_STEPS}`)).toBeVisible();
-  });
-});
+// There is deliberately no end-to-end test of the run-state gate here. Asserting it needs a run in
+// a non-terminal state, and this suite has no worker, so the only way to get one is to start a real
+// run -- which writes a row into the database every spec in this suite shares, changing OPP-1001's
+// "Latest run" out from under deals.spec.ts. Stubbing the run endpoints instead would assert the
+// shape of the stub rather than the server's. The gate is covered deterministically in
+// tests/unit/guided-tour-precision.test.ts, where the run state can be staged directly: it holds
+// while the run works, releases on the state the step narrates, releases with an honest notice on a
+// failed run, and always offers a deliberate way onward.
