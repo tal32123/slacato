@@ -538,7 +538,9 @@ describe('guided tour: no step narrates a state the reviewer cannot see', () => 
   it('describes the Slack step against the brief its anchor actually frames', () => {
     const step = stepAt((candidate) => candidate.target === 'slack-evidence');
 
-    expect(step?.body).toMatch(/generated brief’s own Source Evidence/);
+    // The page renders whichever brief exists, so the step names the brief the reader is on
+    // rather than one of the two views by name.
+    expect(step?.body).toMatch(/Source Evidence of the brief you are reading/);
     expect(step?.body).toMatch(/slack\/account_team_updates/);
   });
 });

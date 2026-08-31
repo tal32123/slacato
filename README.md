@@ -15,7 +15,7 @@ This pnpm monorepo builds a negotiation-preparation brief for a seller from synt
 
 ## Technical overview
 
-Open the self-contained [technical overview](docs/technical-overview.html) for the architecture, actual Drizzle ERD, request lifecycle, design rationale, security notes, Slack-fixture provenance, and production-readiness assessment. It has no external assets and works offline.
+Open the self-contained [technical overview](docs/technical-overview.html) for the architecture, agent roles, request lifecycle, design rationale, security notes, Slack-fixture provenance, and production-readiness assessment. It has no external assets and works offline.
 
 ## Prerequisites
 

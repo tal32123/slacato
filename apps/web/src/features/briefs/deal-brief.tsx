@@ -116,6 +116,7 @@ export function DealBrief({
             selectedEvidenceId={selectedEvidenceId}
             onEvidence={onEvidence}
             sourceCues
+            carriesTourAnchor
           />
         </section>
       ) : (
@@ -142,6 +143,7 @@ export function DealBrief({
               evidence={evidence}
               selectedEvidenceId={selectedEvidenceId}
               onEvidence={onEvidence}
+              carriesTourAnchor
             />
           </section>
 
@@ -187,7 +189,8 @@ function WorkspaceContent({
   selectedEvidenceId,
   onEvidence,
   sourceCues = false,
-  qualifyHeadings = false
+  qualifyHeadings = false,
+  carriesTourAnchor = false
 }: Readonly<{
   brief: DealWorkspaceView['brief'];
   evidence: ReadonlyMap<string, DealWorkspaceView['evidence'][number]>;
@@ -197,6 +200,17 @@ function WorkspaceContent({
   /** Distinguishes these headings from an identically titled generated brief on the same page.
    *  Only meaningful when both views render together; alone it just corrupts the accessible name. */
   qualifyHeadings?: boolean;
+  /**
+   * Marks this as the brief a guided-tour step means when it names a section.
+   *
+   * Set on exactly one view per page: the generated brief when there is one, the deterministic
+   * snapshot when it is the only brief rendered. Both views emit the same nine section ids, so
+   * without this the tour's Source Evidence anchor matched twice and resolved by DOM order --
+   * always to the generated brief, even while the step's copy described the other one, which sits
+   * thousands of pixels lower inside a closed disclosure. Anchoring only the view a reader is
+   * actually looking at makes the step frame something real in both states.
+   */
+  carriesTourAnchor?: boolean;
 }>): React.JSX.Element {
   return (
     <div>
@@ -207,17 +221,11 @@ function WorkspaceContent({
         return (
           <section
             key={id}
-            // The two views render the same nine section ids on one page, so a tour anchor placed
-            // on both resolves to whichever happens to come first in the DOM -- which is how the
-            // guided tour's Slack step came to frame the generated brief's Source Evidence while
-            // its copy described the source snapshot's, thousands of pixels below and inside a
-            // closed disclosure. Each view carries its own anchor name, so a step names the view
-            // it means.
             data-tour={
               id === 'sourceEvidence'
-                ? sourceCues
-                  ? 'snapshot-source-evidence'
-                  : 'slack-evidence'
+                ? carriesTourAnchor
+                  ? 'slack-evidence'
+                  : 'snapshot-source-evidence'
                 : undefined
             }
             className="border-b py-8"

@@ -196,14 +196,30 @@ describe('DealBrief', () => {
   // `data-tour="slack-evidence"` anchor. The guided tour resolves an anchor by DOM order, so its
   // Slack step always framed the generated brief's copy while its wording described the source
   // snapshot's -- thousands of pixels below, inside a closed disclosure, and never spotlit.
-  it('gives each Source Evidence view its own tour anchor so a step cannot frame the wrong one', () => {
+  it('anchors the Slack tour step to the generated brief when there is one', () => {
     const { container } = renderBrief(buildWorkspace(true));
 
     const anchors = container.querySelectorAll('[data-tour="slack-evidence"]');
     expect(anchors).toHaveLength(1);
     expect(anchors[0]?.getAttribute('aria-labelledby')).toBe('generated-sourceEvidence');
+    // The snapshot's own copy is still addressable, under a name no step confuses with the other.
     expect(
       container.querySelector('[data-tour="snapshot-source-evidence"]')?.getAttribute('aria-labelledby')
     ).toBe('source_backed-sourceEvidence');
+  });
+
+  // Cancelling or resetting a run leaves the deal with no generated output, and the tour can also
+  // reach this step after "Continue without generating". Anchoring only the generated brief would
+  // leave the step with nothing to frame in exactly the state a pre-demo reset produces.
+  it('anchors the Slack tour step to the snapshot when that is the only brief on the page', () => {
+    const { container } = renderBrief(buildWorkspace(false));
+
+    const anchors = container.querySelectorAll('[data-tour="slack-evidence"]');
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0]?.getAttribute('aria-labelledby')).toBe('source_backed-sourceEvidence');
+    expect(container.querySelector('[data-tour="snapshot-source-evidence"]')).toBeNull();
+    // And it is genuinely on screen: rendered directly, not inside the collapsed disclosure the
+    // snapshot lives in whenever a generated brief is also present.
+    expect(anchors[0]?.closest('details')).toBeNull();
   });
 });
