@@ -1004,10 +1004,12 @@ function safeRecommendationAction(value: string, claims: readonly Claim[]): bool
   // Pricing and concessions belong to the deterministic approval policy, never to raw actions.
   if (COMMERCIAL_COMMITMENT.test(normalized)) return false;
   if (UNSAFE_CUSTOMER_FACING_ACTION.test(normalized)) return false;
-  if (assertionSupported(normalized, claims)) return true;
-  // A forward-looking instruction, not a narrative: one sentence, opening on an internal verb.
-  if (!INTERNAL_ACTION_VERB.test(normalized)) return false;
+  // One action is one instruction, however well grounded its text is: a multi-sentence passage
+  // copied out of a transcript or a Slack thread is a status narrative, not something to execute.
   if ((normalized.match(/[.!?](?=\s|$)/g) ?? []).length > 1) return false;
+  if (assertionSupported(normalized, claims)) return true;
+  // A forward-looking instruction, not a narrative: opening on an internal verb.
+  if (!INTERNAL_ACTION_VERB.test(normalized)) return false;
   // Subordinate clauses smuggle unverified facts into text nothing grounds.
   if (UNGROUNDED_FACTUAL_CONNECTIVE.test(normalized)) return false;
   return true;
