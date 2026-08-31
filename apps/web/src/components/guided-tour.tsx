@@ -16,8 +16,20 @@ const TARGET_PADDING = 8;
 const FOCUSABLE_SELECTOR =
   'button:not(:disabled), [href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
-/** Run outcomes that end a run without reaching the state a step narrates. */
-const UNSUCCESSFUL_RUN_STATUSES: readonly RunStatus[] = ['failed', 'cancelled', 'rejected'];
+/**
+ * Statuses in which the workflow is still doing work, so a later state is genuinely coming.
+ * Everything else is a resting state -- including `awaiting_approval`, where a run can sit
+ * indefinitely waiting on human quorum that may never be reached. The gate holds only while a
+ * run is in this list, so it can never wait on a transition that is not going to happen.
+ */
+const IN_FLIGHT_RUN_STATUSES: readonly RunStatus[] = [
+  'created',
+  'retrieving',
+  'specialists_running',
+  'synthesizing',
+  'validating',
+  'finalizing'
+];
 const RUN_PATH_PATTERN = /^\/runs\/([^/]+)$/;
 
 /** Renders a run status as the plain words the interface uses elsewhere. */
@@ -27,33 +39,45 @@ function readableRunStatus(status: RunStatus): string {
 
 type RunGate = Readonly<{ waiting: boolean; notice?: string }>;
 
+/** Renders a list of run outcomes as the plain words the interface uses elsewhere. */
+function readableOutcomes(statuses: readonly RunStatus[]): string {
+  const words = statuses.map((status) => `"${readableRunStatus(status)}"`);
+  if (words.length <= 1) return words[0] ?? '';
+  return `${words.slice(0, -1).join(', ')} or ${words.at(-1)}`;
+}
+
 /**
  * Decides whether a run-narrating step must hold, and what to tell the user while it does.
- * A step never holds on a run that has stopped: an unreadable state, a failure, a cancellation
- * and a rejection all release the tour with an honest note, because a user who cannot advance
- * and cannot see why is stuck in a product that looks broken.
+ *
+ * The rule is "hold while the run is still working", never "hold until the run reaches one
+ * specific status". Which outcome a run reaches is decided by what it produces, not by which
+ * opportunity it belongs to: the same unrestricted deal parks at `awaiting_approval` on one run
+ * and finishes on the next, depending on whether a policy rule trips. Keying the gate to a single
+ * expected status therefore hung the tour on roughly half of real runs, with the run resting in a
+ * state the gate did not list and no further transition coming. `narrated` now only chooses the
+ * wording, so an unexpected outcome is explained rather than waited on.
  */
 function describeRunGate(
-  expected: readonly RunStatus[] | undefined,
+  narrated: readonly RunStatus[] | undefined,
   detail: RunDetailResponse | undefined,
   failed: boolean
 ): RunGate {
-  if (expected === undefined) return { waiting: false };
+  if (narrated === undefined) return { waiting: false };
   if (failed)
     return {
       waiting: false,
       notice: 'This run’s live state could not be read, so the tour is not holding you here.'
     };
   if (detail === undefined) return { waiting: true, notice: 'Checking this run’s state…' };
-  if (expected.includes(detail.status)) return { waiting: false };
-  if (UNSUCCESSFUL_RUN_STATUSES.includes(detail.status))
+  if (IN_FLIGHT_RUN_STATUSES.includes(detail.status))
     return {
-      waiting: false,
-      notice: `This run ended as "${readableRunStatus(detail.status)}" instead of "${readableRunStatus(expected[0] as RunStatus)}". You can continue, but the next steps describe a run that reached that state.`
+      waiting: true,
+      notice: `Waiting for this run to finish — it is ${readableRunStatus(detail.status)} right now.`
     };
+  if (narrated.includes(detail.status)) return { waiting: false };
   return {
-    waiting: true,
-    notice: `Waiting for this run to reach "${readableRunStatus(expected[0] as RunStatus)}" — it is ${readableRunStatus(detail.status)} right now.`
+    waiting: false,
+    notice: `This run settled as "${readableRunStatus(detail.status)}" rather than ${readableOutcomes(narrated)}. You can continue; the next steps describe a run that reached one of those.`
   };
 }
 
@@ -82,10 +106,12 @@ type TourStep = Readonly<{
    */
   action?: string;
   /**
-   * Run states that release this step. While the user is on a run page and the run has reached
-   * none of them, the step holds instead of letting the user walk past work still in progress.
+   * The run outcomes this step's body describes. Present on a step that narrates a run: it makes
+   * the step hold while that run is still working, and chooses the wording when the run settles
+   * on something the step did not describe. It is never a list the gate waits for -- see
+   * `describeRunGate`.
    */
-  awaitRunStatus?: readonly RunStatus[];
+  narratedRunOutcomes?: readonly RunStatus[];
   /**
    * Recognises the navigation this step's own body invites. Following an instruction is never
    * "stepping off the guided path", so a matching route advances the tour instead of warning.
@@ -125,8 +151,8 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     target: 'run-progress-detail',
     scenario: 'Scenario 1 \u00b7 Authorized brief',
     title: 'Watch the work actually happen',
-    body: 'Retrieval, specialists, synthesis, and validation each report their own state. This page has a stable address, so you can close the tab, come back, and rejoin the same run instead of losing it in a spinner.',
-    awaitRunStatus: ['completed']
+    body: 'Retrieval, specialists, synthesis, and validation each report their own state. This page has a stable address, so you can close the tab, come back, and rejoin the same run instead of losing it in a spinner. A run may finish, or stop short of finishing at "awaiting approval" if a policy rule trips on what it actually produced — that is the guardrail firing, not a stall, and it is decided by the evidence rather than by which deal this is.',
+    narratedRunOutcomes: ['completed', 'awaiting_approval']
   },
   {
     target: 'citations',
@@ -175,8 +201,8 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     target: 'run-progress-detail',
     scenario: 'Scenario 2 \u00b7 Restricted deal and approvals',
     title: 'The run stops instead of publishing',
-    body: 'This run reaches "awaiting approval" rather than finishing. The discount, the liability wording, and the customer-facing concession each tripped a written policy rule, so the workflow parks the draft instead of releasing it.',
-    awaitRunStatus: ['awaiting_approval']
+    body: 'This run is expected to reach "awaiting approval" rather than finishing: the discount, the liability wording, and the customer-facing concession each trip a written policy rule, so the workflow parks the draft instead of releasing it. The rules read what the run produced, so a run that raises none of them finishes instead and leaves the next screen\u2019s inbox empty — the gate is evidence-driven, not hard-coded to this deal.',
+    narratedRunOutcomes: ['awaiting_approval', 'completed']
   },
   {
     target: 'approvals',
@@ -301,7 +327,7 @@ export function GuidedTour(): React.JSX.Element {
   // session-scoped key interferes with the protected route loaders, which tear those keys down
   // and re-fetch around every session transition.
   const runId = RUN_PATH_PATTERN.exec(location.pathname)?.[1];
-  const awaitsRun = active && step.awaitRunStatus !== undefined && runId !== undefined;
+  const awaitsRun = active && step.narratedRunOutcomes !== undefined && runId !== undefined;
   const [watchedGate, setWatchedGate] = useState<RunGate>({ waiting: false });
   const runGate = awaitsRun ? watchedGate : { waiting: false };
 
@@ -546,8 +572,12 @@ export function GuidedTour(): React.JSX.Element {
 
       {active && (
         <div className="pointer-events-none fixed inset-0 z-[70]" aria-live="polite">
-          {awaitsRun && runId !== undefined && step.awaitRunStatus !== undefined && (
-            <RunStateWatcher runId={runId} expected={step.awaitRunStatus} onGate={setWatchedGate} />
+          {awaitsRun && runId !== undefined && step.narratedRunOutcomes !== undefined && (
+            <RunStateWatcher
+              runId={runId}
+              expected={step.narratedRunOutcomes}
+              onGate={setWatchedGate}
+            />
           )}
           {targetBox === undefined ? (
             <div className="pointer-events-auto absolute inset-0 bg-brand-forest/75 backdrop-blur-[1px]" />

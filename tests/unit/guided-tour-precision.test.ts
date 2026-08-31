@@ -4,6 +4,7 @@ import { QueryClientProvider } from '../../apps/web/node_modules/@tanstack/react
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { DemoSession, Persona, RunDetailResponse } from '@slacato/contracts';
+import { runStatusSchema } from '@slacato/contracts';
 import { createElement, Fragment } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -217,42 +218,43 @@ describe('guided tour: the spotlight frames only the control to act on', () => {
   });
 });
 
-describe('guided tour: run steps wait for the run to reach a real outcome', () => {
-  /** Renders the tour on a run route with the run detail the test staged. */
-  function renderRunStepWithTour(stepIndex: number): void {
-    startAtStep(stepIndex);
-    const router = createMemoryRouter(
-      [
-        {
-          id: 'protected-root',
-          loader: () => session,
-          children: [
-            {
-              path: '/runs/:runId',
-              Component: () =>
-                createElement(
-                  Fragment,
-                  null,
-                  createElement('main', { id: 'main-content' }, [
-                    createElement('div', { key: 'target', 'data-tour': 'run-progress-detail' }, 'Progress')
-                  ]),
-                  createElement(GuidedTour)
-                )
-            }
-          ]
-        }
-      ],
-      { initialEntries: ['/runs/RUN-1'] }
-    );
-    render(
-      createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        createElement(RouterProvider, { router })
-      )
-    );
-  }
+/** Renders the tour on a run route with the run detail the test staged. */
+function renderRunStepWithTour(stepIndex: number): void {
+  startAtStep(stepIndex);
+  const router = createMemoryRouter(
+    [
+      {
+        id: 'protected-root',
+        loader: () => session,
+        // The tour is mounted once in the layout, as the app shell mounts it, and a catch-all
+        // route stands in for wherever the step advances to.
+        Component: () => createElement(Fragment, null, createElement(Outlet), createElement(GuidedTour)),
+        children: [
+          {
+            path: '/runs/:runId',
+            Component: () =>
+              createElement(
+                'main',
+                { id: 'main-content' },
+                createElement('div', { 'data-tour': 'run-progress-detail' }, 'Progress')
+              )
+          },
+          { path: '*', Component: () => createElement('main', { id: 'main-content' }, 'Elsewhere') }
+        ]
+      }
+    ],
+    { initialEntries: ['/runs/RUN-1'] }
+  );
+  render(
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(RouterProvider, { router })
+    )
+  );
+}
 
+describe('guided tour: run steps wait for the run to reach a real outcome', () => {
   it('holds the step while the run is still working instead of letting the user walk past it', async () => {
     const index = stepIndexWhere((step) => step.target === 'run-progress-detail');
     runDetail = runIn('specialists_running', false);
@@ -274,6 +276,36 @@ describe('guided tour: run steps wait for the run to reach a real outcome', () =
     await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).toBeEnabled());
   });
 
+  it('releases when the run parks for approval, the outcome that hung the tour in a live demo', async () => {
+    // Reported live: scenario 1 sat on "Waiting for this run to reach completed" while the run
+    // rested at 82% in awaiting_approval, with no way forward. Which outcome a run reaches is
+    // decided by what it produced -- the same unrestricted deal parks on one run and finishes on
+    // the next -- so a gate keyed to one expected status hangs on roughly half of real runs.
+    const index = stepIndexWhere((step) => step.target === 'run-progress-detail');
+    runDetail = runIn('awaiting_approval', false);
+    renderRunStepWithTour(index);
+
+    await screen.findByRole('dialog');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).toBeEnabled());
+  });
+
+  it('offers a deliberate way onward at every moment it holds', async () => {
+    // Holding is the requested behaviour; trapping a reviewer mid-demo is strictly worse than not
+    // gating at all, so the override must render in the same block as the waiting notice.
+    const index = stepIndexWhere((step) => step.target === 'run-progress-detail');
+    runDetail = runIn('synthesizing', false);
+    renderRunStepWithTour(index);
+
+    await screen.findByRole('dialog');
+    await screen.findByText(/it is synthesizing right now/);
+    expect(screen.getByRole('button', { name: /Next/ })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue anyway' }));
+    await waitFor(() =>
+      expect(screen.getByText(`Step ${index + 2} of ${tourSteps.length}`)).toBeInTheDocument()
+    );
+  });
+
   it('releases the step with an honest message when the run fails instead of trapping the user', async () => {
     const index = stepIndexWhere((step) => step.target === 'run-progress-detail');
     runDetail = runIn('failed', true);
@@ -283,6 +315,30 @@ describe('guided tour: run steps wait for the run to reach a real outcome', () =
     await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).toBeEnabled());
     expect(screen.getByRole('status').textContent).toMatch(/did not finish|failed|ended/i);
   });
+});
+
+describe('guided tour: no run status can hang a step', () => {
+  // Enumerated from the contract rather than hand-listed, so a status added later fails this test
+  // instead of silently becoming a state the tour can wait on forever.
+  const IN_FLIGHT = ['created', 'retrieving', 'specialists_running', 'synthesizing', 'validating', 'finalizing'];
+
+  for (const status of runStatusSchema.options) {
+    it(`${IN_FLIGHT.includes(status) ? 'holds while' : 'releases once'} a run is "${status}"`, async () => {
+      const index = stepIndexWhere((step) => step.target === 'run-progress-detail');
+      runDetail = runIn(status, !IN_FLIGHT.includes(status));
+      renderRunStepWithTour(index);
+
+      await screen.findByRole('dialog');
+      const next = () => screen.getByRole('button', { name: /Next/ });
+      if (IN_FLIGHT.includes(status)) {
+        // A held step must always show the override alongside the reason it is holding.
+        await waitFor(() => expect(next()).toBeDisabled());
+        expect(screen.getByRole('button', { name: 'Continue anyway' })).toBeEnabled();
+      } else {
+        await waitFor(() => expect(next()).toBeEnabled());
+      }
+    });
+  }
 });
 
 describe('guided tour: a held run step is never a dead end', () => {
