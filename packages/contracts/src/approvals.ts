@@ -90,7 +90,7 @@ const evidenceSummarySchema = z
     evidenceId: opaqueIdSchema,
     sourceType: z.enum(['crm', 'conversation', 'policy', 'pricing', 'slack', 'other']),
     summary: shortTextSchema,
-    capturedAt: timestampSchema,
+    capturedAt: timestampSchema.optional(),
     claims: z.array(claimSchema).max(50)
   })
   .strict();

@@ -240,12 +240,16 @@ describe('specialized agents', () => {
     // must be re-emitted under a fresh id or validateDealBrief's stakeholderIdentitySupported check
     // prunes the stakeholder (and safeRecommendationAction / assertionSupported prune the action).
     expect(strategy).toContain(
-      'mint one fresh claim whose statement names that person in full and restates their title exactly as the cited record states it'
+      'mint one fresh claim naming the person in full and restating their title exactly as the cited record states it'
     );
-    expect(strategy).toContain('never naming the company in that claim');
-    expect(strategy).toContain('mint one fresh claim from the evidence tuple that grounds its rationale');
-    expect(strategy).toContain('copy that claim statement into the rationale');
-    expect(strategy).toContain('bounded verb such as schedule, prepare, confirm, or verify');
+    expect(strategy).toContain('without naming the company');
+    expect(strategy).toContain('mint one fresh claim grounding its rationale');
+    expect(strategy).toContain('copy that statement into the rationale');
+    expect(strategy).toContain('bounded verb such as schedule, prepare, confirm or verify');
+    // Source Evidence must list every cited record, not only the ones a specialist retained, or
+    // the section silently omits the Slack, pricing, and policy sources the run actually used.
+    expect(strategy).toContain('its own sourceEvidence entry');
+    expect(strategy).toContain('never a whole record');
   });
 
   it('cannot let an evidence record close the fixed inert-data delimiter', async () => {
@@ -471,12 +475,14 @@ describe('specialized agents', () => {
     const artifact = await new ConversationAgent(gateway).run(context([cited]));
 
     expect(artifact.claims).toEqual([]);
-    expect(artifact.missingContext).toContain('Verify evidence for claim claim_discount.');
+    expect(artifact.missingContext).toContain(
+      'Confirm against the authorized sources: 35%, discount.'
+    );
     expect(artifact.reviewWarnings).toEqual(expect.arrayContaining([
       {
         code: 'INSUFFICIENT_CLAIM_SUPPORT',
         severity: 'warning',
-        message: 'Material anchors are absent: 35%, discount',
+        message: 'One cited record does not state: 35%, discount',
         claimIds: ['claim_discount']
       }
     ]));
@@ -1078,8 +1084,8 @@ describe('specialized agents', () => {
 
     expect(artifact.claims).toEqual([]);
     expect(artifact.missingContext).toEqual([
-      'Verify evidence for claim claim_wrong_opportunity.',
-      'Verify evidence for claim claim_wrong_close_date.'
+      'Confirm against the authorized sources: 1002, opportunity opp-1002.',
+      'Confirm against the authorized sources: 2026-05-18, 18, opportunity opp-1001.'
     ]);
   });
 
@@ -1096,7 +1102,9 @@ describe('specialized agents', () => {
     const artifact = await new ConversationAgent(gateway).run(context([cited]));
 
     expect(artifact.claims).toEqual([]);
-    expect(artifact.missingContext).toContain('Verify evidence for claim claim_commitment.');
+    expect(artifact.missingContext).toContain(
+      'Confirm a generated statement that its cited record did not support in full.'
+    );
   });
 
   it('supports a normalized local assertion without cross-clause synthesis', async () => {
@@ -1261,8 +1269,8 @@ describe('specialized agents', () => {
 
     expect(artifact.claims).toEqual([]);
     expect(artifact.missingContext).toEqual([
-      'Verify evidence for claim claim_wrong_name.',
-      'Verify evidence for claim claim_wrong_date.'
+      'Confirm against the authorized sources: bob jones.',
+      'Confirm against the authorized sources: 2026-09-10, 10.'
     ]);
   });
 
@@ -1436,7 +1444,7 @@ describe('specialized agents', () => {
     expect(request?.context?.evidence?.reduce((sum, entry) => sum + entry.content.length, 0)).toBeLessThan(24_000);
     expect(brief.recommendedNextActions.actions).toEqual([]);
     expect(brief.missingInformation.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ question: 'Verify evidence for claim claim_offer.' })
+      expect.objectContaining({ question: 'Confirm against the authorized sources: 45%, discount.' })
     ]));
   });
 
@@ -1696,7 +1704,7 @@ describe('specialized agents', () => {
 
     expect(conversation.missingContext).toEqual([
       ...fullGeneratedList.slice(0, 49),
-      'Verify evidence for claim claim_overflow.'
+      'Confirm the source for a generated statement that carried no authorized citation.'
     ]);
     expect(stakeholder.coverageGaps).toEqual([
       ...fullGeneratedList.slice(0, 49),

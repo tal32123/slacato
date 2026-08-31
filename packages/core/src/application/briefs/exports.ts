@@ -64,9 +64,9 @@ function citationSourceLabel(citation: Citation): string {
   return `source=${escapeMarkdown(citation.locator)}`;
 }
 
-/** Builds a conflict-free citation registry from every claim in the brief. */
-function citationLabels(brief: DealBrief): ReadonlyMap<string, Citation> {
-  const claims: readonly Claim[] = [
+/** Collects every claim the exported brief presents, in section order. */
+function briefClaims(brief: DealBrief): readonly Claim[] {
+  return [
     ...(brief.dealSnapshot.claims ?? []),
     ...(brief.executiveSummary.claims ?? []),
     ...(brief.buyerGoalsAndBusinessDrivers.claims ?? []),
@@ -76,6 +76,11 @@ function citationLabels(brief: DealBrief): ReadonlyMap<string, Citation> {
     ...brief.recommendedNextActions.actions.flatMap((action) => action.claims ?? []),
     ...brief.sourceEvidence.evidence.flatMap((evidence) => evidence.claims ?? [])
   ];
+}
+
+/** Builds a conflict-free citation registry from every claim in the brief. */
+function citationLabels(brief: DealBrief): ReadonlyMap<string, Citation> {
+  const claims = briefClaims(brief);
   const citations = new Map<string, Citation>();
   for (const claim of claims) {
     for (const citation of claim.citations) {
@@ -183,7 +188,9 @@ function renderMarkdown(brief: DealBrief, citations: ReadonlyMap<string, Citatio
     lines.push(
       `### ${escapeMarkdown(evidence.evidenceId)}`,
       `- **Source type:** ${escapeMarkdown(evidence.sourceType)}`,
-      `- **Captured at:** ${escapeMarkdown(evidence.capturedAt)}`,
+      ...(evidence.capturedAt === undefined
+        ? []
+        : [`- **Captured at:** ${escapeMarkdown(evidence.capturedAt)}`]),
       `- **Summary:** ${escapeMarkdown(evidence.summary)}`,
       ...claimLines(evidence.claims, context, '#### Claims')
     );
@@ -203,11 +210,17 @@ function renderMarkdown(brief: DealBrief, citations: ReadonlyMap<string, Citatio
     `- **Overall confidence:** ${brief.confidenceAndReviewWarnings.overallConfidence.toFixed(2)}`
   );
   if (brief.confidenceAndReviewWarnings.warnings.length === 0) lines.push('- **Warnings:** None');
+  // Claim identifiers are internal bookkeeping and mean nothing to a reviewer holding the export,
+  // and a warning about a discarded claim names an id the export does not contain at all. The
+  // affected claim's own statement is the actionable form of the same reference.
+  const statementsById = new Map(briefClaims(brief).map((claim) => [claim.id, claim.statement]));
   for (const warning of brief.confidenceAndReviewWarnings.warnings) {
-    const claimIds =
-      warning.claimIds.length === 0 ? 'none' : warning.claimIds.map((id) => `\`${id}\``).join(', ');
+    const affected = warning.claimIds.flatMap((id) => {
+      const statement = statementsById.get(id);
+      return statement === undefined ? [] : [escapeMarkdown(statement)];
+    });
     lines.push(
-      `- **${warning.code} (${warning.severity}):** ${escapeMarkdown(warning.message)} — claims: ${claimIds}`
+      `- **${warning.code} (${warning.severity}):** ${escapeMarkdown(warning.message)}${affected.length === 0 ? '' : ` — affects: ${affected.join('; ')}`}`
     );
   }
   return `${lines.join('\n')}\n`;
