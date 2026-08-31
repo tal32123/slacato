@@ -257,6 +257,11 @@ export function evaluateBriefQuality(
   // 6. A brief must not present a stakeholder as supported and then warn that the same person is
   //    absent. Whichever half is wrong, the reviewer cannot act on a document that contradicts
   //    itself.
+  //
+  //    The anchors compared here are deliberately limited to stakeholder names. Widening the
+  //    comparison to every material anchor a warning mentions immediately misreads legitimate
+  //    policy warnings: POLICY_LEGAL_APPROVAL names "data retention" while the brief presents that
+  //    same risk as supported, and it is right on both counts.
   const supported = supportedStakeholderNames(brief);
   for (const warning of brief.confidenceAndReviewWarnings.warnings) {
     if (!ABSENCE_WORDING.test(warning.message)) continue;

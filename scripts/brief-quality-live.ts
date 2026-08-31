@@ -90,7 +90,14 @@ async function driveRun(
   return run;
 }
 
-/** Reads the brief a finished run produced, preferring the finalized export over the draft. */
+/**
+ * Reads the brief a finished run produced, preferring the finalized export over the draft.
+ *
+ * A run whose policy facts require approval stops at `awaiting_approval` and has no finalized
+ * export, so the first draft checkpoint is read instead. That is the artifact the approver reads,
+ * and it has already passed the same grounding validation, so the invariants apply to it unchanged.
+ * Only draft version 1 is read: a regeneration cycle is outside what this evaluation drives.
+ */
 async function readBrief(
   exporter: PostgresBriefExportService,
   store: PostgresWorkflowStore,
