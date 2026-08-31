@@ -172,7 +172,8 @@ export function GuidedTour(): React.JSX.Element {
   const step = tourSteps[stepIndex] ?? tourSteps[0];
 
   const settle = useCallback((nextIndex: number): void => {
-    const bounded = Math.max(0, Math.min(tourSteps.length - 1, nextIndex));
+    const safe = Number.isFinite(nextIndex) ? Math.round(nextIndex) : 0;
+    const bounded = Math.max(0, Math.min(tourSteps.length - 1, safe));
     routedStep.current = undefined;
     setStepIndex(bounded);
     persistTourState({ active: true, stepIndex: bounded, dismissed: false });
@@ -242,7 +243,7 @@ export function GuidedTour(): React.JSX.Element {
     const start = (): void => open();
     const advance = (event: Event): void => {
       const detail = (event as CustomEvent<{ stepIndex?: unknown }>).detail;
-      if (typeof detail?.stepIndex !== 'number') return;
+      if (typeof detail?.stepIndex !== 'number' || !Number.isFinite(detail.stepIndex)) return;
       setActive(true);
       settle(detail.stepIndex);
     };
@@ -575,6 +576,7 @@ function readTourState(): PersistedTour {
     ) as Partial<PersistedTour> | null;
     const stepIndex =
       typeof parsed?.stepIndex === 'number' &&
+      Number.isInteger(parsed.stepIndex) &&
       parsed.stepIndex >= 0 &&
       parsed.stepIndex < tourSteps.length
         ? parsed.stepIndex
