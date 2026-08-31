@@ -1,12 +1,5 @@
 import type { Persona } from '@slacato/contracts';
-import {
-  Check,
-  Database,
-  LoaderCircle,
-  LockKeyhole,
-  ShieldCheck,
-  Sparkles
-} from 'lucide-react';
+import { Check, Database, LoaderCircle, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { fetchCsrf, fetchPersonas } from '@/api/client';
@@ -240,7 +233,9 @@ function PersonaChoice({
           disabled={submitting !== undefined}
           onClick={() => void onChoose(persona)}
         >
-          {submitting === persona.userId && <LoaderCircle aria-hidden="true" className="animate-spin" />}
+          {submitting === persona.userId && (
+            <LoaderCircle aria-hidden="true" className="animate-spin" />
+          )}
           <span>
             {submitting === persona.userId
               ? 'Opening workspace…'
