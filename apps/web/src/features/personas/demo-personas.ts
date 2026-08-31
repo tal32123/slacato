@@ -51,7 +51,8 @@ const supportingGroup = {
 
 /** Explains, per identity, why the demo keeps it and what it proves. */
 const purposes: Readonly<Record<string, string>> = {
-  'USR-5001': 'Owns OPP-1001. Use this identity to generate an authorized, evidence-grounded brief.',
+  'USR-5001':
+    'Owns OPP-1001. Use this identity to generate an authorized, evidence-grounded brief.',
   'USR-5002': 'Owns OPP-1002. A second authorized owner, interchangeable with the first.',
   'USR-5003':
     'Owns the restricted renewal. Use this identity to trigger pricing, legal, and customer-facing approval routing.',

@@ -46,7 +46,10 @@ export function AccessState({
   children?: React.ReactNode;
 }>): React.JSX.Element {
   return (
-    <main id="main-content" className="grid min-h-screen place-items-center bg-background px-5 py-12">
+    <main
+      id="main-content"
+      className="grid min-h-screen place-items-center bg-background px-5 py-12"
+    >
       <section
         data-tour={tourTarget}
         className="w-full max-w-lg rounded-2xl border bg-card p-7 shadow-sm sm:p-10"

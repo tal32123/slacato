@@ -249,7 +249,11 @@ export function GuidedTour(): React.JSX.Element {
           const current = controls.indexOf(document.activeElement as HTMLElement);
           const size = controls.length;
           const nextIndex =
-            current === -1 ? 0 : event.shiftKey ? (current - 1 + size) % size : (current + 1) % size;
+            current === -1
+              ? 0
+              : event.shiftKey
+                ? (current - 1 + size) % size
+                : (current + 1) % size;
           controls[nextIndex]?.focus();
         }
       }
@@ -505,8 +509,8 @@ export function GuidedTour(): React.JSX.Element {
                 className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
               >
                 <p>
-                  Generate Brief is disabled right now, so this step cannot be completed as
-                  written: {generationGate.reason}
+                  Generate Brief is disabled right now, so this step cannot be completed as written:{' '}
+                  {generationGate.reason}
                 </p>
               </div>
             )}

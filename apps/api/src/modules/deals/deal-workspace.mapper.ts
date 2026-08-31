@@ -13,7 +13,6 @@ import {
   type SourceSnapshotView,
   type StakeholderView
 } from '@slacato/contracts';
-import { resolveEvidenceIdentity } from '@slacato/core';
 import type {
   AuthorizedDeal,
   Claim,
@@ -24,6 +23,7 @@ import type {
   LatestDealRun,
   ReviewWarning
 } from '@slacato/core';
+import { resolveEvidenceIdentity } from '@slacato/core';
 
 const sectionTitles = {
   dealSnapshot: 'Deal Snapshot',

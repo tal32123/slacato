@@ -191,8 +191,8 @@ export function SettingsRoute(): React.JSX.Element {
                       Active persona
                     </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Changing persona closes open views and live connections before protected
-                      data is reloaded.
+                      Changing persona closes open views and live connections before protected data
+                      is reloaded.
                     </p>
                   </div>
                   <Button

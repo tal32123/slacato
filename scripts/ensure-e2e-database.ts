@@ -22,7 +22,8 @@ import postgres from 'postgres';
  * chain with an error unrelated to its actual cause, on a workflow file this script cannot fix.
  */
 async function main(): Promise<void> {
-  const targetUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato_e2e';
+  const targetUrl =
+    process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato_e2e';
 
   const target = postgres(targetUrl, { max: 1 });
   try {
@@ -37,7 +38,8 @@ async function main(): Promise<void> {
 
   const parsed = new URL(targetUrl);
   const databaseName = parsed.pathname.replace(/^\//, '');
-  if (databaseName.length === 0) throw new Error(`DATABASE_URL is missing a database name: ${targetUrl}`);
+  if (databaseName.length === 0)
+    throw new Error(`DATABASE_URL is missing a database name: ${targetUrl}`);
   // Database names cannot be parameterized; databaseName is validated as a plain Postgres
   // identifier below to keep this safe against anything other than a deliberately malformed
   // DATABASE_URL.
@@ -50,7 +52,9 @@ async function main(): Promise<void> {
   try {
     const existing = await admin`select 1 from pg_database where datname = ${databaseName}`;
     if (existing.length > 0) {
-      console.log(`[ensure-e2e-database] "${databaseName}" already exists but was not reachable directly`);
+      console.log(
+        `[ensure-e2e-database] "${databaseName}" already exists but was not reachable directly`
+      );
       return;
     }
     await admin.unsafe(`create database ${databaseName}`);
