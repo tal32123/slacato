@@ -101,46 +101,79 @@ export function DealBrief({
         />
       </section>
 
-      <section className="border-b py-8" aria-labelledby="source-snapshot">
-        <h2 id="source-snapshot" className="text-2xl font-semibold">
-          {sourceSnapshot.label}
-        </h2>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Evidence overview assembled deterministically from currently authorized, ingested records.
-          It is not AI-generated and is not produced by a run.
-        </p>
-        <WorkspaceContent
-          brief={sourceSnapshot.evidenceOverview}
-          evidence={evidence}
-          selectedEvidenceId={selectedEvidenceId}
-          onEvidence={onEvidence}
-          sourceCues
-        />
-      </section>
-      {generatedOutput !== null && (
-        <section className="border-b py-8" aria-labelledby="generated-output">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="generated-output" className="text-2xl font-semibold">
-              {generatedOutput.lifecycle === 'finalized'
-                ? 'Finalized generated output'
-                : 'Generated draft'}
-            </h2>
-            <StatusBadge
-              status="readonly"
-              label={generatedOutput.lifecycle === 'finalized' ? 'Finalized' : 'Draft'}
-            />
-          </div>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Produced by run {generatedOutput.producingRun.id} ·{' '}
-            {generatedOutput.producingRun.status.replaceAll('_', ' ')}
+      {generatedOutput === null ? (
+        <section className="border-b py-8" aria-labelledby="source-snapshot">
+          <h2 id="source-snapshot" className="text-2xl font-semibold">
+            {sourceSnapshot.label}
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+            Evidence overview assembled deterministically from currently authorized, ingested
+            records. It is not AI-generated and is not produced by a run.
           </p>
           <WorkspaceContent
-            brief={generatedOutput.content}
+            brief={sourceSnapshot.evidenceOverview}
             evidence={evidence}
             selectedEvidenceId={selectedEvidenceId}
             onEvidence={onEvidence}
+            sourceCues
           />
         </section>
+      ) : (
+        <>
+          <section className="border-b py-8" aria-labelledby="generated-output">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="generated-output" className="text-2xl font-semibold">
+                {generatedOutput.lifecycle === 'finalized'
+                  ? 'Finalized generated output'
+                  : 'Generated draft'}
+              </h2>
+              <StatusBadge
+                status="readonly"
+                label={generatedOutput.lifecycle === 'finalized' ? 'Finalized' : 'Draft'}
+              />
+            </div>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              This is the primary brief for this negotiation. Produced by run{' '}
+              {generatedOutput.producingRun.id} ·{' '}
+              {generatedOutput.producingRun.status.replaceAll('_', ' ')}
+            </p>
+            <WorkspaceContent
+              brief={generatedOutput.content}
+              evidence={evidence}
+              selectedEvidenceId={selectedEvidenceId}
+              onEvidence={onEvidence}
+            />
+          </section>
+
+          <section className="border-b py-8">
+            <details className="group" data-testid="source-snapshot-disclosure">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 py-1 [&::-webkit-details-marker]:hidden">
+                <span className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
+                  {sourceSnapshot.label}
+                  <StatusBadge status="readonly" label="Deterministic — not AI-generated" />
+                </span>
+                <span className="text-sm font-medium text-primary underline underline-offset-4 group-open:hidden">
+                  Show reference view
+                </span>
+                <span className="hidden text-sm font-medium text-primary underline underline-offset-4 group-open:inline">
+                  Hide reference view
+                </span>
+              </summary>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+                Evidence overview assembled deterministically from currently authorized, ingested
+                records. It is not AI-generated and is not produced by a run. Kept as a
+                citation-backed reference alongside the generated brief above.
+              </p>
+              <WorkspaceContent
+                brief={sourceSnapshot.evidenceOverview}
+                evidence={evidence}
+                selectedEvidenceId={selectedEvidenceId}
+                onEvidence={onEvidence}
+                sourceCues
+              />
+            </details>
+          </section>
+        </>
       )}
     </article>
   );
@@ -176,6 +209,12 @@ function WorkspaceContent({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id={`${brief.status}-${id}`} className="text-xl font-semibold">
                 {section.title}
+                {sourceCues && (
+                  <span className="ml-2 align-middle text-xs font-normal uppercase tracking-wide text-muted-foreground">
+                    {' '}
+                    Source snapshot
+                  </span>
+                )}
               </h3>
               <div className="flex flex-wrap gap-2">
                 {isSourceCue && <StatusBadge status="readonly" label="Deterministic source cue" />}
