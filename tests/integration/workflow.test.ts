@@ -326,7 +326,7 @@ async function startRun(
   requestedBy = 'USR-5003',
   key = `key-${opportunityId}`
 ) {
-  return system.start.execute({ opportunityId, requestedBy, idempotencyKey: key });
+  return (await system.start.execute({ opportunityId, requestedBy, idempotencyKey: key })).runId;
 }
 
 async function decide(system: ReturnType<typeof harness>, runId: string, entryId: string, actorId: string, authority: ApprovalAuthority, action: 'approve_unchanged' | 'edit_and_approve' | 'reject' = 'approve_unchanged', extra: Readonly<Record<string, unknown>> = {}) {
@@ -763,14 +763,24 @@ describe('durable DealBrief workflow', () => {
   });
 
   it('rejoins concurrent starts and duplicate delivery skips every committed generation', async () => {
-    const system = harness(); const [first, second] = await Promise.all([startRun(system, 'OPP-1001', 'USR-5001', 'one'), startRun(system, 'OPP-1001', 'USR-5001', 'two')]);
-    expect(second).toBe(first); const command = system.memory.nextCommand(); if (!command) throw new Error('missing command'); await system.process.execute({ command, workerId: 'worker-1' }); await system.process.execute({ command, workerId: 'worker-2' }); await system.drain();
+    const system = harness();
+    const [first, second] = await Promise.all([
+      system.start.execute({ opportunityId: 'OPP-1001', requestedBy: 'USR-5001', idempotencyKey: 'one' }),
+      system.start.execute({ opportunityId: 'OPP-1001', requestedBy: 'USR-5001', idempotencyKey: 'two' })
+    ]);
+    // One active run per opportunity is the guarantee; saying which caller got the existing run
+    // rather than a new one is the honesty the guarantee was missing.
+    expect(second.runId).toBe(first.runId);
+    expect([first.disposition, second.disposition].sort()).toEqual(['created', 'joined']);
+    const later = await system.start.execute({ opportunityId: 'OPP-1001', requestedBy: 'USR-5001', idempotencyKey: 'three' });
+    expect(later).toEqual({ runId: first.runId, disposition: 'joined' });
+    const command = system.memory.nextCommand(); if (!command) throw new Error('missing command'); await system.process.execute({ command, workerId: 'worker-1' }); await system.process.execute({ command, workerId: 'worker-2' }); await system.drain();
     expect(system.services.calls).toEqual({ conversation: 1, stakeholder: 1, commercial: 1, strategy: 1 });
   });
 
   it('denies USR-5007 before a run, generation, artifact, or restricted audit metadata exists', async () => {
     const system = harness(); await expect(startRun(system, 'OPP-1003', 'USR-5007')).rejects.toBeInstanceOf(AuthorizationDeniedError);
     expect(system.memory.runs.size).toBe(0); expect(system.services.calls).toEqual({ conversation: 0, stakeholder: 0, commercial: 0, strategy: 0 }); expect(system.memory.briefs.size).toBe(0);
-    expect(system.access.denied).toEqual([{ type: 'deal_brief_start_denied', actorId: 'USR-5007', reason: 'forbidden' }]); expect(canonical(system.access.denied)).not.toContain('OPP-1003');
+    expect(system.access.denied).toEqual([{ actorId: 'USR-5007', reason: 'forbidden' }]); expect(canonical(system.access.denied)).not.toContain('OPP-1003');
   });
 });

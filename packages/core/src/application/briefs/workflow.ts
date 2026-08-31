@@ -407,6 +407,28 @@ export function assertApprovableBrief(value: unknown): DealBrief {
   return parsed;
 }
 
+/**
+ * Reports whether a start request produced a run or attached to one that already existed.
+ *
+ * `runs_one_active_opportunity_uq` permits one active run per opportunity, so a second start is
+ * answered with the run already in flight. That is the correct concurrency behaviour, but silently
+ * returning it makes the product claim it started work it did not start - and because
+ * `awaiting_approval` is a resting state, the reused run can be minutes old and already finished.
+ * Naming the outcome lets the caller say which of the three things actually happened.
+ */
+export type StartDealBriefOutcome = Readonly<{
+  /** Identifies the run the caller should now follow. */
+  runId: RunId;
+  /**
+   * States how the caller arrived at that run.
+   *
+   * `created` started fresh work. `replayed` re-answered this caller's own identical request.
+   * `joined` attached to an unrelated active run for the same opportunity - the only case where
+   * the caller asked for new work and did not get it.
+   */
+  disposition: 'created' | 'replayed' | 'joined';
+}>;
+
 /** Starts authorized deal-brief runs while enforcing idempotency and active-run reuse. */
 export class StartDealBrief {
   /** Provides persistence, access control, and the selected generation model. */
@@ -415,8 +437,8 @@ export class StartDealBrief {
     private readonly access: DealBriefAccessControl,
     private readonly model: Readonly<{ provider: string; model: string }>
   ) {}
-  /** Authorizes and starts a deal-brief run, returning an existing run when appropriate. */
-  public async execute(input: StartDealBriefCommand): Promise<RunId> {
+  /** Authorizes and starts a deal-brief run, reporting whether an existing run was reused. */
+  public async execute(input: StartDealBriefCommand): Promise<StartDealBriefOutcome> {
     if (input.idempotencyKey.trim().length === 0)
       throw new DomainValidationError('Idempotency key is required');
     const runId = stableId(
@@ -449,12 +471,16 @@ export class StartDealBrief {
     if (replay !== undefined) {
       if (replay.startRequestHash !== requestHash)
         throw new DomainConflictError('Start idempotency key is bound to a different command');
-      return replay.id;
+      return { runId: replay.id, disposition: 'replayed' };
     }
     const active = await this.store.findActiveRun(scope);
-    if (active !== undefined) return active.id;
+    if (active !== undefined) return { runId: active.id, disposition: 'joined' };
+    // The store resolves the same conflict itself, under an advisory lock, by returning the run
+    // already active for the opportunity instead of raising. So the branch taken here says nothing
+    // about what happened - only the identity of the run that came back does. A run whose id is not
+    // the one this request would have minted is a run this request did not start.
     try {
-      return (
+      const started = (
         await this.store.startRun({
           id: runId,
           opportunityId: scope.opportunityId,
@@ -468,11 +494,12 @@ export class StartDealBrief {
           budget: { scope: runId, maxCalls: 24, deadlineMs: 600_000 }
         })
       ).id;
+      return { runId: started, disposition: started === runId ? 'created' : 'joined' };
     } catch (error) {
       if (!(error instanceof DomainConflictError)) throw error;
       const concurrent = await this.store.findActiveRun(scope);
       if (concurrent === undefined) throw error;
-      return concurrent.id;
+      return { runId: concurrent.id, disposition: 'joined' };
     }
   }
 }
