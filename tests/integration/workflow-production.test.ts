@@ -4,18 +4,36 @@ import postgres from 'postgres';
 import request from 'supertest';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
-  CANONICAL_FIXTURE_COMMIT, CancelDealBrief, DecideApproval, DomainConflictError, DomainValidationError, ProcessDealBriefStep,
-  RegenerateDealBrief, StartDealBrief, dealBriefSchema, hashApprovalPayload, type DealBriefWorkflowServices
+  CANONICAL_FIXTURE_COMMIT,
+  CancelDealBrief,
+  DecideApproval,
+  DomainConflictError,
+  DomainValidationError,
+  ProcessDealBriefStep,
+  RegenerateDealBrief,
+  StartDealBrief,
+  dealBriefSchema,
+  hashApprovalPayload,
+  type DealBriefWorkflowServices
 } from '@slacato/core';
 import {
-  BullMqCommandQueue, DealBriefProcessor, OutboxDispatcher, OutboxDispatcherLoop,
-  PostgresDealBriefAccessControl, PostgresDealBriefContextRepository, PostgresDealBriefPolicyFacts,
-  PostgresDealBriefWorkflowServices, PostgresWorkflowStore, WORKFLOW_QUEUE_NAME, createDatabaseClient
+  BullMqCommandQueue,
+  DealBriefProcessor,
+  OutboxDispatcher,
+  OutboxDispatcherLoop,
+  PostgresDealBriefAccessControl,
+  PostgresDealBriefContextRepository,
+  PostgresDealBriefPolicyFacts,
+  PostgresDealBriefWorkflowServices,
+  PostgresWorkflowStore,
+  WORKFLOW_QUEUE_NAME,
+  createDatabaseClient
 } from '@slacato/infrastructure';
 import { AppModule } from '../../apps/api/src/app.module';
 import { configureApiApplication } from '../../apps/api/src/main';
 
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const databaseUrl =
+  process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:56379';
 const suffix = crypto.randomUUID().replaceAll('-', '');
 const numeric = BigInt(`0x${suffix.slice(0, 15)}`).toString();
@@ -57,10 +75,19 @@ function approvalBrief(label: string) {
   });
 }
 
-async function waitFor<T>(read: () => Promise<T | undefined>, attempts = 20_000): Promise<T> {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const value = await read(); if (value !== undefined) return value;
-    const { promise, resolve } = Promise.withResolvers<void>(); setImmediate(resolve); await promise;
+// Bounded by elapsed time rather than by a poll count, and it sleeps between reads. Spinning on
+// setImmediate issued thousands of queries per second against the same database and event loop the
+// BullMQ processor needs to make progress, so on a loaded runner the poll budget ran out before the
+// work it was waiting for could happen - the wait starved its own subject.
+async function waitFor<T>(read: () => Promise<T | undefined>, timeoutMs = 20_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await read();
+    if (value !== undefined) return value;
+    if (Date.now() >= deadline) break;
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, 25);
+    await promise;
   }
   throw new Error('Durable workflow state was not observed');
 }
@@ -69,9 +96,13 @@ afterAll(async () => {
   if (loop !== undefined) await loop.stop();
   if (processor !== undefined) await processor.close();
   if (app !== undefined) await app.close();
-  if (queue !== undefined) { await queue.queue.drain(true); await queue.close(); }
+  if (queue !== undefined) {
+    await queue.queue.drain(true);
+    await queue.close();
+  }
   // Unique IDs isolate durable rows; PostgreSQL foreign keys intentionally retain the audit graph.
-  await admin.end({ timeout: 5 }); await database.close();
+  await admin.end({ timeout: 5 });
+  await database.close();
 });
 
 describe('production DealBrief seams', () => {
@@ -88,51 +119,122 @@ describe('production DealBrief seams', () => {
     await admin`insert into opportunity_policy_facts (opportunity_id, discount_percent, renewal_uplift_percent, source_commit)
       values (${opportunity}, 12, 1, 'task-9-production-test')`;
 
-    const store = new PostgresWorkflowStore(database); const access = new PostgresDealBriefAccessControl(database);
+    const store = new PostgresWorkflowStore(database);
+    const access = new PostgresDealBriefAccessControl(database);
     const strategyCalls = new Map<string, number>();
     const retrievalCalls = new Map<string, number>();
     const services: DealBriefWorkflowServices = {
       async retrieve(run) {
-        const attempt = (retrievalCalls.get(run.id) ?? 0) + 1; retrievalCalls.set(run.id, attempt);
+        const attempt = (retrievalCalls.get(run.id) ?? 0) + 1;
+        retrievalCalls.set(run.id, attempt);
         if (attempt === 1) throw new Error('transient retrieval failure');
         return { manifestId: `manifest_${suffix}` };
       },
-      async conversation() { return { goals: [] }; }, async stakeholder() { return { stakeholders: [] }; }, async commercial() { return { terms: [] }; },
+      async conversation() {
+        return { goals: [] };
+      },
+      async stakeholder() {
+        return { stakeholders: [] };
+      },
+      async commercial() {
+        return { terms: [] };
+      },
       async strategy(run) {
         strategyCalls.set(run.id, (strategyCalls.get(run.id) ?? 0) + 1);
         return approvalBrief('Workflow Account');
       },
-      approvalInput() { return { discountPercent: 12, renewalUpliftPercent: 1, liabilityCapChanged: false, dataRetentionLanguage: false,
-        restrictedResearchLanguage: false, customerSpecificSecurityLanguage: false, customerFacingConcessionLanguage: false,
-        overallConfidence: 0.9, conflictingEvidence: false, missingMaterialEvidence: false }; },
-      validateDraft(value) { return dealBriefSchema.parse(value); }
+      approvalInput() {
+        return {
+          discountPercent: 12,
+          renewalUpliftPercent: 1,
+          liabilityCapChanged: false,
+          dataRetentionLanguage: false,
+          restrictedResearchLanguage: false,
+          customerSpecificSecurityLanguage: false,
+          customerFacingConcessionLanguage: false,
+          overallConfidence: 0.9,
+          conflictingEvidence: false,
+          missingMaterialEvidence: false
+        };
+      },
+      validateDraft(value) {
+        return dealBriefSchema.parse(value);
+      }
     };
-    queue = new BullMqCommandQueue(redisUrl, WORKFLOW_QUEUE_NAME); await queue.queue.drain(true);
-    processor = new DealBriefProcessor(new ProcessDealBriefStep(store, services, { leaseMs: 30_000 }), { redisUrl, workerId: `test-${suffix}`, concurrency: 1, jobsPerSecond: 20 });
-    loop = new OutboxDispatcherLoop(new OutboxDispatcher(database, queue, queue), 10, 20); loop.start();
+    queue = new BullMqCommandQueue(redisUrl, WORKFLOW_QUEUE_NAME);
+    await queue.queue.drain(true);
+    processor = new DealBriefProcessor(
+      new ProcessDealBriefStep(store, services, { leaseMs: 30_000 }),
+      { redisUrl, workerId: `test-${suffix}`, concurrency: 1, jobsPerSecond: 20 }
+    );
+    loop = new OutboxDispatcherLoop(new OutboxDispatcher(database, queue, queue), 10, 20);
+    loop.start();
     const directory = {
-      async list() { return [requester, approver].map((userId) => ({ userId, displayName: userId === requester ? 'Workflow Requester' : 'Workflow Approver', role: userId === requester ? 'Account Owner' : 'Deal Desk Approver', grants: [] })); },
-      async findById(userId: string) { return (await this.list()).find((persona) => persona.userId === userId); }
+      async list() {
+        return [requester, approver].map((userId) => ({
+          userId,
+          displayName: userId === requester ? 'Workflow Requester' : 'Workflow Approver',
+          role: userId === requester ? 'Account Owner' : 'Deal Desk Approver',
+          grants: []
+        }));
+      },
+      async findById(userId: string) {
+        return (await this.list()).find((persona) => persona.userId === userId);
+      }
     };
-    app = await NestFactory.create<NestExpressApplication>(AppModule.register({ sessionSecret: 'task-9-production-test-secret-which-is-long', environment: 'test', allowedOrigins: [origin], personaDirectory: directory }, {
-      startDealBrief: new StartDealBrief(store, access, { provider: 'mock', model: 'mock-brief' }),
-      regenerateDealBrief: new RegenerateDealBrief(store, access),
-      cancelDealBrief: new CancelDealBrief(store, access),
-      decideApproval: new DecideApproval(store, access)
-    }), { bodyParser: false, logger: false });
-    configureApiApplication(app); await app.init();
+    app = await NestFactory.create<NestExpressApplication>(
+      AppModule.register(
+        {
+          sessionSecret: 'task-9-production-test-secret-which-is-long',
+          environment: 'test',
+          allowedOrigins: [origin],
+          personaDirectory: directory
+        },
+        {
+          startDealBrief: new StartDealBrief(store, access, {
+            provider: 'mock',
+            model: 'mock-brief'
+          }),
+          regenerateDealBrief: new RegenerateDealBrief(store, access),
+          cancelDealBrief: new CancelDealBrief(store, access),
+          decideApproval: new DecideApproval(store, access)
+        }
+      ),
+      { bodyParser: false, logger: false }
+    );
+    configureApiApplication(app);
+    await app.init();
     const browser = request.agent(app.getHttpServer());
-    const bootstrap = await browser.get('/api/auth/csrf').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').expect(200);
-    const selected = await browser.post('/api/auth/persona').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', bootstrap.body.csrfToken).send({ userId: requester }).expect(201);
-    const started = await browser.post('/api/runs/deal-brief').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', selected.body.csrfToken)
-      .send({ opportunityId: opportunity, idempotencyKey: `start-${suffix}` }).expect(201);
+    const bootstrap = await browser
+      .get('/api/auth/csrf')
+      .set('Origin', origin)
+      .set('Sec-Fetch-Site', 'same-site')
+      .expect(200);
+    const selected = await browser
+      .post('/api/auth/persona')
+      .set('Origin', origin)
+      .set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', bootstrap.body.csrfToken)
+      .send({ userId: requester })
+      .expect(201);
+    const started = await browser
+      .post('/api/runs/deal-brief')
+      .set('Origin', origin)
+      .set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', selected.body.csrfToken)
+      .send({ opportunityId: opportunity, idempotencyKey: `start-${suffix}` })
+      .expect(201);
     const runId = started.body.runId as string;
     const waiting = await waitFor(async () => {
       const current = await store.getRun(runId as never);
-      if (current?.status === 'failed') throw new Error(`Workflow failed: ${current.errorCode}: ${current.errorMessage}`);
+      if (current?.status === 'failed')
+        throw new Error(`Workflow failed: ${current.errorCode}: ${current.errorMessage}`);
       return current?.status === 'awaiting_approval' ? current : undefined;
     });
-    expect(waiting.status).toBe('awaiting_approval'); expect(retrievalCalls.get(runId)).toBe(2); expect(strategyCalls.get(runId)).toBe(1); expect(await queue.queue.getJob(runId)).toBeUndefined();
+    expect(waiting.status).toBe('awaiting_approval');
+    expect(retrievalCalls.get(runId)).toBe(2);
+    expect(strategyCalls.get(runId)).toBe(1);
+    expect(await queue.queue.getJob(runId)).toBeUndefined();
     const initialArtifacts = await admin<{ kind: string; draft_version: number }[]>`
       select kind, draft_version from specialist_artifacts
       where run_id = ${runId}
@@ -144,35 +246,52 @@ describe('production DealBrief seams', () => {
       { kind: 'stakeholder', draft_version: 0 },
       { kind: 'strategy', draft_version: 1 }
     ]);
-    const subject = await store.getApprovalSubject({ runId: runId as never }); const entry = subject?.entries[0];
-    if (subject === undefined || entry === undefined) throw new Error('Approval subject not persisted');
+    const subject = await store.getApprovalSubject({ runId: runId as never });
+    const entry = subject?.entries[0];
+    if (subject === undefined || entry === undefined)
+      throw new Error('Approval subject not persisted');
     await admin`insert into run_evidence_manifests (id, run_id, scope_hash, policy_hash, query_hash, index_profile,
       embedding_provider, embedding_model, embedding_dimension, embedding_version, embedding_normalization, context_limit, diagnostics)
       values (${`manifest_${suffix}`}, ${runId}, ${'a'.repeat(64)}, ${'b'.repeat(64)}, ${'c'.repeat(64)}, 'task-9',
       'mock', 'mock-embedding', 3, 'v1', 'l2', 1000, '{}'::jsonb)`;
     const unsupportedEdit = dealBriefSchema.parse({
-      ...subject.payload, executiveSummary: { narrative: 'we can offer a reduction' }
+      ...subject.payload,
+      executiveSummary: { narrative: 'we can offer a reduction' }
     });
-    await expect(access.validateApprovalEdit({
-      actorId: requester,
-      opportunityId: opportunity,
-      runId,
-      originalPayload: subject.payload,
-      payload: unsupportedEdit
-    })).rejects.toBeInstanceOf(DomainValidationError);
-    const regenerationResponse = await browser.post(`/api/runs/${runId}/regenerate`).set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
-      .set('X-CSRF-Token', selected.body.csrfToken).send({ idempotencyKey: `regenerate-${suffix}` });
+    await expect(
+      access.validateApprovalEdit({
+        actorId: requester,
+        opportunityId: opportunity,
+        runId,
+        originalPayload: subject.payload,
+        payload: unsupportedEdit
+      })
+    ).rejects.toBeInstanceOf(DomainValidationError);
+    const regenerationResponse = await browser
+      .post(`/api/runs/${runId}/regenerate`)
+      .set('Origin', origin)
+      .set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', selected.body.csrfToken)
+      .send({ idempotencyKey: `regenerate-${suffix}` });
     expect(regenerationResponse.status, JSON.stringify(regenerationResponse.body)).toBe(201);
-    const regenerationReplay = await browser.post(`/api/runs/${runId}/regenerate`).set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
-      .set('X-CSRF-Token', selected.body.csrfToken).send({ idempotencyKey: `regenerate-${suffix}` }).expect(201);
+    const regenerationReplay = await browser
+      .post(`/api/runs/${runId}/regenerate`)
+      .set('Origin', origin)
+      .set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', selected.body.csrfToken)
+      .send({ idempotencyKey: `regenerate-${suffix}` })
+      .expect(201);
     expect(regenerationReplay.body.runId).toBe(runId);
     const regenerated = await waitFor(async () => {
       const current = await store.getRun(runId as never);
-      return current?.status === 'awaiting_approval' && current.version > waiting.version ? current : undefined;
+      return current?.status === 'awaiting_approval' && current.version > waiting.version
+        ? current
+        : undefined;
     });
     const regeneratedSubject = await store.getApprovalSubject({ runId: runId as never });
     const regeneratedEntry = regeneratedSubject?.entries[0];
-    if (regeneratedSubject === undefined || regeneratedEntry === undefined) throw new Error('Regenerated approval subject not persisted');
+    if (regeneratedSubject === undefined || regeneratedEntry === undefined)
+      throw new Error('Regenerated approval subject not persisted');
     expect(regeneratedSubject.id).not.toBe(subject.id);
     expect(strategyCalls.get(runId)).toBe(2);
     expect(await queue.queue.getJob(runId)).toBeUndefined();
@@ -185,23 +304,53 @@ describe('production DealBrief seams', () => {
       ...initialArtifacts,
       { kind: 'strategy', draft_version: waiting.version + 1 }
     ]);
-    const switched = await browser.post('/api/auth/persona').set('Origin', origin).set('Sec-Fetch-Site', 'same-site').set('X-CSRF-Token', selected.body.csrfToken).send({ userId: approver }).expect(201);
+    const switched = await browser
+      .post('/api/auth/persona')
+      .set('Origin', origin)
+      .set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', selected.body.csrfToken)
+      .send({ userId: approver })
+      .expect(201);
     const approvalCommand = {
-      runId, approvalSubjectId: regeneratedSubject.id, expectedRunVersion: regenerated.version,
-      expectedSubjectHash: regeneratedSubject.subjectHash, entryId: regeneratedEntry.id, category: regeneratedEntry.category,
-      authority: 'deal_desk', action: 'approve_unchanged', idempotencyKey: `approve-${suffix}`
+      runId,
+      approvalSubjectId: regeneratedSubject.id,
+      expectedRunVersion: regenerated.version,
+      expectedSubjectHash: regeneratedSubject.subjectHash,
+      entryId: regeneratedEntry.id,
+      category: regeneratedEntry.category,
+      authority: 'deal_desk',
+      action: 'approve_unchanged',
+      idempotencyKey: `approve-${suffix}`
     };
-    const approvalResult = await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
-      .set('X-CSRF-Token', switched.body.csrfToken).send(approvalCommand);
+    const approvalResult = await browser
+      .post('/api/approvals/decisions')
+      .set('Origin', origin)
+      .set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', switched.body.csrfToken)
+      .send(approvalCommand);
     expect(approvalResult.status, JSON.stringify(approvalResult.body)).toBe(201);
-    const approvalReplay = await browser.post('/api/approvals/decisions').set('Origin', origin).set('Sec-Fetch-Site', 'same-site')
-      .set('X-CSRF-Token', switched.body.csrfToken).send(approvalCommand).expect(201);
+    const approvalReplay = await browser
+      .post('/api/approvals/decisions')
+      .set('Origin', origin)
+      .set('Sec-Fetch-Site', 'same-site')
+      .set('X-CSRF-Token', switched.body.csrfToken)
+      .send(approvalCommand)
+      .expect(201);
     expect(approvalReplay.body).toEqual({ ...approvalResult.body, replayed: true });
-    const completed = await waitFor(async () => (await store.getRun(runId as never))?.status === 'completed' ? store.getRun(runId as never) : undefined);
-    expect(completed.status).toBe('completed'); expect(strategyCalls.get(runId)).toBe(2);
-  }, 20_000);
+    const completed = await waitFor(async () =>
+      (await store.getRun(runId as never))?.status === 'completed'
+        ? store.getRun(runId as never)
+        : undefined
+    );
+    expect(completed.status).toBe('completed');
+    expect(strategyCalls.get(runId)).toBe(2);
+  }, 90_000);
   it('reauthorizes canonical permission provenance before worker retrieval', async () => {
-    const row = (await admin<{ id: string }[]>`select id from runs where opportunity_id = ${opportunity} order by created_at desc limit 1`)[0];
+    const row = (
+      await admin<
+        { id: string }[]
+      >`select id from runs where opportunity_id = ${opportunity} order by created_at desc limit 1`
+    )[0];
     if (row === undefined) throw new Error('Workflow run fixture is unavailable');
     const store = new PostgresWorkflowStore(database);
     const run = await store.getRun(row.id as never);
@@ -216,13 +365,13 @@ describe('production DealBrief seams', () => {
           registry: { resolve: () => ({ modelId: 'mock-brief' }) }
         } as never
       );
-      await expect(services.retrieve(run, `invocation-stale-${suffix}`))
-        .rejects.toThrow('Authorized opportunity context is unavailable');
+      await expect(services.retrieve(run, `invocation-stale-${suffix}`)).rejects.toThrow(
+        'Authorized opportunity context is unavailable'
+      );
     } finally {
       await admin`update permission_grants set source_commit = ${CANONICAL_FIXTURE_COMMIT} where id = ${`grant_${suffix}`}`;
     }
   });
-
 
   it('replays the original non-quorate unchanged approval after a later edit supersedes its subject', async () => {
     const replaySuffix = crypto.randomUUID().replaceAll('-', '');
@@ -261,53 +410,105 @@ describe('production DealBrief seams', () => {
 
     const replayStore = new PostgresWorkflowStore(database);
     const unchanged = await replayStore.recordDecisionAndEnqueueFinalization({
-      runId: runId as never, expectedVersion: 5, approvalSubjectId: subjectId, expectedSubjectHash: subjectHash,
-      entryId: firstEntryId, category: 'commercial_discount', authority: 'deal_desk', actorId: firstApprover as never,
-      idempotencyKey: `unchanged-${replaySuffix}`, requestHash: unchangedRequestHash,
+      runId: runId as never,
+      expectedVersion: 5,
+      approvalSubjectId: subjectId,
+      expectedSubjectHash: subjectHash,
+      entryId: firstEntryId,
+      category: 'commercial_discount',
+      authority: 'deal_desk',
+      actorId: firstApprover as never,
+      idempotencyKey: `unchanged-${replaySuffix}`,
+      requestHash: unchangedRequestHash,
       decision: {
-        action: 'approve_unchanged', entryId: firstEntryId, category: 'commercial_discount', authority: 'deal_desk',
-        actorId: firstApprover as never, originalPayload: payload, approvedPayload: payload, approvedSubjectHash: subjectHash,
-        requestHash: unchangedRequestHash, decidedAt: new Date().toISOString()
+        action: 'approve_unchanged',
+        entryId: firstEntryId,
+        category: 'commercial_discount',
+        authority: 'deal_desk',
+        actorId: firstApprover as never,
+        originalPayload: payload,
+        approvedPayload: payload,
+        approvedSubjectHash: subjectHash,
+        requestHash: unchangedRequestHash,
+        decidedAt: new Date().toISOString()
       },
       finalizationCommand: {
-        id: `command_unchanged_${replaySuffix}`, runId: runId as never, type: 'process-deal-brief-step',
-        payload: { step: 'finalize' }, idempotencyKey: `finalize-unchanged-${replaySuffix}`
+        id: `command_unchanged_${replaySuffix}`,
+        runId: runId as never,
+        type: 'process-deal-brief-step',
+        payload: { step: 'finalize' },
+        idempotencyKey: `finalize-unchanged-${replaySuffix}`
       }
     });
     expect(unchanged).toMatchObject({
       run: { id: runId, status: 'awaiting_approval', version: 6 },
-      quorumSatisfied: false, rejected: false, replayed: false, approvedSubjectHash: subjectHash
+      quorumSatisfied: false,
+      rejected: false,
+      replayed: false,
+      approvedSubjectHash: subjectHash
     });
 
     await replayStore.replaceApprovalSubject({
-      runId: runId as never, expectedVersion: 6, priorSubjectId: subjectId,
-      idempotencyKey: `edit-${replaySuffix}`, requestHash: editRequestHash,
+      runId: runId as never,
+      expectedVersion: 6,
+      priorSubjectId: subjectId,
+      idempotencyKey: `edit-${replaySuffix}`,
+      requestHash: editRequestHash,
       priorDecision: {
-        action: 'edit_and_approve', entryId: secondEntryId, category: 'commercial_discount', authority: 'sales_leader',
-        actorId: secondApprover as never, originalPayload: payload, approvedPayload: payload, editedPayload: payload,
-        approvedSubjectHash: subjectHash, diff: { changed: false }, rationale: 'Regenerate approvals.',
-        requestHash: editRequestHash, decidedAt: new Date().toISOString()
+        action: 'edit_and_approve',
+        entryId: secondEntryId,
+        category: 'commercial_discount',
+        authority: 'sales_leader',
+        actorId: secondApprover as never,
+        originalPayload: payload,
+        approvedPayload: payload,
+        editedPayload: payload,
+        approvedSubjectHash: subjectHash,
+        diff: { changed: false },
+        rationale: 'Regenerate approvals.',
+        requestHash: editRequestHash,
+        decidedAt: new Date().toISOString()
       },
       subject: {
-        id: replacementId, runId: runId as never, subjectHash, payload, sectionIds: [], recommendationIds: [], citationIds: [],
-        policyTriggers: [], entries: [{
-          id: `replacement_entry_${replaySuffix}`, category: 'commercial_discount',
-          eligibleAuthorities: ['deal_desk'], policyTriggers: [], dependsOn: []
-        }], quorumVersion: 'replay-v2'
+        id: replacementId,
+        runId: runId as never,
+        subjectHash,
+        payload,
+        sectionIds: [],
+        recommendationIds: [],
+        citationIds: [],
+        policyTriggers: [],
+        entries: [
+          {
+            id: `replacement_entry_${replaySuffix}`,
+            category: 'commercial_discount',
+            eligibleAuthorities: ['deal_desk'],
+            policyTriggers: [],
+            dependsOn: []
+          }
+        ],
+        quorumVersion: 'replay-v2'
       }
     });
 
     const replay = await replayStore.findDecisionByIdempotencyKey({
-      idempotencyKey: `unchanged-${replaySuffix}`, requestHash: unchangedRequestHash
+      idempotencyKey: `unchanged-${replaySuffix}`,
+      requestHash: unchangedRequestHash
     });
     expect(replay).toMatchObject({
       run: { id: runId, status: 'awaiting_approval', version: 6 },
-      approvalSubjectId: subjectId, entryId: firstEntryId, approvedSubjectHash: subjectHash,
-      quorumSatisfied: false, rejected: false
+      approvalSubjectId: subjectId,
+      entryId: firstEntryId,
+      approvedSubjectHash: subjectHash,
+      quorumSatisfied: false,
+      rejected: false
     });
-    await expect(replayStore.findDecisionByIdempotencyKey({
-      idempotencyKey: `unchanged-${replaySuffix}`, requestHash: `mismatch-${replaySuffix}`
-    })).rejects.toBeInstanceOf(DomainConflictError);
+    await expect(
+      replayStore.findDecisionByIdempotencyKey({
+        idempotencyKey: `unchanged-${replaySuffix}`,
+        requestHash: `mismatch-${replaySuffix}`
+      })
+    ).rejects.toBeInstanceOf(DomainConflictError);
   });
 
   it('replays the original terminal rejection after regeneration supersedes its subject', async () => {
@@ -342,30 +543,57 @@ describe('production DealBrief seams', () => {
 
     const replayStore = new PostgresWorkflowStore(database);
     const rejection = await replayStore.recordDecisionAndEnqueueFinalization({
-      runId: runId as never, expectedVersion: 11, approvalSubjectId: subjectId, expectedSubjectHash: subjectHash,
-      entryId, category: 'commercial_discount', authority: 'deal_desk', actorId: rejectingApprover as never,
-      idempotencyKey: `reject-${replaySuffix}`, requestHash: rejectRequestHash,
+      runId: runId as never,
+      expectedVersion: 11,
+      approvalSubjectId: subjectId,
+      expectedSubjectHash: subjectHash,
+      entryId,
+      category: 'commercial_discount',
+      authority: 'deal_desk',
+      actorId: rejectingApprover as never,
+      idempotencyKey: `reject-${replaySuffix}`,
+      requestHash: rejectRequestHash,
       decision: {
-        action: 'reject', entryId, category: 'commercial_discount', authority: 'deal_desk',
-        actorId: rejectingApprover as never, originalPayload: payload, approvedPayload: payload, approvedSubjectHash: subjectHash,
-        rationale: 'The commercial position is not acceptable.', requestHash: rejectRequestHash, decidedAt: new Date().toISOString()
+        action: 'reject',
+        entryId,
+        category: 'commercial_discount',
+        authority: 'deal_desk',
+        actorId: rejectingApprover as never,
+        originalPayload: payload,
+        approvedPayload: payload,
+        approvedSubjectHash: subjectHash,
+        rationale: 'The commercial position is not acceptable.',
+        requestHash: rejectRequestHash,
+        decidedAt: new Date().toISOString()
       },
       finalizationCommand: {
-        id: `command_reject_${replaySuffix}`, runId: runId as never, type: 'process-deal-brief-step',
-        payload: { step: 'finalize' }, idempotencyKey: `finalize-reject-${replaySuffix}`
+        id: `command_reject_${replaySuffix}`,
+        runId: runId as never,
+        type: 'process-deal-brief-step',
+        payload: { step: 'finalize' },
+        idempotencyKey: `finalize-reject-${replaySuffix}`
       }
     });
     expect(rejection).toMatchObject({
       run: { id: runId, status: 'rejected', version: 12 },
-      quorumSatisfied: false, rejected: true, replayed: false, approvedSubjectHash: subjectHash
+      quorumSatisfied: false,
+      rejected: true,
+      replayed: false,
+      approvedSubjectHash: subjectHash
     });
 
     await replayStore.regenerateRun({
-      runId: runId as never, expectedVersion: 12, requestedBy: replayRequester as never,
-      idempotencyKey: `regenerate-${replaySuffix}`, requestHash: `request_regenerate_${replaySuffix}`,
+      runId: runId as never,
+      expectedVersion: 12,
+      requestedBy: replayRequester as never,
+      idempotencyKey: `regenerate-${replaySuffix}`,
+      requestHash: `request_regenerate_${replaySuffix}`,
       command: {
-        id: `command_regenerate_${replaySuffix}`, runId: runId as never, type: 'process-deal-brief-step',
-        payload: { step: 'synthesize' }, idempotencyKey: `regenerate-command-${replaySuffix}`
+        id: `command_regenerate_${replaySuffix}`,
+        runId: runId as never,
+        type: 'process-deal-brief-step',
+        payload: { step: 'synthesize' },
+        idempotencyKey: `regenerate-command-${replaySuffix}`
       }
     });
     await admin`insert into approval_subjects
@@ -374,12 +602,16 @@ describe('production DealBrief seams', () => {
     await admin`update approval_subjects set superseded_by_subject_id = ${regeneratedSubjectId} where id = ${subjectId}`;
 
     const replay = await replayStore.findDecisionByIdempotencyKey({
-      idempotencyKey: `reject-${replaySuffix}`, requestHash: rejectRequestHash
+      idempotencyKey: `reject-${replaySuffix}`,
+      requestHash: rejectRequestHash
     });
     expect(replay).toMatchObject({
       run: { id: runId, status: 'rejected', version: 12 },
-      approvalSubjectId: subjectId, entryId, approvedSubjectHash: subjectHash,
-      quorumSatisfied: false, rejected: true
+      approvalSubjectId: subjectId,
+      entryId,
+      approvedSubjectHash: subjectHash,
+      quorumSatisfied: false,
+      rejected: true
     });
   });
 });
