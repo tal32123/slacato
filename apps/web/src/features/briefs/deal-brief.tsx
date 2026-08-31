@@ -248,6 +248,13 @@ function WorkspaceContent({
                 )}
               </div>
             </div>
+            {section.accountTeamUpdateImpact && (
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {describeAccountTeamUpdateImpact(
+                  accountTeamUpdateIds(section.citationIds, evidence)
+                )}
+              </p>
+            )}
             <div className="mt-4 grid gap-3 text-sm leading-6 sm:text-base">
               {section.paragraphs.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
@@ -269,9 +276,11 @@ function WorkspaceContent({
             )}
             {id === 'stakeholderMap' && <Stakeholders stakeholders={brief.stakeholders} />}
             {id === 'recommendedNextActions' && (
-              <Actions actions={brief.actions} sourceCues={sourceCues} />
+              <Actions actions={brief.actions} evidence={evidence} sourceCues={sourceCues} />
             )}
-            {id === 'confidenceAndReviewWarnings' && <Warnings warnings={brief.warnings} />}
+            {id === 'confidenceAndReviewWarnings' && (
+              <Warnings warnings={brief.warnings} evidence={evidence} />
+            )}
             <CitationControls
               citationIds={section.citationIds}
               evidence={evidence}
@@ -283,6 +292,41 @@ function WorkspaceContent({
       })}
     </div>
   );
+}
+
+/** Names the authorized account-team updates behind a set of citations, in the order they are cited. */
+function accountTeamUpdateIds(
+  citationIds: readonly string[],
+  evidence: ReadonlyMap<string, DealWorkspaceView['evidence'][number]>
+): string[] {
+  return citationIds
+    .map((citationId) => evidence.get(citationId))
+    .filter((item) => item?.sourceType === 'slack')
+    .map((item) => item?.stableId ?? '')
+    .filter((stableId) => stableId.length > 0);
+}
+
+/**
+ * Explains the "Account-team update impact" badge in place.
+ *
+ * The badge answers "did the generated Slack-style chatter move this?" but not "which chatter?",
+ * which is the only form a reviewer can check. Naming the cited update ids turns the badge into a
+ * claim the reader can verify against the evidence list a few lines below.
+ */
+function describeAccountTeamUpdateImpact(updateIds: readonly string[]): string {
+  if (updateIds.length === 0)
+    return 'Badged because this section cites a generated account-team update the requester is authorized to read.';
+  const label = updateIds.length === 1 ? 'account-team update' : 'account-team updates';
+  return `Badged because this section cites ${label} ${updateIds.join(', ')}. Without the requester's Slack grant that citation is never retrieved and the badge is absent.`;
+}
+
+/** Appends the cited update ids to an inline impact label, or nothing when none are resolvable. */
+function citedUpdateSuffix(
+  citationIds: readonly string[],
+  evidence: ReadonlyMap<string, DealWorkspaceView['evidence'][number]>
+): string {
+  const updateIds = accountTeamUpdateIds(citationIds, evidence);
+  return updateIds.length === 0 ? '' : ` \u00b7 ${updateIds.join(', ')}`;
 }
 
 /**
@@ -423,9 +467,11 @@ function Stakeholders({
 /** Presents source-backed recommended actions in layouts suited to desktop and mobile screens. */
 function Actions({
   actions,
+  evidence,
   sourceCues = false
 }: Readonly<{
   actions: readonly RecommendedActionView[];
+  evidence: ReadonlyMap<string, DealWorkspaceView['evidence'][number]>;
   sourceCues?: boolean;
 }>): React.JSX.Element {
   if (actions.length === 0)
@@ -458,7 +504,7 @@ function Actions({
                   {action.action}
                   {action.accountTeamUpdateImpact && (
                     <span className="mt-1 block text-xs font-medium text-attention-foreground">
-                      Account-team update impact
+                      Account-team update impact{citedUpdateSuffix(action.citationIds, evidence)}
                     </span>
                   )}
                 </TableCell>
@@ -477,7 +523,7 @@ function Actions({
             <strong>{action.action}</strong>
             {action.accountTeamUpdateImpact && (
               <p className="mt-2 text-xs font-semibold text-attention-foreground">
-                Account-team update impact
+                Account-team update impact{citedUpdateSuffix(action.citationIds, evidence)}
               </p>
             )}
             <dl className="mt-3 grid gap-2 text-sm">
@@ -495,8 +541,12 @@ function Actions({
 
 /** Highlights confidence and review warnings attached to the brief. */
 function Warnings({
-  warnings
-}: Readonly<{ warnings: DealWorkspaceView['brief']['warnings'] }>): React.JSX.Element | null {
+  warnings,
+  evidence
+}: Readonly<{
+  warnings: DealWorkspaceView['brief']['warnings'];
+  evidence: ReadonlyMap<string, DealWorkspaceView['evidence'][number]>;
+}>): React.JSX.Element | null {
   if (warnings.length === 0) return null;
   return (
     <ul className="mt-5 grid gap-3">
@@ -514,7 +564,7 @@ function Warnings({
             <p className="mt-1 leading-6">{warning.message}</p>
             {warning.accountTeamUpdateImpact && (
               <p className="mt-2 text-xs font-semibold text-attention-foreground">
-                Account-team update impact
+                Account-team update impact{citedUpdateSuffix(warning.citationIds, evidence)}
               </p>
             )}
           </div>

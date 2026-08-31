@@ -192,6 +192,74 @@ describe('DealBrief', () => {
     expect(screen.getByText('No authorized records populate this section.')).toBeInTheDocument();
   });
 
+  // The "Account-team update impact" badge told a reviewer that generated Slack-style chatter moved
+  // a section, but not which update did it, which is the only part they can check. The badge now
+  // names the cited update ids, in the section body and on impacted actions and warnings alike.
+  it('names the cited account-team update behind an impact badge', () => {
+    const workspace = buildWorkspace(true);
+    const generated = workspace.generatedOutput;
+    if (generated === null) throw new Error('Generated output fixture is required');
+    const impacted = {
+      ...generated.content,
+      sections: {
+        ...generated.content.sections,
+        executiveSummary: {
+          ...generated.content.sections.executiveSummary,
+          citationIds: ['slack:SLK-9009:0', 'gong_summary:CALL-008:0'],
+          accountTeamUpdateImpact: true
+        }
+      },
+      actions: [
+        {
+          action: 'Confirm the discount position with Deal Desk',
+          owner: 'Nora Chen',
+          priority: 'high',
+          dueDate: null,
+          rationale: 'Executive stakeholders disagree on the lead concession.',
+          citationIds: ['slack:SLK-9009:0'],
+          accountTeamUpdateImpact: true
+        }
+      ]
+    };
+    renderBrief({
+      ...workspace,
+      generatedOutput: { ...generated, content: impacted },
+      brief: impacted,
+      evidence: [
+        {
+          id: 'slack:SLK-9009:0',
+          sourceType: 'slack',
+          sourcePath: 'slack/account_team_updates.tsv',
+          stableKey: 'update_id',
+          stableId: 'SLK-9009',
+          citationLabel: 'source=slack/account_team_updates.tsv, update_id=SLK-9009',
+          chunkId: 'slack:SLK-9009:0',
+          capturedAt: '2026-05-18T00:00:00.000Z',
+          content: 'updateText: Executive stakeholders disagree on the lead concession.'
+        },
+        {
+          id: 'gong_summary:CALL-008:0',
+          sourceType: 'gong_summary',
+          sourcePath: 'gong/gong_call_summaries.tsv',
+          stableKey: 'call_id',
+          stableId: 'CALL-008',
+          citationLabel: 'source=gong/gong_call_summaries.tsv, call_id=CALL-008',
+          chunkId: 'gong_summary:CALL-008:0',
+          capturedAt: '2026-05-12T00:00:00.000Z',
+          content: 'summary: Pricing pressure raised again.'
+        }
+      ]
+    } as DealWorkspaceView);
+
+    // The section says which update carried the badge, and does not name the co-cited call.
+    const explanation = screen.getByText(/Badged because this section cites account-team update/);
+    expect(explanation).toHaveTextContent('SLK-9009');
+    expect(explanation).not.toHaveTextContent('CALL-008');
+    // The impacted action carries the same identification, in both the table and the mobile list.
+    const actionLabels = screen.getAllByText(/Account-team update impact · SLK-9009/);
+    expect(actionLabels.length).toBeGreaterThan(0);
+  });
+
   // Regression: both views render a section called Source Evidence, and both carried the same
   // `data-tour="slack-evidence"` anchor. The guided tour resolves an anchor by DOM order, so its
   // Slack step always framed the generated brief's copy while its wording described the source
