@@ -18,7 +18,7 @@
     "check": "biome check apps packages scripts",
     "check:fix": "biome check --write apps packages scripts",
     "quality:ci": "biome ci apps packages scripts && pnpm lint:boundaries && pnpm typecheck",
-    "typecheck": "tsc -b apps/web apps/api apps/worker packages/contracts packages/core packages/infrastructure --pretty false",
+    "typecheck": "tsc -b packages/contracts packages/core packages/infrastructure apps/web apps/api apps/worker --pretty false",
     "test": "vitest run",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
