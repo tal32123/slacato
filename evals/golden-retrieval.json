@@ -1,5 +1,18 @@
 {
   "version": 1,
+  "_labelling": [
+    "Labels are hand-checked against fixtures/cato. A chunk is labelled relevant only when its own",
+    "text answers the query, not merely because its document does.",
+    "Gong transcripts are chunked into six-turn windows that overlap by one turn, so several windows",
+    "of one call can restate the same point. Labelling every overlapping window would make recall@5",
+    "unreachable by construction, so each source document contributes at most one label per case: the",
+    "single window that most directly answers the query. This is strict on the retriever, not lenient",
+    "- returning a neighbouring window of the right call still scores as a miss.",
+    "The retriever admits at most one policy chunk into its ranked selection, so no case labels two.",
+    "forbiddenEvidenceIds are chunks the persona must never be handed for that query (a",
+    "sensitive-pricing note without the grant, or a source family outside their authorized set).",
+    "Any of them appearing anywhere in the returned evidence counts as permission leakage."
+  ],
   "cases": [
     {
       "id": "northstar-owner-matrix-success-metrics",
@@ -8,7 +21,99 @@
       "opportunityId": "OPP-1001",
       "query": "final owner matrix success metrics client stakeholders",
       "limit": 5,
-      "relevantEvidenceIds": ["slack:SLK-9002:0", "gong_transcript:CALL-008:transcript:0"]
+      "relevantEvidenceIds": [
+        "slack:SLK-9002:0",
+        "gong_transcript:CALL-008:transcript:0",
+        "gong_summary:CALL-008:summary:0"
+      ]
+    },
+    {
+      "id": "northstar-payment-schedule-migration-milestone",
+      "userId": "USR-5001",
+      "accountId": "ACC-2001",
+      "opportunityId": "OPP-1001",
+      "query": "payment schedule milestone tied to first migration wave billing options",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-004:transcript:2",
+        "gong_summary:CALL-004:summary:0",
+        "pricing:PN-4001:0"
+      ]
+    },
+    {
+      "id": "northstar-data-retention-citation",
+      "userId": "USR-5001",
+      "accountId": "ACC-2001",
+      "opportunityId": "OPP-1001",
+      "query": "data retention language accurate policy citation legal review",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-004:transcript:3",
+        "gong_summary:CALL-007:summary:0",
+        "gong_summary:CALL-009:summary:0",
+        "policy:deal-desk-policy:OPP-1001:2"
+      ]
+    },
+    {
+      "id": "northstar-regional-exceptions-migration-ownership",
+      "userId": "USR-5001",
+      "accountId": "ACC-2001",
+      "opportunityId": "OPP-1001",
+      "query": "fewer regional exceptions clearer migration ownership named escalation owners",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "salesforce:ACC-2001:OPP-1001:account:0",
+        "salesforce:CON-3002:OPP-1001:contact:0",
+        "gong_summary:CALL-001:summary:0"
+      ]
+    },
+    {
+      "id": "northstar-uplift-explanation-without-sensitive-pricing",
+      "userId": "USR-5001",
+      "accountId": "ACC-2001",
+      "opportunityId": "OPP-1001",
+      "query": "explain why the renewal uplift is not flat expanded branch coverage procurement pushback",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-004:transcript:0",
+        "gong_summary:CALL-004:summary:0"
+      ],
+      "forbiddenEvidenceIds": ["slack:SLK-9003:0"]
+    },
+    {
+      "id": "northstar-uplift-pushback-authorized-for-sensitive-pricing",
+      "userId": "USR-5005",
+      "accountId": "ACC-2001",
+      "opportunityId": "OPP-1001",
+      "query": "procurement pushing back on proposed uplift legal wants narrower liability wording",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "slack:SLK-9003:0",
+        "gong_summary:CALL-004:summary:0",
+        "gong_transcript:CALL-004:transcript:1"
+      ]
+    },
+    {
+      "id": "northstar-source-scoped-requester",
+      "userId": "USR-5007",
+      "accountId": "ACC-2001",
+      "opportunityId": "OPP-1001",
+      "query": "owner matrix and success metrics for the final signature packet",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_summary:CALL-008:summary:0",
+        "gong_transcript:CALL-008:transcript:0"
+      ],
+      "forbiddenEvidenceIds": [
+        "slack:SLK-9002:0",
+        "slack:SLK-9001:0",
+        "pricing:PN-4001:0",
+        "pricing:PN-4002:0",
+        "policy:deal-desk-policy:OPP-1001:0",
+        "policy:deal-desk-policy:OPP-1001:1",
+        "policy:deal-desk-policy:OPP-1001:2",
+        "policy:deal-desk-policy:OPP-1001:3"
+      ]
     },
     {
       "id": "meridian-night-shift-training",
@@ -17,7 +122,65 @@
       "opportunityId": "OPP-1002",
       "query": "training gaps night-shift staff troubleshooting workflows",
       "limit": 5,
-      "relevantEvidenceIds": ["slack:SLK-9005:0", "gong_transcript:CALL-018:transcript:0"]
+      "relevantEvidenceIds": [
+        "slack:SLK-9005:0",
+        "gong_transcript:CALL-018:transcript:0",
+        "gong_summary:CALL-014:summary:0"
+      ]
+    },
+    {
+      "id": "meridian-export-retest-owner-map",
+      "userId": "USR-5002",
+      "accountId": "ACC-2002",
+      "opportunityId": "OPP-1002",
+      "query": "reporting export retest and incident owner map required before sign-off",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-018:transcript:3",
+        "gong_summary:CALL-018:summary:0",
+        "gong_summary:CALL-015:summary:0"
+      ]
+    },
+    {
+      "id": "meridian-staged-payment-capped-enablement",
+      "userId": "USR-5002",
+      "accountId": "ACC-2002",
+      "opportunityId": "OPP-1002",
+      "query": "staged payment milestones capped minimum enablement scope finance",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-018:transcript:1",
+        "gong_summary:CALL-017:summary:0",
+        "pricing:PN-4003:0",
+        "salesforce:CON-3009:OPP-1002:contact:0"
+      ]
+    },
+    {
+      "id": "meridian-policy-drift-data-protection-evidence",
+      "userId": "USR-5002",
+      "accountId": "ACC-2002",
+      "opportunityId": "OPP-1002",
+      "query": "policy drift report segmentation and data protection evidence for the security architect",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-014:transcript:3",
+        "gong_summary:CALL-016:summary:0",
+        "gong_summary:CALL-011:summary:0",
+        "salesforce:CON-3010:OPP-1002:contact:0"
+      ]
+    },
+    {
+      "id": "meridian-discount-conflict-without-restricted-grant",
+      "userId": "USR-5004",
+      "accountId": "ACC-2002",
+      "opportunityId": "OPP-1002",
+      "query": "conflict between staged proof payments and the client demanding deep upfront discounts",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_summary:CALL-017:summary:0",
+        "gong_transcript:CALL-018:transcript:1"
+      ],
+      "forbiddenEvidenceIds": ["slack:SLK-9006:0"]
     },
     {
       "id": "eclipse-discount-risk-routing",
@@ -26,7 +189,75 @@
       "opportunityId": "OPP-1003",
       "query": "aggressive discounting risk mitigation final negotiations approval",
       "limit": 5,
-      "relevantEvidenceIds": ["slack:SLK-9009:0", "policy:deal-desk-policy:OPP-1003:1"]
+      "relevantEvidenceIds": [
+        "slack:SLK-9009:0",
+        "policy:deal-desk-policy:OPP-1003:1",
+        "gong_summary:CALL-023:summary:0"
+      ]
+    },
+    {
+      "id": "eclipse-discount-exceeds-approval-threshold",
+      "userId": "USR-5003",
+      "accountId": "ACC-2003",
+      "opportunityId": "OPP-1003",
+      "query": "aggressive discount exceeds approval threshold route to deal desk not approved",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-027:transcript:1",
+        "gong_summary:CALL-021:summary:0",
+        "pricing:PN-4004:0",
+        "policy:deal-desk-policy:OPP-1003:1"
+      ]
+    },
+    {
+      "id": "eclipse-liability-language-legal-approval",
+      "userId": "USR-5003",
+      "accountId": "ACC-2003",
+      "opportunityId": "OPP-1003",
+      "query": "liability cap language needs legal approval before customer-facing concession",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_summary:CALL-022:summary:0",
+        "gong_transcript:CALL-027:transcript:0",
+        "policy:deal-desk-policy:OPP-1003:1",
+        "salesforce:CON-3013:OPP-1003:contact:0"
+      ]
+    },
+    {
+      "id": "eclipse-restricted-research-access-expiration",
+      "userId": "USR-5003",
+      "accountId": "ACC-2003",
+      "opportunityId": "OPP-1003",
+      "query": "temporary restricted research access expiration reapproval and audit export",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-019:transcript:4",
+        "gong_summary:CALL-024:summary:0",
+        "gong_summary:CALL-020:summary:0",
+        "salesforce:CON-3015:OPP-1003:contact:0"
+      ]
+    },
+    {
+      "id": "eclipse-restricted-source-permission-enforcement",
+      "userId": "USR-5003",
+      "accountId": "ACC-2003",
+      "opportunityId": "OPP-1003",
+      "query": "confirm requester permissions before summarizing restricted sources in a generated brief",
+      "limit": 5,
+      "relevantEvidenceIds": [
+        "policy:deal-desk-policy:OPP-1003:3",
+        "gong_summary:CALL-026:summary:0",
+        "gong_transcript:CALL-027:transcript:4"
+      ]
+    },
+    {
+      "id": "eclipse-exception-handling-undocumented",
+      "userId": "USR-5003",
+      "accountId": "ACC-2003",
+      "opportunityId": "OPP-1003",
+      "query": "exception handling procedures requested by the research team are still undocumented",
+      "limit": 5,
+      "relevantEvidenceIds": ["slack:SLK-9008:0", "gong_summary:CALL-020:summary:0"]
     },
     {
       "id": "eclipse-unauthorized-no-leakage",
@@ -34,6 +265,46 @@
       "accountId": "ACC-2003",
       "opportunityId": "OPP-1003",
       "query": "discount liability restricted source approval",
+      "limit": 5,
+      "relevantEvidenceIds": [],
+      "expectedDenied": true
+    },
+    {
+      "id": "eclipse-denied-northstar-owner",
+      "userId": "USR-5001",
+      "accountId": "ACC-2003",
+      "opportunityId": "OPP-1003",
+      "query": "restricted research workflow controls and board cost pressure",
+      "limit": 5,
+      "relevantEvidenceIds": [],
+      "expectedDenied": true
+    },
+    {
+      "id": "eclipse-denied-sales-leader",
+      "userId": "USR-5004",
+      "accountId": "ACC-2003",
+      "opportunityId": "OPP-1003",
+      "query": "aggressive discount request and liability redlines for the renewal",
+      "limit": 5,
+      "relevantEvidenceIds": [],
+      "expectedDenied": true
+    },
+    {
+      "id": "northstar-denied-meridian-owner",
+      "userId": "USR-5002",
+      "accountId": "ACC-2001",
+      "opportunityId": "OPP-1001",
+      "query": "owner matrix success metrics and payment schedule for the renewal packet",
+      "limit": 5,
+      "relevantEvidenceIds": [],
+      "expectedDenied": true
+    },
+    {
+      "id": "meridian-denied-northstar-owner",
+      "userId": "USR-5001",
+      "accountId": "ACC-2002",
+      "opportunityId": "OPP-1002",
+      "query": "proof closeout remediation items and staged commercial option",
       "limit": 5,
       "relevantEvidenceIds": [],
       "expectedDenied": true

@@ -3,12 +3,13 @@
     {
       "id": "northstar-owner-matrix-success-metrics",
       "precisionAtK": 0.2,
-      "recallAtK": 0.5,
+      "recallAtK": 0.3333333333333333,
       "leakedEvidence": 0,
       "retrieved": 5,
       "relevantEvidenceIds": [
         "slack:SLK-9002:0",
-        "gong_transcript:CALL-008:transcript:0"
+        "gong_transcript:CALL-008:transcript:0",
+        "gong_summary:CALL-008:summary:0"
       ],
       "retrievedEvidenceIds": [
         "slack:SLK-9002:0",
@@ -19,14 +20,128 @@
       ]
     },
     {
-      "id": "meridian-night-shift-training",
+      "id": "northstar-payment-schedule-migration-milestone",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-004:transcript:2",
+        "gong_summary:CALL-004:summary:0",
+        "pricing:PN-4001:0"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9002:0",
+        "slack:SLK-9001:0",
+        "gong_summary:CALL-005:summary:0",
+        "gong_summary:CALL-008:summary:0",
+        "policy:deal-desk-policy:OPP-1001:2"
+      ]
+    },
+    {
+      "id": "northstar-data-retention-citation",
+      "precisionAtK": 0.4,
+      "recallAtK": 0.5,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-004:transcript:3",
+        "gong_summary:CALL-007:summary:0",
+        "gong_summary:CALL-009:summary:0",
+        "policy:deal-desk-policy:OPP-1001:2"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9002:0",
+        "gong_summary:CALL-009:summary:0",
+        "pricing:PN-4002:0",
+        "slack:SLK-9001:0",
+        "policy:deal-desk-policy:OPP-1001:2"
+      ]
+    },
+    {
+      "id": "northstar-regional-exceptions-migration-ownership",
+      "precisionAtK": 0.2,
+      "recallAtK": 0.3333333333333333,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "salesforce:ACC-2001:OPP-1001:account:0",
+        "salesforce:CON-3002:OPP-1001:contact:0",
+        "gong_summary:CALL-001:summary:0"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9002:0",
+        "slack:SLK-9001:0",
+        "salesforce:CON-3002:OPP-1001:contact:0",
+        "gong_summary:CALL-005:summary:0",
+        "policy:deal-desk-policy:OPP-1001:2"
+      ]
+    },
+    {
+      "id": "northstar-uplift-explanation-without-sensitive-pricing",
       "precisionAtK": 0.2,
       "recallAtK": 0.5,
       "leakedEvidence": 0,
       "retrieved": 5,
       "relevantEvidenceIds": [
+        "gong_transcript:CALL-004:transcript:0",
+        "gong_summary:CALL-004:summary:0"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9002:0",
+        "gong_summary:CALL-005:summary:0",
+        "slack:SLK-9001:0",
+        "gong_summary:CALL-004:summary:0",
+        "policy:deal-desk-policy:OPP-1001:1"
+      ]
+    },
+    {
+      "id": "northstar-uplift-pushback-authorized-for-sensitive-pricing",
+      "precisionAtK": 0.2,
+      "recallAtK": 0.3333333333333333,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "slack:SLK-9003:0",
+        "gong_summary:CALL-004:summary:0",
+        "gong_transcript:CALL-004:transcript:1"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9003:0",
+        "slack:SLK-9002:0",
+        "gong_summary:CALL-005:summary:0",
+        "pricing:PN-4002:0",
+        "policy:deal-desk-policy:OPP-1001:2"
+      ]
+    },
+    {
+      "id": "northstar-source-scoped-requester",
+      "precisionAtK": 0.2,
+      "recallAtK": 0.5,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_summary:CALL-008:summary:0",
+        "gong_transcript:CALL-008:transcript:0"
+      ],
+      "retrievedEvidenceIds": [
+        "gong_summary:CALL-005:summary:0",
+        "salesforce:CON-3002:OPP-1001:contact:0",
+        "gong_summary:CALL-008:summary:0",
+        "salesforce:CON-3003:OPP-1001:contact:0",
+        "salesforce:OPP-1001:0"
+      ]
+    },
+    {
+      "id": "meridian-night-shift-training",
+      "precisionAtK": 0.2,
+      "recallAtK": 0.3333333333333333,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
         "slack:SLK-9005:0",
-        "gong_transcript:CALL-018:transcript:0"
+        "gong_transcript:CALL-018:transcript:0",
+        "gong_summary:CALL-014:summary:0"
       ],
       "retrievedEvidenceIds": [
         "slack:SLK-9005:0",
@@ -37,14 +152,92 @@
       ]
     },
     {
-      "id": "eclipse-discount-risk-routing",
+      "id": "meridian-export-retest-owner-map",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-018:transcript:3",
+        "gong_summary:CALL-018:summary:0",
+        "gong_summary:CALL-015:summary:0"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9005:0",
+        "slack:SLK-9004:0",
+        "gong_summary:CALL-013:summary:0",
+        "policy:deal-desk-policy:OPP-1002:2",
+        "salesforce:OPP-1002:0"
+      ]
+    },
+    {
+      "id": "meridian-staged-payment-capped-enablement",
       "precisionAtK": 0.2,
-      "recallAtK": 0.5,
+      "recallAtK": 0.25,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-018:transcript:1",
+        "gong_summary:CALL-017:summary:0",
+        "pricing:PN-4003:0",
+        "salesforce:CON-3009:OPP-1002:contact:0"
+      ],
+      "retrievedEvidenceIds": [
+        "gong_summary:CALL-013:summary:0",
+        "slack:SLK-9005:0",
+        "salesforce:CON-3009:OPP-1002:contact:0",
+        "slack:SLK-9004:0",
+        "policy:deal-desk-policy:OPP-1002:2"
+      ]
+    },
+    {
+      "id": "meridian-policy-drift-data-protection-evidence",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-014:transcript:3",
+        "gong_summary:CALL-016:summary:0",
+        "gong_summary:CALL-011:summary:0",
+        "salesforce:CON-3010:OPP-1002:contact:0"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9004:0",
+        "slack:SLK-9005:0",
+        "gong_summary:CALL-013:summary:0",
+        "salesforce:CON-3009:OPP-1002:contact:0",
+        "policy:deal-desk-policy:OPP-1002:2"
+      ]
+    },
+    {
+      "id": "meridian-discount-conflict-without-restricted-grant",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_summary:CALL-017:summary:0",
+        "gong_transcript:CALL-018:transcript:1"
+      ],
+      "retrievedEvidenceIds": [
+        "gong_summary:CALL-013:summary:0",
+        "slack:SLK-9005:0",
+        "slack:SLK-9004:0",
+        "salesforce:CON-3009:OPP-1002:contact:0",
+        "policy:deal-desk-policy:OPP-1002:2"
+      ]
+    },
+    {
+      "id": "eclipse-discount-risk-routing",
+      "precisionAtK": 0.4,
+      "recallAtK": 0.6666666666666666,
       "leakedEvidence": 0,
       "retrieved": 5,
       "relevantEvidenceIds": [
         "slack:SLK-9009:0",
-        "policy:deal-desk-policy:OPP-1003:1"
+        "policy:deal-desk-policy:OPP-1003:1",
+        "gong_summary:CALL-023:summary:0"
       ],
       "retrievedEvidenceIds": [
         "slack:SLK-9009:0",
@@ -55,7 +248,140 @@
       ]
     },
     {
+      "id": "eclipse-discount-exceeds-approval-threshold",
+      "precisionAtK": 0.2,
+      "recallAtK": 0.25,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-027:transcript:1",
+        "gong_summary:CALL-021:summary:0",
+        "pricing:PN-4004:0",
+        "policy:deal-desk-policy:OPP-1003:1"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9009:0",
+        "pricing:PN-4005:0",
+        "pricing:PN-4004:0",
+        "salesforce:CON-3014:OPP-1003:contact:0",
+        "policy:deal-desk-policy:OPP-1003:2"
+      ]
+    },
+    {
+      "id": "eclipse-liability-language-legal-approval",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_summary:CALL-022:summary:0",
+        "gong_transcript:CALL-027:transcript:0",
+        "policy:deal-desk-policy:OPP-1003:1",
+        "salesforce:CON-3013:OPP-1003:contact:0"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9009:0",
+        "pricing:PN-4005:0",
+        "pricing:PN-4004:0",
+        "policy:deal-desk-policy:OPP-1003:2",
+        "gong_summary:CALL-023:summary:0"
+      ]
+    },
+    {
+      "id": "eclipse-restricted-research-access-expiration",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "gong_transcript:CALL-019:transcript:4",
+        "gong_summary:CALL-024:summary:0",
+        "gong_summary:CALL-020:summary:0",
+        "salesforce:CON-3015:OPP-1003:contact:0"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9009:0",
+        "pricing:PN-4005:0",
+        "salesforce:CON-3014:OPP-1003:contact:0",
+        "policy:deal-desk-policy:OPP-1003:2",
+        "gong_summary:CALL-023:summary:0"
+      ]
+    },
+    {
+      "id": "eclipse-restricted-source-permission-enforcement",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "policy:deal-desk-policy:OPP-1003:3",
+        "gong_summary:CALL-026:summary:0",
+        "gong_transcript:CALL-027:transcript:4"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9009:0",
+        "pricing:PN-4005:0",
+        "salesforce:OPP-1003:0",
+        "pricing:PN-4004:0",
+        "policy:deal-desk-policy:OPP-1003:2"
+      ]
+    },
+    {
+      "id": "eclipse-exception-handling-undocumented",
+      "precisionAtK": 0,
+      "recallAtK": 0,
+      "leakedEvidence": 0,
+      "retrieved": 5,
+      "relevantEvidenceIds": [
+        "slack:SLK-9008:0",
+        "gong_summary:CALL-020:summary:0"
+      ],
+      "retrievedEvidenceIds": [
+        "slack:SLK-9009:0",
+        "pricing:PN-4005:0",
+        "pricing:PN-4004:0",
+        "policy:deal-desk-policy:OPP-1003:2",
+        "gong_summary:CALL-023:summary:0"
+      ]
+    },
+    {
       "id": "eclipse-unauthorized-no-leakage",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "leakedEvidence": 0,
+      "retrieved": 0,
+      "relevantEvidenceIds": [],
+      "retrievedEvidenceIds": []
+    },
+    {
+      "id": "eclipse-denied-northstar-owner",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "leakedEvidence": 0,
+      "retrieved": 0,
+      "relevantEvidenceIds": [],
+      "retrievedEvidenceIds": []
+    },
+    {
+      "id": "eclipse-denied-sales-leader",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "leakedEvidence": 0,
+      "retrieved": 0,
+      "relevantEvidenceIds": [],
+      "retrievedEvidenceIds": []
+    },
+    {
+      "id": "northstar-denied-meridian-owner",
+      "precisionAtK": 1,
+      "recallAtK": 1,
+      "leakedEvidence": 0,
+      "retrieved": 0,
+      "relevantEvidenceIds": [],
+      "retrievedEvidenceIds": []
+    },
+    {
+      "id": "meridian-denied-northstar-owner",
       "precisionAtK": 1,
       "recallAtK": 1,
       "leakedEvidence": 0,
@@ -65,8 +391,8 @@
     }
   ],
   "summary": {
-    "macroPrecisionAtK": 0.20000000000000004,
-    "macroRecallAtK": 0.5,
+    "macroPrecisionAtK": 0.13333333333333333,
+    "macroRecallAtK": 0.2222222222222222,
     "permissionLeakage": 0
   }
 }

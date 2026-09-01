@@ -113,6 +113,25 @@ pnpm eval:deterministic    # golden-retrieval recall and permission leakage
 pnpm eval:brief-quality    # brief-quality invariants over samples/*.json
 ```
 
+`eval:deterministic` runs `evals/golden-retrieval.json` against a throwaway database it creates and
+drops: 18 scored cases carrying 56 hand-checked relevance labels, plus 5 cases that must return
+nothing at all because the requester is unauthorized. Cases may also carry `forbiddenEvidenceIds` -
+evidence a specific reader must never be handed, such as a sensitive-pricing note for a persona
+without that grant, or a source family outside their authorized set. Returning one counts as
+permission leakage exactly like answering a denied request. `evals/reports/retrieval.json` is the
+checked-in output, per case, so every number below is reproducible.
+
+**The retrieval quality gate is currently red, and that is reported rather than tuned away.**
+Permission leakage is 0 across all 23 cases, but measured macro recall@5 is 0.222 and macro
+precision@5 is 0.133, against a 0.5 recall floor. The earlier three-case set scored 0.5 recall only
+because its handful of labels happened to be the lexically obvious Slack rows. Two defects the wider
+set exposes: no Gong transcript chunk reaches the top 5 in *any* case, and the returned set is
+nearly identical across unrelated queries for the same opportunity - the ranked hybrid fuses the
+user's query with six fixed section queries, so the caller's own words carry roughly a seventh of
+the fusion mass. That is defensible for assembling a standard evidence pack for a brief, and poor
+at answering a specific question. The floor stays where it was calibrated until the retriever
+clears it.
+
 `eval:brief-quality` measures whether a produced brief is usable by the reviewer who reads it:
 that no cited stakeholder is silently dropped, that citations span more than one source family,
 that the required sections are populated, that no internal identifier appears in user-facing copy,
