@@ -258,15 +258,21 @@ function renderFinalizedDealBrief(
       accountTeamUpdateImpact: referencesAccountTeamEvidence(citationIds, evidenceById)
     };
   });
-  const warnings = brief.confidenceAndReviewWarnings.warnings.map((warning): ReviewWarningView => {
-    const citationIds = collectWarningEvidenceIds(warning, claimsById);
-    return {
-      severity: warning.severity,
-      message: warning.message,
-      citationIds,
-      accountTeamUpdateImpact: referencesAccountTeamEvidence(citationIds, evidenceById)
-    };
-  });
+  const warnings = brief.confidenceAndReviewWarnings.warnings
+    .map((warning): ReviewWarningView | undefined => {
+      const citationIds = collectWarningEvidenceIds(warning, claimsById);
+      // Warning prose is free text an approver can edit, so it is only shown when it is bound to
+      // claims this viewer is already authorized to read. An unbound or dangling warning would
+      // otherwise carry a fact out of a source the viewer has no grant on.
+      if (citationIds === undefined || citationIds.length === 0) return undefined;
+      return {
+        severity: warning.severity,
+        message: warning.message,
+        citationIds,
+        accountTeamUpdateImpact: referencesAccountTeamEvidence(citationIds, evidenceById)
+      };
+    })
+    .filter((warning): warning is ReviewWarningView => warning !== undefined);
 
   const dealSnapshotCitationIds = collectClaimEvidenceIds(brief.dealSnapshot.claims ?? []);
   const executiveSummaryCitationIds = collectClaimEvidenceIds(brief.executiveSummary.claims ?? []);
@@ -413,17 +419,20 @@ function canonicalEvidenceIsAuthorized(
   return referencedEvidenceIds.every((evidenceId) => evidenceById.has(evidenceId));
 }
 
-/** Resolves warning claim references into the authorized evidence IDs rendered by the workspace. */
+/** Resolves warning claim references into authorized evidence IDs, or nothing when one is unresolvable.
+ *
+ * Validation legitimately keeps a warning about a claim it then discarded from the brief, so an
+ * unresolvable reference is an unrenderable warning rather than a server fault: the caller drops it. */
 function collectWarningEvidenceIds(
   warning: ReviewWarning,
   claimsById: ReadonlyMap<string, Claim>
-): string[] {
-  const claims = warning.claimIds.map((claimId) => {
+): string[] | undefined {
+  const claims: Claim[] = [];
+  for (const claimId of warning.claimIds) {
     const claim = claimsById.get(claimId);
-    if (claim === undefined)
-      throw new Error(`Finalized brief warning references unknown claim ${claimId}`);
-    return claim;
-  });
+    if (claim === undefined) return undefined;
+    claims.push(claim);
+  }
   return collectClaimEvidenceIds(claims);
 }
 
