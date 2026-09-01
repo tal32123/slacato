@@ -9,16 +9,21 @@ const STORAGE_KEY = 'slacato.guided-tour.v3';
 const TOTAL_STEPS = 20;
 
 /**
- * Dispatches the tour's start event only once the component listening for it has mounted.
+ * Asks for the tour until the tour actually opens.
  *
- * The listener is registered in an effect (guided-tour.tsx), and the event is fire-and-forget, so
- * dispatching before that effect runs drops it silently and the tour never opens - which on a
- * loaded runner looks like the app ignoring the request. The launcher button comes from the same
- * component and is rendered unconditionally, so its presence is proof the listener is in place.
+ * The listener is registered in an effect (guided-tour.tsx) and the event is fire-and-forget, so a
+ * dispatch that lands first is dropped with no trace and the tour never opens - which reads as the
+ * app ignoring the request. Waiting for the launcher is not enough on its own: it proves the
+ * component rendered, but React flushes passive effects after paint, so the element can be visible
+ * while the listener still does not exist. Re-dispatching closes that window. Repeating the event
+ * is safe here because every caller is starting a fresh tour, which step one is anyway.
  */
 async function startTour(page: import('@playwright/test').Page): Promise<void> {
   await expect(page.locator('[data-tour="tour-launcher"]')).toBeVisible();
-  await page.evaluate(() => window.dispatchEvent(new Event('slacato:start-guided-tour')));
+  await expect(async () => {
+    await page.evaluate(() => window.dispatchEvent(new Event('slacato:start-guided-tour')));
+    await expect(page.getByText(/Step \d+ of \d+/).first()).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
 }
 
 async function startTourAsMaya(page: import('@playwright/test').Page): Promise<void> {
