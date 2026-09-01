@@ -402,6 +402,35 @@ describe('GuidedTour', () => {
     }
   });
 
+  /**
+   * Reported live: a run URL "couldn't open" while the tour was active on the step that narrates
+   * a run. The step's target had not rendered yet, so the tour had nothing to frame -- and its
+   * no-target fallback was a full-viewport `pointer-events-auto` sheet at 75% opacity with a
+   * blur. The page underneath was loaded and healthy the whole time (the API served its detail
+   * 200/304 throughout); it was unreadable and every control on it was unclickable.
+   *
+   * A spotlight blocks the page to protect the one control a step names. With no target there is
+   * no such control, so blocking protects nothing and only seals a page the tour is still looking
+   * at. It waits without covering it instead.
+   */
+  it('does not seal the page when the step has no target to frame', async () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ active: true, stepIndex: 1, dismissed: false })
+    );
+    render(createElement(TourHarness, { initialPath: '/deals', withTarget: false }));
+    await screen.findByRole('dialog');
+    await screen.findByText(/not ready on screen yet/);
+
+    const blockers = [...document.querySelectorAll('.bg-brand-forest\\/75')].filter(
+      (element) => !element.classList.contains('pointer-events-none')
+    );
+
+    expect(blockers).toHaveLength(0);
+    // The dialog itself stays interactive: it carries the only way onward from a missing target.
+    expect(screen.getByRole('button', { name: 'Continue anyway' })).toBeInTheDocument();
+  });
+
   it('discards a corrupted non-integer persisted step index instead of rendering mismatched progress', async () => {
     // Bug: readTourState() only checked the bounds of parsed.stepIndex, not that it was an
     // integer. A fractional value (e.g. from hand-edited or corrupted localStorage) passed the

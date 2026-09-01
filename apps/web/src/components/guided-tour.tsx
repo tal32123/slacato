@@ -680,7 +680,13 @@ export function GuidedTour(): React.JSX.Element {
             />
           )}
           {anchor === undefined ? (
-            <div className="pointer-events-auto absolute inset-0 bg-brand-forest/75 backdrop-blur-[1px]" />
+            // Nothing measured yet, so there is no control to protect and nothing to point at.
+            // This used to be the same 75% sheet the spotlight dims with, and interactive: on a
+            // page whose target had not rendered yet -- a run page still loading, an anchor in a
+            // closed tab -- it blurred the whole view and swallowed every click, which reads as
+            // the page failing to open rather than as the tour waiting. It waits invisibly now;
+            // the dialog above still says the step is not ready and offers the way onward.
+            <div className="pointer-events-none absolute inset-0" />
           ) : (
             <Spotlight box={anchor.box} />
           )}
