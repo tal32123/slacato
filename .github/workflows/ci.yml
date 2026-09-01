@@ -97,3 +97,18 @@ jobs:
         run: pnpm test:e2e
         env:
           DATABASE_URL: postgres://slacato:slacato@127.0.0.1:54329/slacato_e2e
+
+      # Every gate above reads the REPOSITORY; this one reads the BUILD CONTEXT, and the two are not
+      # the same file set. A commit can pass everything else and still be undeployable - which is
+      # exactly what happened when the web app started reading its documents from docs/ and samples/,
+      # both excluded by .dockerignore. `if: always()` so an unrelated red step cannot hide it.
+      - name: Build the web image and confirm it carries the documents it serves
+        if: always()
+        run: |
+          set -euo pipefail
+          docker build -f Dockerfile.web -t slacato-web-ci .
+          docker run --rm --entrypoint sh slacato-web-ci -c 'cat /srv/technical-overview.html' \
+            | diff -q - docs/technical-overview.html
+          docker run --rm --entrypoint sh slacato-web-ci -c 'cat /srv/samples/slack-impact.html' \
+            | diff -q - samples/slack-impact.html
+
