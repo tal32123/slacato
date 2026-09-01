@@ -23,7 +23,7 @@ import type {
   LatestDealRun,
   ReviewWarning
 } from '@slacato/core';
-import { resolveEvidenceIdentity } from '@slacato/core';
+import { projectEvidenceDetail } from '@slacato/core';
 
 const sectionTitles = {
   dealSnapshot: 'Deal Snapshot',
@@ -97,30 +97,6 @@ export function mapAuthorizedDealToListItem(
   });
 }
 
-/** Maps an authorized evidence query model into a provenance-safe public evidence detail. */
-function mapAuthorizedEvidenceToDetail(evidence: DealEvidence): EvidenceDetail | undefined {
-  const locator = evidence.sourceLocator?.trim();
-  if (!locator) return undefined;
-  const fields = parseColonDelimitedRecord(evidence.content);
-  const stableIdentity = resolveEvidenceIdentity(locator, fields);
-  if (stableIdentity === undefined) return undefined;
-  const sourcePath = stableIdentity.sourcePath;
-  const eventDate = evidence.eventDate === null ? null : parseIsoDate(evidence.eventDate);
-  if (evidence.eventDate !== null && eventDate === null) return undefined;
-  return {
-    id: evidence.id,
-    sourceType: evidence.sourceType as EvidenceDetail['sourceType'],
-    sourcePath,
-    stableKey: stableIdentity.key,
-    stableId: stableIdentity.id,
-    citationLabel: `source=${sourcePath}, ${stableIdentity.key}=${stableIdentity.id}`,
-    chunkId: evidence.id,
-    capturedAt:
-      eventDate === null ? serializeDateTime(evidence.createdAt) : `${eventDate}T00:00:00.000Z`,
-    content: evidence.content
-  };
-}
-
 /** Projects authorized repository evidence while excluding unstable provenance and invalid optional dates. */
 function projectAuthorizedWorkspaceEvidence(
   opportunityRows: readonly DealEvidence[],
@@ -128,13 +104,13 @@ function projectAuthorizedWorkspaceEvidence(
   supplementalRows: readonly DealEvidence[]
 ): AuthorizedWorkspaceEvidence {
   const opportunityEvidence = opportunityRows
-    .map(mapAuthorizedEvidenceToDetail)
+    .map(projectEvidenceDetail)
     .filter((item): item is EvidenceDetail => item !== undefined);
   const stakeholderEvidenceDetails = stakeholderRows
-    .map(mapAuthorizedEvidenceToDetail)
+    .map(projectEvidenceDetail)
     .filter((item): item is EvidenceDetail => item !== undefined);
   const supplementalEvidence = supplementalRows
-    .map(mapAuthorizedEvidenceToDetail)
+    .map(projectEvidenceDetail)
     .filter((item): item is EvidenceDetail => item !== undefined);
   const evidence = [...opportunityEvidence, ...stakeholderEvidenceDetails, ...supplementalEvidence];
   const includedEvidenceIds = new Set(evidence.map((item) => item.id));

@@ -10,6 +10,7 @@ export * from './application/briefs/workflow.js';
 export * from './application/context/context-window-policy.js';
 export * from './application/context/contracts.js';
 export * from './application/deals/contracts.js';
+export * from './application/deals/evidence-detail.js';
 export * from './application/events/run-events.js';
 export * from './application/evidence/chunk.js';
 export * from './application/evidence/citations.js';

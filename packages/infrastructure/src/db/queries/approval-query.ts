@@ -13,7 +13,8 @@ import {
 import {
   CANONICAL_FIXTURE_COMMIT,
   collectDealBriefReferences,
-  dealBriefSchema
+  dealBriefSchema,
+  projectEvidenceDetail
 } from '@slacato/core';
 import type { DatabaseClient } from '../client.js';
 
@@ -69,6 +70,15 @@ type DecisionRow = Readonly<{
   diff: unknown;
   created_at: Date | string;
   actor_name: string;
+}>;
+type ReadableEvidenceRow = Readonly<{
+  id: string;
+  source_type: string;
+  sensitivity: string;
+  event_date: string | null;
+  source_locator: string | null;
+  content: string;
+  created_at: Date | string;
 }>;
 type QueryPrincipal = Readonly<{ actorId: string; sessionVersion: string }>;
 
@@ -184,7 +194,9 @@ export class PostgresApprovalQueryRepository {
       >`select source_type from authorized_opportunity_grants
         where persona_id = ${actorId} and opportunity_id = ${subject.opportunity_id}
           and source_commit = ${CANONICAL_FIXTURE_COMMIT}`,
-      this.database.sql<{ id: string }[]>`select evidence.id
+      this.database.sql<ReadableEvidenceRow[]>`select evidence.id, evidence.source_type,
+          evidence.sensitivity, evidence.event_date::text, evidence.source_locator, evidence.content,
+          evidence.created_at
         from evidence_versions evidence
         join opportunities opportunity on opportunity.id = evidence.opportunity_id
         join authorized_evidence_grants evidence_grant
@@ -202,7 +214,20 @@ export class PostgresApprovalQueryRepository {
     );
     const decisions = decisionRows.map(mapDecision);
     const decidedEntries = new Set(decidedEntryRows.map((row) => row.entry_id));
-    const readableEvidenceIds = new Set(readableEvidenceRows.map(({ id }) => id));
+    const readableEvidence = readableEvidenceRows
+      .map((row) =>
+        projectEvidenceDetail({
+          id: row.id,
+          sourceType: row.source_type,
+          sensitivity: row.sensitivity,
+          eventDate: row.event_date,
+          sourceLocator: row.source_locator,
+          content: row.content,
+          createdAt: row.created_at
+        })
+      )
+      .filter((detail) => detail !== undefined);
+    const readableEvidenceIds = new Set(readableEvidence.map(({ id }) => id));
     const readsAllPayloadEvidence = payloadEvidenceIds.every((evidenceId) =>
       readableEvidenceIds.has(evidenceId)
     );
@@ -221,6 +246,7 @@ export class PostgresApprovalQueryRepository {
       accountName: subject.account_name,
       status: subject.run_status,
       payload: visiblePayload,
+      evidence: readableEvidence,
       entries: entryRows.map((entry) => {
         const required = parseApprovalAuthorities(entry.eligible_authorities);
         return {
@@ -236,8 +262,7 @@ export class PostgresApprovalQueryRepository {
       quorum: { completed: decisions.length, required: entryRows.length },
       capabilities: {
         canReadDeal: readableDealRows.length > 0,
-        canEditPayload: readableDealRows.length > 0 && readsAllPayloadEvidence,
-        evidenceIds: [...readableEvidenceIds]
+        canEditPayload: readableDealRows.length > 0 && readsAllPayloadEvidence
       },
       createdAt: toIsoTimestamp(subject.created_at),
       supersededBySubjectId: subject.superseded_by_subject_id

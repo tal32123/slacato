@@ -5,9 +5,9 @@ import {
   type ApprovalClaim,
   approvalBriefPayloadSchema
 } from '@slacato/contracts';
-import { createElement } from 'react';
+import { createElement, Fragment, useState } from 'react';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ApprovalSubjectDetail } from '../../apps/web/src/features/approvals/subject-section';
@@ -113,19 +113,24 @@ function buildPayload(): ApprovalBriefPayload {
   };
 }
 
+/** Exercises the subject's evidence-selection interface with observable parent-owned state. */
+function SubjectHarness(): React.JSX.Element {
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState('none');
+  return createElement(
+    Fragment,
+    null,
+    createElement(ApprovalSubjectDetail, {
+      payload: buildPayload(),
+      evidenceIds: new Set([readableEvidenceId]),
+      onEvidence: (evidenceId: string) => setSelectedEvidenceId(evidenceId)
+    }),
+    createElement('output', { 'aria-label': 'Selected evidence' }, selectedEvidenceId)
+  );
+}
+
 /** Renders the approval subject with only the first evidence version authorized. */
 function renderSubject() {
-  return render(
-    createElement(
-      MemoryRouter,
-      null,
-      createElement(ApprovalSubjectDetail, {
-        payload: buildPayload(),
-        evidenceIds: new Set([readableEvidenceId]),
-        opportunityId: 'OPP-1001'
-      })
-    )
-  );
+  return render(createElement(MemoryRouter, null, createElement(SubjectHarness)));
 }
 
 /** Finds the section element whose heading carries the given title. */
@@ -182,18 +187,19 @@ describe('ApprovalSubjectDetail evidence attribution', () => {
     expect(within(summary).getByText('[2]').tagName).toBe('SPAN');
   });
 
-  it('keeps the numbered evidence roll-up and its authorized deep link intact', () => {
+  it('opens authorized evidence in place instead of linking to the deal workspace', () => {
     const { container } = renderSubject();
 
     const evidence = section(container, 'Authorized evidence summaries');
     expect(evidence.querySelector('#approval-evidence-1')).not.toBeNull();
     expect(evidence.querySelector('#approval-evidence-2')).not.toBeNull();
-    const links = within(evidence).getAllByRole('link', { name: 'Open authorized evidence' });
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute(
-      'href',
-      `/deals/OPP-1001?evidence=${encodeURIComponent(readableEvidenceId)}`
+    const button = within(evidence).getByRole('button', { name: 'Open authorized evidence' });
+    fireEvent.click(button);
+
+    expect(screen.getByRole('status', { name: 'Selected evidence' })).toHaveTextContent(
+      readableEvidenceId
     );
+    expect(within(evidence).queryByRole('link', { name: 'Open authorized evidence' })).toBeNull();
   });
 
   it('names the claim a review warning was raised against and stays silent when it references none', () => {
@@ -225,7 +231,7 @@ describe('ApprovalSubjectDetail evidence attribution', () => {
         createElement(ApprovalSubjectDetail, {
           payload,
           evidenceIds: new Set([readableEvidenceId]),
-          opportunityId: 'OPP-1001'
+          onEvidence: () => undefined
         })
       )
     );

@@ -87,8 +87,8 @@ export function useApprovalDecision(
   const operationKeys = useRef(new Map<ApprovalAction, string>());
   const statusRef = useRef<HTMLParagraphElement>(null);
   const evidenceIds = useMemo(
-    () => new Set(detail.capabilities.evidenceIds),
-    [detail.capabilities.evidenceIds]
+    () => new Set(detail.evidence.map(({ id }) => id)),
+    [detail.evidence]
   );
   const decidedIds = useMemo(
     () => new Set(detail.entries.filter((entry) => entry.decided).map((entry) => entry.entryId)),
