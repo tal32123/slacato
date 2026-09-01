@@ -698,7 +698,10 @@ export function GuidedTour(): React.JSX.Element {
             aria-describedby="guided-tour-description"
             data-tour-dialog="true"
             style={{ [placement.side]: DIALOG_MARGIN, maxHeight: placement.maxHeight }}
-            className="pointer-events-auto fixed left-1/2 z-[72] w-[min(92vw,25rem)] overflow-y-auto -translate-x-1/2 rounded-2xl border border-primary/25 bg-card p-5 text-card-foreground shadow-2xl sm:p-6"
+            // A column, not one scroll box. The height cap keeps the dialog off the control its
+            // step names, and when the cap bites it has to bite the prose -- never the controls
+            // that leave the step. Only the middle section below scrolls.
+            className="pointer-events-auto fixed left-1/2 z-[72] flex w-[min(92vw,25rem)] -translate-x-1/2 flex-col rounded-2xl border border-primary/25 bg-card p-5 text-card-foreground shadow-2xl sm:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -725,84 +728,86 @@ export function GuidedTour(): React.JSX.Element {
               value={((stepIndex + 1) / tourSteps.length) * 100}
               aria-label={`Tour step ${stepIndex + 1} of ${tourSteps.length}`}
             />
-            <p
-              id="guided-tour-description"
-              className="mt-4 text-sm leading-6 text-muted-foreground"
-            >
-              {step.body}
-            </p>
-            {targetMissing && (
-              <div
-                role="status"
-                className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
+            <div data-tour-dialog-scroll="true" className="min-h-0 flex-1 overflow-y-auto">
+              <p
+                id="guided-tour-description"
+                className="mt-4 text-sm leading-6 text-muted-foreground"
               >
-                <p>
-                  {offPath
-                    ? 'You have stepped off the guided path. Return to this step, or leave the tour.'
-                    : 'This step is not ready on screen yet. Wait for it to load, or move on.'}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {step.route !== undefined && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        routedStep.current = undefined;
-                        setTargetMissing(false);
-                        if (step.route !== undefined) void navigate(step.route);
-                      }}
-                    >
-                      Return to this step
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => settle(stepIndex + 1)}
-                  >
-                    Continue anyway
-                  </Button>
-                </div>
-              </div>
-            )}
-            {!targetMissing && generationGate.blocked && (
-              <div
-                role="status"
-                className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
-              >
-                <p>
-                  Generate Brief is disabled right now, so this step cannot be completed as written:{' '}
-                  {generationGate.reason}
-                </p>
-              </div>
-            )}
-            {!targetMissing && runGate.notice !== undefined && (
-              <div
-                role="status"
-                className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
-              >
-                <p>{runGate.notice}</p>
-                {runGate.waiting && (
+                {step.body}
+              </p>
+              {targetMissing && (
+                <div
+                  role="status"
+                  className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
+                >
+                  <p>
+                    {offPath
+                      ? 'You have stepped off the guided path. Return to this step, or leave the tour.'
+                      : 'This step is not ready on screen yet. Wait for it to load, or move on.'}
+                  </p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {/* Holding the step is the point; trapping the user in it is not. Waiting can
-                        outlast the tour's ability to read the run at all -- an unreadable session,
-                        a run page reached outside the protected shell -- and without a deliberate
-                        way past, the only exits left are abandoning the tour entirely. */}
+                    {step.route !== undefined && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          routedStep.current = undefined;
+                          setTargetMissing(false);
+                          if (step.route !== undefined) void navigate(step.route);
+                        }}
+                      >
+                        Return to this step
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       size="sm"
                       variant="ghost"
-                      onClick={() => settle(Math.min(stepIndex + 1, tourSteps.length - 1))}
+                      onClick={() => settle(stepIndex + 1)}
                     >
                       Continue anyway
                     </Button>
                   </div>
-                )}
-              </div>
-            )}
-            <div className="mt-5 flex items-center justify-between gap-3">
+                </div>
+              )}
+              {!targetMissing && generationGate.blocked && (
+                <div
+                  role="status"
+                  className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
+                >
+                  <p>
+                    Generate Brief is disabled right now, so this step cannot be completed as
+                    written: {generationGate.reason}
+                  </p>
+                </div>
+              )}
+              {!targetMissing && runGate.notice !== undefined && (
+                <div
+                  role="status"
+                  className="mt-3 rounded-lg bg-attention/15 px-3 py-2 text-sm text-attention-foreground"
+                >
+                  <p>{runGate.notice}</p>
+                  {runGate.waiting && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {/* Holding the step is the point; trapping the user in it is not. Waiting can
+                        outlast the tour's ability to read the run at all -- an unreadable session,
+                        a run page reached outside the protected shell -- and without a deliberate
+                        way past, the only exits left are abandoning the tour entirely. */}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => settle(Math.min(stepIndex + 1, tourSteps.length - 1))}
+                      >
+                        Continue anyway
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="mt-5 flex shrink-0 items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-1">
                 <Button type="button" variant="ghost" onClick={close}>
                   Skip tour

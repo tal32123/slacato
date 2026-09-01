@@ -431,6 +431,55 @@ describe('GuidedTour', () => {
     expect(screen.getByRole('button', { name: 'Continue anyway' })).toBeInTheDocument();
   });
 
+  /**
+   * Found in a UI review of a real screenshot: on a step whose spotlight sits low on the page, the
+   * dialog is capped to the space above it, and because the whole dialog was one scroll box the
+   * cap took the footer with it. The step rendered with its title, its body, a failure notice
+   * severed mid-sentence at the bottom border, and no Skip, Back or Next at all -- on step 4 of
+   * 20, leaving the close button as the only visible way out.
+   *
+   * The cap itself is right: the dialog must not grow across the control its step names. What
+   * cannot be capped away is the means to leave, so the footer sits outside the scrolling region.
+   */
+  it('keeps the step controls reachable when the dialog is capped shorter than its content', async () => {
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    const originalInnerHeight = window.innerHeight;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
+    // A target low in the viewport: the dialog is placed above it and capped to that space.
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.dataset?.tour === 'deal-list')
+        return {
+          top: 520, left: 0, right: 900, bottom: 690, width: 900, height: 170,
+          x: 0, y: 520, toJSON: () => ({})
+        } as DOMRect;
+      return originalRect.call(this);
+    };
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ active: true, stepIndex: 1, dismissed: false })
+      );
+      render(createElement(TourHarness, { initialPath: '/deals', target: 'deal-list' }));
+      const dialog = await screen.findByRole('dialog');
+      await waitFor(() => expect(document.querySelector('.ring-4')).not.toBeNull());
+
+      // The cap is doing its job.
+      expect(Number.parseInt(dialog.style.maxHeight, 10)).toBeLessThan(dialog.scrollHeight);
+
+      // ...and the controls are still outside whatever it clipped.
+      const footer = screen.getByRole('button', { name: /Next/ }).closest('div');
+      const scroller = footer?.closest('[data-tour-dialog-scroll="true"]');
+      expect(scroller).toBeNull();
+      expect(screen.getByRole('button', { name: 'Skip tour' })).toBeInTheDocument();
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: originalInnerHeight
+      });
+    }
+  });
+
   it('discards a corrupted non-integer persisted step index instead of rendering mismatched progress', async () => {
     // Bug: readTourState() only checked the bounds of parsed.stepIndex, not that it was an
     // integer. A fractional value (e.g. from hand-edited or corrupted localStorage) passed the
