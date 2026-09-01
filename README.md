@@ -23,7 +23,7 @@ Open the self-contained [technical overview](docs/technical-overview.html) for t
 - pnpm 10.25.0 (the version pinned by `packageManager`)
 - Docker with Docker Compose
 - A POSIX-like shell for the environment-loading commands below
-- For live inference: an OpenRouter or Ollama API key and explicit chat/embedding model IDs
+- For live inference: an OpenRouter API key and explicit chat/embedding model IDs
 
 ## Setup
 
@@ -177,7 +177,6 @@ All runtime secrets are server-side environment variables. `.env` and `.env.loca
 | --- | --- | --- |
 | `mock` | Deterministic local development and tests only. It uses a 64-dimensional token-hash embedding and no network or key. Do not use it to create submission or demo artifacts. | `AI_PROVIDER=mock` |
 | `openrouter` | Live structured generation and embeddings through OpenRouter. | `AI_PROVIDER=openrouter`, `OPENROUTER_API_KEY`, `OPENROUTER_CHAT_MODEL`, `OPENROUTER_EMBEDDING_MODEL` |
-| `ollama` | Live Ollama-compatible generation and embeddings; the adapter probes embedding dimension/normalization and structured-output capability. | `AI_PROVIDER=ollama`, `OLLAMA_API_KEY`, `OLLAMA_CHAT_MODEL`, `OLLAMA_EMBEDDING_MODEL`; `OLLAMA_BASE_URL` defaults to `https://ollama.com/api` |
 
 The full configuration surface represented by `.env.example` is:
 
@@ -188,14 +187,10 @@ The full configuration surface represented by `.env.example` is:
 | `REDIS_URL` | Redis/BullMQ connection string |
 | `WEB_ORIGIN` | Exact allowed browser origin, with no path |
 | `SESSION_SECRET` | Server-side session signing secret, at least 32 characters |
-| `AI_PROVIDER` | `mock`, `openrouter`, or `ollama` |
+| `AI_PROVIDER` | `mock` or `openrouter` |
 | `OPENROUTER_API_KEY` | OpenRouter server-side credential |
 | `OPENROUTER_CHAT_MODEL` | OpenRouter chat model ID |
 | `OPENROUTER_EMBEDDING_MODEL` | OpenRouter embedding model ID |
-| `OLLAMA_API_KEY` | Ollama server-side credential |
-| `OLLAMA_BASE_URL` | Ollama API base URL |
-| `OLLAMA_CHAT_MODEL` | Ollama chat model ID |
-| `OLLAMA_EMBEDDING_MODEL` | Ollama embedding model ID |
 | `LOG_LEVEL` | `debug`, `info`, `warn`, or `error` |
 
 Generation uses schema-constrained output where the provider supports it, disables provider-library retries, and applies bounded calls, transport retries, schema repairs, output tokens, and deadlines in the shared model gateway. OpenRouter is configured to allow provider failover while requiring requested parameters. The checked-in Slack fixture provenance records a completed live OpenRouter run with `google/gemini-3.5-flash-lite`, native-schema output, two calls, and 5,825 total tokens; see `fixtures/cato/slack/generation.json`.
