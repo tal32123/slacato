@@ -22,6 +22,8 @@ const REASONS: Readonly<Record<RunFailureReason, string>> = {
 };
 
 /** Describes why a run failed, or returns undefined when the run recorded no reason. */
-export function describeRunFailure(reason: RunFailureReason | null | undefined): string | undefined {
+export function describeRunFailure(
+  reason: RunFailureReason | null | undefined
+): string | undefined {
   return reason === null || reason === undefined ? undefined : REASONS[reason];
 }

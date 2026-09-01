@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { runFailureReasonSchema, runStatusSchema as canonicalRunStatusSchema } from './runs.js';
+import { runStatusSchema as canonicalRunStatusSchema, runFailureReasonSchema } from './runs.js';
 
 export const opaqueIdSchema = z
   .string()
