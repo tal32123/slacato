@@ -27,7 +27,8 @@ export type BriefQualityRule =
   | 'multi-source-citations'
   | 'required-sections-populated'
   | 'internal-identifier-in-copy'
-  | 'self-contradictory-warning';
+  | 'self-contradictory-warning'
+  | 'commercial-claim-provenance';
 
 /**
  * What the authorized fixtures make reachable for the deal under evaluation.
@@ -74,6 +75,45 @@ const INTERNAL_IDENTIFIER_PATTERNS: readonly Readonly<{ label: string; pattern: 
 /** Wording that asserts something is missing, unsupported, or otherwise absent from the brief. */
 const ABSENCE_WORDING =
   /\b(?:absent|missing|unsupported|not supported|no support|lacks|lacking|insufficient|without support|no evidence|unavailable)\b/iu;
+
+/**
+ * The source families that can ground a commercial or legal-terms assertion.
+ *
+ * The task's source list names the pricing notes and the Deal Desk policy as mandatory inputs
+ * precisely because they are the only records that state what the deal may commercially be. A CRM
+ * stage field and a call transcript record what somebody said about money; neither establishes it.
+ */
+const COMMERCIAL_PROVENANCE_SOURCE_TYPES: readonly string[] = ['pricing', 'policy'];
+
+/**
+ * Wording by which a brief states the deal's own commercial or legal-terms position.
+ *
+ * Matched only against the sections where the brief speaks in its own voice about the deal (see
+ * `DEAL_POSITION_PATH`). A stakeholder's recorded concern - "focused on renewal uplift and payment
+ * schedule" - is a fact about a person that their contact record states, not a commercial position
+ * the brief is asserting, and demanding a pricing note for it would be wrong.
+ */
+const COMMERCIAL_POSITION_WORDING =
+  /\b(?:discounts?|discounting|concessions?|pricing|prices?|priced|uplift|acv|arr|payment terms|payment schedule|order form|commercial terms|contract terms|liability language|indemnit\w*|data processing addendum|deal desk|margins?|rebates?|approval threshold)\b/iu;
+
+/**
+ * Prose paths at which the brief asserts the deal's position rather than reporting a source.
+ *
+ * Buyer goals, the stakeholder map and Source Evidence summaries are deliberately excluded: those
+ * restate what a cited record says, and their provenance is the record they restate.
+ */
+const DEAL_POSITION_PATH =
+  /^(?:dealSnapshot\.claims|executiveSummary|negotiationState|recommendedNextActions)\b/u;
+
+/**
+ * A commercial term stated as a specific fact: a rate, a money figure, a named approval gate.
+ *
+ * This is the shape of assertion a reviewer forwards to a customer, so it is held to the stricter
+ * per-claim rule - the claim's own citation must reach a pricing note or the Deal Desk policy, not
+ * merely somewhere else in the brief.
+ */
+const MATERIAL_COMMERCIAL_TERM =
+  /(?:\d+(?:[.,]\d+)?\s?(?:%|percent\b))|(?:[$\u20ac\u00a3]\s?\d)|\b(?:deal desk|approval threshold|list price|acv|arr)\b/iu;
 
 /** Lower-cases and collapses whitespace so warning prose and stakeholder names compare stably. */
 function normalize(value: string): string {
@@ -171,6 +211,35 @@ export function supportedStakeholderNames(brief: DealBrief): readonly string[] {
   return brief.stakeholderMap.stakeholders
     .filter((stakeholder) => stakeholder.claims.some((claim) => claim.citations.length > 0))
     .map((stakeholder) => stakeholder.name);
+}
+
+/** One generated claim together with the path at which the brief presents it. */
+export type BriefClaimField = Readonly<{
+  path: string;
+  claim: DealBrief['executiveSummary']['claims'][number];
+}>;
+
+/** Collects every claim the brief carries, wherever it sits, with the path that presents it. */
+export function collectClaims(brief: DealBrief): readonly BriefClaimField[] {
+  const fields: BriefClaimField[] = [];
+  const addAll = (path: string, claims: DealBrief['executiveSummary']['claims']): void => {
+    for (const [index, claim] of (claims ?? []).entries())
+      fields.push({ path: `${path}[${index}]`, claim });
+  };
+
+  addAll('dealSnapshot.claims', brief.dealSnapshot.claims);
+  addAll('executiveSummary.claims', brief.executiveSummary.claims);
+  addAll('buyerGoalsAndBusinessDrivers.claims', brief.buyerGoalsAndBusinessDrivers.claims);
+  addAll('stakeholderMap.claims', brief.stakeholderMap.claims);
+  for (const [index, stakeholder] of brief.stakeholderMap.stakeholders.entries())
+    addAll(`stakeholderMap.stakeholders[${index}].claims`, stakeholder.claims);
+  addAll('negotiationState.claims', brief.negotiationState.claims);
+  for (const [index, action] of brief.recommendedNextActions.actions.entries())
+    addAll(`recommendedNextActions.actions[${index}].claims`, action.claims);
+  for (const [index, summary] of brief.sourceEvidence.evidence.entries())
+    addAll(`sourceEvidence.evidence[${index}].claims`, summary.claims);
+
+  return fields;
 }
 
 /** Evaluates one finalized brief against every brief-quality invariant. */
@@ -272,6 +341,44 @@ export function evaluateBriefQuality(
           rule: 'self-contradictory-warning',
           detail: `Warning ${warning.code} reports "${warning.message}" while the brief presents ${name} as a cited, supported stakeholder.`
         });
+  }
+
+  // 7. A brief that states where the deal stands commercially - a discount, an uplift, payment or
+  //    contract terms, a Deal Desk gate - must be able to show where that position comes from. The
+  //    pricing notes and the Deal Desk policy are the records that establish it; a contact record
+  //    or a call transcript only reports that somebody spoke about money. Without the rule a brief
+  //    can recommend a commercial position, cite an unrelated CRM row, and pass clean.
+  const sourceTypeByEvidenceId = new Map(
+    brief.sourceEvidence.evidence.map((entry) => [entry.evidenceId, entry.sourceType as string])
+  );
+  /** The source family a citation draws on, from the evidence section or the evidence id itself. */
+  const citedSourceType = (evidenceId: string): string =>
+    sourceTypeByEvidenceId.get(evidenceId) ?? evidenceId.split(':')[0] ?? '';
+  const commercialProvenance = sourceTypes.filter((type) =>
+    COMMERCIAL_PROVENANCE_SOURCE_TYPES.includes(type)
+  );
+
+  if (commercialProvenance.length === 0)
+    for (const field of collectUserFacingProse(brief)) {
+      if (!DEAL_POSITION_PATH.test(field.path)) continue;
+      const match = COMMERCIAL_POSITION_WORDING.exec(field.text);
+      if (match === null) continue;
+      violations.push({
+        rule: 'commercial-claim-provenance',
+        detail: `${field.path} states the deal's commercial position ("${match[0]}") but Source Evidence cites no ${COMMERCIAL_PROVENANCE_SOURCE_TYPES.join(' or ')} evidence. Cited: ${sourceTypes.join(', ') || 'none'}.`
+      });
+      break;
+    }
+
+  for (const { path, claim } of collectClaims(brief)) {
+    const term = MATERIAL_COMMERCIAL_TERM.exec(claim.statement);
+    if (term === null) continue;
+    const cited = claim.citations.map((citation) => citedSourceType(citation.evidenceId));
+    if (cited.some((type) => COMMERCIAL_PROVENANCE_SOURCE_TYPES.includes(type))) continue;
+    violations.push({
+      rule: 'commercial-claim-provenance',
+      detail: `${path} states the commercial term "${term[0]}" ("${claim.statement}") but cites only ${cited.join(', ') || 'nothing'}; a pricing note or the Deal Desk policy must support it.`
+    });
   }
 
   return { violations, sourceTypes, stakeholderNames, sections };

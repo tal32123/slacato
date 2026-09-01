@@ -33,6 +33,22 @@ const SALESFORCE_CANDIDATE_WINDOW = 2;
 // window's history for the same structural constraint).
 const GONG_TRANSCRIPT_CANDIDATE_WINDOW = 2;
 const CANONICAL_POLICY_SECTION_LIMIT = 1 + 3; // Policy preamble and every bounded rule section.
+// The plan runs the caller's query alongside six fixed section queries, and each execution feeds
+// TWO ranked lists (lexical + semantic) into RRF. Unweighted, that is 2 lists for the question the
+// caller actually asked against 12 for a constant, query-independent scaffold -- so the fused top-k
+// was very nearly a fixed shape per opportunity no matter what was asked. Worse, RRF then rewards
+// source CARDINALITY rather than relevance: an opportunity has ~2 Slack rows, so the same two IDs
+// take rank 1-2 in all twelve section lists and accumulate ~12/61 of mass, while an opportunity's
+// dozens of Gong transcript windows scatter their mass across dozens of distinct IDs and none of
+// them ever clears the top 5.
+//
+// The section queries still earn their place: they are what guarantees a deal brief has candidates
+// for every section it must fill, including sections the caller's phrasing never touches. So they
+// are kept and demoted to a tiebreaker rather than removed. The caller's query contributes at most
+// 2/61 of mass; six section queries at weight w contribute at most 12w/61, so any w < 1/6 makes the
+// caller's question strictly dominant while section coverage still orders everything the question
+// itself cannot separate. 0.1 leaves a deliberate margin below that boundary.
+const SECTION_QUERY_WEIGHT = 0.1;
 const RELIABILITY_ADJUSTMENTS: Readonly<Record<string, number>> = Object.freeze({
   authoritative_policy: 0.02,
   authoritative_system: 0.015,
@@ -88,6 +104,7 @@ export function buildEvidencePlan(
         sourceTypes: [...AUTHORIZED_SOURCE_TYPES]
       }
     ],
+    sectionQueryWeight: SECTION_QUERY_WEIGHT,
     sourceLimits: {
       gong_summary: Math.min(input.limit, 2),
       gong_transcript: Math.min(input.limit, GONG_TRANSCRIPT_CANDIDATE_WINDOW),

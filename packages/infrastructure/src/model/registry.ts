@@ -2,6 +2,7 @@ import type { ProviderHealthView } from '@slacato/contracts';
 import type {
   BudgetedModelGateway,
   EmbeddingGateway,
+  EmbeddingRequestOptions,
   GenerateObjectRequest,
   GenerationResult,
   ModelRegistry,
@@ -130,7 +131,7 @@ export type ProviderDescriptor<Provider extends AiProvider = AiProvider> = {
 };
 
 /** Wraps an embedding gateway so every call is metered against the run's durable budget. */
-const runScopedEmbedding =
+export const runScopedEmbedding =
   (
     gateway: EmbeddingGateway,
     attemptLedger: PostgresProviderAttemptLedger,
@@ -142,8 +143,8 @@ const runScopedEmbedding =
       throw new Error('Run budget scope must match the gateway run scope');
     await attemptLedger.assertRunBudget(input.budget);
     return {
-      async embed(values: readonly string[]) {
-        await attemptLedger.remainingDeadlineMs(input.runScope);
+      async embed(values: readonly string[], options?: EmbeddingRequestOptions) {
+        const deadlineAt = Date.now() + (await attemptLedger.remainingDeadlineMs(input.runScope));
         const inputTokens = Math.max(
           1,
           Math.ceil(values.reduce((total, value) => total + value.length, 0) / 4)
@@ -159,7 +160,15 @@ const runScopedEmbedding =
           requestedOutputTokens: 1
         });
         try {
-          const output = await gateway.embed(values);
+          // Bound the provider call itself: a pre-check and a post-check cannot end a request
+          // that hangs between them, so the run's remaining time becomes the request's timeout.
+          const deadlineSignal = AbortSignal.timeout(Math.max(1, deadlineAt - Date.now()));
+          const output = await gateway.embed(values, {
+            signal:
+              options?.signal === undefined
+                ? deadlineSignal
+                : AbortSignal.any([options.signal, deadlineSignal])
+          });
           await attemptLedger.remainingDeadlineMs(input.runScope);
           await attemptLedger.settleAttempt({
             ...reservation,

@@ -91,18 +91,32 @@ async function driveRun(
 }
 
 /**
- * Reads the brief a finished run produced, preferring the finalized export over the draft.
+ * Reads the brief a successful run produced, preferring the finalized export over the draft.
  *
- * A run whose policy facts require approval stops at `awaiting_approval` and has no finalized
- * export, so the first draft checkpoint is read instead. That is the artifact the approver reads,
- * and it has already passed the same grounding validation, so the invariants apply to it unchanged.
- * Only draft version 1 is read: a regeneration cycle is outside what this evaluation drives.
+ * Exactly two run states are accepted. `completed` is the finalized brief. `awaiting_approval` is a
+ * run whose policy facts require a human decision: it has no finalized export, so the first draft
+ * checkpoint is read instead - that is the artifact the approver reads, and it has already passed
+ * the same grounding validation, so the invariants apply to it unchanged. Only draft version 1 is
+ * read: a regeneration cycle is outside what this evaluation drives.
+ *
+ * Every other status is a hard failure, deliberately. The synthesis step persists `strategy:1`
+ * before the validation step runs, so a run that terminally fails validation - or one the command
+ * pump abandons short of a terminal state - still leaves a draft behind. Scoring that draft would
+ * report a green brief quality for a run that never succeeded, and this evaluation is the evidence
+ * the submission offers that a real model produces a usable brief. It must not be reportable
+ * without the run that earned it.
  */
-async function readBrief(
-  exporter: PostgresBriefExportService,
-  store: PostgresWorkflowStore,
+export async function readBrief(
+  exporter: Pick<PostgresBriefExportService, 'exportFinalized'>,
+  store: Pick<PostgresWorkflowStore, 'getCheckpoint'>,
   run: WorkflowRun
 ): Promise<DealBrief> {
+  if (run.status !== 'completed' && run.status !== 'awaiting_approval') {
+    throw new Error(
+      `Run ${run.id} did not succeed (status ${run.status}); refusing to report brief quality for it. ` +
+        'A draft checkpoint can outlive a run that failed validation, so it is not evidence of quality.'
+    );
+  }
   if (run.status === 'completed') {
     const exported = await exporter.exportFinalized({
       actorId: run.requestedBy,

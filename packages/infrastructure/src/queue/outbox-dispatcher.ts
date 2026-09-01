@@ -1,5 +1,8 @@
 import type { CommandQueue, WorkflowCommand } from '@slacato/core';
+import type { Logger } from 'pino';
 import type { DatabaseClient } from '../db/client.js';
+import { logger } from '../logging/logger.js';
+import { reportLoopFailure } from '../logging/loop-telemetry.js';
 import type { CommandInspection } from './bullmq.js';
 
 type OutboxRow = Readonly<{
@@ -21,7 +24,8 @@ export class OutboxDispatcher {
     private readonly commandQueue: CommandQueue,
     private readonly deadLetterQueue: CommandQueue,
     private readonly maxAttempts = 3,
-    private readonly claimLeaseMs = 30_000
+    private readonly claimLeaseMs = 30_000,
+    private readonly telemetry: Logger = logger
   ) {}
 
   /** Claims and publishes one bounded batch while preserving safe retry and dead-letter outcomes. */
@@ -56,7 +60,9 @@ export class OutboxDispatcher {
         const acceptance = await this.inspectAcceptance(row.id);
         if (acceptance === 'accepted') {
           if (await this.markPublished(row)) published += 1;
+          this.reportDelivery(row, error, 'outbox_command_delivery_recovered', 'published');
         } else if (acceptance === 'ambiguous') {
+          this.reportDelivery(row, error, 'outbox_command_delivery_ambiguous', 'claimed');
           await this.database
             .sql`update outbox_commands set delivery_attempts = greatest(delivery_attempts - 1, 0)
             where id = ${row.id} and status = 'claimed' and claim_token = ${row.claim_token}`;
@@ -69,14 +75,31 @@ export class OutboxDispatcher {
           await this.database
             .sql`update outbox_commands set status = 'dead_letter', claim_owner = null, claim_token = null, claim_expires_at = null where id = ${row.id} and status = 'claimed' and claim_token = ${row.claim_token}`;
           deadLettered += 1;
+          this.reportDelivery(row, error, 'outbox_command_dead_lettered', 'dead_letter');
         } else {
           await this.database
             .sql`update outbox_commands set status = 'pending', available_at = now() + interval '1 second' * ${row.delivery_attempts}, claim_owner = null, claim_token = null, claim_expires_at = null where id = ${row.id} and status = 'claimed' and claim_token = ${row.claim_token}`;
+          this.reportDelivery(row, error, 'outbox_command_delivery_retried', 'pending');
         }
-        void error;
       }
     }
     return { claimed: claimed.length, published, deadLettered };
+  }
+
+  /** Records the outcome of a failed publish so discarded and dead-lettered deliveries stay visible. */
+  private reportDelivery(row: OutboxRow, error: unknown, event: string, status: string): void {
+    const record = {
+      event,
+      correlationId: row.id,
+      runId: row.run_id,
+      attemptId: row.id,
+      status,
+      retryCount: Math.max(0, row.delivery_attempts - 1),
+      errorName: error instanceof Error ? error.constructor.name : 'UnknownError',
+      errorCode: 'OUTBOX_COMMAND_PUBLISH_FAILED'
+    };
+    if (status === 'published') this.telemetry.warn(record);
+    else this.telemetry.error(record);
   }
 
   /** Marks a claimed command as published only when this dispatcher still owns its claim. */
@@ -108,12 +131,13 @@ export class OutboxDispatcherLoop {
   private timer: NodeJS.Timeout | undefined;
   private stopping = false;
   private running = false;
+  private consecutiveFailures = 0;
   /** Configures bounded polling for the outbox dispatcher. */
   public constructor(
     private readonly dispatcher: OutboxDispatcher,
     private readonly pollMs = 1_000,
     private readonly batchSize = 25,
-    private readonly onTransientError: () => void = () => {}
+    private readonly telemetry: Logger = logger
   ) {}
   /** Starts polling when the loop is not already active. */
   public start(): void {
@@ -128,12 +152,21 @@ export class OutboxDispatcherLoop {
   /** Dispatches one batch and schedules the next poll with bounded failure backoff. */
   private async tick(): Promise<void> {
     this.running = true;
+    const startedAt = Date.now();
     let delay = this.pollMs;
     try {
       await this.dispatcher.dispatchBatch(this.batchSize);
-    } catch {
+      this.consecutiveFailures = 0;
+    } catch (error) {
       delay = Math.min(this.pollMs * 2, 30_000);
-      this.onTransientError();
+      this.consecutiveFailures += 1;
+      reportLoopFailure(this.telemetry, {
+        event: 'outbox_dispatcher_loop_failed',
+        errorCode: 'OUTBOX_DISPATCH_LOOP_FAILED',
+        error,
+        durationMs: Date.now() - startedAt,
+        consecutiveFailures: this.consecutiveFailures
+      });
     } finally {
       this.running = false;
     }

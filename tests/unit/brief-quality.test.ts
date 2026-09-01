@@ -9,6 +9,8 @@ import {
 } from '../../scripts/brief-quality.js';
 import {
   contactEvidenceId,
+  fixtureCitation,
+  fixtureClaim,
   healthyBrief,
   NORTHSTAR_CONTACTS,
   NORTHSTAR_EXPECTATIONS,
@@ -25,7 +27,7 @@ describe('brief-quality invariants', () => {
   it('passes a brief that surfaces its stakeholders, cites two source families, and warns cleanly', () => {
     expect(evaluateBriefQuality(healthyBrief(), NORTHSTAR_EXPECTATIONS)).toMatchObject({
       violations: [],
-      sourceTypes: ['crm', 'slack'],
+      sourceTypes: ['crm', 'policy', 'slack'],
       stakeholderNames: ['Marco Devlin']
     });
   });
@@ -154,6 +156,70 @@ describe('brief-quality invariants', () => {
       }
     } as DealBrief;
     expect(rules(benign)).not.toContain('self-contradictory-warning');
+  });
+
+  it('flags a brief that states the deal commercial position with no pricing or policy evidence', () => {
+    const brief = healthyBrief();
+    const unprovenanced = {
+      ...brief,
+      sourceEvidence: {
+        evidence: brief.sourceEvidence.evidence.filter(
+          (entry) => entry.sourceType !== 'pricing' && entry.sourceType !== 'policy'
+        )
+      },
+      negotiationState: {
+        ...brief.negotiationState,
+        claims: brief.negotiationState.claims.map((claim) => ({
+          ...claim,
+          citations: [fixtureCitation(contactEvidenceId('CON-3002'))]
+        }))
+      }
+    } as DealBrief;
+    expect(rules(unprovenanced)).toContain('commercial-claim-provenance');
+  });
+
+  it('flags a stated discount that cites a contact record instead of pricing or policy evidence', () => {
+    const brief = healthyBrief();
+    const fabricatedDiscount = {
+      ...brief,
+      negotiationState: {
+        ...brief.negotiationState,
+        claims: [
+          ...brief.negotiationState.claims,
+          fixtureClaim(
+            'claim_ns_discount',
+            'Procurement secured a 15 percent discount on the renewal.',
+            contactEvidenceId('CON-3002')
+          )
+        ]
+      }
+    } as DealBrief;
+    expect(rules(fabricatedDiscount)).toContain('commercial-claim-provenance');
+  });
+
+  it('does not demand pricing provenance from a brief that states no commercial position', () => {
+    const brief = healthyBrief();
+    const operational = {
+      ...brief,
+      sourceEvidence: {
+        evidence: brief.sourceEvidence.evidence.filter(
+          (entry) => entry.sourceType !== 'pricing' && entry.sourceType !== 'policy'
+        )
+      },
+      negotiationState: {
+        currentState: 'The rollout model is under review with the account team.',
+        leverage: [],
+        risks: ['Regional exception handling remains unresolved.'],
+        claims: [
+          fixtureClaim(
+            'claim_ns_1',
+            'The rollout model is under review with the account team.',
+            contactEvidenceId('CON-3002')
+          )
+        ]
+      }
+    } as DealBrief;
+    expect(rules(operational)).not.toContain('commercial-claim-provenance');
   });
 
   it('derives its expectations from the canonical fixtures rather than a hand-kept list', () => {

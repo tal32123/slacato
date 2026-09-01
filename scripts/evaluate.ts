@@ -30,17 +30,28 @@ const caseSchema = z
     query: z.string().min(1),
     limit: z.number().int().min(1).max(20),
     relevantEvidenceIds: z.array(z.string().min(1)),
+    // Evidence this persona must never be handed for this query - a sensitive-pricing note for a
+    // reader without that grant, or any source family outside their authorized set. Retrieving one
+    // is counted as permission leakage, exactly like answering a denied request.
+    forbiddenEvidenceIds: z.array(z.string().min(1)).optional(),
     expectedDenied: z.boolean().optional()
   })
   .strict();
 const goldenSchema = z
-  .object({ version: z.literal(1), cases: z.array(caseSchema).min(1) })
+  .object({
+    version: z.literal(1),
+    // JSON carries no comments, so the labelling rules that make these cases reproducible live in
+    // the file itself rather than only in a commit message.
+    _labelling: z.array(z.string().min(1)).optional(),
+    cases: z.array(caseSchema).min(1)
+  })
   .strict();
 
 export type RetrievalEvaluationInput = Readonly<{
   id: string;
   k: number;
   relevantEvidenceIds: readonly string[];
+  forbiddenEvidenceIds?: readonly string[] | undefined;
   retrievedEvidenceIds: readonly string[];
   denied: boolean;
 }>;
@@ -49,15 +60,21 @@ export type RetrievalEvaluationInput = Readonly<{
 export function evaluateRetrievalResults(inputs: readonly RetrievalEvaluationInput[]) {
   const cases = inputs.map((input) => {
     const relevant = new Set(input.relevantEvidenceIds);
+    const forbidden = new Set(input.forbiddenEvidenceIds ?? []);
     const retrieved = [...new Set(input.retrievedEvidenceIds)].slice(0, input.k);
     const hits = retrieved.filter((id) => relevant.has(id)).length;
+    // Forbidden evidence is checked against everything the retriever returned, not just the scored
+    // prefix: handing a reader a source they may not see is leakage wherever it lands in the list.
+    const leakedForbidden = [...new Set(input.retrievedEvidenceIds)].filter((id) =>
+      forbidden.has(id)
+    ).length;
     const precisionAtK = relevant.size === 0 && retrieved.length === 0 ? 1 : hits / input.k;
     const recallAtK = relevant.size === 0 ? 1 : hits / relevant.size;
     return {
       id: input.id,
       precisionAtK,
       recallAtK,
-      leakedEvidence: input.denied ? retrieved.length : 0,
+      leakedEvidence: input.denied ? retrieved.length : leakedForbidden,
       retrieved: retrieved.length,
       relevantEvidenceIds: [...relevant],
       retrievedEvidenceIds: retrieved
@@ -191,6 +208,9 @@ async function runRetrievalEvaluation(): Promise<ReturnType<typeof evaluateRetri
         id: testCase.id,
         k: testCase.limit,
         relevantEvidenceIds: testCase.relevantEvidenceIds,
+        ...(testCase.forbiddenEvidenceIds === undefined
+          ? {}
+          : { forbiddenEvidenceIds: testCase.forbiddenEvidenceIds }),
         retrievedEvidenceIds: result.evidence.map((entry) => entry.evidenceId),
         denied: denied || testCase.expectedDenied === true
       });
@@ -217,17 +237,26 @@ async function main(): Promise<void> {
   process.stdout.write(`${JSON.stringify(report)}\n`);
   // The macro mean is an average of per-case recalls over a fixed golden set, so it lands on
   // representable-but-inexact values - the sibling metric reports 0.20000000000000004 for what is
-  // arithmetically 0.2. Recall currently sits exactly on the threshold, so a bare `< 0.5` can fail
-  // on 0.49999999999999994 while nominally at the gate. The tolerance rejects only that
-  // representation noise: a genuine regression moves the mean by a whole case, and with three
-  // scored cases the next reachable value below 0.5 is 0.333, which still fails loudly.
+  // arithmetically 0.2. The tolerance rejects only that representation noise; it is far smaller
+  // than the smallest move a real regression can make.
+  //
+  // The floor is deliberately left at the value the original three-case set was calibrated to. The
+  // expanded set measures the same retriever honestly and scores well under it, so this gate is
+  // currently RED BY DESIGN: it records an unmet quality bar rather than pretending the bar was
+  // always this low. Fix the retriever to clear it; do not lower the floor to match the retriever.
   const RECALL_FLOOR = 0.5;
   const RECALL_EPSILON = 1e-9;
-  if (
-    report.summary.permissionLeakage !== 0 ||
-    report.summary.macroRecallAtK < RECALL_FLOOR - RECALL_EPSILON
-  )
-    process.exitCode = 1;
+  const leaked = report.summary.permissionLeakage !== 0;
+  const belowFloor = report.summary.macroRecallAtK < RECALL_FLOOR - RECALL_EPSILON;
+  if (leaked)
+    process.stderr.write(
+      `FAIL permission leakage: ${report.summary.permissionLeakage} evidence chunks were returned to a reader who may not see them\n`
+    );
+  if (belowFloor)
+    process.stderr.write(
+      `FAIL retrieval recall: macroRecallAtK ${report.summary.macroRecallAtK.toFixed(3)} is below the ${RECALL_FLOOR} floor (macroPrecisionAtK ${report.summary.macroPrecisionAtK.toFixed(3)}). See evals/reports/retrieval.json for the per-case misses.\n`
+    );
+  if (leaked || belowFloor) process.exitCode = 1;
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url))

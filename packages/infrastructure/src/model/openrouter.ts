@@ -3,6 +3,7 @@ import {
   type BudgetedModelGateway,
   createBudgetedModelGateway,
   type EmbeddingGateway,
+  type EmbeddingRequestOptions,
   ModelGatewayTransportError,
   type ModelRegistry,
   type ModelTransport,
@@ -201,13 +202,17 @@ export function createOpenRouterModelGateways(config: OpenRouterGatewayConfig): 
       config.attemptLedger
     ),
     embeddingGateway: {
-      async embed(values: readonly string[]): Promise<number[][]> {
+      async embed(
+        values: readonly string[],
+        options?: EmbeddingRequestOptions
+      ): Promise<number[][]> {
         if (values.length === 0) return [];
         try {
           const result = await embedMany({
             model: provider.textEmbeddingModel(config.embeddingModelId),
             values: [...values],
-            maxRetries: 0
+            maxRetries: 0,
+            ...(options?.signal === undefined ? {} : { abortSignal: options.signal })
           });
           return result.embeddings.map((embedding) => [...embedding]);
         } catch (error) {

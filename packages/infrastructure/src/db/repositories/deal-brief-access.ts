@@ -253,9 +253,7 @@ export class PostgresDealBriefPolicyFacts {
       overallConfidence: brief.confidenceAndReviewWarnings.overallConfidence,
       conflictingEvidence: facts.conflicting_evidence || warningCodes.has('CONFLICTING_EVIDENCE'),
       missingMaterialEvidence:
-        facts.missing_material_evidence ||
-        brief.missingInformation.items.length > 0 ||
-        warningCodes.has('MISSING_MATERIAL_EVIDENCE')
+        facts.missing_material_evidence || warningCodes.has('MISSING_MATERIAL_EVIDENCE')
     };
   }
 }

@@ -122,6 +122,12 @@ test('completes the desktop and mobile shell journey with keyboard input only', 
   const changePersona = page.getByRole('button', { name: 'Use selected persona' });
   await expect(changePersona).toBeFocused();
   await page.keyboard.press('Space');
+  // The radio reflects the local selection as soon as it is checked, so re-asserting it here
+  // waits on nothing: the POST /api/auth/persona this Space press submits is still in flight, and
+  // navigating away would abandon it mid-write -- the old session is revoked first, so the next
+  // protected navigation lands on /login. The sr-only "active persona" marker is rendered from the
+  // session the mutation returns, so it appears only once the switch is durable.
+  await expect(page.getByText('Nora Chen, active persona')).toBeVisible();
   await expect(page.getByRole('radio', { name: /Nora Chen/ })).toBeChecked();
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -213,14 +219,26 @@ test('routes typed authorization errors and gives root bootstrap failures a main
 test('renders route pending, error, and genuine not-found states', async ({ page }) => {
   await loginAs(page);
 
-  let releaseDiagnostics: (() => void) | undefined;
+  // Both gates are created BEFORE the route handler can run. Assigning the release function
+  // inside the handler instead left it undefined whenever the request reached the interceptor
+  // after the pending-status assertion resolved (the shell shows "Loading destination" as soon as
+  // the router transition starts, which can precede the loader's fetch under a loaded suite), so
+  // `releaseDiagnostics?.()` silently released nothing and the request hung until the test timed
+  // out. Waiting for `diagnosticsHeld` also makes the assertion say what it means: the pending
+  // state is asserted while this request is demonstrably in flight and held.
+  let markDiagnosticsHeld!: () => void;
+  const diagnosticsHeld = new Promise<void>((resolve) => { markDiagnosticsHeld = resolve; });
+  let releaseDiagnostics!: () => void;
+  const diagnosticsGate = new Promise<void>((resolve) => { releaseDiagnostics = resolve; });
   await page.route('**/api/diagnostics', async (route) => {
-    await new Promise<void>((resolve) => { releaseDiagnostics = resolve; });
+    markDiagnosticsHeld();
+    await diagnosticsGate;
     await route.continue();
   });
   await page.getByLabel('Session controls').getByRole('link', { name: 'Demo Diagnostics' }).click();
+  await diagnosticsHeld;
   await expect(page.getByRole('status', { name: 'Loading destination' })).toBeVisible();
-  releaseDiagnostics?.();
+  releaseDiagnostics();
   await expect(page.getByRole('heading', { name: 'Demo Diagnostics' })).toBeVisible();
   await page.unroute('**/api/diagnostics');
 

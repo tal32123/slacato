@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { evidenceDetailSchema } from './deals.js';
 import { runStatusSchema } from './runs.js';
 
 const opaqueIdSchema = z
@@ -320,6 +321,7 @@ export const approvalDetailResponseSchema = z
     accountName: z.string().min(1).max(2_000),
     status: runStatusSchema,
     payload: approvalBriefPayloadSchema,
+    evidence: z.array(evidenceDetailSchema).max(50),
     entries: z.array(approvalRequirementViewSchema).min(1).max(20),
     decisions: z.array(approvalDecisionViewSchema).max(20),
     quorum: z
@@ -328,8 +330,7 @@ export const approvalDetailResponseSchema = z
     capabilities: z
       .object({
         canReadDeal: z.boolean(),
-        canEditPayload: z.boolean(),
-        evidenceIds: z.array(opaqueIdSchema).max(50)
+        canEditPayload: z.boolean()
       })
       .strict(),
     createdAt: timestampSchema,
