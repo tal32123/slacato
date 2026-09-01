@@ -187,6 +187,7 @@ test('lists only the signed persona authorized deals and opens the pre-generatio
   await expect(page.getByRole('heading', { name: 'No AI brief yet' })).toBeVisible();
   const availableInputs = page
     .getByRole('heading', { name: 'Authorized inputs available' })
+  await expect(page.getByText(/source snapshot/iu)).toHaveCount(0);
     .locator('..');
   const renderedAvailability = (await availableInputs.getByRole('listitem').allTextContents())
     .map((item) => item.trim())
@@ -263,6 +264,7 @@ test('defaults a generated workspace to Overview, then exposes the AI Brief and 
     sections.includes(heading as (typeof sections)[number])
   );
   expect(renderedSectionOrder).toEqual(sections);
+  await expect(page.getByText(/source snapshot/iu)).toHaveCount(0);
 
   const provenance = page.getByRole('heading', { name: 'AI provenance' }).locator('..');
   const provenanceRoles = provenance.getByRole('listitem');
@@ -300,6 +302,8 @@ test('defaults a generated workspace to Overview, then exposes the AI Brief and 
 
   await openSourceRecords(page);
   await expect(page.getByRole('button', {
+  for (const section of sections)
+    await expect(page.getByRole('heading', { name: section, exact: true })).toHaveCount(0);
     name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
   })).toBeVisible();
   await expectNoHorizontalOverflow(page);
