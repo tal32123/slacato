@@ -17,10 +17,12 @@ import { resolve } from 'node:path';
 
 const DEFAULT_INPUT = 'samples/slack-impact-comparison.json';
 const DEFAULT_OUTPUT = 'samples/slack-impact.html';
-// The web app serves apps/web/public at its root, so the same page is reachable at
-// /slack-impact.html during a live demo without adding a route or a nav entry. Writing both
-// copies from this one generator is what keeps them from drifting apart.
-const WEB_PUBLIC_OUTPUT = 'apps/web/public/slack-impact.html';
+// The web app serves apps/web/public at its root, so this copy is reachable during a live demo
+// without adding a route or a nav entry. It sits under samples/ so that the ONE relative link the
+// technical overview carries - ../samples/slack-impact.html - resolves both from docs/ on disk and
+// from the served copy at the web root. Serving it anywhere else silently breaks that link into the
+// SPA's catch-all, which answers 200 with the app shell and looks like a blank page.
+const WEB_PUBLIC_OUTPUT = 'apps/web/public/samples/slack-impact.html';
 const CITATION_SOURCES = [
   'samples/restricted-opportunity-brief.txt',
   'samples/normal-opportunity-brief.txt',
