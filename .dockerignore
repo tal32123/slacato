@@ -11,8 +11,14 @@ test-results
 playwright-report
 evals
 tests
+# The web image serves these two documents from where they actually live, so they are the only
+# parts of samples/ and docs/ the build context needs. Re-including them relies on
+# .dockerignore being last-match-wins, unlike .gitignore, which cannot re-include a file whose
+# directory is excluded. apps/web/vite.config.ts fails the build loudly if either goes missing.
 samples
+!samples/slack-impact.html
 docs
+!docs/technical-overview.html
 *.tsbuildinfo
 **/*.tsbuildinfo
 .env
