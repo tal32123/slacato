@@ -11,8 +11,7 @@
       "!fixtures/**",
       "!docs/**",
       "!.superpowers/**",
-      "!evals/reports/**",
-      "!apps/web/public/technical-overview.html"
+      "!evals/reports/**"
     ]
   },
   "formatter": {
