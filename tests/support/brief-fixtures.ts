@@ -109,6 +109,18 @@ export const NORTHSTAR_CONTACTS = [
   }
 ] as const;
 
+/**
+ * The Deal Desk policy chunk that states the discount approval rule, on OPP-1001.
+ *
+ * A brief that takes a commercial position has to cite the record that establishes it, so the
+ * control fixture carries this chunk rather than resting its deal-desk statement on a contact row.
+ */
+export const DEAL_DESK_POLICY_EVIDENCE_ID = 'policy:deal-desk-policy:OPP-1001:1';
+
+/** The approval rule the Deal Desk policy chunk states, quoted as a brief would summarize it. */
+const DEAL_DESK_APPROVAL_RULE =
+  'Discounts greater than 10 percent require Deal Desk approval before they are recommended internally or shared with a customer.';
+
 /** The contact chunk identifier the ingest pipeline assigns to one ACC-2001 contact on OPP-1001. */
 export function contactEvidenceId(contactId: string): string {
   return `salesforce:${contactId}:OPP-1001:contact:0`;
@@ -168,7 +180,7 @@ export function healthyBrief(): DealBrief {
         fixtureClaim(
           'claim_ns_1',
           'Commercial terms are under review with the deal desk.',
-          contactEvidence
+          DEAL_DESK_POLICY_EVIDENCE_ID
         )
       ]
     },
@@ -211,6 +223,15 @@ export function healthyBrief(): DealBrief {
               'We still need the final owner matrix and success metrics confirmed by the client stakeholders.',
               'slack:SLK-9002:0'
             )
+          ]
+        },
+        {
+          evidenceId: DEAL_DESK_POLICY_EVIDENCE_ID,
+          sourceType: 'policy',
+          summary: DEAL_DESK_APPROVAL_RULE,
+          capturedAt: '2026-01-05T00:00:00Z',
+          claims: [
+            fixtureClaim('claim_ev_3', DEAL_DESK_APPROVAL_RULE, DEAL_DESK_POLICY_EVIDENCE_ID)
           ]
         }
       ]
