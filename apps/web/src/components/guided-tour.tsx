@@ -377,6 +377,8 @@ export function GuidedTour(): React.JSX.Element {
   const [anchor, setAnchor] = useState<TourAnchor>();
   const [targetMissing, setTargetMissing] = useState(false);
   const launcherRef = useRef<HTMLButtonElement>(null);
+  /** Set by `close()` so only a deliberate close pulls focus back to the launcher. */
+  const restoreLauncherFocus = useRef(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
   const routedStep = useRef<number | undefined>(undefined);
@@ -417,10 +419,23 @@ export function GuidedTour(): React.JSX.Element {
   }, []);
 
   const close = useCallback((): void => {
+    // Focus is restored by the effect below rather than here, because the dialog holding the
+    // focused control is still mounted at this point. Scheduling it on an animation frame
+    // instead made the restore wait on a paint the browser is not obliged to produce on any
+    // schedule -- headless CI dropped it outright, leaving focus on <body> after Escape.
+    restoreLauncherFocus.current = true;
     setActive(false);
     persistTourState({ active: false, stepIndex, dismissed: true });
-    window.requestAnimationFrame(() => launcherRef.current?.focus());
   }, [stepIndex]);
+
+  // Runs after the commit that unmounts the dialog, so the launcher is focused once the element
+  // that had focus is gone. Guarded by the flag so that mounting a closed tour, or finishing one,
+  // never pulls focus away from whatever the reader was doing.
+  useEffect(() => {
+    if (active || !restoreLauncherFocus.current) return;
+    restoreLauncherFocus.current = false;
+    launcherRef.current?.focus();
+  }, [active]);
 
   /**
    * Reopens the tour where the user left it.

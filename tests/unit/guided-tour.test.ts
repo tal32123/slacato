@@ -373,6 +373,35 @@ describe('GuidedTour', () => {
     await waitFor(() => expect(launcher).toHaveFocus());
   });
 
+  /**
+   * CI regression: "Escape closes the tour and returns focus to the launcher button" failed on a
+   * tree byte-identical to one that had just passed, with the launcher never focused inside the
+   * 5s budget. The restore was scheduled on `requestAnimationFrame`, so it waited on the browser
+   * producing a paint -- which a headless run under load is not obliged to do on any schedule.
+   * Closing is a state change, and the focus move that belongs to it has to land with the commit.
+   *
+   * Stubbing the frame away is the assertion: the contract must hold with no paint at all.
+   */
+  it('returns focus to the launcher without waiting for an animation frame', async () => {
+    const frames = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(0);
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ active: true, stepIndex: 1, dismissed: false })
+      );
+      render(createElement(TourHarness, { initialPath: '/deals', target: 'deal-list' }));
+      const launcher = screen.getByRole('button', { name: 'Start guided tour' });
+      await screen.findByRole('dialog');
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(launcher).toHaveFocus();
+    } finally {
+      frames.mockRestore();
+    }
+  });
+
   it('discards a corrupted non-integer persisted step index instead of rendering mismatched progress', async () => {
     // Bug: readTourState() only checked the bounds of parsed.stepIndex, not that it was an
     // integer. A fractional value (e.g. from hand-edited or corrupted localStorage) passed the
