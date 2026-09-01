@@ -24,6 +24,7 @@ import {
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { describeRunFailure } from '@/features/runs/failure-reason';
 import { runDetailQueryOptions } from '@/features/runs/queries';
 import { applyRunEvent, openRunEventStream, type RunStreamSource } from '@/features/runs/stream';
 import { throwProtectedLoaderError } from './loader-security';
@@ -417,16 +418,20 @@ function RunStateNotice({
         href={`/deals/${encodeURIComponent(detail.opportunityId)}`}
       />
     );
-  if (detail.status === 'failed')
+  if (detail.status === 'failed') {
+    // The reason travels on the run's own failure event, so a page opened after the fact used to
+    // report the safety property and nothing about what actually stopped.
+    const reason = describeRunFailure(detail.failureReason);
     return (
       <Notice
         icon={RotateCcw}
         title="Run failed safely"
-        text="This run is terminal, so there is nothing left to cancel. No unvalidated output was published, and its audit history is retained. Start a new run from the deal when ready."
+        text={`${reason === undefined ? 'This run is terminal' : `It stopped because ${reason}. This run is terminal`}, so there is nothing left to cancel. No unvalidated output was published, and its audit history is retained. Start a new run from the deal when ready.`}
         action="Return to deal and run again"
         href={`/deals/${encodeURIComponent(detail.opportunityId)}`}
       />
     );
+  }
   if (detail.status === 'cancelled')
     return (
       <Notice

@@ -34,6 +34,7 @@ describe('run and approval wire contracts', () => {
       sessionVersion: 'session-1', runId: 'run-1', opportunityId: 'OPP-1001', opportunityName: 'Atlas Renewal',
       accountName: 'Atlas', initiatedBy: 'Maya Chen', status: 'validating', version: 5,
       watermark: 'event-5', watermarkSequence: 5, terminal: false, createdAt: timestamp, updatedAt: timestamp,
+      failureReason: null,
       progress: {
         phase: 'validating', retrievalCount: 17, validationRetries: 1,
         specialists: [{ name: 'commercial', status: 'completed' }], completedSections: ['Executive Summary'],

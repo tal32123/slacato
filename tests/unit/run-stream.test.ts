@@ -7,6 +7,7 @@ const detail: RunDetailResponse = {
   sessionVersion: 'session-1', runId: 'run-1', opportunityId: 'OPP-1001', opportunityName: 'Atlas Renewal',
   accountName: 'Atlas', initiatedBy: 'Maya Chen', status: 'validating', version: 5,
   watermark: 'event-5', watermarkSequence: 5, terminal: false, createdAt: timestamp, updatedAt: timestamp,
+  failureReason: null,
   progress: {
     phase: 'validating', retrievalCount: 17, validationRetries: 1,
     specialists: [
@@ -37,6 +38,25 @@ describe('validated run stream state', () => {
     expect(next).not.toBe(detail);
     expect(next).toMatchObject({ status: 'awaiting_approval', version: 6, watermark: 'event-6', watermarkSequence: 6 });
     expect(next.progress.timeline.at(-1)).toMatchObject({ sequence: 6, phase: 'awaiting_approval' });
+  });
+
+  it('carries a failure event\u2019s diagnostic code onto the detail the page keeps reading', () => {
+    // The code is published once, on the `fail` event. A page watching the stream has to keep it,
+    // or the reason is gone the moment the event is applied and only a reload can recover it.
+    const failed = applyRunEvent(
+      detail,
+      {
+        id: 'event-6', streamId: 'run-1', sequence: 6, version: 1, type: 'fail', timestamp,
+        payload: { version: 6, reasonCode: 'draft_validation_failed', terminal: true }
+      },
+      3,
+      3
+    );
+
+    expect(failed.status).toBe('failed');
+    expect(failed.failureReason).toBe('draft_validation_failed');
+    // A later event must not erase what the failure recorded.
+    expect(applyRunEvent(failed, envelope(7), 3, 3).failureReason).toBe('draft_validation_failed');
   });
 
   it('opens only non-terminal streams at the persisted watermark and closes ownership exactly once', () => {

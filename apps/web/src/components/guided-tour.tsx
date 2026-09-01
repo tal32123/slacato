@@ -6,6 +6,7 @@ import { useLocation, useNavigate, useRouteLoaderData } from 'react-router';
 import { readinessQueryOptions } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { describeRunFailure } from '@/features/runs/failure-reason';
 import { describeGenerationReadiness } from '@/features/runs/generation-readiness';
 import { runDetailQueryOptions } from '@/features/runs/queries';
 
@@ -87,12 +88,13 @@ function describeRunGate(
   // the reviewer on with "the next steps describe a run that reached one of those", which reads as
   // a promise that the explanation is coming -- and the steps that follow narrate a brief this run
   // never produced, so nothing explains it until the diagnostics step at the very end.
-  if (detail.status === 'failed')
+  if (detail.status === 'failed') {
+    const reason = describeRunFailure(detail.failureReason);
     return {
       waiting: false,
-      notice:
-        'This run failed, so it produced no brief for the next steps to read. Outside the spotlight, this page carries the "Run failed safely" notice above and the persisted timeline below, which record the phase it stopped in. Demo Diagnostics reports the dependency checks — index, model, database — so it accounts for a failure of that shape and reads healthy for one that generated or validated badly. You can continue, or start another run from the deal first.'
+      notice: `This run failed${reason === undefined ? '' : ` because ${reason}`}, so it produced no brief for the next steps to read. Outside the spotlight, this page carries the "Run failed safely" notice above and the persisted timeline below, which record the phase it stopped in. You can continue, or start another run from the deal first.`
     };
+  }
   return {
     waiting: false,
     notice: `This run settled as "${readableRunStatus(detail.status)}" rather than ${readableOutcomes(narrated)}. You can continue; the next steps describe a run that reached one of those.`
@@ -177,7 +179,7 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     route: '/deals/OPP-1001',
     scenario: 'Scenario 1 \u00b7 Authorized brief',
     title: 'Check the brief against its sources',
-    body: 'The spotlight is on AI Brief: open it, and every generated section closes with the numbered sources behind it. Select a number to read the authorized excerpt it resolves to. Citations are re-authorized on open, so a citation can never become a side door into data the current persona may not read. If the run produced no brief, this tab stays disabled \u2014 the run\u2019s own page records where it stopped, and Demo Diagnostics reports whether a dependency was the cause.'
+    body: 'The spotlight is on AI Brief: open it, and every generated section closes with the numbered sources behind it. Select a number to read the authorized excerpt it resolves to. Citations are re-authorized on open, so a citation can never become a side door into data the current persona may not read. If the run produced no brief, this tab stays disabled \u2014 the run\u2019s own page names what stopped it.'
   },
   {
     target: 'slack-evidence',

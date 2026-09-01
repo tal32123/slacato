@@ -1,10 +1,12 @@
 import {
   type RunDetailResponse,
   type RunEventType,
+  type RunFailureReason,
   type RunListResponse,
   type RunStatus,
   runDetailResponseSchema,
   runEventFallbackStatuses,
+  runFailureReasonSchema,
   runListResponseSchema,
   runStatusSchema
 } from '@slacato/contracts';
@@ -149,6 +151,7 @@ export class PostgresRunQueryRepository {
       terminal: terminalStatuses.includes(status),
       createdAt: toIsoTimestamp(row.created_at),
       updatedAt: toIsoTimestamp(row.updated_at),
+      failureReason: failureReasonOf(orderedEvents),
       progress: {
         phase: status,
         retrievalCount: retrievalRows[0]?.evidence_count ?? 0,
@@ -203,6 +206,23 @@ function resolveSpecialistStatus(
   fallback: DefaultSpecialistStatus
 ): 'pending' | 'running' | 'completed' | 'degraded' | 'failed' {
   return value === 'completed' || value === 'degraded' || value === 'failed' ? value : fallback;
+}
+/**
+ * Reads the diagnostic code off the run's own failure event.
+ *
+ * The code is published on the `fail` event and nowhere else, so a reader who was not watching
+ * the stream when it arrived -- a reload, a resumed page, a run opened later -- had no way to
+ * learn why the run stopped. Projecting it onto the detail costs no extra query: these events are
+ * already loaded for the timeline.
+ */
+function failureReasonOf(orderedEvents: readonly EventRow[]): RunFailureReason | null {
+  for (let index = orderedEvents.length - 1; index >= 0; index -= 1) {
+    const event = orderedEvents[index];
+    if (event === undefined || event.type !== 'fail') continue;
+    const parsed = runFailureReasonSchema.safeParse(asRecord(event.payload)?.reasonCode);
+    return parsed.success ? parsed.data : 'workflow_failed';
+  }
+  return null;
 }
 /** Resolves the run phase represented by an event. */
 function phaseForEvent(event: EventRow, fallback: RunStatus): RunStatus {

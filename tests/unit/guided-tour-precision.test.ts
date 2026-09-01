@@ -42,7 +42,11 @@ const session: DemoSession = {
 let runDetail: RunDetailResponse;
 
 /** Builds a run detail response in the requested workflow state. */
-function runIn(status: RunDetailResponse['status'], terminal: boolean): RunDetailResponse {
+function runIn(
+  status: RunDetailResponse['status'],
+  terminal: boolean,
+  failureReason: RunDetailResponse['failureReason'] = null
+): RunDetailResponse {
   return {
     sessionVersion: session.version,
     runId: 'RUN-1',
@@ -56,6 +60,7 @@ function runIn(status: RunDetailResponse['status'], terminal: boolean): RunDetai
     watermark: 'evt-1',
     watermarkSequence: 1,
     updatedAt: '2026-04-18T00:00:00.000Z',
+    failureReason,
     progress: {
       phase: status,
       retrievalCount: 7,
@@ -313,7 +318,7 @@ describe('guided tour: run steps wait for the run to reach a real outcome', () =
 
     await screen.findByRole('dialog');
     await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).toBeEnabled());
-    expect(screen.getByRole('status').textContent).toMatch(/did not finish|failed|ended/i);
+    expect((await screen.findByRole('status')).textContent).toMatch(/did not finish|failed|ended/i);
   });
 
   it('says a failed run left no brief, and where the reason is, instead of promising later steps', async () => {
@@ -328,8 +333,21 @@ describe('guided tour: run steps wait for the run to reach a real outcome', () =
     const notice = await screen.findByRole('status');
     await waitFor(() => expect(notice.textContent).toMatch(/produced no brief/));
     expect(notice.textContent).toMatch(/timeline/);
-    expect(notice.textContent).toMatch(/Diagnostics/);
     expect(notice.textContent).not.toMatch(/the next steps describe a run that reached/);
+  });
+
+  it('names why the run failed, from the code the run itself recorded', async () => {
+    // "only at the end i get the highlight as to why": the reason was published on the run's own
+    // failure event and read by nothing, so every screen after it could say a run failed and none
+    // could say what failed.
+    const index = stepIndexWhere((step) => step.target === 'run-progress-detail');
+    runDetail = runIn('failed', true, 'draft_validation_failed');
+    renderRunStepWithTour(index);
+
+    await screen.findByRole('dialog');
+    const notice = await screen.findByRole('status');
+    await waitFor(() => expect(notice.textContent).toMatch(/did not pass validation/));
+    expect(notice.textContent).toMatch(/retries ran out/);
   });
 });
 
@@ -579,9 +597,11 @@ describe('guided tour: no step narrates a state the reviewer cannot see', () => 
 
     expect(step?.body).toMatch(/spotlight is on AI Brief/);
     expect(step?.body).toMatch(/re-authorized on open/);
-    // A failed run leaves the tab disabled, which is exactly the state the reporter hit.
+    // A failed run leaves the tab disabled, which is exactly the state the reporter hit. The run
+    // page now names what stopped it, so the step sends the reviewer there rather than to
+    // Diagnostics, which reads healthy for a run that generated or validated badly.
     expect(step?.body).toMatch(/stays disabled/);
-    expect(step?.body).toMatch(/Diagnostics/);
+    expect(step?.body).toMatch(/names what stopped it/);
   });
 
   it('describes the Slack step against the raw Source Records view its anchor opens', () => {
