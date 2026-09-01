@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 
-import { QueryClientProvider } from '../../apps/web/node_modules/@tanstack/react-query/build/modern/index.js';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { QueryClientProvider } from '../../apps/web/node_modules/@tanstack/react-query/build/modern/index.js';
 import '@testing-library/jest-dom/vitest';
 import type { DemoSession, Persona } from '@slacato/contracts';
 import { createElement, Fragment } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMemoryRouter, RouterProvider } from '../../apps/web/node_modules/react-router/dist/development/index.js';
+import {
+  createMemoryRouter,
+  RouterProvider
+} from '../../apps/web/node_modules/react-router/dist/development/index.js';
 import { queryClient } from '../../apps/web/src/api/session';
 import { GuidedTour, tourSteps } from '../../apps/web/src/components/guided-tour';
 import { SettingsRoute } from '../../apps/web/src/routes/settings';
@@ -69,11 +72,22 @@ function renderSettingsWithTour(stepIndex = selectPersonaStep): void {
   );
 
   render(
-    createElement(QueryClientProvider, { client: queryClient }, createElement(RouterProvider, { router }))
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(RouterProvider, { router })
+    )
   );
 }
 
 describe('settings persona switch tour targets', () => {
+  it('does not advertise the walkthrough from Settings', async () => {
+    renderSettingsWithTour();
+
+    await screen.findByRole('radio', { name: /Nora Chen/ });
+    expect(screen.queryByRole('link', { name: 'Start walkthrough' })).not.toBeInTheDocument();
+  });
+
   it('spotlights only the named persona while the step asks the user to select them', async () => {
     // Reported: "if i need to click on maya, it should only highlight maya and everything else
     // gray". The step used to target a wrapper holding every persona, the heading, and the submit
@@ -118,6 +132,8 @@ describe('settings persona switch tour targets', () => {
     fireEvent.click(await screen.findByRole('radio', { name: /Nora Chen/ }));
 
     // Advancing on selection is what keeps the apply button out from behind the dimmed backdrop.
-    expect(await screen.findByRole('heading', { name: 'Apply the persona change' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Apply the persona change' })
+    ).toBeInTheDocument();
   });
 });

@@ -1,13 +1,6 @@
 import type { DemoSession } from '@slacato/contracts';
 import { useQuery } from '@tanstack/react-query';
-import {
-  BookOpenCheck,
-  Check,
-  ExternalLink,
-  FileText,
-  LockKeyhole,
-  ShieldCheck
-} from 'lucide-react';
+import { Check, ExternalLink, FileText, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { LoaderFunctionArgs } from 'react-router';
 import { Link, useNavigate, useRevalidator, useRouteLoaderData } from 'react-router';
@@ -99,28 +92,6 @@ export function SettingsRoute(): React.JSX.Element {
           protected request.
         </p>
       </header>
-
-      <Card className="border-primary/30 bg-primary/5 shadow-none">
-        <CardHeader>
-          <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
-              <BookOpenCheck aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>New here? Follow the home-task walkthrough</CardTitle>
-              <CardDescription className="mt-2 leading-6">
-                See how each Cato assignment requirement maps to a persona, screen, action, and
-                inspectable result.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Button asChild className="min-h-11">
-            <Link to="/walkthrough">Start walkthrough</Link>
-          </Button>
-        </CardContent>
-      </Card>
 
       {mutationError && (
         <Alert variant="destructive">

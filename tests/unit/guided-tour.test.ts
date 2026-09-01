@@ -132,7 +132,7 @@ describe('guided tour steps', () => {
     // Scenario 1: an authorized owner generates and inspects a brief for OPP-1001.
     expect(routes).toContain('/deals/OPP-1001');
     expect(targets).toContain('generate-brief');
-    expect(targets).toContain('citations');
+    expect(targets).toContain('ai-brief');
     // Scenario 2: the restricted deal routes through authority-scoped approvals.
     expect(routes).toContain('/deals/OPP-1003');
     expect(targets).toContain('approvals');
@@ -656,6 +656,41 @@ describe('GuidedTour', () => {
       Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight });
     }
   }
+
+  /**
+   * Reported live at step 15: the dialog rendered as a 144px stub showing a slice of its own
+   * footer -- no step number, no title, no body -- and the "Continue anyway" escape sat below the
+   * clip, so a required-interaction step whose form was already recorded became a dead end.
+   *
+   * The unanchored branch derived its height from `anchor?.viewportHeight ?? 0`, so every step
+   * with no measured target -- one whose anchor lives inside a closed tab, a page still loading,
+   * a form already submitted -- collapsed to the floor meant only for a spotlight that fills the
+   * screen. `placeDialogWithTargetRect` waits for the ring before reading placement, so the whole
+   * suite measured only the anchored branch and this went unseen.
+   */
+  it('gives the dialog the free viewport when no target has been measured', async () => {
+    const index = tourSteps.findIndex((step) => step.target === 'approval-decision');
+    const originalInnerHeight = window.innerHeight;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1000 });
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ active: true, stepIndex: index, dismissed: true })
+      );
+      render(createElement(TourHarness, { initialPath: '/approvals/A-1', withTarget: false }));
+
+      const dialog = await screen.findByRole('dialog');
+      await screen.findByText(/not ready on screen yet/);
+
+      expect(Number.parseInt(dialog.style.maxHeight, 10)).toBe(1000 - 16 * 2);
+      expect(screen.getByRole('button', { name: 'Continue anyway' })).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: originalInnerHeight
+      });
+    }
+  });
 
   it('drops the dialog below a spotlighted target sitting near the top of a short viewport', async () => {
     const placed = await placeDialogWithTargetRect({ top: 100, height: 40 }, 700);
