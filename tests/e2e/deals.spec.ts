@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const sections = [
   'Deal Snapshot',
@@ -14,8 +14,8 @@ const sections = [
 ] as const;
 
 const sourceTypeLabels = {
-  gong_summary: 'Gong Summary',
-  gong_transcript: 'Gong Transcript',
+  gong_summary: 'Gong summary',
+  gong_transcript: 'Gong transcript',
   policy: 'Policy',
   pricing: 'Pricing',
   salesforce: 'Salesforce',
@@ -29,7 +29,11 @@ async function loginAs(page: Page, name: string, returnTo = '/deals'): Promise<v
 }
 
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )
+  ).toBe(true);
 }
 
 async function openCitation(_page: Page, citation: Locator): Promise<void> {
@@ -40,10 +44,7 @@ async function openCitation(_page: Page, citation: Locator): Promise<void> {
   await expect.poll(() => element.getAttribute('aria-pressed')).toBe('true');
 }
 
-async function mockGeneratedWorkspace(
-  page: Page,
-  runId: string
-): Promise<{ preview: string }> {
+async function mockGeneratedWorkspace(page: Page, runId: string): Promise<{ preview: string }> {
   const workspace = await page.evaluate(async () => {
     const response = await fetch('/api/deals/OPP-1001', { credentials: 'same-origin' });
     return response.json() as Record<string, unknown>;
@@ -53,7 +54,8 @@ async function mockGeneratedWorkspace(
       sections: Record<string, Record<string, unknown>>;
     };
   };
-  const preview = 'AI-generated preview: Northstar has a supported renewal path with open execution details.';
+  const preview =
+    'AI-generated preview: Northstar has a supported renewal path with open execution details.';
   const generatedContent = {
     ...sourceSnapshot.evidenceOverview,
     status: 'generated',
@@ -75,6 +77,7 @@ async function mockGeneratedWorkspace(
         status: 'awaiting_approval',
         updatedAt: '2026-08-29T01:00:00.000Z'
       },
+      approvalReview: null,
       content: generatedContent
     },
     brief: generatedContent
@@ -113,7 +116,7 @@ test('lists only the signed persona authorized deals and opens the pre-generatio
 
   const workspaceExpectations = await page.evaluate(async () => {
     const response = await fetch('/api/deals/OPP-1001', { credentials: 'same-origin' });
-    const workspace = await response.json() as {
+    const workspace = (await response.json()) as {
       deal: {
         opportunityId: string;
         opportunityName: string;
@@ -139,11 +142,13 @@ test('lists only the signed persona authorized deals and opens the pre-generatio
 
   await page.getByRole('link', { name: /Open OPP-1001/ }).click();
   await expect(page).toHaveURL('/deals/OPP-1001');
-  await expect(page.getByRole('heading', {
-    level: 1,
-    name: 'Northstar Foods Cooperative - Global Access Renewal'
-  })).toBeVisible();
-  const dealFacts = page.getByRole('heading', { name: 'Deal facts' }).locator('..');
+  await expect(
+    page.getByRole('heading', {
+      level: 1,
+      name: 'Northstar Foods Cooperative - Global Access Renewal'
+    })
+  ).toBeVisible();
+  const dealFacts = page.getByRole('region', { name: 'Deal facts' });
   const expectedDealFacts = [
     ['Opportunity ID', workspaceExpectations.deal.opportunityId],
     ['Opportunity', workspaceExpectations.deal.opportunityName],
@@ -185,16 +190,16 @@ test('lists only the signed persona authorized deals and opens the pre-generatio
   await expect(page.getByRole('tab', { name: 'AI Brief' })).toBeDisabled();
   await expect(page.getByRole('tab', { name: 'Source Records' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No AI brief yet' })).toBeVisible();
-  const availableInputs = page
-    .getByRole('heading', { name: 'Authorized inputs available' })
+  await expect(page.getByRole('heading', { name: 'Authorized inputs available' })).toBeVisible();
+  const availableInputs = page.getByRole('list', { name: 'Authorized source types' });
   await expect(page.getByText(/source snapshot/iu)).toHaveCount(0);
-    .locator('..');
   const renderedAvailability = (await availableInputs.getByRole('listitem').allTextContents())
     .map((item) => item.trim())
     .sort();
   const expectedAvailability = workspaceExpectations.sourceAvailability
-    .map(({ sourceType, count }) =>
-      `${sourceTypeLabels[sourceType]} · ${count} ${count === 1 ? 'record' : 'records'}`
+    .map(
+      ({ sourceType, count }) =>
+        `${sourceTypeLabels[sourceType]} · ${count} ${count === 1 ? 'record' : 'records'}`
     )
     .sort();
   expect(renderedAvailability).toEqual(expectedAvailability);
@@ -212,14 +217,16 @@ test('lists only the signed persona authorized deals and opens the pre-generatio
 
   await openSourceRecords(page);
   const slackRecord = page.getByRole('button', {
-    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+    name: 'Open source record: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9002'
   });
   await expect(slackRecord).toBeVisible();
   for (const { sourceType } of workspaceExpectations.sourceAvailability)
-    await expect(page.getByRole('heading', {
-      name: sourceTypeLabels[sourceType],
-      exact: true
-    })).toBeVisible();
+    await expect(
+      page.getByRole('heading', {
+        name: sourceTypeLabels[sourceType],
+        exact: true
+      })
+    ).toBeVisible();
   await openCitation(page, slackRecord);
   await expect(page.getByText('slack:SLK-9002:0', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Close evidence detail' }).click();
@@ -230,6 +237,7 @@ test('lists only the signed persona authorized deals and opens the pre-generatio
 test('defaults a generated workspace to Overview, then exposes the AI Brief and raw Source Records', async ({
   page
 }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, 'Maya Levin');
   const { preview } = await mockGeneratedWorkspace(page, 'run-workspace-draft');
 
@@ -239,8 +247,9 @@ test('defaults a generated workspace to Overview, then exposes the AI Brief and 
     'true'
   );
   await expect(page.getByRole('heading', { name: 'AI brief is ready' })).toBeVisible();
-  const previewRegion = page.getByRole('heading', { name: 'AI-generated preview' }).locator('..');
+  const previewRegion = page.getByRole('region', { name: 'AI-generated preview' });
   await expect(previewRegion.getByText(preview, { exact: true })).toBeVisible();
+  const generationDetails = page.getByRole('region', { name: 'Generation details' });
   for (const metadata of [
     'Lifecycle',
     'Draft',
@@ -251,7 +260,7 @@ test('defaults a generated workspace to Overview, then exposes the AI Brief and 
     'Updated',
     '2026-08-29T01:00:00.000Z'
   ])
-    await expect(page.getByText(metadata, { exact: true })).toBeVisible();
+    await expect(generationDetails.getByText(metadata, { exact: true })).toBeVisible();
 
   await page.getByRole('tab', { name: 'AI Brief' }).click();
   await expect(page.getByRole('tab', { name: 'AI Brief' })).toHaveAttribute(
@@ -260,14 +269,16 @@ test('defaults a generated workspace to Overview, then exposes the AI Brief and 
   );
   for (const section of sections)
     await expect(page.getByRole('heading', { name: section, exact: true })).toBeVisible();
-  const renderedSectionOrder = (await page.getByRole('heading').allTextContents()).filter((heading) =>
-    sections.includes(heading as (typeof sections)[number])
+  const renderedSectionOrder = (await page.getByRole('heading').allTextContents()).filter(
+    (heading) => sections.includes(heading as (typeof sections)[number])
   );
   expect(renderedSectionOrder).toEqual(sections);
   await expect(page.getByText(/source snapshot/iu)).toHaveCount(0);
 
-  const provenance = page.getByRole('heading', { name: 'AI provenance' }).locator('..');
-  const provenanceRoles = provenance.getByRole('listitem');
+  await expect(page.getByRole('heading', { name: 'AI provenance' })).toBeVisible();
+  const provenanceRoles = page
+    .getByRole('list', { name: 'AI brief provenance' })
+    .getByRole('listitem');
   await expect(provenanceRoles).toHaveCount(4);
   const roleResponsibilities = [
     [
@@ -293,19 +304,23 @@ test('defaults a generated workspace to Overview, then exposes the AI Brief and 
     await expect(entry).toContainText(responsibility);
   }
 
-  const generatedCitation = page.getByRole('button', {
-    name: /Open evidence: source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
-  }).first();
+  const generatedCitation = page
+    .getByRole('button', {
+      name: /Open evidence: source=synthetic_data\/slack\/account_team_updates\.tsv, update_id=SLK-9002/
+    })
+    .first();
   await openCitation(page, generatedCitation);
   await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toBeVisible();
   await page.getByRole('button', { name: 'Close evidence detail' }).click();
 
   await openSourceRecords(page);
-  await expect(page.getByRole('button', {
   for (const section of sections)
     await expect(page.getByRole('heading', { name: section, exact: true })).toHaveCount(0);
-    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
-  })).toBeVisible();
+  await expect(
+    page.getByRole('button', {
+      name: 'Open source record: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9002'
+    })
+  ).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -326,13 +341,15 @@ test('does not overflow the generated Overview at a narrow viewport with a long 
   await expectNoHorizontalOverflow(page);
 });
 
-test('desktop evidence uses one non-modal complementary region with replace and back history', async ({ page }) => {
+test('desktop evidence uses one non-modal complementary region with replace and back history', async ({
+  page
+}) => {
   await page.setViewportSize({ width: 1440, height: 600 });
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
   await openSourceRecords(page);
 
   const first = page.getByRole('button', {
-    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+    name: 'Open source record: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9002'
   });
   await openCitation(page, first);
 
@@ -340,24 +357,33 @@ test('desktop evidence uses one non-modal complementary region with replace and 
   await expect(detail).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(detail.getByText('slack:SLK-9002:0', { exact: true })).toBeVisible();
-  await expect(detail.getByText('slack/account_team_updates.tsv', { exact: true })).toBeVisible();
+  await expect(
+    detail.getByText('synthetic_data/slack/account_team_updates.tsv', { exact: true })
+  ).toBeVisible();
   await expect(detail).toBeFocused();
   const detailBox = await detail.boundingBox();
-  expect(detailBox!.width).toBeGreaterThanOrEqual(360);
-  expect(detailBox!.width).toBeLessThanOrEqual(440);
-  const mainWidth = await page.locator('[data-deal-main]').evaluate((element) => element.getBoundingClientRect().width);
+  if (detailBox === null) throw new Error('Desktop evidence detail has no layout box');
+  expect(detailBox.width).toBeGreaterThanOrEqual(360);
+  expect(detailBox.width).toBeLessThanOrEqual(440);
+  const mainWidth = await page
+    .locator('[data-deal-main]')
+    .evaluate((element) => element.getBoundingClientRect().width);
   expect(mainWidth).toBeGreaterThanOrEqual(640);
 
   const second = page.getByRole('button', {
-    name: 'Open source record: source=gong/gong_call_summaries.tsv, call_id=CALL-008'
+    name: 'Open source record: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-008'
   });
   await second.click();
   await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toHaveCount(1);
   await expect(second).toHaveAttribute('aria-pressed', 'true');
   await expect(first).toHaveAttribute('aria-pressed', 'false');
   await expect(page).toHaveURL(/evidence=gong_summary%3ACALL-008%3Asummary%3A0/);
-  expect(await detail.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
-  await detail.evaluate((element) => { element.scrollTop = 120; });
+  expect(await detail.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
+    true
+  );
+  await detail.evaluate((element) => {
+    element.scrollTop = 120;
+  });
   expect(await detail.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await detail.focus();
   await page.keyboard.press('Tab');
@@ -374,7 +400,9 @@ test('desktop evidence uses one non-modal complementary region with replace and 
   await expect(first).toBeFocused();
 });
 
-test('mobile and constrained evidence is a full-height modal sheet with focus, inert, and scroll controls', async ({ page }) => {
+test('mobile and constrained evidence is a full-height modal sheet with focus, inert, and scroll controls', async ({
+  page
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
 
@@ -384,18 +412,28 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
   await openSourceRecords(page);
 
   const citation = page.getByRole('button', {
-    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+    name: 'Open source record: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9002'
   });
   await openCitation(page, citation);
   const sheet = page.getByRole('dialog', { name: 'Evidence detail' });
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByText('Authorized source record and stable citation identifiers.')).toBeVisible();
+  await expect(
+    sheet.getByText('Authorized source record and stable citation identifiers.')
+  ).toBeVisible();
   const sheetBox = await sheet.boundingBox();
-  expect(sheetBox!.height).toBeGreaterThanOrEqual(840);
+  if (sheetBox === null) throw new Error('Mobile evidence sheet has no layout box');
+  expect(sheetBox.height).toBeGreaterThanOrEqual(840);
   const protectedShell = page.locator('[data-protected-app-shell]');
   await expect(protectedShell).toHaveAttribute('inert', '');
   for (const selector of ['header', '#main-content', 'nav[data-layout="mobile"]']) {
-    expect(await page.locator(selector).first().evaluate((element) => (element.closest('[data-protected-app-shell]') as HTMLElement | null)?.inert)).toBe(true);
+    expect(
+      await page
+        .locator(selector)
+        .first()
+        .evaluate(
+          (element) => (element.closest('[data-protected-app-shell]') as HTMLElement | null)?.inert
+        )
+    ).toBe(true);
   }
 
   await page.keyboard.press('Tab');
@@ -415,13 +453,19 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
   await expect(protectedShell).not.toHaveAttribute('inert', '');
 
-  await protectedShell.evaluate((element) => { (element as HTMLElement).inert = true; });
-  await citation.evaluate((element) => { (element as HTMLButtonElement).click(); });
+  await protectedShell.evaluate((element) => {
+    (element as HTMLElement).inert = true;
+  });
+  await citation.evaluate((element) => {
+    (element as HTMLButtonElement).click();
+  });
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toHaveCount(0);
   await expect(protectedShell).toHaveAttribute('inert', '');
-  await protectedShell.evaluate((element) => { (element as HTMLElement).inert = false; });
+  await protectedShell.evaluate((element) => {
+    (element as HTMLElement).inert = false;
+  });
 
   await page.goto('/deals/OPP-1001?evidence=slack%3ASLK-9002%3A0');
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toBeVisible();
@@ -434,12 +478,14 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
   expect(accessibility.violations).toEqual([]);
 });
 
-test('uses a modal rather than shrinking the main column when a desktop-width viewport cannot fit both regions', async ({ page }) => {
+test('uses a modal rather than shrinking the main column when a desktop-width viewport cannot fit both regions', async ({
+  page
+}) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
   await openSourceRecords(page);
   const citation = page.getByRole('button', {
-    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+    name: 'Open source record: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9002'
   });
   await citation.click();
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toBeVisible();
@@ -447,12 +493,24 @@ test('uses a modal rather than shrinking the main column when a desktop-width vi
   await expectNoHorizontalOverflow(page);
 });
 
-test('preserves complete responsive records at 320px and a short 200%-zoom equivalent', async ({ page }) => {
+test('preserves complete responsive records at 320px and a short 200%-zoom equivalent', async ({
+  page
+}) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await loginAs(page, 'Maya Levin');
   await expect(page.getByRole('table', { name: 'Authorized deals' })).toHaveCount(0);
   const dealRecord = page.getByRole('list', { name: 'Authorized deals' }).getByRole('listitem');
-  for (const value of ['Northstar Foods Cooperative - Global Access Renewal', '6.0 Order Review', 'Maya Levin', '2026-05-17', '4,217,500', '78%', 'Medium risk', 'No run yet', 'Standard deal']) {
+  for (const value of [
+    'Northstar Foods Cooperative - Global Access Renewal',
+    '6.0 Order Review',
+    'Maya Levin',
+    '2026-05-17',
+    '4,217,500',
+    '78%',
+    'Medium risk',
+    'No run yet',
+    'Standard deal'
+  ]) {
     await expect(dealRecord).toContainText(value);
   }
   await expectNoHorizontalOverflow(page);
@@ -462,7 +520,7 @@ test('preserves complete responsive records at 320px and a short 200%-zoom equiv
     'aria-selected',
     'true'
   );
-  const dealFacts = page.getByRole('heading', { name: 'Deal facts' }).locator('..');
+  const dealFacts = page.getByRole('region', { name: 'Deal facts' });
   await expect(dealFacts.getByText('4,217,500', { exact: true })).toBeVisible();
   await expect(dealFacts.getByText('78%', { exact: true })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Stakeholders' })).toHaveCount(0);
@@ -471,13 +529,14 @@ test('preserves complete responsive records at 320px and a short 200%-zoom equiv
   await page.setViewportSize({ width: 640, height: 320 });
   await openSourceRecords(page);
   const citation = page.getByRole('button', {
-    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+    name: 'Open source record: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9002'
   });
   await citation.click();
   const sheet = page.getByRole('dialog', { name: 'Evidence detail' });
   await expect(sheet).toBeVisible();
   const box = await sheet.boundingBox();
-  expect(box!.height).toBeGreaterThanOrEqual(316);
+  if (box === null) throw new Error('Constrained evidence sheet has no layout box');
+  expect(box.height).toBeGreaterThanOrEqual(316);
   expect(await sheet.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto');
   expect(await sheet.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   await expectNoHorizontalOverflow(page);
@@ -486,13 +545,19 @@ test('preserves complete responsive records at 320px and a short 200%-zoom equiv
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
 });
 
-test('renders deterministic loading and safe error states at the production route boundary', async ({ page }) => {
+test('renders deterministic loading and safe error states at the production route boundary', async ({
+  page
+}) => {
   await loginAs(page, 'Maya Levin');
   await page.route('**/api/deals/OPP-1001', async (route) => {
     const delay = Promise.withResolvers<void>();
     setTimeout(delay.resolve, 350);
     await delay.promise;
-    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'UNAVAILABLE', message: 'Unavailable' }) });
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'UNAVAILABLE', message: 'Unavailable' })
+    });
   });
   await page.getByRole('link', { name: /Open OPP-1001/ }).click();
   await expect(page.getByRole('status', { name: 'Loading destination' })).toBeVisible();
@@ -501,11 +566,14 @@ test('renders deterministic loading and safe error states at the production rout
   await expectNoHorizontalOverflow(page);
 });
 
-test('renders safe empty list and workspace states with a persona recovery path', async ({ page, context }) => {
+test('renders safe empty list and workspace states with a persona recovery path', async ({
+  page,
+  context
+}) => {
   await loginAs(page, 'Maya Levin');
   const sessionVersion = await page.evaluate(async () => {
     const response = await fetch('/api/auth/session', { credentials: 'same-origin' });
-    const session = await response.json() as { version: string };
+    const session = (await response.json()) as { version: string };
     return session.version;
   });
   const workspaceResponse = await page.evaluate(async () => {
@@ -514,11 +582,18 @@ test('renders safe empty list and workspace states with a persona recovery path'
   });
   await page.route('**/api/deals', async (route) => {
     if (new URL(route.request().url()).pathname !== '/api/deals') return route.fallback();
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessionVersion, deals: [] }) });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ sessionVersion, deals: [] })
+    });
   });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'No authorized deals' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Review persona access' })).toHaveAttribute('href', '#active-persona-control');
+  await expect(page.getByRole('link', { name: 'Review persona access' })).toHaveAttribute(
+    'href',
+    '#active-persona-control'
+  );
   await expect(page.getByText(/does not reveal hidden deal names or counts/i)).toBeVisible();
 
   const workspacePage = await context.newPage();
@@ -534,12 +609,16 @@ test('renders safe empty list and workspace states with a persona recovery path'
   });
   await workspacePage.goto('/deals/OPP-1001');
   await expect(workspacePage.getByRole('heading', { name: 'No AI brief yet' })).toBeVisible();
-  await expect(workspacePage.getByRole('heading', {
-    name: 'Authorized inputs available'
-  })).toBeVisible();
+  await expect(
+    workspacePage.getByRole('heading', {
+      name: 'Authorized inputs available'
+    })
+  ).toBeVisible();
   await expect(workspacePage.getByText('No authorized source types are available.')).toBeVisible();
   await openSourceRecords(workspacePage);
-  await expect(workspacePage.getByText('No authorized source records are available.')).toBeVisible();
+  await expect(
+    workspacePage.getByText('No authorized source records are available.')
+  ).toBeVisible();
   await expect(workspacePage.getByRole('button', { name: /Open source record:/ })).toHaveCount(0);
   await expectNoHorizontalOverflow(workspacePage);
   await workspacePage.close();

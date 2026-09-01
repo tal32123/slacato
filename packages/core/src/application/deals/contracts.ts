@@ -37,17 +37,17 @@ export type GeneratedDealOutput = Readonly<{
   brief: DealBrief;
 }>;
 
-/** Identifies the actor-authorized current approval subject without exposing approval details. */
-export type ApprovalReview = Readonly<{
+/** Identifies the actor-authorized actionable approval subject without exposing approval details. */
+export type ApprovalReviewDescriptor = Readonly<{
   approvalSubjectId: string;
 }>;
 
-/** Describes the latest authorized run, any generated output, and its current approval review. */
+/** Describes the latest authorized run, any generated output, and its actionable approval review. */
 export type LatestDealRun = DealRunSummary &
   Readonly<{
     runId: string;
     generatedOutput: GeneratedDealOutput | null;
-    approvalReview: ApprovalReview | null;
+    approvalReview: ApprovalReviewDescriptor | null;
   }>;
 
 /** Represents one authorized evidence record displayed in a deal workspace. */
@@ -99,7 +99,7 @@ export interface DealQueryRepository {
   listAuthorizedDeals(personaId: string): Promise<readonly AuthorizedDeal[]>;
   /** Finds one deal authorized by a live Salesforce source grant for the persona. */
   findAuthorizedDeal(personaId: string, opportunityId: string): Promise<AuthorizedDeal | undefined>;
-  /** Finds the latest authorized run, generated output, and actor-authorized current approval subject. */
+  /** Finds the latest authorized run, generated output, and actor-authorized actionable approval subject. */
   findLatestRun(personaId: string, opportunityId: string): Promise<LatestDealRun | undefined>;
   /** Lists source-specific authorized evidence for one deal workspace category. */
   listEvidence(scope: EvidenceScope, category: EvidenceCategory): Promise<readonly DealEvidence[]>;

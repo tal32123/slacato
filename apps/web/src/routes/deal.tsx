@@ -1,6 +1,6 @@
 import type { DealWorkspaceView, DemoSession } from '@slacato/contracts';
 import type { LoaderFunctionArgs } from 'react-router';
-import { useLoaderData, useRouteLoaderData } from 'react-router';
+import { useLoaderData, useRevalidator, useRouteLoaderData } from 'react-router';
 import {
   queryClient,
   SessionInvalidatedError,
@@ -48,6 +48,7 @@ export async function dealLoader({
 export function DealRoute(): React.JSX.Element {
   const workspace = useLoaderData() as DealWorkspaceView;
   const session = useRouteLoaderData('protected-root') as DemoSession;
+  const revalidator = useRevalidator();
   const approvalReview = workspace.generatedOutput?.approvalReview ?? null;
   return (
     <EvidenceExplorer evidence={workspace.evidence}>
@@ -58,7 +59,11 @@ export function DealRoute(): React.JSX.Element {
           onEvidence={onEvidence}
           approvalDecision={
             approvalReview === null ? undefined : (
-              <DealApprovalDecision approvalReview={approvalReview} session={session} />
+              <DealApprovalDecision
+                approvalReview={approvalReview}
+                session={session}
+                onWorkspaceRevalidate={() => revalidator.revalidate()}
+              />
             )
           }
           primaryAction={

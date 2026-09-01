@@ -696,65 +696,105 @@ function projectApprovalDecision(
   });
 }
 
-/** Creates a failed synthetic provider attempt only when the ledger has no durable row. */
-function projectFallbackFailureAttempt(
-  runId: string,
-  metadata: DealBriefGenerationMetadata
-): GenerationAttemptProjection {
+/** Projects terminal diagnostics without manufacturing a logical generation or provider attempt. */
+function projectFailureWithoutGeneration(
+  input: Extract<WorkflowTraceProjectionInput, { type: 'failed' }>,
+  reasonCode: FailureReasonCode
+): WorkflowTraceProjection {
+  if (reasonCode === 'draft_validation_failed') {
+    const validationSpan = projectSpan({
+      runId: input.runId,
+      kind: 'validation',
+      discriminator: `terminal:${reasonCode}:${input.version}`,
+      step: 'validation',
+      status: 'failed',
+      parent: {
+        type: 'latest',
+        candidates: [
+          { kinds: ['model_call'], step: 'strategy' },
+          { kinds: ['strategy_attempt'], step: 'strategy' },
+          { kinds: ['evidence_retrieval', 'authorization_lookup'] }
+        ]
+      },
+      data: { decision: 'rejected', validationAttempts: 0 }
+    });
+    return {
+      failureReasonCode: reasonCode,
+      spans: [
+        validationSpan,
+        projectSpan({
+          runId: input.runId,
+          kind: 'fatal_failure',
+          discriminator: `${reasonCode}:${input.version}`,
+          step: 'validation',
+          status: 'failed',
+          parent: { type: 'direct', spanId: validationSpan.spanId },
+          data: { decision: 'fatal', reasonCode }
+        })
+      ]
+    };
+  }
+
+  const identity = failureOperations[reasonCode];
   return {
-    runId,
-    id: `attempt_${hashApprovalPayload({
-      runId,
-      logicalGenerationId: metadata.logicalGenerationId,
-      operation: metadata.operation,
-      ordinal: 1
-    })}`,
-    invocationId: metadata.invocationId,
-    logicalGenerationId: metadata.logicalGenerationId,
-    operation: metadata.operation,
-    ordinal: 1,
-    status: 'failed',
-    provider: metadata.provider,
-    model: metadata.model,
-    outputMode: null,
-    validationAttempts: 0,
-    possibleDuplicate: metadata.possibleDuplicate,
-    inputTokens: null,
-    validationIssues: [],
-    outputTokens: null
+    failureReasonCode: reasonCode,
+    spans: [
+      projectSpan({
+        runId: input.runId,
+        kind: 'fatal_failure',
+        discriminator: `${reasonCode}:${input.version}`,
+        step: identity.step,
+        status: 'failed',
+        parent: {
+          type: 'latest',
+          candidates: [
+            {
+              kinds: [
+                'validation',
+                'repair',
+                'guardrail',
+                'policy_decision',
+                'approval_requirement',
+                'approval_decision',
+                'recommendation',
+                'finalization',
+                'partial_failure',
+                'evidence_retrieval',
+                'authorization_lookup'
+              ]
+            }
+          ]
+        },
+        data: { decision: 'fatal', reasonCode }
+      })
+    ]
   };
 }
 
-/** Projects the failed attempt and terminal failure spans with the same parent fallback order as the workflow. */
+/** Projects an explicitly identified failed generation and only its durable provider-attempt evidence. */
 function projectFailure(
   input: Extract<WorkflowTraceProjectionInput, { type: 'failed' }>
 ): WorkflowTraceProjection {
   const reasonCode = failureReasonCode(input.reason);
-  const identity = failureOperations[reasonCode];
-  const attemptKind: 'strategy_attempt' | 'specialist_attempt' =
-    identity.step === 'strategy' ? 'strategy_attempt' : 'specialist_attempt';
   const metadata = input.generationFailure?.metadata;
-  if (metadata !== undefined && metadata.operation !== identity.operation) {
+  if (
+    metadata === undefined ||
+    input.reason === 'draft_validation_failed' ||
+    input.reason === 'processor_attempts_exhausted'
+  ) {
+    return projectFailureWithoutGeneration(input, reasonCode);
+  }
+
+  const identity = failureOperations[reasonCode];
+  if (metadata.operation !== identity.operation) {
     throw new Error('Failed generation operation does not match terminal failure reason');
   }
-  const operation = metadata?.operation ?? identity.operation;
-  const logicalGenerationId =
-    metadata?.logicalGenerationId ??
-    `failed_${hashApprovalPayload({
-      runId: input.runId,
-      operation,
-      reasonCode,
-      version: input.version
-    })}`;
   const persistedAttempts = input.generationFailure?.persistedAttempts ?? [];
-  if (persistedAttempts.some((attempt) => attempt.operation !== operation)) {
+  if (persistedAttempts.some((attempt) => attempt.operation !== metadata.operation)) {
     throw new Error('Persisted provider attempt operation does not match failed generation');
   }
-  const generationAttempt =
-    metadata !== undefined && persistedAttempts.length === 0
-      ? projectFallbackFailureAttempt(input.runId, metadata)
-      : undefined;
-  const attempts = generationAttempt === undefined ? persistedAttempts : [generationAttempt];
+  const attemptKind: 'strategy_attempt' | 'specialist_attempt' =
+    identity.step === 'strategy' ? 'strategy_attempt' : 'specialist_attempt';
   const attemptSpan = projectSpan({
     runId: input.runId,
     kind: attemptKind,
@@ -768,7 +808,10 @@ function projectFailure(
         { kinds: ['evidence_retrieval', 'authorization_lookup'] }
       ]
     },
-    data: { operation, logicalGenerationId }
+    data: {
+      operation: metadata.operation,
+      logicalGenerationId: metadata.logicalGenerationId
+    }
   });
   return {
     failureReasonCode: reasonCode,
@@ -778,9 +821,9 @@ function projectFailure(
         runId: input.runId,
         discriminator: `${identity.step}:failed:${reasonCode}:${input.version}`,
         step: identity.step,
-        operation,
+        operation: metadata.operation,
         parentSpanId: attemptSpan.spanId,
-        attempts
+        attempts: persistedAttempts
       }),
       projectSpan({
         runId: input.runId,
@@ -791,8 +834,7 @@ function projectFailure(
         parent: { type: 'direct', spanId: attemptSpan.spanId },
         data: { decision: 'fatal', reasonCode }
       })
-    ],
-    ...(generationAttempt === undefined ? {} : { generationAttempt })
+    ]
   };
 }
 

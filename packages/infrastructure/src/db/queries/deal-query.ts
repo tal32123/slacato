@@ -29,6 +29,7 @@ type LatestDealRunSqlRow = Readonly<{
   updated_at: Date | string;
   generated_output_lifecycle: 'draft' | 'finalized' | null;
   generated_output_payload: unknown | null;
+  approval_subject_id: string | null;
 }>;
 
 type DealEvidenceSqlRow = Readonly<{
@@ -71,17 +72,22 @@ function mapAuthorizedDealSqlRow(row: AuthorizedDealSqlRow): AuthorizedDeal {
 
 /** Converts the latest authorized run projection and validates any generated canonical payload. */
 function mapLatestDealRunSqlRow(row: LatestDealRunSqlRow): LatestDealRun {
+  const generatedOutput =
+    row.generated_output_lifecycle === null || row.generated_output_payload === null
+      ? null
+      : {
+          lifecycle: row.generated_output_lifecycle,
+          brief: dealBriefSchema.parse(parseStoredDealBrief(row.generated_output_payload))
+        };
   return {
     runId: row.id,
     status: runStatusSchema.parse(row.status),
     updatedAt: row.updated_at,
-    generatedOutput:
-      row.generated_output_lifecycle === null || row.generated_output_payload === null
+    generatedOutput,
+    approvalReview:
+      generatedOutput === null || row.approval_subject_id === null
         ? null
-        : {
-            lifecycle: row.generated_output_lifecycle,
-            brief: dealBriefSchema.parse(parseStoredDealBrief(row.generated_output_payload))
-          }
+        : { approvalSubjectId: row.approval_subject_id }
   };
 }
 
@@ -178,7 +184,7 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
     return rows[0] === undefined ? undefined : mapAuthorizedDealSqlRow(rows[0]);
   }
 
-  /** Loads the latest run and generated output while the deal remains authorized through any live source grant. */
+  /** Loads the latest authorized run, generated output, and actor-authorized actionable approval subject. */
   public async findLatestRun(
     personaId: string,
     opportunityId: string
@@ -187,7 +193,8 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
       select run.id, run.status, run.updated_at,
         case when finalized_brief.payload is not null then 'finalized'
           when generated_draft.payload is not null then 'draft' else null end as generated_output_lifecycle,
-        coalesce(finalized_brief.payload, generated_draft.payload) as generated_output_payload
+        coalesce(finalized_brief.payload, generated_draft.payload) as generated_output_payload,
+        current_approval_subject.id as approval_subject_id
       from runs run
       join opportunities opportunity on opportunity.id = run.opportunity_id
       left join lateral (
@@ -206,6 +213,22 @@ export class PostgresDealQueryRepository implements DealQueryRepository {
         order by subject.draft_version desc, subject.created_at desc
         limit 1
       ) generated_draft on true
+      left join lateral (
+        select subject.id
+        from approval_subjects subject
+        where subject.run_id = run.id
+          and subject.superseded_by_subject_id is null
+          and run.status = 'awaiting_approval'
+          and exists (
+            select 1 from authorized_run_approval_grants approval_grant
+            where approval_grant.persona_id = ${personaId}
+              and approval_grant.source_commit = ${CANONICAL_FIXTURE_COMMIT}
+              and approval_grant.run_id = run.id
+              and approval_grant.approval_subject_id = subject.id
+          )
+        order by subject.draft_version desc, subject.created_at desc, subject.id desc
+        limit 1
+      ) current_approval_subject on true
       where run.opportunity_id = ${opportunityId}
         and exists (
           select 1 from authorized_opportunity_grants opportunity_grant

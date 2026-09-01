@@ -152,6 +152,7 @@ function renderGeneratedOutput(
       status: input.producingRun.status,
       updatedAt: serializeDateTime(input.producingRun.updatedAt)
     },
+    approvalReview: input.producingRun.approvalReview,
     content: renderFinalizedDealBrief(brief, evidenceById, claims)
   };
 }
@@ -224,10 +225,16 @@ function renderFinalizedDealBrief(
   });
   const actions = brief.recommendedNextActions.actions.map((action): RecommendedActionView => {
     const citationIds = collectClaimEvidenceIds(action.claims);
-    return { action: action.action, audience: action.audience, owner: action.owner ?? null, priority: action.priority, dueDate: action.dueDate ?? null,
-    rationale: action.rationale,
-    citationIds,
-    accountTeamUpdateImpact: referencesAccountTeamEvidence(citationIds, evidenceById) };
+    return {
+      action: action.action,
+      audience: action.audience,
+      owner: action.owner ?? null,
+      priority: action.priority,
+      dueDate: action.dueDate ?? null,
+      rationale: action.rationale,
+      citationIds,
+      accountTeamUpdateImpact: referencesAccountTeamEvidence(citationIds, evidenceById)
+    };
   });
   const warnings = brief.confidenceAndReviewWarnings.warnings
     .map((warning): ReviewWarningView | undefined => {
@@ -632,21 +639,40 @@ function buildSourceBackedActions(
 ): RecommendedActionView[] {
   const actions: RecommendedActionView[] = [];
   if (fields.nextStep !== undefined)
-    actions.push({ action: fields.nextStep, audience: 'internal', owner: deal.owner, priority: deal.riskLevel === 'high' ? 'critical' : 'high', dueDate: extractIsoDate(fields.nextStep),
-    rationale: 'This is the next step recorded in the authorized opportunity source.',
-    citationIds: evidenceIdsForItem(opportunity),
-    accountTeamUpdateImpact: false });
+    actions.push({
+      action: fields.nextStep,
+      audience: 'internal',
+      owner: deal.owner,
+      priority: deal.riskLevel === 'high' ? 'critical' : 'high',
+      dueDate: extractIsoDate(fields.nextStep),
+      rationale: 'This is the next step recorded in the authorized opportunity source.',
+      citationIds: evidenceIdsForItem(opportunity),
+      accountTeamUpdateImpact: false
+    });
   if (unresolvedUpdate !== undefined)
-    actions.push({ action: 'Confirm the latest account-team information gap before finalizing the packet.', audience: 'internal', owner: deal.owner, priority: 'high', dueDate: deal.closeDate,
-    rationale: unresolvedUpdateFields.updateText ?? unresolvedUpdate.content,
-    citationIds: [unresolvedUpdate.id],
-    accountTeamUpdateImpact: true });
+    actions.push({
+      action: 'Confirm the latest account-team information gap before finalizing the packet.',
+      audience: 'internal',
+      owner: deal.owner,
+      priority: 'high',
+      dueDate: deal.closeDate,
+      rationale: unresolvedUpdateFields.updateText ?? unresolvedUpdate.content,
+      citationIds: [unresolvedUpdate.id],
+      accountTeamUpdateImpact: true
+    });
   else if (conversation !== undefined) {
     const conversationFields = parseColonDelimitedRecord(conversation.content);
-    actions.push({ action: conversationFields.nextSteps ?? 'Confirm the next negotiation step with the account team.', audience: 'internal', owner: deal.owner, priority: 'medium', dueDate: extractIsoDate(conversationFields.nextSteps),
-    rationale: 'This action is grounded in the latest authorized conversation summary.',
-    citationIds: [conversation.id],
-    accountTeamUpdateImpact: false });
+    actions.push({
+      action:
+        conversationFields.nextSteps ?? 'Confirm the next negotiation step with the account team.',
+      audience: 'internal',
+      owner: deal.owner,
+      priority: 'medium',
+      dueDate: extractIsoDate(conversationFields.nextSteps),
+      rationale: 'This action is grounded in the latest authorized conversation summary.',
+      citationIds: [conversation.id],
+      accountTeamUpdateImpact: false
+    });
   }
   return actions;
 }

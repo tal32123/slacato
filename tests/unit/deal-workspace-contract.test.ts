@@ -1,42 +1,79 @@
 import { dealWorkspaceViewSchema } from '@slacato/contracts';
-import { dealBriefSchema, type AuthorizedDeal, type DealEvidence, type LatestDealRun } from '@slacato/core';
+import {
+  type AuthorizedDeal,
+  type DealEvidence,
+  dealBriefSchema,
+  type LatestDealRun
+} from '@slacato/core';
 import { expect, it } from 'vitest';
 import { renderDealWorkspace } from '../../apps/api/src/modules/deals/deal-workspace.mapper';
 
 const section = {
-  title: 'Evidence overview', paragraphs: [], items: [], citationIds: [], accountTeamUpdateImpact: false
+  title: 'Evidence overview',
+  paragraphs: [],
+  items: [],
+  citationIds: [],
+  accountTeamUpdateImpact: false
 };
 
 it('accepts a source snapshot and a separately run-linked generated draft in the workspace response', () => {
   const content = {
-    status: 'generated', overallConfidence: 0.5,
+    status: 'generated',
+    overallConfidence: 0.5,
     sections: {
-      dealSnapshot: section, executiveSummary: section, buyerGoalsAndBusinessDrivers: section,
-      stakeholderMap: section, negotiationState: section, recommendedNextActions: section,
-      missingInformation: section, sourceEvidence: section, confidenceAndReviewWarnings: section
+      dealSnapshot: section,
+      executiveSummary: section,
+      buyerGoalsAndBusinessDrivers: section,
+      stakeholderMap: section,
+      negotiationState: section,
+      recommendedNextActions: section,
+      missingInformation: section,
+      sourceEvidence: section,
+      confidenceAndReviewWarnings: section
     },
-    stakeholders: [], actions: [], warnings: []
+    stakeholders: [],
+    actions: [],
+    warnings: []
   };
 
-  expect(() => dealWorkspaceViewSchema.parse({
-    sessionVersion: 'session-v1',
-    deal: {
-      opportunityId: 'OPP-1', opportunityName: 'Renewal', accountName: 'Northstar', stage: 'Negotiation',
-      owner: null, closeDate: null, amount: null, currency: null, probability: null, riskLevel: 'unknown',
-      restricted: false, createdAt: '2026-08-29T00:00:00.000Z', latestRun: null
-    },
-    sourceSnapshot: {
-      type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: { ...content, status: 'source_backed' }
-    },
-    generatedOutput: {
-      type: 'generated_output', lifecycle: 'draft',
-      producingRun: { id: 'run-42', status: 'awaiting_approval', updatedAt: '2026-08-29T01:00:00.000Z' },
-      approvalReview: { approvalSubjectId: 'approval-1' },
-      content
-    },
-    brief: content,
-    evidence: []
-  })).not.toThrow();
+  expect(() =>
+    dealWorkspaceViewSchema.parse({
+      sessionVersion: 'session-v1',
+      deal: {
+        opportunityId: 'OPP-1',
+        opportunityName: 'Renewal',
+        accountName: 'Northstar',
+        stage: 'Negotiation',
+        owner: null,
+        closeDate: null,
+        amount: null,
+        currency: null,
+        probability: null,
+        riskLevel: 'unknown',
+        restricted: false,
+        createdAt: '2026-08-29T00:00:00.000Z',
+        latestRun: null
+      },
+      sourceSnapshot: {
+        type: 'source_snapshot',
+        label: 'Source snapshot',
+        evidenceOverview: { ...content, status: 'source_backed' }
+      },
+      generatedOutput: {
+        type: 'generated_output',
+        lifecycle: 'draft',
+        producingRun: {
+          id: 'run-42',
+          status: 'awaiting_approval',
+          updatedAt: '2026-08-29T01:00:00.000Z'
+        },
+        approvalReview: { approvalSubjectId: 'approval-1' },
+        content
+      },
+      brief: content,
+      evidence: []
+    })
+  ).not.toThrow();
 });
 
 const target: AuthorizedDeal = {
@@ -133,7 +170,9 @@ it('derives the executive summary and buyer goals paragraphs from different auth
   const executiveSummaryParagraph = brief.sections.executiveSummary.paragraphs[0];
   const buyerGoalsParagraph = brief.sections.buyerGoalsAndBusinessDrivers.paragraphs[0];
 
-  expect(executiveSummaryParagraph).toBe('Final document review found no new commercial objections.');
+  expect(executiveSummaryParagraph).toBe(
+    'Final document review found no new commercial objections.'
+  );
   expect(buyerGoalsParagraph).toContain('Rival Corp');
   expect(buyerGoalsParagraph).not.toBe(executiveSummaryParagraph);
 
@@ -187,9 +226,7 @@ const generatedBrief = dealBriefSchema.parse({
   confidenceAndReviewWarnings: { overallConfidence: 0.5, warnings: [] }
 });
 
-function generatedLatestRun(
-  approvalReview: LatestDealRun['approvalReview']
-): LatestDealRun {
+function generatedLatestRun(approvalReview: LatestDealRun['approvalReview']): LatestDealRun {
   return {
     runId: 'run-generated',
     status: 'awaiting_approval',

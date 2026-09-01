@@ -120,44 +120,12 @@
     .guide-item { min-width: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; }
     .guide-item h4 { color: var(--teal-dark); }
     .guide-item p { margin: 4px 0 0; color: #4f5d65; font-size: 14px; line-height: 1.5; }
-    .updated-region { position: relative; }
-    .updated-marker {
-      display: inline-flex;
-      align-items: center;
-      width: fit-content;
-      margin: 0 0 10px;
-      padding: 3px 8px;
-      border: 1px solid var(--warning);
-      border-radius: 999px;
-      background: var(--warning-soft);
-      color: var(--warning);
-      font-size: 11px;
-      font-weight: 760;
-      line-height: 1.25;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
-    .update-legend {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      max-width: 72ch;
-      margin-top: 28px;
-      padding: 14px 16px;
-      border: 1px solid var(--line-strong);
-      border-radius: 12px;
-      background: var(--paper);
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .update-legend .updated-marker { flex: 0 0 auto; margin: 1px 0 0; }
-    .update-legend strong { color: var(--ink); }
     .table-wrap { max-width: 100%; overflow-x: auto; }
     .table-wrap table { min-width: 720px; }
     .table-wrap:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
     .commands { margin: 14px 0 0; padding-left: 1.3em; }
     .commands code { overflow-wrap: anywhere; }
+    section code { overflow-wrap: anywhere; }
     .readiness-list { display: grid; gap: 18px; margin: 24px 0 34px; }
     .readiness-card { min-width: 0; padding: 24px; border: 1px solid var(--line); border-left: 4px solid var(--teal); border-radius: 14px; background: #fbfcfb; }
     .readiness-card > h3 { margin: 0 0 6px; }
@@ -197,9 +165,6 @@
       section { padding: 28px 22px; }
       .brand { margin-right: 6px; }
     }
-    @media (max-width: 620px) {
-      .update-legend { flex-direction: column; }
-    }
     @media print {
       nav { display: none; }
       body { background: white; font-size: 14px; }
@@ -209,7 +174,6 @@
       .diagram svg { min-width: 0; }
       .table-wrap { overflow: visible; }
       .table-wrap table { min-width: 0; table-layout: fixed; }
-      .updated-marker { color: var(--ink); border-color: var(--ink); background: transparent; }
     }
   </style>
 </head>
@@ -238,10 +202,6 @@
       <span class="pill">9-section typed brief</span>
       <span class="pill">Human approval gates</span>
     </div>
-    <div class="update-legend" role="note" aria-label="Updated in this review">
-      <span class="updated-marker" aria-hidden="true">Updated</span>
-      <span><strong>Updated in this review.</strong> This label appears only beside material changed for this review; unmarked content is unchanged.</span>
-    </div>
   </header>
 
   <main>
@@ -262,20 +222,20 @@
       <h2>Thin apps around durable domain and infrastructure seams.</h2>
       <p>The browser requests work. The API checks access. The worker builds the brief. Core holds the business rules; infrastructure connects them to storage, queues, search, and models.</p>
 
-      <div class="updated-region">
-        <span class="updated-marker" aria-label="Updated in this review">Updated</span>
+      <div>
         <h3>Logical view</h3>
+        <p class="diagram-note"><strong>Inspect:</strong> follow authorization into draft review in the web/API, then verify the approval quorum gates only finalization, export, and customer-facing use.</p>
         <div class="diagram" data-diagram="logical-architecture" role="group" aria-label="Logical architecture diagram">
           <svg viewBox="0 0 1500 900" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="logical-title logical-desc">
-            <title id="logical-title">Authorized, durable logical architecture</title>
-            <desc id="logical-desc">An authorized reviewer request enters Authorized hybrid RAG. A durable orchestrator sends typed context to Conversation, Stakeholder, Commercial, and Strategy agents and checkpoints their typed artifacts. Validation and guardrails precede the required human approval quorum, which precedes reviewer output channels. Retrieval, model, validation, approval, and final-output events all feed the trace and audit projection.</desc>
+            <title id="logical-title">Authorized draft review with approval-gated final output</title>
+            <desc id="logical-desc">An authorized reviewer request enters Authorized hybrid RAG. A durable orchestrator sends typed context to Conversation, Stakeholder, Commercial, and Strategy agents and checkpoints their typed artifacts. Validation and guardrails produce an authorized draft that reviewers may inspect in the web application and API before approvals complete. The human approval quorum gates finalization, export, and customer-facing use. Retrieval, model, validation, approval, and final-output events all feed the trace and audit projection.</desc>
             <defs><marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
             <rect x="24" y="24" width="1452" height="852" rx="22" fill="#fbfcfb" stroke="#dce3df"/>
             <style>
               .la-app{fill:#fff;stroke:#158864;stroke-width:2}.la-core{fill:#eaf6f1;stroke:#158864;stroke-width:2}.la-infra{fill:#eef1f2;stroke:#65737b;stroke-width:2}.la-human{fill:#fff7e8;stroke:#9a5a10;stroke-width:2}
               .la-title{font:700 17px system-ui;fill:#0A141D}.la-copy{font:12px system-ui;fill:#4d5b63}.la-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowA)}.la-event{stroke:#158864;stroke-width:1.7;stroke-dasharray:6 6;fill:none;marker-end:url(#arrowA)}.la-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}.la-label{font:700 11px system-ui;fill:#52616a;letter-spacing:.5px}
             </style>
-            <text x="50" y="62" class="la-g">AUTHORIZED, CHECKPOINTED PATH TO REVIEWER OUTPUT</text>
+            <text x="50" y="62" class="la-g">AUTHORIZED DRAFT REVIEW; APPROVAL-GATED FINAL USE</text>
 
             <g><title>The API authenticates the requester and proves deal and source grants before retrieval.</title><rect class="la-app" x="45" y="155" width="225" height="145" rx="16"/><text x="158" y="192" text-anchor="middle" class="la-title">API authorization</text><text x="158" y="226" text-anchor="middle" class="la-copy">Checks requester, deal,</text><text x="158" y="247" text-anchor="middle" class="la-copy">and source permissions.</text><text x="158" y="275" text-anchor="middle" class="la-label">DENY BEFORE RETRIEVAL</text></g>
             <path class="la-a" d="M270 228H325"/>
@@ -291,46 +251,47 @@
             <g><title>Commercial receives AgentContext and returns a validated CommercialArtifact.</title><rect class="la-core" x="955" y="300" width="220" height="105" rx="14"/><text x="1065" y="335" text-anchor="middle" class="la-title">Commercial</text><text x="1065" y="365" text-anchor="middle" class="la-copy">AgentContext →</text><text x="1065" y="385" text-anchor="middle" class="la-copy">CommercialArtifact</text></g>
 
             <path class="la-a" d="M1175 122H1215V238H1255"/><path class="la-a" d="M1175 238H1255"/><path class="la-a" d="M1175 352H1215V238H1255"/><path class="la-a" d="M910 310H930V430H1380V295"/>
-            <g><title>Strategy receives the three validated specialist artifacts and the same authorized manifest, and returns the typed DealBrief.</title><rect class="la-core" x="1255" y="170" width="210" height="135" rx="14"/><text x="1360" y="206" text-anchor="middle" class="la-title">Strategy</text><text x="1360" y="237" text-anchor="middle" class="la-copy">StrategyArtifacts →</text><text x="1360" y="258" text-anchor="middle" class="la-copy">DealBrief</text><text x="1360" y="283" text-anchor="middle" class="la-label">CHECKPOINTED FAN-IN</text></g>
+            <g><title>Strategy receives AgentContext plus the three validated StrategyArtifacts and returns the typed DealBrief.</title><rect class="la-core" x="1255" y="170" width="210" height="135" rx="14"/><text x="1360" y="202" text-anchor="middle" class="la-title">Strategy</text><text x="1360" y="230" text-anchor="middle" class="la-copy">AgentContext +</text><text x="1360" y="250" text-anchor="middle" class="la-copy">StrategyArtifacts → DealBrief</text><text x="1360" y="280" text-anchor="middle" class="la-label">CHECKPOINTED FAN-IN</text></g>
 
             <path class="la-a" d="M1360 305V475"/>
             <g><title>Deterministic validation restores code-owned citations, checks support and schema rules, and applies safety and policy guardrails.</title><rect class="la-app" x="1195" y="475" width="270" height="135" rx="16"/><text x="1330" y="514" text-anchor="middle" class="la-title">Validation + guardrails</text><text x="1330" y="547" text-anchor="middle" class="la-copy">Schema, citation, support, safety,</text><text x="1330" y="568" text-anchor="middle" class="la-copy">and deterministic policy checks.</text><text x="1330" y="594" text-anchor="middle" class="la-label">CODE-ENFORCED</text></g>
             <path class="la-a" d="M1195 543H1135"/>
 
-            <g><title>Every required human approval must be recorded before any reviewer output channel receives the finalized brief.</title><rect class="la-human" x="845" y="475" width="290" height="135" rx="16"/><text x="990" y="514" text-anchor="middle" class="la-title">HITL approval quorum</text><text x="990" y="547" text-anchor="middle" class="la-copy">Deal Desk, Sales, Legal, or owner</text><text x="990" y="568" text-anchor="middle" class="la-copy">as required; all must resolve.</text><text x="990" y="594" text-anchor="middle" class="la-label">BEFORE REVIEWER OUTPUT</text></g>
-            <path class="la-a" d="M845 543H785"/>
+            <g><title>The validated, authorized draft is available to authorized reviewers in the web application and API before approvals complete; it cannot yet finalize or export.</title><rect class="la-app" x="885" y="475" width="250" height="135" rx="16"/><text x="1010" y="514" text-anchor="middle" class="la-title">Authorized draft review</text><text x="1010" y="547" text-anchor="middle" class="la-copy">Web + API may show the draft</text><text x="1010" y="568" text-anchor="middle" class="la-copy">before approval quorum.</text><text x="1010" y="594" text-anchor="middle" class="la-label">PREAPPROVAL REVIEW</text></g>
+            <path class="la-a" d="M885 543H825"/>
+            <g><title>Every required human approval must resolve before the draft can finalize, export, or support customer-facing use.</title><rect class="la-human" x="575" y="475" width="250" height="135" rx="16"/><text x="700" y="514" text-anchor="middle" class="la-title">HITL approval quorum</text><text x="700" y="547" text-anchor="middle" class="la-copy">Required authorities resolve before</text><text x="700" y="568" text-anchor="middle" class="la-copy">finalization, export, or external use.</text><text x="700" y="594" text-anchor="middle" class="la-label">GATES FINAL USE</text></g>
+            <path class="la-a" d="M575 543H515"/>
+            <g><title>After approval quorum, reviewer channels expose the finalized brief and controlled exports may support customer-facing use.</title><rect class="la-app" x="265" y="475" width="250" height="135" rx="16"/><text x="390" y="514" text-anchor="middle" class="la-title">Reviewer output channels</text><text x="390" y="547" text-anchor="middle" class="la-copy">Final brief · controlled export ·</text><text x="390" y="568" text-anchor="middle" class="la-copy">customer-facing use</text><text x="390" y="594" text-anchor="middle" class="la-label">AFTER APPROVAL QUORUM</text></g>
 
-            <g><title>Only the finalized, authorized, validated, and fully approved result reaches reviewer-facing web, API, and export channels.</title><rect class="la-app" x="485" y="475" width="300" height="135" rx="16"/><text x="635" y="514" text-anchor="middle" class="la-title">Reviewer output channels</text><text x="635" y="547" text-anchor="middle" class="la-copy">Web brief · API read model ·</text><text x="635" y="568" text-anchor="middle" class="la-copy">reviewable sample export</text><text x="635" y="594" text-anchor="middle" class="la-label">FINALIZED OUTPUT ONLY</text></g>
-
-            <path class="la-event" d="M455 315V710"/><path class="la-event" d="M1065 405V675H735V710"/><path class="la-event" d="M1330 610V710"/><path class="la-event" d="M990 610V710"/><path class="la-event" d="M635 610V710"/>
+            <path class="la-event" d="M455 315V710"/><path class="la-event" d="M1065 405V675H735V710"/><path class="la-event" d="M1330 610V710"/><path class="la-event" d="M1010 610V710"/><path class="la-event" d="M700 610V710"/><path class="la-event" d="M390 610V710"/>
             <g><title>The trace and audit projection receives events from retrieval, every model invocation, validation and guardrail decisions, approval decisions, and final output.</title><rect class="la-infra" x="245" y="710" width="1010" height="125" rx="18"/><text x="750" y="751" text-anchor="middle" class="la-title">Trace + audit projection</text><text x="750" y="783" text-anchor="middle" class="la-copy">Fed by retrieval · model · validation · approval · final output</text><text x="750" y="811" text-anchor="middle" class="la-label">PERSISTED RUN TIMELINE, USAGE, DECISIONS, AND PROVENANCE</text></g>
           </svg>
         </div>
         <div class="diagram-guide" aria-label="Logical architecture explanations">
           <div class="guide-item"><h4>Authorized hybrid RAG</h4><p>Authorization narrows the corpus before exact CRM, full-text, and vector search. Reciprocal-rank fusion produces a frozen evidence manifest that every downstream step must honor.</p></div>
-          <div class="guide-item"><h4>Durable typed orchestration</h4><p>The orchestrator supplies typed <code>AgentContext</code> to Conversation, Stakeholder, and Commercial, checkpoints their artifacts, and invokes Strategy with typed <code>StrategyArtifacts</code>.</p></div>
+          <div class="guide-item"><h4>Durable typed orchestration</h4><p>The orchestrator supplies typed <code>AgentContext</code> to each specialist, checkpoints their artifacts, and invokes Strategy with both <code>AgentContext</code> and typed <code>StrategyArtifacts</code>.</p></div>
           <div class="guide-item"><h4>Validation + guardrails</h4><p>Schema, citation ownership, semantic support, unsafe-language, and approval-policy checks run in deterministic code around model output.</p></div>
-          <div class="guide-item"><h4>HITL before output</h4><p>The human-in-the-loop quorum must resolve every required approval before the web brief, API read model, or reviewer export can expose finalized output.</p></div>
+          <div class="guide-item"><h4>Draft review and finalization quorum</h4><p>Authorized reviewers may inspect the validated draft in the web application and API before approvals complete. The human quorum gates finalization, export, and customer-facing use—not draft visibility.</p></div>
           <div class="guide-item"><h4>Trace + audit projection</h4><p>Retrieval, model, validation, approval, and final-output events feed one persisted reviewer timeline rather than separate, unverifiable logs.</p></div>
           <div class="guide-item"><h4>Asymmetric failure boundary</h4><p>Recoverable specialist degradation is explicit and checkpointed; unsafe commercial or synthesis failure stops the run instead of producing a misleading brief.</p></div>
         </div>
       </div>
 
-      <div class="updated-region">
-        <span class="updated-marker" aria-label="Updated in this review">Updated</span>
+      <div>
         <h3>Deployment view</h3>
-        <p>The API proves who may request work, the worker performs it, PostgreSQL preserves recovery authority, the model gateway contains provider access, and operational credentials and telemetry stay behind explicit deployment boundaries.</p>
-        <div class="diagram" data-diagram="deployment" role="group" aria-label="Deployment architecture diagram">
+        <p class="diagram-note"><strong>Inspect:</strong> compare the current server-side environment configuration and application logs/health with the dashed production-target Secrets manager and multi-service telemetry paths.</p>
+        <p>Today, server-side environment configuration supplies credentials and the application exposes logs and health signals. The production target adds managed secret injection and centralized monitoring without changing the API, worker, PostgreSQL, Redis, or model-gateway responsibilities.</p>
+        <div class="diagram" data-diagram="deployment" role="group" aria-label="Current deployment and production-target operations diagram">
           <svg viewBox="0 0 1500 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="deployment-title deployment-desc">
-            <title id="deployment-title">Deployment services, credential injection, and telemetry</title>
-            <desc id="deployment-desc">The reviewer browser reaches the web gateway and API. The API records work for the worker, which uses PostgreSQL, Redis, and the model gateway. A Secrets manager injects credentials into the API, worker, and model gateway. API, worker, PostgreSQL, Redis, and model gateway telemetry flows to Monitoring and telemetry.</desc>
+            <title id="deployment-title">Current services with production-target secret injection and telemetry</title>
+            <desc id="deployment-desc">The current reviewer browser reaches the web gateway and API. The API records work for the worker, which uses PostgreSQL, Redis, and the model gateway; credentials come from server-side environment configuration and the application emits logs and health signals. Dashed production-target nodes and edges show a future Secrets manager injecting credentials into the API, worker, and model gateway, and centralized Monitoring and telemetry receiving signals from API, worker, PostgreSQL, Redis, and model gateway.</desc>
             <defs><marker id="arrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
             <rect width="1500" height="720" fill="#fbfcfb"/>
             <style>
-              .dp-svc{fill:#fff;stroke:#158864;stroke-width:2}.dp-store{fill:#fff;stroke:#65737b;stroke-width:1.6}.dp-ext{fill:#eaf6f1;stroke:#158864;stroke-width:1.6}.dp-ops{fill:#eef1f2;stroke:#65737b;stroke-width:1.8}
+              .dp-svc{fill:#fff;stroke:#158864;stroke-width:2}.dp-store{fill:#fff;stroke:#65737b;stroke-width:1.6}.dp-ext{fill:#eaf6f1;stroke:#158864;stroke-width:1.6}.dp-ops{fill:#eef1f2;stroke:#65737b;stroke-width:1.8;stroke-dasharray:8 5}
               .dp-h{font:700 16px system-ui;fill:#0A141D}.dp-s{font:12px system-ui;fill:#52616a}.dp-l{font:700 10px system-ui;fill:#6b7880;letter-spacing:.5px}.dp-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}.dp-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowD)}.dp-secret{stroke:#9a5a10;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arrowD)}.dp-tele{stroke:#158864;stroke-width:1.7;stroke-dasharray:4 5;fill:none;marker-end:url(#arrowD)}
             </style>
-            <text x="28" y="32" class="dp-g">DEPLOYED SERVICES, CREDENTIAL INJECTION, AND TELEMETRY FLOWS</text>
+            <text x="28" y="32" class="dp-g">CURRENT SERVICES + DASHED PRODUCTION-TARGET OPERATIONS</text>
 
             <g><title>The reviewer browser is a review surface only and never receives database or model-provider credentials.</title><rect class="dp-store" x="30" y="80" width="190" height="125" rx="14"/><text x="48" y="114" class="dp-h">Reviewer browser</text><text x="48" y="144" class="dp-s">Starts and reviews briefs.</text><text x="48" y="164" class="dp-s">Holds no provider keys.</text></g>
             <path class="dp-a" d="M220 143H270"/><text x="245" y="133" text-anchor="middle" class="dp-l">HTTPS</text>
@@ -338,10 +299,10 @@
             <g><title>The web gateway serves the interface and forwards API traffic under one trusted origin.</title><rect class="dp-svc" x="270" y="80" width="190" height="125" rx="14"/><text x="288" y="114" class="dp-h">Web gateway</text><text x="288" y="144" class="dp-s">Serves React and forwards</text><text x="288" y="164" class="dp-s">same-origin API traffic.</text></g>
             <path class="dp-a" d="M460 143H510"/>
 
-            <g><title>The API authenticates, authorizes, records durable commands, and returns safe read models.</title><rect class="dp-svc" x="510" y="65" width="235" height="155" rx="14"/><text x="530" y="100" class="dp-h">API service</text><text x="530" y="130" class="dp-s">Authenticates and authorizes.</text><text x="530" y="150" class="dp-s">Records durable commands.</text><text x="530" y="170" class="dp-s">Returns safe reviewer views.</text><text x="530" y="198" class="dp-l">SECRET-INJECTED CREDENTIALS</text></g>
+            <g><title>The current API authenticates, authorizes, records durable commands, and returns safe read models using server-side environment configuration.</title><rect class="dp-svc" x="510" y="65" width="235" height="155" rx="14"/><text x="530" y="100" class="dp-h">API service</text><text x="530" y="130" class="dp-s">Authenticates and authorizes.</text><text x="530" y="150" class="dp-s">Records durable commands.</text><text x="530" y="170" class="dp-s">Returns safe reviewer views.</text><text x="530" y="198" class="dp-l">SERVER-SIDE ENV CONFIG</text></g>
             <path class="dp-a" d="M628 220V300"/>
 
-            <g><title>The worker owns Authorized hybrid RAG, agent execution, checkpoints, validation, approval routing, and finalization.</title><rect class="dp-svc" x="510" y="300" width="235" height="165" rx="14"/><text x="530" y="335" class="dp-h">Worker service</text><text x="530" y="365" class="dp-s">Runs retrieval and agents.</text><text x="530" y="385" class="dp-s">Checkpoints and validates.</text><text x="530" y="405" class="dp-s">Routes approvals and finalizes.</text><text x="530" y="440" class="dp-l">SECRET-INJECTED CREDENTIALS</text></g>
+            <g><title>The current worker owns Authorized hybrid RAG, agent execution, checkpoints, validation, approval routing, and finalization using server-side environment configuration.</title><rect class="dp-svc" x="510" y="300" width="235" height="165" rx="14"/><text x="530" y="335" class="dp-h">Worker service</text><text x="530" y="365" class="dp-s">Runs retrieval and agents.</text><text x="530" y="385" class="dp-s">Checkpoints and validates.</text><text x="530" y="405" class="dp-s">Routes approvals and finalizes.</text><text x="530" y="440" class="dp-l">SERVER-SIDE ENV CONFIG</text></g>
 
             <g><title>PostgreSQL with pgvector is the recovery authority for permissions, evidence, run state, checkpoints, approvals, citations, and finalized briefs.</title><rect class="dp-store" x="820" y="60" width="300" height="175" rx="14"/><text x="840" y="96" class="dp-h">PostgreSQL + pgvector</text><text x="840" y="126" class="dp-s">Permissions and evidence.</text><text x="840" y="146" class="dp-s">Run state and checkpoints.</text><text x="840" y="166" class="dp-s">Approvals, citations, briefs.</text><text x="840" y="202" class="dp-l">RECOVERY AUTHORITY</text></g>
             <path class="dp-a" d="M745 135H820"/><path class="dp-a" d="M745 335C780 335 780 190 820 190"/>
@@ -349,14 +310,14 @@
             <g><title>Redis and BullMQ deliver pending commands to workers and can be rebuilt from PostgreSQL.</title><rect class="dp-store" x="820" y="285" width="300" height="115" rx="14"/><text x="840" y="321" class="dp-h">Redis + BullMQ</text><text x="840" y="351" class="dp-s">Delivers pending work.</text><text x="840" y="371" class="dp-s">Rebuildable queue state.</text></g>
             <path class="dp-a" d="M745 358H820"/>
 
-            <g><title>The model gateway is the only provider path and receives provider credentials from the Secrets manager rather than the browser or checked-in files.</title><rect class="dp-ext" x="820" y="455" width="300" height="125" rx="14"/><text x="840" y="491" class="dp-h">Model gateway</text><text x="840" y="521" class="dp-s">Generation and embeddings.</text><text x="840" y="541" class="dp-s">Controlled provider boundary.</text><text x="840" y="565" class="dp-l">SECRET-INJECTED CREDENTIALS</text></g>
+            <g><title>The current model gateway is the only provider path and reads provider credentials from server-side environment configuration.</title><rect class="dp-ext" x="820" y="455" width="300" height="125" rx="14"/><text x="840" y="491" class="dp-h">Model gateway</text><text x="840" y="521" class="dp-s">Generation and embeddings.</text><text x="840" y="541" class="dp-s">Controlled provider boundary.</text><text x="840" y="565" class="dp-l">SERVER-SIDE ENV CONFIG</text></g>
             <path class="dp-a" d="M745 430C780 430 780 518 820 518"/>
 
-            <g><title>The Secrets manager injects only the credentials needed by the API, worker, and model gateway. The browser and web gateway receive none.</title><rect class="dp-ops" x="30" y="505" width="300" height="135" rx="14"/><text x="50" y="542" class="dp-h">Secrets manager</text><text x="50" y="572" class="dp-s">Injects scoped credentials into</text><text x="50" y="592" class="dp-s">API, worker, and model gateway.</text><text x="50" y="620" class="dp-l">ROTATION + LEAST PRIVILEGE</text></g>
-            <path class="dp-secret" d="M330 545H430V190H510"/><path class="dp-secret" d="M330 570H470V410H510"/><path class="dp-secret" d="M330 600H785V548H820"/><text x="362" y="532" class="dp-l">CREDENTIAL INJECTION</text>
+            <g><title>Production target: a managed Secrets manager injects only the credentials needed by the API, worker, and model gateway; this is not part of the current prototype.</title><rect class="dp-ops" x="30" y="505" width="300" height="135" rx="14"/><text x="50" y="542" class="dp-l">PRODUCTION TARGET</text><text x="50" y="568" class="dp-h">Secrets manager</text><text x="50" y="594" class="dp-s">Injects scoped credentials into</text><text x="50" y="614" class="dp-s">API, worker, and model gateway.</text></g>
+            <path class="dp-secret" d="M330 545H430V190H510"/><path class="dp-secret" d="M330 570H470V410H510"/><path class="dp-secret" d="M330 600H785V548H820"/><text x="362" y="532" class="dp-l">TARGET CREDENTIAL INJECTION</text>
 
-            <g><title>Monitoring and telemetry receives service health, metrics, traces, and diagnostics from the API, worker, PostgreSQL, Redis, and model gateway.</title><rect class="dp-ops" x="1210" y="235" width="260" height="220" rx="14"/><text x="1230" y="273" class="dp-h">Monitoring + telemetry</text><text x="1230" y="305" class="dp-s">API and worker health.</text><text x="1230" y="325" class="dp-s">Queue and database signals.</text><text x="1230" y="345" class="dp-s">Model latency and failures.</text><text x="1230" y="380" class="dp-l">METRICS · TRACES · ALERTS</text></g>
-            <path class="dp-tele" d="M745 105H1160V270H1210"/><path class="dp-tele" d="M745 380H1160V305H1210"/><path class="dp-tele" d="M1120 125H1175V340H1210"/><path class="dp-tele" d="M1120 342H1185V375H1210"/><path class="dp-tele" d="M1120 518H1175V410H1210"/><text x="1142" y="220" class="dp-l">TELEMETRY</text>
+            <g><title>Production target: centralized Monitoring and telemetry receives health, metrics, traces, and diagnostics from the API, worker, PostgreSQL, Redis, and model gateway; current operation uses application logs and health signals.</title><rect class="dp-ops" x="1210" y="235" width="260" height="220" rx="14"/><text x="1230" y="273" class="dp-l">PRODUCTION TARGET</text><text x="1230" y="301" class="dp-h">Monitoring + telemetry</text><text x="1230" y="333" class="dp-s">API and worker health.</text><text x="1230" y="353" class="dp-s">Queue and database signals.</text><text x="1230" y="373" class="dp-s">Model latency and failures.</text><text x="1230" y="408" class="dp-l">METRICS · TRACES · ALERTS</text></g>
+            <path class="dp-tele" d="M745 105H1160V270H1210"/><path class="dp-tele" d="M745 380H1160V305H1210"/><path class="dp-tele" d="M1120 125H1175V340H1210"/><path class="dp-tele" d="M1120 342H1185V375H1210"/><path class="dp-tele" d="M1120 518H1175V410H1210"/><text x="1142" y="220" class="dp-l">TARGET TELEMETRY</text>
           </svg>
         </div>
         <div class="diagram-guide" aria-label="Deployment diagram explanations">
@@ -364,8 +325,8 @@
           <div class="guide-item"><h4>Why split API and worker?</h4><p>The API can answer after recording a command. Slow retrieval and model calls run in the worker without holding an HTTP request open.</p></div>
           <div class="guide-item"><h4>Why does PostgreSQL own recovery?</h4><p>Workflow state and checkpoints survive process or queue loss. Redis can be rebuilt without losing which durable step runs next.</p></div>
           <div class="guide-item"><h4>Why one model gateway?</h4><p>Every provider call crosses one boundary where request contracts, retries, validation, usage, and diagnostics are applied consistently.</p></div>
-          <div class="guide-item"><h4>How are secrets supplied?</h4><p>The Secrets manager injects scoped credentials into the API, worker, and model gateway. Reviewer browser and web gateway receive no database or provider credentials.</p></div>
-          <div class="guide-item"><h4>What feeds operations?</h4><p>API, worker, PostgreSQL, Redis, and model gateway all emit health, metrics, traces, and diagnostics to Monitoring + telemetry.</p></div>
+          <div class="guide-item"><h4>How are secrets supplied?</h4><p>Current services read validated server-only environment configuration. The dashed production target replaces long-lived file or environment secrets with scoped Secrets manager injection into the API, worker, and model gateway.</p></div>
+          <div class="guide-item"><h4>What feeds operations?</h4><p>Current operation exposes application logs and health signals. The dashed production target centralizes API, worker, PostgreSQL, Redis, and model-gateway metrics, traces, diagnostics, dashboards, and alerts.</p></div>
         </div>
       </div>
     </section>
@@ -381,9 +342,9 @@
         <div class="card"><h4>Negotiation Strategy</h4><p><strong>What:</strong> combines the three specialist views into the final brief and next actions.<br><strong>Why:</strong> the seller needs one prioritized, evidence-backed view of the deal.<br><strong>Inputs:</strong> all three validated specialist outputs and the full authorized evidence list.<br><strong>Tools:</strong> none. It sees only the three validated specialist outputs and the authorized evidence list, and returns the brief.</p></div>
       </div>
 
-      <div class="updated-region">
-        <span class="updated-marker" aria-label="Updated in this review">Updated</span>
+      <div>
         <h3>Executable contracts and failure disposition</h3>
+        <p class="diagram-note"><strong>Inspect:</strong> compare each typed input/output contract, its evidence-validation boundary, and the deliberate degraded-versus-fatal failure decision.</p>
         <p>Each role is an executable typed boundary, not only a prompt persona. The same frozen, authorized evidence manifest binds input, output validation, citations, and the checkpoint written for that invocation.</p>
         <div class="table-wrap" role="region" aria-label="Agent executable contracts" tabindex="0">
           <table class="contracts">
@@ -411,8 +372,8 @@
               </tr>
               <tr>
                 <td><strong>Strategy</strong></td>
-                <td><code>StrategyArtifacts → DealBrief</code></td>
-                <td>Receives the three validated specialist artifacts plus the same authorized evidence manifest. It must return the canonical nine-section schema; citation, support, safety and policy validation run before approval routing.</td>
+                <td><code>(AgentContext, StrategyArtifacts) → DealBrief</code></td>
+                <td>Receives the same authorized <code>AgentContext</code> plus the three validated specialist artifacts. It must return the canonical nine-section schema; citation, support, safety and policy validation run before approval routing.</td>
                 <td><strong>Fatal.</strong> End the run as <code>strategy_generation_failed</code>; no partial final brief is emitted.</td>
               </tr>
             </tbody>
@@ -494,18 +455,18 @@
         </svg>
       </div>
 
-      <div class="updated-region">
-        <span class="updated-marker" aria-label="Updated in this review">Updated</span>
+      <div>
         <h3>Live-model controls</h3>
+        <p class="diagram-note"><strong>Inspect:</strong> distinguish local context, schema, retry, call, and deadline controls from provider defaults and limits the adapter does not claim.</p>
         <p>Live generation runs behind deterministic authorization, shape, retry, and durable-run boundaries. These are application controls; they do not imply provider-side limits that the adapter does not send.</p>
         <div class="grid-2">
           <div class="card">
             <h4>Authorized context selection</h4>
-            <p>Exact canonical CRM evidence and Authorized hybrid RAG results are selected only from the requester’s allowed deal and source scope, then frozen in the run manifest. Model prompt assembly accepts at most 20 authorized evidence records inside a 24,000-character retrieval context and trims any one evidence record to 6,000 characters.</p>
+            <p>Exact canonical CRM evidence and Authorized hybrid RAG results are selected only from the requester’s allowed deal and source scope, then frozen in a retrieval evidence manifest capped at 60,000 characters. Each agent prompt separately selects at most 20 authorized records within a 22,000-character evidence cap and trims any one record to 6,000 characters.</p>
           </div>
           <div class="card">
             <h4>Artifact and schema limits</h4>
-            <p>Conversation and Commercial artifacts are capped at 6,000 serialized bytes; Stakeholder is capped at 8,192. Persisted artifacts and raw JSON responses stop at 128 KiB. Strict JSON parsing also caps nesting at 32 levels and 10,000 nodes, followed by full local schema and evidence-support validation.</p>
+            <p>Conversation and Commercial artifacts are capped at 6,000 serialized bytes; Stakeholder is capped at 8,192, and persisted artifacts remain bounded by the shared 128 KiB ceiling. In <code>prompted_json</code> mode only, the raw JSON parser enforces 128 KiB, 32 nesting levels, and 10,000 nodes. <code>native_schema</code> instead uses provider-native schema output followed by full local schema and evidence-support validation.</p>
           </div>
           <div class="card">
             <h4>Invocation and run budgets</h4>
@@ -532,10 +493,11 @@
         <div class="card"><h4>Human approval before action</h4><p><strong>What:</strong> an accountable person must approve sensitive recommendations before the brief can finalize.<br><strong>Why:</strong> these are high-value deals with real pricing, legal, and customer commitments.<br><strong>How:</strong> the workflow pauses and routes each issue to Deal Desk, Sales leadership, legal, or the account owner; it continues only after every required approval is recorded.</p></div>
         <div class="card"><h4>Review and recovery history</h4><p><strong>What:</strong> reviewers can see which evidence, agents, and decisions produced the brief.<br><strong>Why:</strong> the business must explain outcomes and recover interrupted work without repeating approvals.<br><strong>How:</strong> PostgreSQL stores run progress, retrieved evidence, model calls, approvals, and the final brief; a replacement worker resumes from the last saved stage.</p></div>
       </div>
-      <div class="updated-region">
-        <span class="updated-marker" aria-label="Updated in this review">Updated</span>
+      <div>
         <h3>Generated Slack evidence</h3>
-        <p>The canonical dataset is <a href="../fixtures/cato/slack/account_team_updates.tsv"><code>fixtures/cato/slack/account_team_updates.tsv</code></a>; its reviewed live-generation record is <a href="../fixtures/cato/slack/generation.json"><code>fixtures/cato/slack/generation.json</code></a>. It contains three clearly synthetic account-team updates per opportunity: one reinforcing fact, one missing-context signal, and one ambiguity or conflict.</p>
+        <p>The <a href="../samples/slack-impact.html">Slack impact comparison</a> shows the rendered before-and-after reviewer artifact. This section keeps the separate technical contract—generation provenance, ingestion validation, permission enforcement, and maintenance commands—which that comparison does not contain.</p>
+        <p class="diagram-note"><strong>Inspect:</strong> verify the canonical TSV and provenance repository paths, strict ingestion checks, permissioned <code>slack</code> retrieval, column contract, and exact maintenance commands.</p>
+        <p>The canonical dataset is <code>fixtures/cato/slack/account_team_updates.tsv</code>; its reviewed live-generation record is <code>fixtures/cato/slack/generation.json</code>. It contains three clearly synthetic account-team updates per opportunity: one reinforcing fact, one missing-context signal, and one ambiguity or conflict.</p>
         <p>Fixture loading validates the strict TSV shape, unique IDs, synthetic notices, opportunity/account bindings, chronology, per-opportunity coverage, and the reviewed output hash in generation provenance before ingestion can proceed. Ingestion stores each row as <code>sourceType=slack</code>, classifies its declared <code>source_access_level</code>, and preserves the stable locator <code>slack/account_team_updates.tsv#&lt;update_id&gt;</code>. Retrieval then requires an effective <code>slack</code> source grant and rechecks the run’s authorized evidence manifest before any row reaches an agent.</p>
         <div class="table-wrap" role="region" aria-label="Generated Slack column definitions" tabindex="0">
           <table>
@@ -571,10 +533,10 @@
         <div class="card"><h4>A · Runnable prototype</h4><p>A working web experience, API, background processing, retrieval, approvals, and live-model configuration.</p></div>
         <div class="card"><h4>B · Architecture diagrams</h4><p>Logical, deployment, agent, and workflow views cover retrieval, state, approvals, guardrails, observability, storage, and model access.</p></div>
         <div class="card"><h4>C · Documentation</h4><p>The README, this overview, and security notes explain setup, permissions, saved state, and generated Slack ingestion.</p></div>
-        <div class="card updated-region">
-          <span class="updated-marker" aria-label="Updated in this review">Updated</span>
+        <div class="card">
           <h4>D · Sample run artifacts</h4>
-          <p><a href="../samples/index.html"><code>samples/index.html</code></a> is the sample-artifact index for live-model briefs, approval output, denied access, traces, logs, and the <a href="../samples/slack-impact.html">Slack impact comparison</a>. The raw generated Slack TSV and its generation provenance remain canonical under <code>fixtures/cato/slack/</code>: <a href="../fixtures/cato/slack/account_team_updates.tsv"><code>account_team_updates.tsv</code></a> and <a href="../fixtures/cato/slack/generation.json"><code>generation.json</code></a>.</p>
+          <p class="diagram-note"><strong>Inspect:</strong> confirm the repository sample index is <code>samples/index.html</code> while raw Slack data and generation provenance remain canonical under <code>fixtures/cato/slack/</code>.</p>
+          <p><code>samples/index.html</code> is the repository sample-artifact index for live-model briefs, approval output, denied access, traces, logs, and the <a href="../samples/slack-impact.html">served Slack impact comparison</a>. The raw generated Slack TSV and its generation provenance remain canonical under <code>fixtures/cato/slack/</code>: <code>account_team_updates.tsv</code> and <code>generation.json</code>.</p>
         </div>
         <div class="card"><h4>E · Interview walkthrough</h4><p>A 15-minute narrative should cover business value, design choices, a live demo, evaluation results, and production risks.</p></div>
       </div>
@@ -656,12 +618,12 @@
         </article>
 
         <article class="readiness-card">
-          <span class="updated-marker" aria-label="Updated in this review">Updated</span>
           <h3>Cost and capacity</h3>
+          <p class="diagram-note"><strong>Inspect:</strong> separate the implemented local call, deadline, shape, and usage controls from currency accounting and team budgets that remain production work.</p>
           <p><strong>What it is:</strong> keeping model spend and processing time predictable as usage grows.</p>
           <div class="readiness-columns">
             <div class="readiness-block"><h4>Why it matters</h4><ul><li>A provider change, retry storm, or traffic spike can increase both latency and cost unexpectedly.</li></ul></div>
-            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Call and deadline limits:</strong> stop one invocation or run from retrying forever.</li><li><strong>Local shape limits:</strong> bound selected context, serialized artifacts, and strict JSON complexity; the adapter does not claim or send a provider-side output-token cap.</li><li><strong>Usage records:</strong> save reported input and output token counts for later analysis.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Call and deadline limits:</strong> stop one invocation or run from retrying forever.</li><li><strong>Local shape limits:</strong> bound selected context and serialized artifacts; <code>prompted_json</code> additionally bounds strict JSON complexity. The adapter does not claim or send a provider-side output-token cap.</li><li><strong>Usage records:</strong> save reported input and output token counts for later analysis.</li></ul></div>
             <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Currency-level accounting:</strong> convert provider usage into actual money spent.</li><li><strong>Team budgets:</strong> cap or alert on spend by tenant or team.</li><li><strong>Forecasts and anomaly alerts:</strong> detect unusual growth before a bill arrives.</li><li><strong>Measured model routing:</strong> choose models only after comparing quality, latency, and price for each agent task.</li></ul></div>
           </div>
         </article>

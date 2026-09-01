@@ -1,21 +1,26 @@
-import { describe, expect, it } from 'vitest';
 import {
-  TraceCompletenessError,
-  assertTraceComplete,
-  createRunEventSubscription,
-  type RunEventSubscriptionSource
-} from '@slacato/core';
-import {
+  type RunEventEnvelope,
   runEventEnvelopeSchema,
   runEventToPublishSchema,
-  traceSpanSchema,
-  type RunEventEnvelope,
-  type TraceSpan
+  type TraceSpan,
+  traceSpanSchema
 } from '@slacato/contracts';
+import {
+  assertTraceComplete,
+  createRunEventSubscription,
+  type RunEventSubscriptionSource,
+  TraceCompletenessError
+} from '@slacato/core';
+import { describe, expect, it } from 'vitest';
 
 const timestamp = '2026-08-29T12:00:00.000Z';
 
-function event(id: string, streamId: string, sequence: number, type = 'progress'): RunEventEnvelope {
+function event(
+  id: string,
+  streamId: string,
+  sequence: number,
+  type = 'progress'
+): RunEventEnvelope {
   return runEventEnvelopeSchema.parse({
     id,
     streamId,
@@ -64,72 +69,124 @@ function span(
 function completedTrace(runId: string): TraceSpan[] {
   const auth = span(runId, 'authorization_lookup', 'auth', {
     status: 'completed',
-    data: { decision: 'allowed', correlationHash: 'a'.repeat(64), readKinds: ['opportunity', 'account', 'requester', 'permissions'], readCount: 4 }
+    data: {
+      decision: 'allowed',
+      correlationHash: 'a'.repeat(64),
+      readKinds: ['opportunity', 'account', 'requester', 'permissions'],
+      readCount: 4
+    }
   });
   const retrieval = span(runId, 'evidence_retrieval', 'retrieval', {
-    status: 'completed', parentSpanId: auth.spanId, data: { resultIds: ['ev-1'], scores: [0.9], evidenceCount: 1 }
+    status: 'completed',
+    parentSpanId: auth.spanId,
+    data: { resultIds: ['ev-1'], scores: [0.9], evidenceCount: 1 }
   });
   const spans = [auth, retrieval];
   for (const specialist of ['conversation', 'stakeholder', 'commercial']) {
     const attempt = span(runId, 'specialist_attempt', specialist, {
-      status: 'completed', step: specialist, parentSpanId: retrieval.spanId,
+      status: 'completed',
+      step: specialist,
+      parentSpanId: retrieval.spanId,
       data: { operation: specialist, logicalGenerationId: `generation-${specialist}` }
     });
     const model = span(runId, 'model_call', `${specialist}_model`, {
-      status: 'completed', step: specialist, parentSpanId: attempt.spanId,
+      status: 'completed',
+      step: specialist,
+      parentSpanId: attempt.spanId,
       data: {
-        durableAttemptId: `attempt-${specialist}`, logicalGenerationId: `generation-${specialist}`, ordinal: 1,
-        provider: 'mock', model: 'mock-brief', parametersHash: 'b'.repeat(64),
-        outputMode: 'native_schema', possibleDuplicate: false
+        durableAttemptId: `attempt-${specialist}`,
+        logicalGenerationId: `generation-${specialist}`,
+        ordinal: 1,
+        provider: 'mock',
+        model: 'mock-brief',
+        parametersHash: 'b'.repeat(64),
+        outputMode: 'native_schema',
+        possibleDuplicate: false
       }
     });
     spans.push(
       attempt,
       model,
       span(runId, 'validation', `${specialist}_validation`, {
-        status: 'completed', step: specialist, parentSpanId: model.spanId, data: { decision: 'accepted', validationAttempts: 0 }
+        status: 'completed',
+        step: specialist,
+        parentSpanId: model.spanId,
+        data: { decision: 'accepted', validationAttempts: 0 }
       }),
       span(runId, 'guardrail', `${specialist}_guardrail`, {
-        status: 'completed', step: specialist, parentSpanId: model.spanId, data: { decision: 'passed' }
+        status: 'completed',
+        step: specialist,
+        parentSpanId: model.spanId,
+        data: { decision: 'passed' }
       }),
       span(runId, 'usage', `${specialist}_usage`, {
-        status: 'completed', step: specialist, parentSpanId: model.spanId, data: { inputTokens: 10, outputTokens: 4 }
+        status: 'completed',
+        step: specialist,
+        parentSpanId: model.spanId,
+        data: { inputTokens: 10, outputTokens: 4 }
       })
     );
   }
   const strategy = span(runId, 'strategy_attempt', 'strategy', {
-    status: 'completed', step: 'strategy', parentSpanId: retrieval.spanId,
+    status: 'completed',
+    step: 'strategy',
+    parentSpanId: retrieval.spanId,
     data: { operation: 'strategy', logicalGenerationId: 'generation-strategy' }
   });
   const strategyModel = span(runId, 'model_call', 'strategy_model', {
-    status: 'completed', step: 'strategy', parentSpanId: strategy.spanId,
+    status: 'completed',
+    step: 'strategy',
+    parentSpanId: strategy.spanId,
     data: {
-      durableAttemptId: 'attempt-strategy', logicalGenerationId: 'generation-strategy', ordinal: 1,
-      provider: 'mock', model: 'mock-brief', parametersHash: 'c'.repeat(64),
-      outputMode: 'native_schema', possibleDuplicate: false
+      durableAttemptId: 'attempt-strategy',
+      logicalGenerationId: 'generation-strategy',
+      ordinal: 1,
+      provider: 'mock',
+      model: 'mock-brief',
+      parametersHash: 'c'.repeat(64),
+      outputMode: 'native_schema',
+      possibleDuplicate: false
     }
   });
   spans.push(
     strategy,
     strategyModel,
     span(runId, 'validation', 'strategy_validation', {
-      status: 'completed', step: 'strategy', parentSpanId: strategyModel.spanId, data: { decision: 'accepted', validationAttempts: 0 }
+      status: 'completed',
+      step: 'strategy',
+      parentSpanId: strategyModel.spanId,
+      data: { decision: 'accepted', validationAttempts: 0 }
     }),
     span(runId, 'guardrail', 'strategy_guardrail', {
-      status: 'completed', step: 'strategy', parentSpanId: strategyModel.spanId, data: { decision: 'passed' }
+      status: 'completed',
+      step: 'strategy',
+      parentSpanId: strategyModel.spanId,
+      data: { decision: 'passed' }
     }),
     span(runId, 'usage', 'strategy_usage', {
-      status: 'completed', step: 'strategy', parentSpanId: strategyModel.spanId, data: { inputTokens: 20, outputTokens: 8 }
+      status: 'completed',
+      step: 'strategy',
+      parentSpanId: strategyModel.spanId,
+      data: { inputTokens: 20, outputTokens: 8 }
     }),
     span(runId, 'policy_decision', 'policy', {
-      status: 'completed', parentSpanId: strategy.spanId,
-      data: { decision: 'no_approval_required', policyHash: 'd'.repeat(64), subjectHash: 'f'.repeat(64) }
+      status: 'completed',
+      parentSpanId: strategy.spanId,
+      data: {
+        decision: 'no_approval_required',
+        policyHash: 'd'.repeat(64),
+        subjectHash: 'f'.repeat(64)
+      }
     }),
     span(runId, 'recommendation', 'recommendation', {
-      status: 'completed', parentSpanId: strategy.spanId, data: { recommendationIds: ['rec-1'] }
+      status: 'completed',
+      parentSpanId: strategy.spanId,
+      data: { recommendationIds: ['rec-1'] }
     }),
     span(runId, 'finalization', 'finalization', {
-      status: 'completed', parentSpanId: strategy.spanId, data: { decision: 'completed', artifactHash: 'e'.repeat(64) }
+      status: 'completed',
+      parentSpanId: strategy.spanId,
+      data: { decision: 'completed', artifactHash: 'e'.repeat(64) }
     })
   );
   return spans;
@@ -147,7 +204,7 @@ describe('generic run event subscription', () => {
       event('evt-4', runId, 4)
     ];
     const source: RunEventSubscriptionSource = {
-      resolveCursor: async (_streamId, afterId) => afterId === 'evt-2' ? 2 : 0,
+      resolveCursor: async (_streamId, afterId) => (afterId === 'evt-2' ? 2 : 0),
       readAfter: async () => rows,
       waitForWake: () => Promise.resolve()
     };
@@ -176,7 +233,9 @@ describe('generic run event subscription', () => {
       }
     };
 
-    await expect(collect(createRunEventSubscription(source, 'run-race'), 1)).resolves.toMatchObject([{ id: 'evt-race' }]);
+    await expect(collect(createRunEventSubscription(source, 'run-race'), 1)).resolves.toMatchObject(
+      [{ id: 'evt-race' }]
+    );
   });
 
   it('stops an idle subscription when its caller aborts', async () => {
@@ -190,7 +249,9 @@ describe('generic run event subscription', () => {
         return woken.promise;
       }
     };
-    const iterator = createRunEventSubscription(source, 'run-abort', undefined, abort.signal)[Symbol.asyncIterator]();
+    const iterator = createRunEventSubscription(source, 'run-abort', undefined, abort.signal)[
+      Symbol.asyncIterator
+    ]();
     const pending = iterator.next();
 
     abort.abort();
@@ -210,8 +271,16 @@ describe('safe event contract', () => {
     ]) {
       expect(runEventToPublishSchema.safeParse({ ...base, payload }).success).toBe(false);
     }
-    expect(runEventToPublishSchema.safeParse({ ...base, payload: { status: 'running' } }).success).toBe(true);
-    expect(runEventToPublishSchema.safeParse({ ...base, id: 'evt-safe\nevent: complete', payload: { status: 'running' } }).success).toBe(false);
+    expect(
+      runEventToPublishSchema.safeParse({ ...base, payload: { status: 'running' } }).success
+    ).toBe(true);
+    expect(
+      runEventToPublishSchema.safeParse({
+        ...base,
+        id: 'evt-safe\nevent: complete',
+        payload: { status: 'running' }
+      }).success
+    ).toBe(false);
     for (const payload of [
       { status: 'running', sourceBody: 'restricted' },
       { status: 'running', sourceLocator: 'restricted/path' },
@@ -230,7 +299,9 @@ describe('trace completeness', () => {
     const spans = completedTrace(runId);
     expect(() => assertTraceComplete(runId, spans)).not.toThrow();
 
-    const incomplete = spans.filter((candidate) => !(candidate.kind === 'model_call' && candidate.step === 'commercial'));
+    const incomplete = spans.filter(
+      (candidate) => !(candidate.kind === 'model_call' && candidate.step === 'commercial')
+    );
     expect(() => assertTraceComplete(runId, incomplete)).toThrowError(TraceCompletenessError);
   });
 
@@ -241,46 +312,233 @@ describe('trace completeness', () => {
     const requirement = span(runId, 'approval_requirement', 'requirement', {
       status: 'completed',
       parentSpanId: policy.spanId,
-      data: { subjectHash: 'f'.repeat(64), entryId: 'entry-1', category: 'commercial_discount', authorities: ['deal_desk'], policyHash: 'e'.repeat(64) }
+      data: {
+        subjectHash: 'f'.repeat(64),
+        entryId: 'entry-1',
+        category: 'commercial_discount',
+        authorities: ['deal_desk'],
+        policyHash: 'e'.repeat(64)
+      }
     });
     expect(() => assertTraceComplete(runId, [...base, requirement])).not.toThrow();
 
     const finalized = [
       ...base,
       requirement,
-      span(runId, 'finalization', 'approved_finalization', { status: 'completed', parentSpanId: requirement.spanId, data: { decision: 'completed', artifactHash: '1'.repeat(64) } })
+      span(runId, 'finalization', 'approved_finalization', {
+        status: 'completed',
+        parentSpanId: requirement.spanId,
+        data: { decision: 'completed', artifactHash: '1'.repeat(64) }
+      })
     ];
     expect(() => assertTraceComplete(runId, finalized)).toThrowError(/approval decision/i);
 
     const decision = span(runId, 'approval_decision', 'decision', {
-      status: 'completed', parentSpanId: requirement.spanId,
-      data: { subjectHash: 'f'.repeat(64), entryId: 'entry-1', category: 'commercial_discount', authority: 'deal_desk', decision: 'approved' }
+      status: 'completed',
+      parentSpanId: requirement.spanId,
+      data: {
+        subjectHash: 'f'.repeat(64),
+        entryId: 'entry-1',
+        category: 'commercial_discount',
+        authority: 'deal_desk',
+        decision: 'approved'
+      }
     });
     expect(() => assertTraceComplete(runId, [...finalized, decision])).not.toThrow();
   });
 
-  it('requires degraded and failed outcomes to link the typed decision to its triggering attempt', () => {
+  it('requires terminal failures to link either durable generation evidence or a real non-provider state', () => {
     const runId = 'run-degraded';
-    const spans = completedTrace(runId).map((candidate) => candidate.kind === 'specialist_attempt' && candidate.step === 'conversation'
-      ? { ...candidate, status: 'degraded' as const } : candidate);
-    const attempt = spans.find(({ kind, step }) => kind === 'specialist_attempt' && step === 'conversation')!;
-    const partial = span(runId, 'partial_failure', 'partial', { status: 'degraded', step: 'conversation', parentSpanId: attempt.spanId, data: { decision: 'partial', reasonCode: 'conversation_unavailable' } });
+    const spans = completedTrace(runId).map((candidate) =>
+      candidate.kind === 'specialist_attempt' && candidate.step === 'conversation'
+        ? { ...candidate, status: 'degraded' as const }
+        : candidate
+    );
+    const attempt = spans.find(
+      ({ kind, step }) => kind === 'specialist_attempt' && step === 'conversation'
+    )!;
+    const partial = span(runId, 'partial_failure', 'partial', {
+      status: 'degraded',
+      step: 'conversation',
+      parentSpanId: attempt.spanId,
+      data: { decision: 'partial', reasonCode: 'conversation_unavailable' }
+    });
     expect(() => assertTraceComplete(runId, [...spans, partial])).not.toThrow();
-    expect(() => assertTraceComplete(runId, [...spans, { ...partial, parentSpanId: 'span-missing' }])).toThrowError(/triggering attempt/i);
+    expect(() =>
+      assertTraceComplete(runId, [...spans, { ...partial, parentSpanId: 'span-missing' }])
+    ).toThrowError(/triggering attempt/i);
 
     const failedRunId = 'run-failed';
-    const auth = span(failedRunId, 'authorization_lookup', 'failed_auth', { status: 'completed', data: { decision: 'allowed', correlationHash: '2'.repeat(64), readKinds: ['opportunity'], readCount: 1 } });
-    const retrieval = span(failedRunId, 'evidence_retrieval', 'failed_retrieval', { status: 'completed', parentSpanId: auth.spanId, data: { resultIds: [], scores: [], evidenceCount: 0 } });
-    const completedAttempt = span(failedRunId, 'strategy_attempt', 'completed_strategy', { status: 'completed', step: 'strategy', parentSpanId: retrieval.spanId, data: { operation: 'strategy', logicalGenerationId: 'generation-completed' } });
-    const failedAttempt = span(failedRunId, 'strategy_attempt', 'failed_strategy', { status: 'failed', step: 'strategy', parentSpanId: completedAttempt.spanId, data: { operation: 'strategy', logicalGenerationId: 'generation-failed' } });
-    const fatal = span(failedRunId, 'fatal_failure', 'fatal', { status: 'failed', step: 'strategy', parentSpanId: failedAttempt.spanId, data: { decision: 'fatal', reasonCode: 'draft_validation_failed' } });
-    expect(() => assertTraceComplete(failedRunId, [auth, retrieval, completedAttempt, failedAttempt, fatal])).not.toThrow();
-    const unaccountedDegradedAttempt = span(failedRunId, 'specialist_attempt', 'degraded_conversation', { status: 'degraded', step: 'conversation', parentSpanId: retrieval.spanId, data: { operation: 'conversation', logicalGenerationId: 'generation-degraded' } });
-    expect(() => assertTraceComplete(failedRunId, [auth, retrieval, unaccountedDegradedAttempt, completedAttempt, failedAttempt, fatal])).toThrowError(/partial/i);
-    const mistypedFatal = span(failedRunId, 'fatal_failure', 'mistyped_fatal', { status: 'completed', step: 'strategy', parentSpanId: failedAttempt.spanId, data: { decision: 'fatal', reasonCode: 'draft_validation_failed' } });
-    expect(() => assertTraceComplete(failedRunId, [auth, retrieval, completedAttempt, failedAttempt, mistypedFatal])).toThrow('Fatal decision is not typed as failed');
-    const completedParentFatal = span(failedRunId, 'fatal_failure', 'completed_parent_fatal', { status: 'failed', step: 'strategy', parentSpanId: completedAttempt.spanId, data: { decision: 'fatal', reasonCode: 'draft_validation_failed' } });
-    expect(() => assertTraceComplete(failedRunId, [auth, retrieval, completedAttempt, completedParentFatal])).toThrow('Fatal decision is not linked to a failed triggering attempt');
+    const auth = span(failedRunId, 'authorization_lookup', 'failed_auth', {
+      status: 'completed',
+      data: {
+        decision: 'allowed',
+        correlationHash: '2'.repeat(64),
+        readKinds: ['opportunity'],
+        readCount: 1
+      }
+    });
+    const retrieval = span(failedRunId, 'evidence_retrieval', 'failed_retrieval', {
+      status: 'completed',
+      parentSpanId: auth.spanId,
+      data: { resultIds: [], scores: [], evidenceCount: 0 }
+    });
+    const completedAttempt = span(failedRunId, 'strategy_attempt', 'completed_strategy', {
+      status: 'completed',
+      step: 'strategy',
+      parentSpanId: retrieval.spanId,
+      data: { operation: 'strategy', logicalGenerationId: 'generation-completed' }
+    });
+    const failedAttempt = span(failedRunId, 'strategy_attempt', 'failed_strategy', {
+      status: 'failed',
+      step: 'strategy',
+      parentSpanId: completedAttempt.spanId,
+      data: { operation: 'strategy', logicalGenerationId: 'generation-failed' }
+    });
+    const failedModel = span(failedRunId, 'model_call', 'failed_model', {
+      status: 'failed',
+      step: 'strategy',
+      parentSpanId: failedAttempt.spanId,
+      data: {
+        durableAttemptId: 'attempt-failed',
+        logicalGenerationId: 'generation-failed',
+        ordinal: 1,
+        provider: 'mock',
+        model: 'mock-brief',
+        parametersHash: '3'.repeat(64),
+        outputMode: null,
+        possibleDuplicate: false
+      }
+    });
+    const failedUsage = span(failedRunId, 'usage', 'failed_usage', {
+      status: 'failed',
+      step: 'strategy',
+      parentSpanId: failedModel.spanId,
+      data: { inputTokens: 4, outputTokens: 0 }
+    });
+    const fatal = span(failedRunId, 'fatal_failure', 'fatal', {
+      status: 'failed',
+      step: 'strategy',
+      parentSpanId: failedAttempt.spanId,
+      data: { decision: 'fatal', reasonCode: 'strategy_generation_failed' }
+    });
+    expect(() =>
+      assertTraceComplete(failedRunId, [
+        auth,
+        retrieval,
+        completedAttempt,
+        failedAttempt,
+        failedModel,
+        failedUsage,
+        fatal
+      ])
+    ).not.toThrow();
+    expect(() =>
+      assertTraceComplete(failedRunId, [auth, retrieval, completedAttempt, failedAttempt, fatal])
+    ).toThrowError(/provider attempt lineage/i);
+    const unaccountedDegradedAttempt = span(
+      failedRunId,
+      'specialist_attempt',
+      'degraded_conversation',
+      {
+        status: 'degraded',
+        step: 'conversation',
+        parentSpanId: retrieval.spanId,
+        data: { operation: 'conversation', logicalGenerationId: 'generation-degraded' }
+      }
+    );
+    expect(() =>
+      assertTraceComplete(failedRunId, [
+        auth,
+        retrieval,
+        unaccountedDegradedAttempt,
+        completedAttempt,
+        failedAttempt,
+        failedModel,
+        failedUsage,
+        fatal
+      ])
+    ).toThrowError(/partial/i);
+    const mistypedFatal = span(failedRunId, 'fatal_failure', 'mistyped_fatal', {
+      status: 'completed',
+      step: 'strategy',
+      parentSpanId: failedAttempt.spanId,
+      data: { decision: 'fatal', reasonCode: 'strategy_generation_failed' }
+    });
+    expect(() =>
+      assertTraceComplete(failedRunId, [
+        auth,
+        retrieval,
+        completedAttempt,
+        failedAttempt,
+        failedModel,
+        failedUsage,
+        mistypedFatal
+      ])
+    ).toThrow('Fatal decision is not typed as failed');
+    const misclassifiedDraftFatal = span(
+      failedRunId,
+      'fatal_failure',
+      'misclassified_draft_fatal',
+      {
+        status: 'failed',
+        step: 'strategy',
+        parentSpanId: failedAttempt.spanId,
+        data: { decision: 'fatal', reasonCode: 'draft_validation_failed' }
+      }
+    );
+    expect(() =>
+      assertTraceComplete(failedRunId, [
+        auth,
+        retrieval,
+        completedAttempt,
+        failedAttempt,
+        failedModel,
+        failedUsage,
+        misclassifiedDraftFatal
+      ])
+    ).toThrowError(/failed validation state/i);
+    const completedParentFatal = span(failedRunId, 'fatal_failure', 'completed_parent_fatal', {
+      status: 'failed',
+      step: 'strategy',
+      parentSpanId: completedAttempt.spanId,
+      data: { decision: 'fatal', reasonCode: 'draft_validation_failed' }
+    });
+    expect(() =>
+      assertTraceComplete(failedRunId, [auth, retrieval, completedAttempt, completedParentFatal])
+    ).toThrowError(/failed validation state/i);
+
+    const validation = span(failedRunId, 'validation', 'failed_draft_validation', {
+      status: 'failed',
+      step: 'validation',
+      parentSpanId: completedAttempt.spanId,
+      data: { decision: 'rejected', validationAttempts: 0 }
+    });
+    const validationFatal = span(failedRunId, 'fatal_failure', 'validation_fatal', {
+      status: 'failed',
+      step: 'validation',
+      parentSpanId: validation.spanId,
+      data: { decision: 'fatal', reasonCode: 'draft_validation_failed' }
+    });
+    expect(() =>
+      assertTraceComplete(failedRunId, [
+        auth,
+        retrieval,
+        completedAttempt,
+        validation,
+        validationFatal
+      ])
+    ).not.toThrow();
+    const processorFatal = span(failedRunId, 'fatal_failure', 'processor_fatal', {
+      status: 'failed',
+      step: 'strategy',
+      parentSpanId: retrieval.spanId,
+      data: { decision: 'fatal', reasonCode: 'workflow_failed' }
+    });
+    expect(() => assertTraceComplete(failedRunId, [auth, retrieval, processorFatal])).not.toThrow();
+    expect(() =>
+      assertTraceComplete(failedRunId, [auth, { ...processorFatal, parentSpanId: 'span-missing' }])
+    ).toThrowError(/triggering/i);
   });
 
   it('requires kind-specific trace facts and a typed decision for every degraded attempt', () => {
@@ -289,11 +547,15 @@ describe('trace completeness', () => {
     const model = spans.find(({ kind }) => kind === 'model_call')!;
     expect(() => traceSpanSchema.parse({ ...model, data: {} })).toThrowError();
     const retrieval = spans.find(({ kind }) => kind === 'evidence_retrieval')!;
-    expect(() => traceSpanSchema.parse({ ...retrieval, data: { resultIds: [], scores: [] } })).toThrowError();
+    expect(() =>
+      traceSpanSchema.parse({ ...retrieval, data: { resultIds: [], scores: [] } })
+    ).toThrowError();
 
-    const degraded = spans.map((candidate) => candidate.kind === 'specialist_attempt' && candidate.step === 'conversation'
-      ? { ...candidate, status: 'degraded' as const }
-      : candidate);
+    const degraded = spans.map((candidate) =>
+      candidate.kind === 'specialist_attempt' && candidate.step === 'conversation'
+        ? { ...candidate, status: 'degraded' as const }
+        : candidate
+    );
     expect(() => assertTraceComplete(runId, degraded)).toThrowError(/partial/i);
   });
 
@@ -302,18 +564,38 @@ describe('trace completeness', () => {
     const denied = span(runId, 'authorization_lookup', 'denied', {
       status: 'denied',
       data: {
-        decision: 'denied', correlationHash: '3'.repeat(64), reasonCode: 'forbidden',
-        readKinds: ['opportunity', 'account', 'requester', 'permissions'], readCount: 4
+        decision: 'denied',
+        correlationHash: '3'.repeat(64),
+        reasonCode: 'forbidden',
+        readKinds: ['opportunity', 'account', 'requester', 'permissions'],
+        readCount: 4
       }
     });
     expect(() => assertTraceComplete(runId, [denied])).not.toThrow();
 
-    const leaked = span(runId, 'evidence_retrieval', 'leaked', { status: 'completed', parentSpanId: denied.spanId, data: { resultIds: ['restricted-id'], scores: [1], evidenceCount: 1 } });
+    const leaked = span(runId, 'evidence_retrieval', 'leaked', {
+      status: 'completed',
+      parentSpanId: denied.spanId,
+      data: { resultIds: ['restricted-id'], scores: [1], evidenceCount: 1 }
+    });
     expect(() => assertTraceComplete(runId, [denied, leaked])).toThrowError(/denied trace/i);
-    expect(() => traceSpanSchema.parse({ ...denied, data: { decision: 'denied', resultIds: ['restricted-id'] } })).toThrowError();
-    expect(() => traceSpanSchema.parse({
-      ...denied,
-      data: { decision: 'denied', correlationHash: 'private prompt text', reasonCode: 'forbidden', readKinds: ['opportunity'], readCount: 1 }
-    })).toThrowError();
+    expect(() =>
+      traceSpanSchema.parse({
+        ...denied,
+        data: { decision: 'denied', resultIds: ['restricted-id'] }
+      })
+    ).toThrowError();
+    expect(() =>
+      traceSpanSchema.parse({
+        ...denied,
+        data: {
+          decision: 'denied',
+          correlationHash: 'private prompt text',
+          reasonCode: 'forbidden',
+          readKinds: ['opportunity'],
+          readCount: 1
+        }
+      })
+    ).toThrowError();
   });
 });

@@ -6,7 +6,6 @@ import {
   AuthorizationDeniedError,
   CANONICAL_FIXTURE_COMMIT,
   classifyCustomerFacingLanguage,
-  requiresCustomerFacingApprovalAfterEdit,
   collectDealBriefReferences,
   type DealBrief,
   type DealBriefAccessControl,
@@ -15,6 +14,7 @@ import {
   extractEditedPolicySignals,
   hashApprovalPayload,
   type OpaqueDenialEvent,
+  requiresCustomerFacingApprovalAfterEdit,
   validateDealBrief
 } from '@slacato/core';
 import type { DatabaseClient } from '../client.js';

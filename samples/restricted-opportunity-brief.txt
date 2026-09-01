@@ -226,26 +226,26 @@ Final prep call identified approval gates for discount, liability language, and 
 #### Claims
 - \# Transcript: CALL\-019 \- Restricted renewal discovery (confidence: 1.00) [^citation_44bae1b9a5b7a29f43fab56317839ce79e732910]
 ### Citation Labels
-[^citation_08f11813cd66f6b065f365e1e25238f42352de90]: source=salesforce/contacts.tsv, contact_id=CON-3015
-[^citation_0b1dd866a8139a19bc9765b1115103c539a648c0]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
-[^citation_274f141f84ce630d610ef6246a9f498d04f97bd4]: source=salesforce/opportunities.tsv, opportunity_id=OPP-1003
-[^citation_30943d4bc05d195461dd50d9b3dc1addd0d2ac66]: source=policies/deal_desk_policy.md, policy_id=deal-desk-policy
-[^citation_39ca03d6d61fdb8bf87b697e3272ed75d2c32127]: source=slack/account_team_updates.tsv, update_id=SLK-9007
-[^citation_44bae1b9a5b7a29f43fab56317839ce79e732910]: source=gong/transcripts/OPP-1003_CALL-019.md, call_id=CALL-019
-[^citation_54649f4fe06ff52b315f43b00bfdceb564ad5a11]: source=pricing/pricing_notes.tsv, pricing_note_id=PN-4005
-[^citation_5d2d1872d2be1d9e9c546ac450c0b10177f0b090]: source=slack/account_team_updates.tsv, update_id=SLK-9008
-[^citation_6504fc6da85f941e1d8f9d8f125536f56f48226d]: source=salesforce/contacts.tsv, contact_id=CON-3011
-[^citation_6d0f5f973910d40e11a1b7b15af9196ed27a9618]: source=gong/gong_call_summaries.tsv, call_id=CALL-023
-[^citation_84a222aa1a88c5ffd8eeab082466a35031263553]: source=salesforce/contacts.tsv, contact_id=CON-3014
-[^citation_8a7682cf2e56a7bcad2eb8104b855221a6bad7ad]: source=salesforce/accounts.tsv, account_id=ACC-2003
-[^citation_94d2887e11d4bfb6b1eadccb11ed0ce7692c6687]: source=salesforce/contacts.tsv, contact_id=CON-3012
-[^citation_9d32893ba80a8640dbc32960f806500612db0225]: source=gong/transcripts/OPP-1003_CALL-019.md, call_id=CALL-019
-[^citation_a6a11350a1547c76d74b7f7c53129a572ebae5dd]: source=gong/gong_call_summaries.tsv, call_id=CALL-027
-[^citation_b57e757c1b6d62c1b726c8185ada53b8e8166d25]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
-[^citation_b6d9b98ac1318de9ff9d47ec7487cd28ff10e97f]: source=salesforce/contacts.tsv, contact_id=CON-3013
-[^citation_cd01e14fbcb79410ab6b437726c0f91d23a08a4c]: source=gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
-[^citation_dab13889d9ae2f22e410ecc107d34ee817da7a44]: source=pricing/pricing_notes.tsv, pricing_note_id=PN-4004
-[^citation_f735c84da94a78934e442361d4313f6d27160a59]: source=slack/account_team_updates.tsv, update_id=SLK-9009
+[^citation_08f11813cd66f6b065f365e1e25238f42352de90]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3015
+[^citation_0b1dd866a8139a19bc9765b1115103c539a648c0]: source=synthetic_data/gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
+[^citation_274f141f84ce630d610ef6246a9f498d04f97bd4]: source=synthetic_data/salesforce/opportunities.tsv, opportunity_id=OPP-1003
+[^citation_30943d4bc05d195461dd50d9b3dc1addd0d2ac66]: source=synthetic_data/policies/deal_desk_policy.md, policy_id=deal-desk-policy
+[^citation_39ca03d6d61fdb8bf87b697e3272ed75d2c32127]: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9007
+[^citation_44bae1b9a5b7a29f43fab56317839ce79e732910]: source=synthetic_data/gong/transcripts/OPP-1003_CALL-019.md, call_id=CALL-019
+[^citation_54649f4fe06ff52b315f43b00bfdceb564ad5a11]: source=synthetic_data/pricing/pricing_notes.tsv, pricing_note_id=PN-4005
+[^citation_5d2d1872d2be1d9e9c546ac450c0b10177f0b090]: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9008
+[^citation_6504fc6da85f941e1d8f9d8f125536f56f48226d]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3011
+[^citation_6d0f5f973910d40e11a1b7b15af9196ed27a9618]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-023
+[^citation_84a222aa1a88c5ffd8eeab082466a35031263553]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3014
+[^citation_8a7682cf2e56a7bcad2eb8104b855221a6bad7ad]: source=synthetic_data/salesforce/accounts.tsv, account_id=ACC-2003
+[^citation_94d2887e11d4bfb6b1eadccb11ed0ce7692c6687]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3012
+[^citation_9d32893ba80a8640dbc32960f806500612db0225]: source=synthetic_data/gong/transcripts/OPP-1003_CALL-019.md, call_id=CALL-019
+[^citation_a6a11350a1547c76d74b7f7c53129a572ebae5dd]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-027
+[^citation_b57e757c1b6d62c1b726c8185ada53b8e8166d25]: source=synthetic_data/gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
+[^citation_b6d9b98ac1318de9ff9d47ec7487cd28ff10e97f]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3013
+[^citation_cd01e14fbcb79410ab6b437726c0f91d23a08a4c]: source=synthetic_data/gong/transcripts/OPP-1003_CALL-027.md, call_id=CALL-027
+[^citation_dab13889d9ae2f22e410ecc107d34ee817da7a44]: source=synthetic_data/pricing/pricing_notes.tsv, pricing_note_id=PN-4004
+[^citation_f735c84da94a78934e442361d4313f6d27160a59]: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9009
 
 ## 9. Confidence and Review Warnings
 - **Overall confidence:** 1.00

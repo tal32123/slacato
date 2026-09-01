@@ -117,7 +117,8 @@ function renderWorkspaceForNarrowerViewer(
     generatedOutput: {
       lifecycle: 'finalized',
       brief: briefWithWarnings(warnings, warningSubject)
-    }
+    },
+    approvalReview: null
   };
   return renderDealWorkspace({
     sessionVersion: 'session-v1',

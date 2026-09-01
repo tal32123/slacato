@@ -46,7 +46,11 @@ function editedBrief(narrative: string) {
   });
 }
 
-function actionBrief(action: string, audience: 'internal' | 'customer') {
+function actionBrief(
+  action: string,
+  audience: 'internal' | 'customer',
+  rationale = 'Complete the recorded next step.'
+) {
   return dealBriefSchema.parse({
     ...editedBrief('The commercial position is settled.'),
     recommendedNextActions: {
@@ -55,7 +59,7 @@ function actionBrief(action: string, audience: 'internal' | 'customer') {
           action,
           audience,
           priority: 'high',
-          rationale: 'Complete the recorded next step.',
+          rationale,
           claims: []
         }
       ]
@@ -191,6 +195,29 @@ describe('deterministic brief approval policy', () => {
       { category: 'legal_terms', eligibleAuthorities: ['legal_reviewer'], dependsOn: [] }
     ]);
   });
+
+  it.each([
+    [
+      'Revise the customer-specific terms.',
+      'Security language requires review.',
+      { customerSpecificSecurityLanguage: true }
+    ],
+    [
+      'Revise the terms',
+      'Liability language requires review',
+      { liabilityCapChanged: true }
+    ]
+  ] as const)(
+    'evaluates an action and its rationale as one policy-sensitive recommendation: %s',
+    (action, rationale, expected) => {
+      const signals = extractEditedPolicySignals(actionBrief(action, 'internal', rationale));
+
+      expect(signals).toMatchObject(expected);
+      expect(entries(signals)).toEqual([
+        { category: 'legal_terms', eligibleAuthorities: ['legal_reviewer'], dependsOn: [] }
+      ]);
+    }
+  );
 
   it('changes unsupported free narrative under the production claim-support validator', () => {
     const edited = editedBrief('we can offer a reduction');

@@ -374,10 +374,10 @@ describe.sequential('run and approval query APIs', () => {
       {
         id: ids.crmEvidence,
         sourceType: 'salesforce',
-        sourcePath: 'salesforce/opportunities.tsv',
+        sourcePath: 'synthetic_data/salesforce/opportunities.tsv',
         stableKey: 'opportunity_id',
         stableId: 'task13:0',
-        citationLabel: 'source=salesforce/opportunities.tsv, opportunity_id=task13:0',
+        citationLabel: 'source=synthetic_data/salesforce/opportunities.tsv, opportunity_id=task13:0',
         chunkId: ids.crmEvidence,
         capturedAt: '2026-08-29T00:00:00.000Z',
         content: 'Readable CRM fixture'

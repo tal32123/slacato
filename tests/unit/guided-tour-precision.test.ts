@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { QueryClientProvider } from '../../apps/web/node_modules/@tanstack/react-query/build/modern/index.js';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClientProvider } from '../../apps/web/node_modules/@tanstack/react-query/build/modern/index.js';
 import '@testing-library/jest-dom/vitest';
 import type { DemoSession, Persona, RunDetailResponse } from '@slacato/contracts';
 import { runStatusSchema } from '@slacato/contracts';
@@ -142,14 +142,11 @@ describe('guided tour: the spotlight frames only the control to act on', () => {
       createElement(
         QueryClientProvider,
         { client: queryClient },
-        createElement(
-          RouterProvider,
-          {
-            router: createMemoryRouter([{ path: '/login', Component: LoginRoute }], {
-              initialEntries: ['/login']
-            })
-          }
-        )
+        createElement(RouterProvider, {
+          router: createMemoryRouter([{ path: '/login', Component: LoginRoute }], {
+            initialEntries: ['/login']
+          })
+        })
       )
     );
 
@@ -194,7 +191,9 @@ describe('guided tour: the spotlight frames only the control to act on', () => {
     await screen.findByRole('dialog');
     fireEvent.click(await screen.findByRole('radio', { name: /Maya Levin/ }));
 
-    await waitFor(() => expect(screen.getByText(`Step ${index + 1} of ${tourSteps.length}`)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(`Step ${index + 1} of ${tourSteps.length}`)).toBeInTheDocument()
+    );
     expect(document.querySelector(`[data-tour="${tourSteps[index].target}"]`)).not.toBeNull();
   });
 
@@ -228,7 +227,8 @@ function renderRunStepWithTour(stepIndex: number): void {
         loader: () => session,
         // The tour is mounted once in the layout, as the app shell mounts it, and a catch-all
         // route stands in for wherever the step advances to.
-        Component: () => createElement(Fragment, null, createElement(Outlet), createElement(GuidedTour)),
+        Component: () =>
+          createElement(Fragment, null, createElement(Outlet), createElement(GuidedTour)),
         children: [
           {
             path: '/runs/:runId',
@@ -320,7 +320,14 @@ describe('guided tour: run steps wait for the run to reach a real outcome', () =
 describe('guided tour: no run status can hang a step', () => {
   // Enumerated from the contract rather than hand-listed, so a status added later fails this test
   // instead of silently becoming a state the tour can wait on forever.
-  const IN_FLIGHT = ['created', 'retrieving', 'specialists_running', 'synthesizing', 'validating', 'finalizing'];
+  const IN_FLIGHT = [
+    'created',
+    'retrieving',
+    'specialists_running',
+    'synthesizing',
+    'validating',
+    'finalizing'
+  ];
 
   for (const status of runStatusSchema.options) {
     it(`${IN_FLIGHT.includes(status) ? 'holds while' : 'releases once'} a run is "${status}"`, async () => {
@@ -352,15 +359,22 @@ describe('guided tour: a held run step is never a dead end', () => {
     const router = createMemoryRouter(
       [
         {
-          Component: () => createElement(Fragment, null, createElement(Outlet), createElement(GuidedTour)),
+          Component: () =>
+            createElement(Fragment, null, createElement(Outlet), createElement(GuidedTour)),
           children: [
             {
               path: '/runs/:runId',
               Component: () =>
-                createElement('main', { id: 'main-content' },
-                  createElement('div', { 'data-tour': 'run-progress-detail' }, 'Progress'))
+                createElement(
+                  'main',
+                  { id: 'main-content' },
+                  createElement('div', { 'data-tour': 'run-progress-detail' }, 'Progress')
+                )
             },
-            { path: '*', Component: () => createElement('main', { id: 'main-content' }, 'Elsewhere') }
+            {
+              path: '*',
+              Component: () => createElement('main', { id: 'main-content' }, 'Elsewhere')
+            }
           ]
         }
       ],
@@ -377,8 +391,8 @@ describe('guided tour: a held run step is never a dead end', () => {
     await screen.findByRole('dialog');
     expect(screen.getByRole('button', { name: /Next/ })).toBeDisabled();
 
-    const escape = await screen.findByRole('button', { name: 'Continue anyway' });
-    fireEvent.click(escape);
+    const continueButton = await screen.findByRole('button', { name: 'Continue anyway' });
+    fireEvent.click(continueButton);
 
     await waitFor(() =>
       expect(screen.getByText(`Step ${index + 2} of ${tourSteps.length}`)).toBeInTheDocument()
@@ -410,10 +424,14 @@ describe('guided tour: following the step’s own instruction is never "stepping
         {
           id: 'protected-root',
           loader: () => session,
-          Component: () => createElement(Fragment, null, createElement(Outlet), createElement(GuidedTour)),
+          Component: () =>
+            createElement(Fragment, null, createElement(Outlet), createElement(GuidedTour)),
           children: [
             { path: from, Component: list },
-            { path: to, Component: () => createElement('main', { id: 'main-content' }, 'Destination') }
+            {
+              path: to,
+              Component: () => createElement('main', { id: 'main-content' }, 'Destination')
+            }
           ]
         }
       ],
@@ -511,7 +529,9 @@ describe('guided tour: no step narrates a state the reviewer cannot see', () => 
     const first = tourSteps.findIndex((candidate) => candidate.target === 'approvals');
     const step = tourSteps.filter((candidate) => candidate.target === 'approvals')[1];
     // Two steps visit this inbox: Nora's own deal first, then the approver's. This is the second.
-    expect(tourSteps.indexOf(step!)).toBeGreaterThan(first);
+    expect(step).toBeDefined();
+    if (step === undefined) throw new Error('The approver tour step is missing');
+    expect(tourSteps.indexOf(step)).toBeGreaterThan(first);
 
     expect(step?.body).toMatch(/Open her pending entry/);
     expect(step?.body).toMatch(/already decided on an earlier pass/);
@@ -535,12 +555,13 @@ describe('guided tour: no step narrates a state the reviewer cannot see', () => 
     expect(step?.body).toMatch(/Canonical permission view/);
   });
 
-  it('describes the Slack step against the brief its anchor actually frames', () => {
+  it('describes the Slack step against the raw Source Records view its anchor opens', () => {
     const step = stepAt((candidate) => candidate.target === 'slack-evidence');
 
-    // The page renders whichever brief exists, so the step names the brief the reader is on
-    // rather than one of the two views by name.
-    expect(step?.body).toMatch(/Source Evidence of the brief you are reading/);
+    expect(step?.body).toMatch(/spotlight is on Source Records/);
+    expect(step?.body).toMatch(/raw authorized evidence/);
+    expect(step?.body).toMatch(/Return to AI Brief/);
     expect(step?.body).toMatch(/slack\/account_team_updates/);
+    expect(step?.body).not.toMatch(/Source Evidence of the brief you are reading/);
   });
 });

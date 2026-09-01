@@ -48,7 +48,7 @@ export type EditedPolicySignals = Readonly<
   >
 >;
 
-/** Normalizes each human-readable prose field independently, never structural metadata. */
+/** Normalizes independent human-readable semantic units, never structural metadata. */
 function semanticFields(payload: DealBrief): readonly string[] {
   const claimStatements = (
     claims: readonly Readonly<{ statement: string }>[] | undefined
@@ -60,7 +60,6 @@ function semanticFields(payload: DealBrief): readonly string[] {
     payload.stakeholderMap.claims,
     ...payload.stakeholderMap.stakeholders.map(({ claims }) => claims),
     payload.negotiationState.claims,
-    ...payload.recommendedNextActions.actions.map(({ claims }) => claims),
     ...payload.sourceEvidence.evidence.map(({ claims }) => claims)
   ];
   const values = [
@@ -75,10 +74,9 @@ function semanticFields(payload: DealBrief): readonly string[] {
     payload.negotiationState.currentState,
     ...(payload.negotiationState.leverage ?? []),
     ...payload.negotiationState.risks,
-    ...payload.recommendedNextActions.actions.flatMap(({ action, rationale }) => [
-      action,
-      rationale
-    ]),
+    ...payload.recommendedNextActions.actions.map(({ action, rationale, claims }) =>
+      [action, rationale, ...claimStatements(claims)].join(' ')
+    ),
     ...payload.missingInformation.items.flatMap(({ question, whyItMatters }) => [
       question,
       whyItMatters
@@ -88,8 +86,12 @@ function semanticFields(payload: DealBrief): readonly string[] {
     ...claimGroups.flatMap(claimStatements)
   ];
   return values
-    .map((value) =>
-      ` ${value.normalize('NFKC').toLocaleLowerCase('en-US').replaceAll(/[^a-z0-9]+/g, ' ')} `
+    .map(
+      (value) =>
+        ` ${value
+          .normalize('NFKC')
+          .toLocaleLowerCase('en-US')
+          .replaceAll(/[^a-z0-9]+/g, ' ')} `
     )
     .filter((value) => value.trim().length > 0);
 }
@@ -175,20 +177,8 @@ export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySign
     'preserve',
     'storage'
   ];
-  const researchSubjects = [
-    'research',
-    'study',
-    'studies',
-    'benchmark',
-    'analysis'
-  ];
-  const restrictedSubjects = [
-    'restricted',
-    'confidential',
-    'private',
-    'nonpublic',
-    'sensitive'
-  ];
+  const researchSubjects = ['research', 'study', 'studies', 'benchmark', 'analysis'];
+  const restrictedSubjects = ['restricted', 'confidential', 'private', 'nonpublic', 'sensitive'];
   const securitySubjects = [
     'security',
     'encryption',
@@ -206,10 +196,7 @@ export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySign
     'specific'
   ];
   return {
-    liabilityCapChanged: containsConceptGroups(fields, [
-      liabilitySubjects,
-      liabilityChanges
-    ]),
+    liabilityCapChanged: containsConceptGroups(fields, [liabilitySubjects, liabilityChanges]),
     dataRetentionLanguage: containsConceptGroups(fields, [dataSubjects, retentionSubjects]),
     restrictedResearchLanguage: containsConceptGroups(fields, [
       researchSubjects,

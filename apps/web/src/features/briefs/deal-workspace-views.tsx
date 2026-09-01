@@ -5,7 +5,9 @@ import { formatDealAmount } from '@/features/deals/deal-format';
 type EvidenceRecord = DealWorkspaceView['evidence'][number];
 
 /** Presents only source-backed deal facts and authorized source availability before generation. */
-export function DealOverview({ workspace }: Readonly<{ workspace: DealWorkspaceView }>): React.JSX.Element {
+export function DealOverview({
+  workspace
+}: Readonly<{ workspace: DealWorkspaceView }>): React.JSX.Element {
   const { deal, generatedOutput } = workspace;
   const sourceCounts = countSources(workspace.evidence);
 
@@ -40,7 +42,10 @@ export function DealOverview({ workspace }: Readonly<{ workspace: DealWorkspaceV
               value={deal.probability === null ? 'Not recorded' : `${deal.probability}%`}
             />
             <Fact label="Risk" value={title(deal.riskLevel)} />
-            <Fact label="Access" value={deal.restricted ? 'Restricted — authorized' : 'Authorized'} />
+            <Fact
+              label="Access"
+              value={deal.restricted ? 'Restricted — authorized' : 'Authorized'}
+            />
             <Fact label="Created" value={deal.createdAt} />
             <Fact
               label="Latest run"
@@ -65,7 +70,10 @@ export function DealOverview({ workspace }: Readonly<{ workspace: DealWorkspaceV
             ) : (
               <ul className="mt-4 flex flex-wrap gap-2" aria-label="Authorized source types">
                 {sourceCounts.map(([sourceType, count]) => (
-                  <li key={sourceType} className="rounded-full border bg-muted/40 px-3 py-1.5 text-sm">
+                  <li
+                    key={sourceType}
+                    className="rounded-full border bg-muted/40 px-3 py-1.5 text-sm"
+                  >
                     {sourceTypeLabel(sourceType)} · {count} {count === 1 ? 'record' : 'records'}
                   </li>
                 ))}
@@ -81,15 +89,22 @@ export function DealOverview({ workspace }: Readonly<{ workspace: DealWorkspaceV
 }
 
 /** Summarizes generation state without reproducing the full generated brief. */
-function GeneratedOverview({ workspace }: Readonly<{ workspace: DealWorkspaceView }>): React.JSX.Element | null {
+function GeneratedOverview({
+  workspace
+}: Readonly<{ workspace: DealWorkspaceView }>): React.JSX.Element | null {
   const generatedOutput = workspace.generatedOutput;
   if (generatedOutput === null) return null;
   const preview = generatedOutput.content.sections.executiveSummary;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
-      <section className="rounded-lg border border-primary/20 bg-primary/5 p-5" aria-labelledby="ai-preview-heading">
-        <p className="text-xs font-semibold uppercase tracking-wide text-primary">AI-generated content</p>
+      <section
+        className="rounded-lg border border-primary/20 bg-primary/5 p-5"
+        aria-labelledby="ai-preview-heading"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+          AI-generated content
+        </p>
         <h3 id="ai-preview-heading" className="mt-2 text-lg font-semibold">
           AI-generated preview
         </h3>
@@ -201,7 +216,11 @@ export function SourceRecords({
       ) : (
         <div className="mt-6 grid gap-8">
           {groups.map(([sourceType, sourceRecords]) => (
-            <section key={sourceType} aria-labelledby={`source-records-${sourceType}`}>
+            <section
+              key={sourceType}
+              className="min-w-0"
+              aria-labelledby={`source-records-${sourceType}`}
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 id={`source-records-${sourceType}`} className="text-lg font-semibold">
                   {sourceTypeLabel(sourceType)}
@@ -210,12 +229,12 @@ export function SourceRecords({
                   {sourceRecords.length} {sourceRecords.length === 1 ? 'record' : 'records'}
                 </p>
               </div>
-              <ul className="mt-3 grid gap-3">
+              <ul className="mt-3 grid min-w-0 gap-3">
                 {sourceRecords.map((record) => {
                   const selected = selectedEvidenceId === record.id;
                   return (
-                    <li key={record.id}>
-                      <article className="rounded-lg border bg-card p-4">
+                    <li key={record.id} className="min-w-0">
+                      <article className="min-w-0 rounded-lg border bg-card p-4">
                         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                           <div className="min-w-0">
                             <h4 className="break-words font-medium">{record.citationLabel}</h4>
@@ -234,7 +253,7 @@ export function SourceRecords({
                             Open source record
                           </Button>
                         </div>
-                        <pre className="mt-4 overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 font-mono text-xs leading-5">
+                        <pre className="mt-4 max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 font-mono text-xs leading-5">
                           {record.content}
                         </pre>
                       </article>
@@ -252,15 +271,20 @@ export function SourceRecords({
 
 function Fact({ label, value }: Readonly<{ label: string; value: string }>): React.JSX.Element {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words text-sm font-medium">{value}</dd>
+      <dd className="mt-1 min-w-0 break-words text-sm font-medium">{value}</dd>
     </div>
   );
 }
 
-function countSources(records: readonly EvidenceRecord[]): [EvidenceRecord['sourceType'], number][] {
-  return groupSources(records).map(([sourceType, groupedRecords]) => [sourceType, groupedRecords.length]);
+function countSources(
+  records: readonly EvidenceRecord[]
+): [EvidenceRecord['sourceType'], number][] {
+  return groupSources(records).map(([sourceType, groupedRecords]) => [
+    sourceType,
+    groupedRecords.length
+  ]);
 }
 
 function groupSources(

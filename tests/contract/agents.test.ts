@@ -1551,8 +1551,10 @@ describe('specialized agents', () => {
     });
 
     expect(call).toBe(2);
-    expect(messages[0]).toContain('claim_<unique_suffix>');
-    expect(messages[0]).toContain('exactly equal to one supporting claim statement');
+    expect(messages[0]).toContain('Use unique claim_<suffix> ids across all sections');
+    expect(messages[0]).toContain(
+      'action rationale, and source summary equal one supporting claim statement'
+    );
     expect(messages[1]).toContain('substantive coverage');
     expect(brief.executiveSummary.narrative).toBe('The platform is central to access control.');
     expect(brief.sourceEvidence.evidence).toHaveLength(1);

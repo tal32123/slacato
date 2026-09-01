@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { createElement, type ReactNode } from 'react';
 import type { BriefSectionView, DealWorkspaceView } from '@slacato/contracts';
+import { createElement, type ReactNode } from 'react';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -34,7 +34,10 @@ function buildSection(title: string, paragraph: string): BriefSectionView {
 /** Builds a full nine-section brief whose paragraphs are tagged with the given source label. */
 function buildSections(status: 'source_backed' | 'generated', tag: string) {
   const sections = Object.fromEntries(
-    Object.entries(sectionTitles).map(([id, title]) => [id, buildSection(title, `${title} — ${tag}`)])
+    Object.entries(sectionTitles).map(([id, title]) => [
+      id,
+      buildSection(title, `${title} — ${tag}`)
+    ])
   ) as Record<keyof typeof sectionTitles, BriefSectionView>;
   return { status, overallConfidence: 0.7, sections, stakeholders: [], actions: [], warnings: [] };
 }
@@ -56,14 +59,21 @@ const deal: DealWorkspaceView['deal'] = {
 };
 
 function buildWorkspace(withGeneratedOutput: boolean): DealWorkspaceView {
-  const sourceSnapshotBrief = buildSections('source_backed', 'source snapshot') as DealWorkspaceView['sourceSnapshot']['evidenceOverview'];
+  const sourceSnapshotBrief = buildSections(
+    'source_backed',
+    'source snapshot'
+  ) as DealWorkspaceView['sourceSnapshot']['evidenceOverview'];
   const generatedBrief = buildSections('generated', 'generated output') as NonNullable<
     DealWorkspaceView['generatedOutput']
   >['content'];
   return {
     sessionVersion: 'session-v1',
     deal,
-    sourceSnapshot: { type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: sourceSnapshotBrief },
+    sourceSnapshot: {
+      type: 'source_snapshot',
+      label: 'Source snapshot',
+      evidenceOverview: sourceSnapshotBrief
+    },
     generatedOutput: withGeneratedOutput
       ? {
           type: 'generated_output',
@@ -104,15 +114,61 @@ function renderBrief(
     )
   );
 }
+/** Selects a Radix tab through the mouse event that its browser control handles. */
+function selectTab(name: 'AI Brief' | 'Source Records'): void {
+  fireEvent.mouseDown(screen.getByRole('tab', { name }), {
+    button: 0,
+    ctrlKey: false
+  });
+}
+
 /** Opens the generated brief from the default deal overview. */
 function openAiBrief(): void {
-  fireEvent.click(screen.getByRole('tab', { name: 'AI Brief' }));
+  selectTab('AI Brief');
 }
 
 afterEach(() => {
   cleanup();
 });
 
+const gongLabel = 'source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-008';
+const slackLabel = 'source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9009';
+const contactLabel = 'source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3003';
+const citedEvidence: DealWorkspaceView['evidence'] = [
+  {
+    id: 'gong_summary:CALL-008:0',
+    sourceType: 'gong_summary',
+    sourcePath: 'synthetic_data/gong/gong_call_summaries.tsv',
+    stableKey: 'call_id',
+    stableId: 'CALL-008',
+    citationLabel: gongLabel,
+    chunkId: 'gong_summary:CALL-008:0',
+    capturedAt: '2026-05-12T00:00:00.000Z',
+    content: 'summary: Pricing pressure raised again.'
+  },
+  {
+    id: 'slack:SLK-9009:0',
+    sourceType: 'slack',
+    sourcePath: 'synthetic_data/slack/account_team_updates.tsv',
+    stableKey: 'update_id',
+    stableId: 'SLK-9009',
+    citationLabel: slackLabel,
+    chunkId: 'slack:SLK-9009:0',
+    capturedAt: '2026-05-18T00:00:00.000Z',
+    content: 'updateText: Executive stakeholders disagree on the lead concession.'
+  },
+  {
+    id: 'salesforce:CON-3003:0',
+    sourceType: 'salesforce',
+    sourcePath: 'synthetic_data/salesforce/contacts.tsv',
+    stableKey: 'contact_id',
+    stableId: 'CON-3003',
+    citationLabel: contactLabel,
+    chunkId: 'salesforce:CON-3003:0',
+    capturedAt: '2026-05-02T00:00:00.000Z',
+    content: 'name: Elena Voss'
+  }
+];
 describe('DealBrief', () => {
   it('shows only deal facts and source availability before an AI brief exists', () => {
     renderBrief(buildWorkspace(false));
@@ -120,10 +176,25 @@ describe('DealBrief', () => {
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /AI Brief/ })).toBeDisabled();
     expect(screen.getByRole('heading', { name: 'No AI brief yet' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Authorized inputs available' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Authorized inputs available' })
+    ).toBeInTheDocument();
     expect(screen.queryByText(/source snapshot/iu)).not.toBeInTheDocument();
     for (const title of Object.values(sectionTitles))
       expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument();
+  });
+
+  it('lists source-type availability without exposing raw records on the pre-generation overview', () => {
+    renderBrief({ ...buildWorkspace(false), evidence: citedEvidence } as DealWorkspaceView);
+
+    const sourceTypes = screen.getByRole('list', { name: 'Authorized source types' });
+    expect(
+      within(sourceTypes)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent)
+    ).toEqual(['Gong summary · 1 record', 'Salesforce · 1 record', 'Slack · 1 record']);
+    expect(screen.queryByText(/Pricing pressure raised again/iu)).not.toBeInTheDocument();
+    expect(screen.queryByText(gongLabel)).not.toBeInTheDocument();
   });
 
   it('keeps the generated brief behind an explicit AI Brief view', () => {
@@ -142,6 +213,23 @@ describe('DealBrief', () => {
     expect(screen.queryByText(/source snapshot/iu)).not.toBeInTheDocument();
   });
 
+  it('names exactly the implemented AI responsibilities in the full brief provenance panel', () => {
+    renderBrief(buildWorkspace(true));
+    openAiBrief();
+
+    const provenance = screen.getByRole('list', { name: 'AI brief provenance' });
+    expect(
+      within(provenance)
+        .getAllByRole('listitem')
+        .map((item) => within(item).getByRole('heading').textContent)
+    ).toEqual([
+      'Conversation Intelligence',
+      'Stakeholder Intelligence',
+      'Commercial Policy Analysis',
+      'Negotiation Strategy'
+    ]);
+  });
+
   it('names an empty generated section instead of leaving a bare heading over blank space', () => {
     const workspace = buildWorkspace(true);
     const generated = workspace.generatedOutput;
@@ -150,7 +238,11 @@ describe('DealBrief', () => {
       ...generated.content,
       sections: {
         ...generated.content.sections,
-        missingInformation: { ...generated.content.sections.missingInformation, paragraphs: [], items: [] },
+        missingInformation: {
+          ...generated.content.sections.missingInformation,
+          paragraphs: [],
+          items: []
+        },
         buyerGoalsAndBusinessDrivers: {
           ...generated.content.sections.buyerGoalsAndBusinessDrivers,
           paragraphs: [],
@@ -175,7 +267,7 @@ describe('DealBrief', () => {
   it('shows raw authorized records instead of a deterministic second brief', () => {
     renderBrief(buildWorkspace(false));
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Source Records' }));
+    selectTab('Source Records');
 
     expect(screen.getByRole('heading', { name: 'Authorized source records' })).toBeInTheDocument();
     expect(screen.getByText('No authorized source records are available.')).toBeInTheDocument();
@@ -187,12 +279,14 @@ describe('DealBrief', () => {
     const onEvidence = vi.fn();
     renderBrief(buildCitedWorkspace(), { onEvidence });
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Source Records' }));
+    selectTab('Source Records');
     const trigger = screen.getByRole('button', {
       name: `Open source record: ${slackLabel}`
     });
     expect(screen.getByRole('heading', { name: 'Slack' })).toBeInTheDocument();
-    expect(screen.getByText('updateText: Executive stakeholders disagree on the lead concession.')).toBeInTheDocument();
+    expect(
+      screen.getByText('updateText: Executive stakeholders disagree on the lead concession.')
+    ).toBeInTheDocument();
 
     fireEvent.click(trigger);
 
@@ -203,14 +297,14 @@ describe('DealBrief', () => {
     const approvalDecision = createElement(
       'section',
       { 'aria-label': 'Record decision' },
-      createElement('button', null, 'Approve unchanged'),
-      createElement('button', null, 'Edit and approve'),
-      createElement('button', null, 'Reject')
+      createElement('button', { type: 'button' }, 'Approve unchanged'),
+      createElement('button', { type: 'button' }, 'Edit and approve'),
+      createElement('button', { type: 'button' }, 'Reject')
     );
     const { container } = renderBrief(buildWorkspace(true), { approvalDecision });
     openAiBrief();
 
-    const sourceEvidence = container.querySelector('[aria-labelledby=\"generated-sourceEvidence\"]');
+    const sourceEvidence = container.querySelector('[aria-labelledby="generated-sourceEvidence"]');
     const decision = screen.getByRole('region', { name: 'Record decision' });
     expect(sourceEvidence).not.toBeNull();
     expect(sourceEvidence?.compareDocumentPosition(decision) ?? 0).toBe(
@@ -259,10 +353,10 @@ describe('DealBrief', () => {
         {
           id: 'slack:SLK-9009:0',
           sourceType: 'slack',
-          sourcePath: 'slack/account_team_updates.tsv',
+          sourcePath: 'synthetic_data/slack/account_team_updates.tsv',
           stableKey: 'update_id',
           stableId: 'SLK-9009',
-          citationLabel: 'source=slack/account_team_updates.tsv, update_id=SLK-9009',
+          citationLabel: 'source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9009',
           chunkId: 'slack:SLK-9009:0',
           capturedAt: '2026-05-18T00:00:00.000Z',
           content: 'updateText: Executive stakeholders disagree on the lead concession.'
@@ -270,10 +364,10 @@ describe('DealBrief', () => {
         {
           id: 'gong_summary:CALL-008:0',
           sourceType: 'gong_summary',
-          sourcePath: 'gong/gong_call_summaries.tsv',
+          sourcePath: 'synthetic_data/gong/gong_call_summaries.tsv',
           stableKey: 'call_id',
           stableId: 'CALL-008',
-          citationLabel: 'source=gong/gong_call_summaries.tsv, call_id=CALL-008',
+          citationLabel: 'source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-008',
           chunkId: 'gong_summary:CALL-008:0',
           capturedAt: '2026-05-12T00:00:00.000Z',
           content: 'summary: Pricing pressure raised again.'
@@ -303,45 +397,6 @@ describe('DealBrief', () => {
     }
   );
 });
-
-const gongLabel = 'source=gong/gong_call_summaries.tsv, call_id=CALL-008';
-const slackLabel = 'source=slack/account_team_updates.tsv, update_id=SLK-9009';
-const contactLabel = 'source=salesforce/contacts.tsv, contact_id=CON-3003';
-const citedEvidence: DealWorkspaceView['evidence'] = [
-  {
-    id: 'gong_summary:CALL-008:0',
-    sourceType: 'gong_summary',
-    sourcePath: 'gong/gong_call_summaries.tsv',
-    stableKey: 'call_id',
-    stableId: 'CALL-008',
-    citationLabel: gongLabel,
-    chunkId: 'gong_summary:CALL-008:0',
-    capturedAt: '2026-05-12T00:00:00.000Z',
-    content: 'summary: Pricing pressure raised again.'
-  },
-  {
-    id: 'slack:SLK-9009:0',
-    sourceType: 'slack',
-    sourcePath: 'slack/account_team_updates.tsv',
-    stableKey: 'update_id',
-    stableId: 'SLK-9009',
-    citationLabel: slackLabel,
-    chunkId: 'slack:SLK-9009:0',
-    capturedAt: '2026-05-18T00:00:00.000Z',
-    content: 'updateText: Executive stakeholders disagree on the lead concession.'
-  },
-  {
-    id: 'salesforce:CON-3003:0',
-    sourceType: 'salesforce',
-    sourcePath: 'salesforce/contacts.tsv',
-    stableKey: 'contact_id',
-    stableId: 'CON-3003',
-    citationLabel: contactLabel,
-    chunkId: 'salesforce:CON-3003:0',
-    capturedAt: '2026-05-02T00:00:00.000Z',
-    content: 'name: Elena Voss'
-  }
-];
 
 /**
  * Builds a generated workspace whose sections, stakeholder, action, and warning all cite records,
@@ -403,6 +458,19 @@ function buildCitedWorkspace(): DealWorkspaceView {
   };
   return {
     ...workspace,
+    sourceSnapshot: {
+      ...workspace.sourceSnapshot,
+      evidenceOverview: {
+        ...workspace.sourceSnapshot.evidenceOverview,
+        sections: {
+          ...workspace.sourceSnapshot.evidenceOverview.sections,
+          dealSnapshot: {
+            ...workspace.sourceSnapshot.evidenceOverview.sections.dealSnapshot,
+            citationIds: ['salesforce:CON-3003:0']
+          }
+        }
+      }
+    },
     generatedOutput: { ...generated, content },
     brief: content,
     evidence: citedEvidence
@@ -424,8 +492,8 @@ describe('DealBrief citations', () => {
     renderBrief(buildCitedWorkspace());
     openAiBrief();
 
-    // First-citation order over the rendered briefs: the deal snapshot cites the call, the
-    // executive summary introduces the Slack update, the stakeholder introduces the contact.
+    // First-citation order comes only from generated content: the call precedes the Slack update
+    // and contact even though the unrendered deterministic source projection cites the contact.
     expect(new Set(markersFor(gongLabel))).toEqual(new Set(['[1]']));
     expect(new Set(markersFor(slackLabel))).toEqual(new Set(['[2]']));
     expect(new Set(markersFor(contactLabel))).toEqual(new Set(['[3]']));
@@ -439,8 +507,8 @@ describe('DealBrief citations', () => {
     openAiBrief();
     const rendered = markersFor(slackLabel);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Source Records' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'AI Brief' }));
+    selectTab('Source Records');
+    selectTab('AI Brief');
 
     expect(markersFor(slackLabel)).toEqual(rendered);
     expect(new Set(markersFor(gongLabel))).toEqual(new Set(['[1]']));
@@ -454,12 +522,18 @@ describe('DealBrief citations', () => {
     const stakeholderMarkers = screen.getAllByRole('list', { name: 'Citations for Elena Voss' });
     expect(stakeholderMarkers).toHaveLength(2);
     for (const list of stakeholderMarkers)
-      expect(within(list).getByRole('button', { name: `Open evidence: ${contactLabel}` })).toHaveTextContent('[3]');
+      expect(
+        within(list).getByRole('button', { name: `Open evidence: ${contactLabel}` })
+      ).toHaveTextContent('[3]');
+
+    expect(screen.getAllByText('Internal')).toHaveLength(2);
 
     const actionMarkers = screen.getAllByRole('list', { name: 'Action citations' });
     expect(actionMarkers).toHaveLength(2);
     for (const list of actionMarkers)
-      expect(within(list).getByRole('button', { name: `Open evidence: ${slackLabel}` })).toHaveTextContent('[2]');
+      expect(
+        within(list).getByRole('button', { name: `Open evidence: ${slackLabel}` })
+      ).toHaveTextContent('[2]');
 
     const warningMarkers = screen.getAllByRole('list', { name: 'Warning citations' });
     expect(warningMarkers).toHaveLength(1);

@@ -16,7 +16,6 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -26,9 +25,10 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDealAmount } from '@/features/deals/deal-format';
-import { AiProvenance, DealOverview, SourceRecords } from './deal-workspace-views';
 import { cn } from '@/lib/utils';
+import { AiProvenance, DealOverview, SourceRecords } from './deal-workspace-views';
 
 const sectionOrder = [
   'dealSnapshot',
@@ -44,7 +44,7 @@ const sectionOrder = [
 
 type EvidenceIndex = ReadonlyMap<string, DealWorkspaceView['evidence'][number]>;
 
-/** Maps an authorized evidence id to the footnote number it carries everywhere on this page. */
+/** Maps a generated citation's authorized evidence id to its stable AI Brief footnote number. */
 type CitationNumbering = ReadonlyMap<string, number>;
 
 /**
@@ -76,11 +76,12 @@ function briefCitationOrder(brief: DealBriefView): string[] {
  * source projection do not participate, so switching tabs cannot renumber a generated citation.
  */
 function buildCitationNumbering(
-  briefs: readonly DealBriefView[],
+  brief: DealBriefView | null,
   evidence: EvidenceIndex
 ): CitationNumbering {
   const numbering = new Map<string, number>();
-  for (const citationId of briefs.flatMap(briefCitationOrder)) {
+  if (brief === null) return numbering;
+  for (const citationId of briefCitationOrder(brief)) {
     if (numbering.has(citationId) || !evidence.has(citationId)) continue;
     numbering.set(citationId, numbering.size + 1);
   }
@@ -97,7 +98,7 @@ function resolveCitations(
     .filter((item): item is DealWorkspaceView['evidence'][number] => item !== undefined);
 }
 
-/** Presents the source-backed deal brief, metrics, recommendations, and linked evidence to the seller. */
+/** Presents authorized deal facts, generated output, and raw source records to the seller. */
 export function DealBrief({
   workspace,
   selectedEvidenceId,
@@ -113,10 +114,7 @@ export function DealBrief({
 }>): React.JSX.Element {
   const { deal, generatedOutput } = workspace;
   const evidence = new Map(workspace.evidence.map((item) => [item.id, item]));
-  const numbering = buildCitationNumbering(
-    generatedOutput === null ? [] : [generatedOutput.content],
-    evidence
-  );
+  const numbering = buildCitationNumbering(generatedOutput?.content ?? null, evidence);
   return (
     <article data-deal-main className="min-w-0">
       <Button asChild variant="link" className="min-h-11 px-0">
@@ -171,11 +169,21 @@ export function DealBrief({
 
       <Tabs defaultValue="overview" className="py-6">
         <TabsList variant="line" aria-label="Deal workspace views">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="ai-brief" disabled={generatedOutput === null}>
+          <TabsTrigger value="overview" className="text-foreground/80">
+            Overview
+          </TabsTrigger>
+          <TabsTrigger
+            value="ai-brief"
+            className="text-foreground/80"
+            disabled={generatedOutput === null}
+          >
             AI Brief
           </TabsTrigger>
-          <TabsTrigger value="source-records" data-tour="slack-evidence">
+          <TabsTrigger
+            value="source-records"
+            className="text-foreground/80"
+            data-tour="slack-evidence"
+          >
             Source Records
           </TabsTrigger>
         </TabsList>
@@ -243,11 +251,7 @@ function WorkspaceContent({
       {sectionOrder.map((id) => {
         const section = brief.sections[id];
         return (
-          <section
-            key={id}
-            className="border-b py-8"
-            aria-labelledby={`${brief.status}-${id}`}
-          >
+          <section key={id} className="border-b py-8" aria-labelledby={`${brief.status}-${id}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id={`${brief.status}-${id}`} className="text-xl font-semibold">
                 {section.title}
@@ -521,8 +525,7 @@ function SectionCitations({
  * Spells out every citation this brief makes, in number order, with its full label.
  *
  * This is where the labels moved to when the markers became numbers, so Source Evidence is the
- * complete, checkable list every `[n]` in this brief resolves against. The numbers are the page's,
- * so the list can legitimately skip one the other brief on the page cites and this one does not.
+ * complete, checkable list every `[n]` in the generated brief resolves against.
  */
 function CitationReferenceList({
   citationIds,
@@ -659,31 +662,27 @@ function Stakeholders({
   );
 }
 
-/** Presents source-backed recommended actions in layouts suited to desktop and mobile screens. */
+/** Presents generated recommended actions in layouts suited to desktop and mobile screens. */
 function Actions({
   actions,
   evidence,
   numbering,
   selectedEvidenceId,
-  onEvidence,
-  sourceCues = false
+  onEvidence
 }: Readonly<{
   actions: readonly RecommendedActionView[];
   evidence: EvidenceIndex;
   numbering: CitationNumbering;
   selectedEvidenceId: string | null;
   onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
-  sourceCues?: boolean;
 }>): React.JSX.Element {
   if (actions.length === 0)
     return (
       <p className="mt-5 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-        No {sourceCues ? 'deterministic source cues' : 'generated actions'} are available.
+        No generated actions are available.
       </p>
     );
-  const caption = sourceCues
-    ? 'Deterministic source cues drawn from authorized records; they are not AI-generated recommendations.'
-    : 'Generated next actions with an explicit internal or customer audience.';
+  const caption = 'Generated next actions with an explicit internal or customer audience.';
   return (
     <div className="mt-6">
       <div className="hidden md:block">
@@ -749,7 +748,10 @@ function Actions({
             />
             <dl className="mt-3 grid gap-2 text-sm">
               <Fact label="Owner" value={action.owner ?? 'Not assigned'} />
-              <Fact label="Audience" value={action.audience === 'customer' ? 'Customer' : 'Internal'} />
+              <Fact
+                label="Audience"
+                value={action.audience === 'customer' ? 'Customer' : 'Internal'}
+              />
               <Fact label="Priority" value={action.priority} />
               <Fact label="Due" value={action.dueDate ?? 'Not recorded'} />
               <Fact label="Rationale" value={action.rationale} />

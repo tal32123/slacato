@@ -29,6 +29,9 @@ importers:
       '@slacato/infrastructure':
         specifier: workspace:*
         version: link:packages/infrastructure
+      '@tanstack/react-query':
+        specifier: 5.102.8
+        version: 5.102.8(react@19.2.8)
       '@testing-library/jest-dom':
         specifier: ^7.0.1
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11)
