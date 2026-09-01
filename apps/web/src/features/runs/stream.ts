@@ -40,6 +40,12 @@ export function applyRunEvent(
     ...current,
     status,
     version,
+    // The failure code arrives on the `fail` event and is carried on the detail from here, so a
+    // reader who stays on the streaming page learns the same reason a reload would report.
+    failureReason:
+      event.type === 'fail' && 'reasonCode' in event.payload
+        ? event.payload.reasonCode
+        : current.failureReason,
     watermark: event.id,
     watermarkSequence: event.sequence,
     terminal:

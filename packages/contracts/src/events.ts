@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { runStatusSchema as canonicalRunStatusSchema } from './runs.js';
+import { runFailureReasonSchema, runStatusSchema as canonicalRunStatusSchema } from './runs.js';
 
 export const opaqueIdSchema = z
   .string()
@@ -21,16 +21,8 @@ const timestampSchema = z.string().datetime();
  * this as a drift to resolve deliberately rather than silently.
  */
 const runStatusSchema = z.enum([...canonicalRunStatusSchema.options, 'running']);
-const failureReasonSchema = z.enum([
-  'conversation_unavailable',
-  'stakeholder_unavailable',
-  'commercial_unavailable',
-  'strategy_unavailable',
-  'commercial_specialist_failed',
-  'strategy_generation_failed',
-  'draft_validation_failed',
-  'workflow_failed'
-]);
+/** The run-failure codes live with the run contracts, because the run detail projects them too. */
+const failureReasonSchema = runFailureReasonSchema;
 const approvalCategorySchema = z.enum([
   'commercial_discount',
   'legal_terms',

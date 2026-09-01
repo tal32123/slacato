@@ -64,6 +64,24 @@ export const runSpecialistStatusSchema = z
   })
   .strict();
 
+/**
+ * Why a run ended in `failed`, as the workflow itself classified it.
+ *
+ * Defined here rather than in ./events.ts, which already imports this module: the codes travel on
+ * the `fail` run event and are also projected onto the run detail a resumed page reads, so they
+ * belong with the run contracts both paths share.
+ */
+export const runFailureReasonSchema = z.enum([
+  'conversation_unavailable',
+  'stakeholder_unavailable',
+  'commercial_unavailable',
+  'strategy_unavailable',
+  'commercial_specialist_failed',
+  'strategy_generation_failed',
+  'draft_validation_failed',
+  'workflow_failed'
+]);
+
 export const runTimelineItemSchema = z
   .object({
     sequence: z.number().int().positive(),
@@ -100,11 +118,17 @@ export const runDetailResponseSchema = z
     terminal: z.boolean(),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
+    /**
+     * Set only on a run that failed, so a page that arrives after the fact can say why rather than
+     * leaving the reason on an event stream the reader was not watching. Null on every other run.
+     */
+    failureReason: runFailureReasonSchema.nullable(),
     progress: runProgressSchema
   })
   .strict();
 
 export type RunStatus = z.infer<typeof runStatusSchema>;
+export type RunFailureReason = z.infer<typeof runFailureReasonSchema>;
 export type StartBriefRequest = z.infer<typeof startBriefRequestSchema>;
 export type StartBriefResponse = z.infer<typeof startBriefResponseSchema>;
 export type CancelRunResponse = z.infer<typeof cancelRunResponseSchema>;
