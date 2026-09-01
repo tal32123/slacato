@@ -495,32 +495,9 @@
       </div>
       <div>
         <h3>Generated Slack evidence</h3>
-        <p>The <a href="../samples/slack-impact.html">Slack impact comparison</a> shows the rendered before-and-after reviewer artifact. This section keeps the separate technical contract—generation provenance, ingestion validation, permission enforcement, and maintenance commands—which that comparison does not contain.</p>
-        <p class="diagram-note"><strong>Inspect:</strong> verify the canonical TSV and provenance repository paths, strict ingestion checks, permissioned <code>slack</code> retrieval, column contract, and exact maintenance commands.</p>
-        <p>The canonical dataset is <code>fixtures/cato/slack/account_team_updates.tsv</code>; its reviewed live-generation record is <code>fixtures/cato/slack/generation.json</code>. It contains three clearly synthetic account-team updates per opportunity: one reinforcing fact, one missing-context signal, and one ambiguity or conflict.</p>
-        <p>Fixture loading validates the strict TSV shape, unique IDs, synthetic notices, opportunity/account bindings, chronology, per-opportunity coverage, and the reviewed output hash in generation provenance before ingestion can proceed. Ingestion stores each row as <code>sourceType=slack</code>, classifies its declared <code>source_access_level</code>, and preserves the stable locator <code>slack/account_team_updates.tsv#&lt;update_id&gt;</code>. Retrieval then requires an effective <code>slack</code> source grant and rechecks the run’s authorized evidence manifest before any row reaches an agent.</p>
-        <div class="table-wrap" role="region" aria-label="Generated Slack column definitions" tabindex="0">
-          <table>
-            <thead><tr><th>Column</th><th>Meaning and validation</th></tr></thead>
-            <tbody>
-              <tr><td><code>update_id</code></td><td>Unique stable citation identifier in the <code>SLK-…</code> format.</td></tr>
-              <tr><td><code>opportunity_id</code> / <code>account_id</code></td><td>Canonical deal binding; both must match the same known opportunity.</td></tr>
-              <tr><td><code>update_date</code></td><td>Scenario date after canonical call evidence and before the opportunity close date.</td></tr>
-              <tr><td><code>channel</code> / <code>author_role</code></td><td>Fictional collaboration channel and role; no real person or customer identity.</td></tr>
-              <tr><td><code>synthetic_notice</code></td><td>Must be <code>true</code> for every row.</td></tr>
-              <tr><td><code>source_access_level</code></td><td><code>standard</code>, <code>restricted</code>, or <code>sensitive_pricing</code>; classification is enforced during evidence ingestion.</td></tr>
-              <tr><td><code>update_text</code></td><td>The synthetic account-team evidence body, kept intact as one retrievable chunk.</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="callout">
-          <p><strong>Regenerate, ingest, embed:</strong></p>
-          <ol class="commands">
-            <li><code>pnpm fixtures:slack</code></li>
-            <li><code>pnpm ingest:records</code></li>
-            <li><code>pnpm index:embeddings</code></li>
-          </ol>
-        </div>
+        <p>The <a href="../samples/slack-impact.html">Slack impact comparison</a> shows how the generated account-team updates change the rendered brief and identifies the cited updates.</p>
+        <p>The canonical dataset is <code>fixtures/cato/slack/account_team_updates.tsv</code>; its reviewed live-generation record is <code>fixtures/cato/slack/generation.json</code>. Each TSV row carries stable update, opportunity, and account identifiers; a scenario date; a fictional channel and author role; a synthetic marker; an access level; and the update text. The fixture generator creates three clearly synthetic updates per opportunity: one reinforcing fact, one missing-context signal, and one ambiguity or conflict.</p>
+        <p>Fixture loading validates the format, unique IDs, synthetic notices, opportunity/account bindings, chronology, per-opportunity coverage, and reviewed output hash before ingestion. The standard ingestion pipeline stores each row as <code>sourceType=slack</code>, classifies its declared access level, and preserves the stable locator <code>slack/account_team_updates.tsv#&lt;update_id&gt;</code>. Retrieval requires an effective <code>slack</code> source grant and rechecks the run’s authorized evidence manifest before any row reaches an agent.</p>
       </div>
       <div class="callout danger"><p><strong>Before production:</strong> add enterprise identity, managed secrets and rotation, rate limits, spending controls, high availability, monitoring and alerting, operational support, and stronger personal-data protection. <a href="#production">Production readiness</a> covers these gaps.</p></div>
     </section>
