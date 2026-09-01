@@ -1,4 +1,6 @@
 .superpowers/
+# Local review artifacts from the lavish CLI; not part of the project.
+.lavish/
 .env
 .env.local
 node_modules
