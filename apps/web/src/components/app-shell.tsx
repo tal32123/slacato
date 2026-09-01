@@ -63,7 +63,20 @@ export function AppShell({
       // preventScroll keeps this purely a focus move. Without it the browser scrolled <main> to the
       // top of the viewport, which parked every freshly opened page at scrollY 65 with its first
       // line hidden under the sticky header. ScrollRestoration below owns scroll position instead.
-      window.requestAnimationFrame(() => mainRef.current?.focus({ preventScroll: true }));
+      //
+      // The frame is what makes this a *default* rather than an override: it can land arbitrarily
+      // late on a loaded machine -- long after something else deliberately claimed focus. Closing
+      // the guided tour does exactly that, returning focus to its launcher on the commit that
+      // closes; a late frame from the navigation that opened the step then stole it straight back
+      // to <main>, leaving a keyboard user with no way to resume. So take focus only if nothing
+      // else has: still on <body>, or still on whatever was focused when this was scheduled (the
+      // nav link the user just activated, which is the case this focus move exists to rescue).
+      const scheduledFrom = document.activeElement;
+      window.requestAnimationFrame(() => {
+        const claimed = document.activeElement;
+        if (claimed !== null && claimed !== document.body && claimed !== scheduledFrom) return;
+        mainRef.current?.focus({ preventScroll: true });
+      });
     }
   }, [location.pathname, location.state, navigationType]);
 
