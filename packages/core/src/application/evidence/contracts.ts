@@ -16,6 +16,9 @@ export type EvidencePlan = Readonly<{
     query: string;
     sourceTypes: readonly AuthorizedSourceType[];
   }>[];
+  /** Share of fused mass one section query may contribute, relative to the caller's own query.
+   *  Part of the plan (and therefore of the hashed retrieval recipe) because it changes ranking. */
+  sectionQueryWeight: number;
   sourceLimits: Readonly<Record<AuthorizedSourceType, number>>;
   /** Always-surface guarantee for canonical CRM records (account, opportunity, every contact);
    *  distinct from `sourceLimits.salesforce`, which bounds the hybrid-search candidate window. */

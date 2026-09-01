@@ -18,7 +18,7 @@ import {
   type RetrievalRequest,
   type RetrievalResult,
   type RetrievedEvidence,
-  reciprocalRankFusion
+  weightedReciprocalRankFusion
 } from '@slacato/core';
 import type { DatabaseClient } from '../db/client.js';
 
@@ -132,10 +132,10 @@ export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
   public async search(request: RetrievalRequest): Promise<RetrievalResult> {
     const plan = buildEvidencePlan(request);
     await this.assertRunBinding(request);
-    // v2: the lexical channel scores partial matches instead of gating on a conjunctive
-    // tsquery. That changes ranking without changing the plan, so it has to be named here -
-    // otherwise a replayed manifest would silently be validated against different retrieval.
-    const queryHash = sha256(stableJson({ algorithmVersion: 'authorized-hybrid-v2', plan }));
+    // v3: section-query lexical and semantic lists contribute only the weight declared by the
+    // plan. Naming the changed fusion semantics prevents manifests produced by the unweighted
+    // implementation from being replayed under a different ranking algorithm.
+    const queryHash = sha256(stableJson({ algorithmVersion: 'authorized-hybrid-v3', plan }));
     const binding = createEvidenceScopeBinding(
       { accountId: request.accountId, opportunityId: request.opportunityId },
       request.scope
@@ -228,11 +228,14 @@ export class PostgresHybridEvidenceRetriever implements EvidenceRetriever {
         .concat(mandatoryPolicy)
         .map((row) => [row.id, row])
     );
-    const fused = reciprocalRankFusion(
-      searches.flatMap((search) => [
-        search.lexical.map((row) => row.id),
-        search.semantic.map((row) => row.id)
-      ]),
+    const fused = weightedReciprocalRankFusion(
+      searches.flatMap((search, index) => {
+        const weight = index === 0 ? 1 : plan.sectionQueryWeight;
+        return [
+          { ids: search.lexical.map((row) => row.id), weight },
+          { ids: search.semantic.map((row) => row.id), weight }
+        ];
+      }),
       plan.fusionK
     );
     const primary = searches[0];
