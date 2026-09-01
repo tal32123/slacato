@@ -58,13 +58,35 @@ describe('run and approval wire contracts', () => {
   it('separates pending authority-scoped work from decided history', () => {
     const entry = {
       approvalSubjectId: 'subject-1', runId: 'run-1', runVersion: 7, subjectHash: 'b'.repeat(64),
-      opportunityId: 'OPP-1001', opportunityName: 'Atlas Renewal', accountName: 'Atlas', entryId: 'legal-1',
-      category: 'legal_terms', requiredAuthorities: ['legal_reviewer'], availableAuthority: 'legal_reviewer',
+      opportunityId: 'OPP-1001', opportunityName: 'Atlas Renewal', accountName: 'Atlas',
+      entryId: 'communication-1',
+      category: 'customer_communication',
+      policyTriggers: ['customer_facing_language', 'customer_facing_concession_language'],
+      requiredAuthorities: ['account_owner'],
+      availableAuthority: 'account_owner',
       assignedApprover: null, quorum: { completed: 0, required: 2 }, ageStartedAt: timestamp,
       updatedAt: timestamp, decision: null
     };
     const parsed = approvalInboxResponseSchema.parse({ sessionVersion: 'session-1', pending: [entry], history: [] });
     expect(parsed.pending[0]?.decision).toBeNull();
+    expect(parsed.pending[0]?.policyTriggers).toEqual([
+      'customer_facing_language',
+      'customer_facing_concession_language'
+    ]);
+    expect(() =>
+      approvalInboxResponseSchema.parse({
+        sessionVersion: 'session-1',
+        pending: [{ ...entry, policyTriggers: undefined }],
+        history: []
+      })
+    ).toThrow();
+    expect(() =>
+      approvalInboxResponseSchema.parse({
+        sessionVersion: 'session-1',
+        pending: [{ ...entry, policyTriggers: ['Customer Facing Language'] }],
+        history: []
+      })
+    ).toThrow();
     expect(parsed.history).toEqual([]);
   });
 });

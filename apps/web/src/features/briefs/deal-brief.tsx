@@ -25,8 +25,10 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDealAmount } from '@/features/deals/deal-format';
 import { cn } from '@/lib/utils';
+import { AiProvenance, DealOverview, SourceRecords } from './deal-workspace-views';
 
 const sectionOrder = [
   'dealSnapshot',
@@ -36,13 +38,13 @@ const sectionOrder = [
   'negotiationState',
   'recommendedNextActions',
   'missingInformation',
-  'sourceEvidence',
-  'confidenceAndReviewWarnings'
+  'confidenceAndReviewWarnings',
+  'sourceEvidence'
 ] as const;
 
 type EvidenceIndex = ReadonlyMap<string, DealWorkspaceView['evidence'][number]>;
 
-/** Maps an authorized evidence id to the footnote number it carries everywhere on this page. */
+/** Maps a generated citation's authorized evidence id to its stable AI Brief footnote number. */
 type CitationNumbering = ReadonlyMap<string, number>;
 
 /**
@@ -68,20 +70,18 @@ function briefCitationOrder(brief: DealBriefView): string[] {
 }
 
 /**
- * Gives every cited record one number that means the same source everywhere on the page.
+ * Gives every generated citation one stable number everywhere in the AI Brief view.
  *
- * Citations used to be rendered as their full label next to each claim, which buried the prose
- * under a wall of near-identical chips. A footnote number only works if `[3]` is the same record
- * in the generated brief, in the deterministic snapshot, and in the reference list, so the number
- * is assigned once here in first-citation order over the briefs actually rendered — never from the
- * deprecated `workspace.brief` alias, which would walk one of them twice.
+ * Numbering is derived only from generated content. Authorized raw records and the deterministic
+ * source projection do not participate, so switching tabs cannot renumber a generated citation.
  */
 function buildCitationNumbering(
-  briefs: readonly DealBriefView[],
+  brief: DealBriefView | null,
   evidence: EvidenceIndex
 ): CitationNumbering {
   const numbering = new Map<string, number>();
-  for (const citationId of briefs.flatMap(briefCitationOrder)) {
+  if (brief === null) return numbering;
+  for (const citationId of briefCitationOrder(brief)) {
     if (numbering.has(citationId) || !evidence.has(citationId)) continue;
     numbering.set(citationId, numbering.size + 1);
   }
@@ -98,26 +98,23 @@ function resolveCitations(
     .filter((item): item is DealWorkspaceView['evidence'][number] => item !== undefined);
 }
 
-/** Presents the source-backed deal brief, metrics, recommendations, and linked evidence to the seller. */
+/** Presents authorized deal facts, generated output, and raw source records to the seller. */
 export function DealBrief({
   workspace,
   selectedEvidenceId,
   onEvidence,
-  primaryAction
+  primaryAction,
+  approvalDecision
 }: Readonly<{
   workspace: DealWorkspaceView;
   selectedEvidenceId: string | null;
   onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
   primaryAction: ReactNode;
+  approvalDecision?: ReactNode;
 }>): React.JSX.Element {
-  const { deal, sourceSnapshot, generatedOutput } = workspace;
+  const { deal, generatedOutput } = workspace;
   const evidence = new Map(workspace.evidence.map((item) => [item.id, item]));
-  const numbering = buildCitationNumbering(
-    generatedOutput === null
-      ? [sourceSnapshot.evidenceOverview]
-      : [generatedOutput.content, sourceSnapshot.evidenceOverview],
-    evidence
-  );
+  const numbering = buildCitationNumbering(generatedOutput?.content ?? null, evidence);
   return (
     <article data-deal-main className="min-w-0">
       <Button asChild variant="link" className="min-h-11 px-0">
@@ -134,7 +131,6 @@ export function DealBrief({
                 status={deal.restricted ? 'attention' : 'ready'}
                 label={deal.restricted ? 'Restricted — authorized' : 'Authorized workspace'}
               />
-              <StatusBadge status="readonly" label="Source snapshot" />
             </div>
             <p className="mt-4 text-sm font-medium text-primary">{deal.opportunityId}</p>
             <h1 className="mt-1 max-w-4xl text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -171,86 +167,66 @@ export function DealBrief({
         />
       </section>
 
-      {generatedOutput === null ? (
-        <section className="border-b py-8" aria-labelledby="source-snapshot">
-          <h2 id="source-snapshot" className="text-2xl font-semibold">
-            {sourceSnapshot.label}
-          </h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Evidence overview assembled deterministically from currently authorized, ingested
-            records. It is not AI-generated and is not produced by a run.
-          </p>
-          <WorkspaceContent
-            brief={sourceSnapshot.evidenceOverview}
-            evidence={evidence}
-            numbering={numbering}
+      <Tabs defaultValue="overview" className="py-6">
+        <TabsList variant="line" aria-label="Deal workspace views">
+          <TabsTrigger value="overview" className="text-foreground/80">
+            Overview
+          </TabsTrigger>
+          <TabsTrigger
+            value="ai-brief"
+            className="text-foreground/80"
+            disabled={generatedOutput === null}
+          >
+            AI Brief
+          </TabsTrigger>
+          <TabsTrigger
+            value="source-records"
+            className="text-foreground/80"
+            data-tour="slack-evidence"
+          >
+            Source Records
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <DealOverview workspace={workspace} />
+        </TabsContent>
+
+        <TabsContent value="ai-brief">
+          {generatedOutput === null ? null : (
+            <>
+              <section className="border-b py-8" aria-labelledby="generated-output">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 id="generated-output" className="text-2xl font-semibold">
+                    AI-generated brief
+                  </h2>
+                  <StatusBadge
+                    status="readonly"
+                    label={generatedOutput.lifecycle === 'finalized' ? 'Finalized' : 'Draft'}
+                  />
+                </div>
+                <WorkspaceContent
+                  brief={generatedOutput.content}
+                  evidence={evidence}
+                  numbering={numbering}
+                  selectedEvidenceId={selectedEvidenceId}
+                  onEvidence={onEvidence}
+                />
+                {approvalDecision}
+              </section>
+              <AiProvenance />
+            </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="source-records">
+          <SourceRecords
+            records={workspace.evidence}
             selectedEvidenceId={selectedEvidenceId}
             onEvidence={onEvidence}
-            sourceCues
-            carriesTourAnchor
           />
-        </section>
-      ) : (
-        <>
-          <section className="border-b py-8" aria-labelledby="generated-output">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 id="generated-output" className="text-2xl font-semibold">
-                {generatedOutput.lifecycle === 'finalized'
-                  ? 'Finalized generated output'
-                  : 'Generated draft'}
-              </h2>
-              <StatusBadge
-                status="readonly"
-                label={generatedOutput.lifecycle === 'finalized' ? 'Finalized' : 'Draft'}
-              />
-            </div>
-            <p className="mt-3 break-words text-sm leading-6 text-muted-foreground">
-              This is the primary brief for this negotiation. Produced by run{' '}
-              {generatedOutput.producingRun.id} ·{' '}
-              {generatedOutput.producingRun.status.replaceAll('_', ' ')}
-            </p>
-            <WorkspaceContent
-              brief={generatedOutput.content}
-              evidence={evidence}
-              numbering={numbering}
-              selectedEvidenceId={selectedEvidenceId}
-              onEvidence={onEvidence}
-              carriesTourAnchor
-            />
-          </section>
-
-          <section className="border-b py-8">
-            <details className="group" data-testid="source-snapshot-disclosure">
-              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 py-1 [&::-webkit-details-marker]:hidden">
-                <span className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
-                  <h2 className="text-2xl font-semibold">{sourceSnapshot.label}</h2>
-                  <StatusBadge status="readonly" label="Deterministic — not AI-generated" />
-                </span>
-                <span className="text-sm font-medium text-primary underline underline-offset-4 group-open:hidden">
-                  Show reference view
-                </span>
-                <span className="hidden text-sm font-medium text-primary underline underline-offset-4 group-open:inline">
-                  Hide reference view
-                </span>
-              </summary>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Evidence overview assembled deterministically from currently authorized, ingested
-                records. It is not AI-generated and is not produced by a run. Kept as a
-                citation-backed reference alongside the generated brief above.
-              </p>
-              <WorkspaceContent
-                brief={sourceSnapshot.evidenceOverview}
-                evidence={evidence}
-                numbering={numbering}
-                selectedEvidenceId={selectedEvidenceId}
-                onEvidence={onEvidence}
-                sourceCues
-                qualifyHeadings
-              />
-            </details>
-          </section>
-        </>
-      )}
+        </TabsContent>
+      </Tabs>
     </article>
   );
 }
@@ -261,64 +237,26 @@ function WorkspaceContent({
   evidence,
   numbering,
   selectedEvidenceId,
-  onEvidence,
-  sourceCues = false,
-  qualifyHeadings = false,
-  carriesTourAnchor = false
+  onEvidence
 }: Readonly<{
-  brief: DealWorkspaceView['brief'];
+  brief: DealBriefView;
   evidence: EvidenceIndex;
   /** Page-wide footnote numbers, so the same record reads as the same `[n]` in every section. */
   numbering: CitationNumbering;
   selectedEvidenceId: string | null;
   onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
-  sourceCues?: boolean;
-  /** Distinguishes these headings from an identically titled generated brief on the same page.
-   *  Only meaningful when both views render together; alone it just corrupts the accessible name. */
-  qualifyHeadings?: boolean;
-  /**
-   * Marks this as the brief a guided-tour step means when it names a section.
-   *
-   * Set on exactly one view per page: the generated brief when there is one, the deterministic
-   * snapshot when it is the only brief rendered. Both views emit the same nine section ids, so
-   * without this the tour's Source Evidence anchor matched twice and resolved by DOM order --
-   * always to the generated brief, even while the step's copy described the other one, which sits
-   * thousands of pixels lower inside a closed disclosure. Anchoring only the view a reader is
-   * actually looking at makes the step frame something real in both states.
-   */
-  carriesTourAnchor?: boolean;
 }>): React.JSX.Element {
   return (
     <div>
       {sectionOrder.map((id) => {
         const section = brief.sections[id];
-        const isSourceCue =
-          sourceCues && (id === 'recommendedNextActions' || id === 'confidenceAndReviewWarnings');
         return (
-          <section
-            key={id}
-            data-tour={
-              id === 'sourceEvidence'
-                ? carriesTourAnchor
-                  ? 'slack-evidence'
-                  : 'snapshot-source-evidence'
-                : undefined
-            }
-            className="border-b py-8"
-            aria-labelledby={`${brief.status}-${id}`}
-          >
+          <section key={id} className="border-b py-8" aria-labelledby={`${brief.status}-${id}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id={`${brief.status}-${id}`} className="text-xl font-semibold">
                 {section.title}
-                {qualifyHeadings && ' '}
-                {qualifyHeadings && (
-                  <span className="ml-2 align-middle text-xs font-normal uppercase tracking-wide text-muted-foreground">
-                    Source snapshot
-                  </span>
-                )}
               </h3>
               <div className="flex flex-wrap gap-2">
-                {isSourceCue && <StatusBadge status="readonly" label="Deterministic source cue" />}
                 {section.accountTeamUpdateImpact && (
                   <StatusBadge status="attention" label="Account-team update impact" />
                 )}
@@ -338,9 +276,8 @@ function WorkspaceContent({
             </div>
             {isEmptySection(section, id) && (
               <p className="mt-4 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                {sourceCues
-                  ? 'No authorized records populate this section.'
-                  : 'This section is empty. The generated output carried nothing here, so treat it as unanswered rather than as nothing to review.'}
+                This section is empty. The generated output carried nothing here, so treat it as
+                unanswered rather than as nothing to review.
               </p>
             )}
             {section.items.length > 0 && (
@@ -366,7 +303,6 @@ function WorkspaceContent({
                 numbering={numbering}
                 selectedEvidenceId={selectedEvidenceId}
                 onEvidence={onEvidence}
-                sourceCues={sourceCues}
               />
             )}
             {id === 'confidenceAndReviewWarnings' && (
@@ -589,8 +525,7 @@ function SectionCitations({
  * Spells out every citation this brief makes, in number order, with its full label.
  *
  * This is where the labels moved to when the markers became numbers, so Source Evidence is the
- * complete, checkable list every `[n]` in this brief resolves against. The numbers are the page's,
- * so the list can legitimately skip one the other brief on the page cites and this one does not.
+ * complete, checkable list every `[n]` in the generated brief resolves against.
  */
 function CitationReferenceList({
   citationIds,
@@ -727,31 +662,27 @@ function Stakeholders({
   );
 }
 
-/** Presents source-backed recommended actions in layouts suited to desktop and mobile screens. */
+/** Presents generated recommended actions in layouts suited to desktop and mobile screens. */
 function Actions({
   actions,
   evidence,
   numbering,
   selectedEvidenceId,
-  onEvidence,
-  sourceCues = false
+  onEvidence
 }: Readonly<{
   actions: readonly RecommendedActionView[];
   evidence: EvidenceIndex;
   numbering: CitationNumbering;
   selectedEvidenceId: string | null;
   onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
-  sourceCues?: boolean;
 }>): React.JSX.Element {
   if (actions.length === 0)
     return (
       <p className="mt-5 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-        No {sourceCues ? 'deterministic source cues' : 'generated actions'} are available.
+        No generated actions are available.
       </p>
     );
-  const caption = sourceCues
-    ? 'Deterministic source cues drawn from authorized records; they are not AI-generated recommendations.'
-    : 'Generated next actions; no action sends customer-facing content.';
+  const caption = 'Generated next actions with an explicit internal or customer audience.';
   return (
     <div className="mt-6">
       <div className="hidden md:block">
@@ -761,6 +692,7 @@ function Actions({
             <TableRow>
               <TableHead>Action</TableHead>
               <TableHead>Owner</TableHead>
+              <TableHead>Audience</TableHead>
               <TableHead>Priority</TableHead>
               <TableHead>Due</TableHead>
               <TableHead>Rationale</TableHead>
@@ -787,6 +719,7 @@ function Actions({
                   />
                 </TableCell>
                 <TableCell>{action.owner ?? 'Not assigned'}</TableCell>
+                <TableCell>{action.audience === 'customer' ? 'Customer' : 'Internal'}</TableCell>
                 <TableCell>{action.priority}</TableCell>
                 <TableCell>{action.dueDate ?? 'Not recorded'}</TableCell>
                 <TableCell className="max-w-sm">{action.rationale}</TableCell>
@@ -815,6 +748,10 @@ function Actions({
             />
             <dl className="mt-3 grid gap-2 text-sm">
               <Fact label="Owner" value={action.owner ?? 'Not assigned'} />
+              <Fact
+                label="Audience"
+                value={action.audience === 'customer' ? 'Customer' : 'Internal'}
+              />
               <Fact label="Priority" value={action.priority} />
               <Fact label="Due" value={action.dueDate ?? 'Not recorded'} />
               <Fact label="Rationale" value={action.rationale} />

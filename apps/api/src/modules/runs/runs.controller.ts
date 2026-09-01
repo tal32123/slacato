@@ -38,12 +38,12 @@ export class RunsController {
   /**
    * Starts a deal-brief run requested by the current principal.
    *
-   * One active run per opportunity is a deliberate concurrency guarantee, so a start request can
-   * legitimately be answered with a run that is already in flight. The response body cannot say so
-   * - it is a strict contract shared with the web client - so the outcome travels as a response
-   * header instead, and is logged server-side either way. A client that reads
-   * `X-Run-Disposition: joined` knows the user asked for a new brief and was handed an existing
-   * one, rather than silently landing on work it did not start.
+   * One active run per requester and opportunity is a deliberate concurrency guarantee, so another
+   * start by that requester can legitimately be answered with a run that is already in flight.
+   * The response body cannot say so - it is a strict contract shared with the web client - so the
+   * outcome travels as a response header instead and is logged server-side either way.
+   * A client that reads `X-Run-Disposition: joined` knows the user asked for a new brief and was
+   * handed an existing one, rather than silently landing on work it did not start.
    */
   @Post('deal-brief')
   @ZodResponse(runResponseSchema)

@@ -6,6 +6,7 @@ export type ApprovalCategory =
   | 'commercial_discount'
   | 'legal_terms'
   | 'evidence_review'
+  | 'customer_communication'
   | 'customer_concession';
 
 export type ApprovalRequirementEntry = Readonly<{
@@ -29,6 +30,7 @@ export type ApprovalRequirementInput = Readonly<{
   dataRetentionLanguage: boolean;
   restrictedResearchLanguage: boolean;
   customerSpecificSecurityLanguage: boolean;
+  customerFacingLanguage: boolean;
   customerFacingConcessionLanguage: boolean;
   overallConfidence: number;
   conflictingEvidence: boolean;
@@ -46,26 +48,52 @@ export type EditedPolicySignals = Readonly<
   >
 >;
 
-/** Normalizes all brief prose for deterministic policy concept matching. */
-function semanticText(payload: DealBrief): string {
-  const values: string[] = [];
-  const visit = (value: unknown): void => {
-    if (typeof value === 'string') {
-      values.push(value);
-      return;
-    }
-    if (Array.isArray(value)) {
-      value.forEach(visit);
-      return;
-    }
-    if (value !== null && typeof value === 'object') Object.values(value).forEach(visit);
-  };
-  visit(payload);
+/** Normalizes independent human-readable semantic units, never structural metadata. */
+function semanticFields(payload: DealBrief): readonly string[] {
+  const claimStatements = (
+    claims: readonly Readonly<{ statement: string }>[] | undefined
+  ): readonly string[] => claims?.map(({ statement }) => statement) ?? [];
+  const claimGroups = [
+    payload.dealSnapshot.claims,
+    payload.executiveSummary.claims,
+    payload.buyerGoalsAndBusinessDrivers.claims,
+    payload.stakeholderMap.claims,
+    ...payload.stakeholderMap.stakeholders.map(({ claims }) => claims),
+    payload.negotiationState.claims,
+    ...payload.sourceEvidence.evidence.map(({ claims }) => claims)
+  ];
+  const values = [
+    payload.executiveSummary.narrative,
+    ...payload.buyerGoalsAndBusinessDrivers.goals,
+    ...payload.buyerGoalsAndBusinessDrivers.businessDrivers,
+    ...(payload.stakeholderMap.coverageGaps ?? []),
+    ...payload.stakeholderMap.stakeholders.flatMap(({ goals, concerns }) => [
+      ...goals,
+      ...concerns
+    ]),
+    payload.negotiationState.currentState,
+    ...(payload.negotiationState.leverage ?? []),
+    ...payload.negotiationState.risks,
+    ...payload.recommendedNextActions.actions.map(({ action, rationale, claims }) =>
+      [action, rationale, ...claimStatements(claims)].join(' ')
+    ),
+    ...payload.missingInformation.items.flatMap(({ question, whyItMatters }) => [
+      question,
+      whyItMatters
+    ]),
+    ...payload.sourceEvidence.evidence.map(({ summary }) => summary),
+    ...payload.confidenceAndReviewWarnings.warnings.map(({ message }) => message),
+    ...claimGroups.flatMap(claimStatements)
+  ];
   return values
-    .join(' ')
-    .normalize('NFKC')
-    .toLocaleLowerCase('en-US')
-    .replaceAll(/[^a-z0-9]+/g, ' ');
+    .map(
+      (value) =>
+        ` ${value
+          .normalize('NFKC')
+          .toLocaleLowerCase('en-US')
+          .replaceAll(/[^a-z0-9]+/g, ' ')} `
+    )
+    .filter((value) => value.trim().length > 0);
 }
 
 /** Reports whether normalized brief prose contains any configured policy concept. */
@@ -73,10 +101,18 @@ function containsConcept(text: string, concepts: readonly string[]): boolean {
   return concepts.some((concept) => text.includes(` ${concept} `));
 }
 
+/** Requires every concept group to occur within the same prose field. */
+function containsConceptGroups(
+  fields: readonly string[],
+  groups: readonly (readonly string[])[]
+): boolean {
+  return fields.some((field) => groups.every((concepts) => containsConcept(field, concepts)));
+}
+
 /** Classifies approval-sensitive concepts in edited brief prose using conservative deterministic rules. */
 export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySignals {
-  const text = ` ${semanticText(payload)} `;
-  const liabilitySubject = containsConcept(text, [
+  const fields = semanticFields(payload);
+  const liabilitySubjects = [
     'liability',
     'liabilities',
     'indemnity',
@@ -84,8 +120,8 @@ export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySign
     'exposure',
     'damages',
     'risk allocation'
-  ]);
-  const liabilityChange = containsConcept(text, [
+  ];
+  const liabilityChanges = [
     'broader',
     'increase',
     'increased',
@@ -99,8 +135,8 @@ export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySign
     'changed',
     'revise',
     'revised'
-  ]);
-  const commitment = containsConcept(text, [
+  ];
+  const commitments = [
     'offer',
     'offered',
     'accept',
@@ -119,8 +155,8 @@ export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySign
     'conceded',
     'waive',
     'waived'
-  ]);
-  const commercialBenefit = containsConcept(text, [
+  ];
+  const commercialBenefits = [
     'concession',
     'discount',
     'reduction',
@@ -130,9 +166,9 @@ export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySign
     'waiver',
     'free',
     'complimentary'
-  ]);
-  const dataSubject = containsConcept(text, ['data', 'records', 'recordings', 'transcripts']);
-  const retentionSubject = containsConcept(text, [
+  ];
+  const dataSubjects = ['data', 'records', 'recordings', 'transcripts'];
+  const retentionSubjects = [
     'retention',
     'retain',
     'retained',
@@ -140,43 +176,40 @@ export function extractEditedPolicySignals(payload: DealBrief): EditedPolicySign
     'deletion',
     'preserve',
     'storage'
-  ]);
-  const researchSubject = containsConcept(text, [
-    'research',
-    'study',
-    'studies',
-    'benchmark',
-    'analysis'
-  ]);
-  const restrictedSubject = containsConcept(text, [
-    'restricted',
-    'confidential',
-    'private',
-    'nonpublic',
-    'sensitive'
-  ]);
-  const securitySubject = containsConcept(text, [
+  ];
+  const researchSubjects = ['research', 'study', 'studies', 'benchmark', 'analysis'];
+  const restrictedSubjects = ['restricted', 'confidential', 'private', 'nonpublic', 'sensitive'];
+  const securitySubjects = [
     'security',
     'encryption',
     'breach',
     'incident',
     'vulnerability',
     'compliance'
-  ]);
-  const customerSpecific = containsConcept(text, [
+  ];
+  const customerSpecificSubjects = [
     'customer',
     'client',
     'account',
     'bespoke',
     'custom',
     'specific'
-  ]);
+  ];
   return {
-    liabilityCapChanged: liabilitySubject && liabilityChange,
-    dataRetentionLanguage: dataSubject && retentionSubject,
-    restrictedResearchLanguage: researchSubject && restrictedSubject,
-    customerSpecificSecurityLanguage: securitySubject && customerSpecific,
-    customerFacingConcessionLanguage: commercialBenefit && commitment
+    liabilityCapChanged: containsConceptGroups(fields, [liabilitySubjects, liabilityChanges]),
+    dataRetentionLanguage: containsConceptGroups(fields, [dataSubjects, retentionSubjects]),
+    restrictedResearchLanguage: containsConceptGroups(fields, [
+      researchSubjects,
+      restrictedSubjects
+    ]),
+    customerSpecificSecurityLanguage: containsConceptGroups(fields, [
+      securitySubjects,
+      customerSpecificSubjects
+    ]),
+    customerFacingConcessionLanguage: containsConceptGroups(fields, [
+      commercialBenefits,
+      commitments
+    ])
   };
 }
 
@@ -266,17 +299,20 @@ export function decideApprovalRequirement(input: ApprovalRequirementInput): Appr
     triggers.push(...reviewTriggers);
   }
 
-  if (input.customerFacingConcessionLanguage) {
-    const trigger = 'customer_facing_concession_language';
+  const customerFacingTriggers = [
+    ...(input.customerFacingLanguage ? ['customer_facing_language'] : []),
+    ...(input.customerFacingConcessionLanguage ? ['customer_facing_concession_language'] : [])
+  ];
+  if (customerFacingTriggers.length > 0) {
     entries.push(
       entry(
-        'customer_concession',
+        input.customerFacingLanguage ? 'customer_communication' : 'customer_concession',
         ['account_owner'],
-        [trigger],
+        customerFacingTriggers,
         entries.map(({ id }) => id)
       )
     );
-    triggers.push(trigger);
+    triggers.push(...customerFacingTriggers);
   }
 
   return Object.freeze({

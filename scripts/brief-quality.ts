@@ -53,8 +53,20 @@ export type BriefQualityReport = Readonly<{
   sections: Readonly<Record<string, number>>;
 }>;
 
-/** Prose the reviewer reads verbatim, paired with the path that produced it. */
-export type ProseField = Readonly<{ path: string; text: string }>;
+/** How a prose field participates in the brief rather than what its path happens to resemble. */
+export type ProseSemantics =
+  | 'deal-position'
+  | 'reported-context'
+  | 'metadata'
+  | 'evidence'
+  | 'review';
+
+/** Prose the reviewer reads verbatim, paired with its location and typed meaning. */
+export type ProseField = Readonly<{
+  path: string;
+  text: string;
+  semantics: ProseSemantics;
+}>;
 
 /**
  * Identifier shapes that exist only inside a run and mean nothing to the person reading the brief.
@@ -86,34 +98,28 @@ const ABSENCE_WORDING =
 const COMMERCIAL_PROVENANCE_SOURCE_TYPES: readonly string[] = ['pricing', 'policy'];
 
 /**
- * Wording by which a brief states the deal's own commercial or legal-terms position.
+ * Concrete commercial or legal terms, rather than mentions of a negotiation topic.
  *
- * Matched only against the sections where the brief speaks in its own voice about the deal (see
- * `DEAL_POSITION_PATH`). A stakeholder's recorded concern - "focused on renewal uplift and payment
- * schedule" - is a fact about a person that their contact record states, not a commercial position
- * the brief is asserting, and demanding a pricing note for it would be wrong.
+ * Amounts and rates are concrete by themselves. Payment structure requires a quantity, cadence, or
+ * Net-N value; legal clauses require an actual clause value; otherwise a term must carry a settled
+ * status such as approved or accepted. This keeps requests, preferences, blockers, and approval-gate
+ * discussions from being mistaken for the deal's actual terms.
  */
-const COMMERCIAL_POSITION_WORDING =
-  /\b(?:discounts?|discounting|concessions?|pricing|prices?|priced|uplift|acv|arr|payment terms|payment schedule|order form|commercial terms|contract terms|liability language|indemnit\w*|data processing addendum|deal desk|margins?|rebates?|approval threshold)\b/iu;
+const MATERIAL_COMMERCIAL_OR_LEGAL_TERM_PATTERNS: readonly RegExp[] = [
+  /(?:\d+(?:[.,]\d+)?\s?(?:%|percent\b))|(?:[$\u20ac\u00a3]\s?\d)|(?:\b\d+(?:[.,]\d+)?\s?(?:dollars?|euros?|pounds?|usd|eur|gbp)\b)|(?:\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|trillion)(?:[\s-]+(?:and[\s-]+)?(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|trillion))*[\s-]+(?:dollars?|euros?|pounds?)\b)/iu,
+  /\b(?:payment (?:terms?|schedules?)|installments?)\b[^.!?]{0,120}\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|equal|monthly|quarterly|semiannual(?:ly)?|annual(?:ly)?|upfront|net[- ]?\d+|milestones?|tranches?)\b|\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|equal|monthly|quarterly|semiannual(?:ly)?|annual(?:ly)?|upfront|net[- ]?\d+|milestones?|tranches?)\b[^.!?]{0,120}\b(?:payment (?:terms?|schedules?)|installments?)\b/iu,
+  /\b(?:uncapped|unlimited)\s+liability\b|\bliability(?: cap)?\s+(?:is\s+)?(?:uncapped|unlimited|capped at|limited to)\b|\b(?:mutual|one-way|unilateral)\s+indemnit\w*\b/iu,
+  /\b(?:discounts?|concessions?|prices?|pricing|uplift|rebates?|commercial terms?|contract(?:ual)? terms?|order[- ]form terms?|payment (?:terms?|schedules?)|legal terms?|liability(?: cap)?|indemnit\w*)\b[^.!?]{0,80}\b(?:approved?|accepted?|agreed|finalized?|executed|signed|rejected|declined|waived|settled)\b|\b(?:approved?|accepted?|agreed|finalized?|executed|signed|rejected|declined|waived|settled)\b[^.!?]{0,80}\b(?:discounts?|concessions?|prices?|pricing|uplift|rebates?|commercial terms?|contract(?:ual)? terms?|order[- ]form terms?|payment (?:terms?|schedules?)|legal terms?|liability(?: cap)?|indemnit\w*)\b/iu
+];
 
-/**
- * Prose paths at which the brief asserts the deal's position rather than reporting a source.
- *
- * Buyer goals, the stakeholder map and Source Evidence summaries are deliberately excluded: those
- * restate what a cited record says, and their provenance is the record they restate.
- */
-const DEAL_POSITION_PATH =
-  /^(?:dealSnapshot\.claims|executiveSummary|negotiationState|recommendedNextActions)\b/u;
-
-/**
- * A commercial term stated as a specific fact: a rate, a money figure, a named approval gate.
- *
- * This is the shape of assertion a reviewer forwards to a customer, so it is held to the stricter
- * per-claim rule - the claim's own citation must reach a pricing note or the Deal Desk policy, not
- * merely somewhere else in the brief.
- */
-const MATERIAL_COMMERCIAL_TERM =
-  /(?:\d+(?:[.,]\d+)?\s?(?:%|percent\b))|(?:[$\u20ac\u00a3]\s?\d)|\b(?:deal desk|approval threshold|list price|acv|arr)\b/iu;
+/** Returns the concrete term asserted by claim prose, if it asserts one. */
+function materialCommercialOrLegalTerm(value: string): string | undefined {
+  for (const pattern of MATERIAL_COMMERCIAL_OR_LEGAL_TERM_PATTERNS) {
+    const match = pattern.exec(value);
+    if (match !== null) return match[0];
+  }
+  return undefined;
+}
 
 /** Lower-cases and collapses whitespace so warning prose and stakeholder names compare stably. */
 function normalize(value: string): string {
@@ -135,73 +141,92 @@ function containsPhrase(haystack: string, phrase: string): boolean {
  */
 export function collectUserFacingProse(brief: DealBrief): readonly ProseField[] {
   const fields: ProseField[] = [];
-  const add = (path: string, text: string | undefined): void => {
-    if (text !== undefined && text.trim().length > 0) fields.push({ path, text });
+  const add = (semantics: ProseSemantics, path: string, text: string | undefined): void => {
+    if (text !== undefined && text.trim().length > 0) fields.push({ path, text, semantics });
   };
-  const addAll = (path: string, values: readonly string[] | undefined): void => {
-    for (const [index, value] of (values ?? []).entries()) add(`${path}[${index}]`, value);
+  const addAll = (
+    semantics: ProseSemantics,
+    path: string,
+    values: readonly string[] | undefined
+  ): void => {
+    for (const [index, value] of (values ?? []).entries())
+      add(semantics, `${path}[${index}]`, value);
   };
-  const addClaims = (path: string, claims: DealBrief['executiveSummary']['claims']): void => {
+  const addClaims = (
+    semantics: ProseSemantics,
+    path: string,
+    claims: DealBrief['executiveSummary']['claims']
+  ): void => {
     for (const [index, claim] of (claims ?? []).entries())
-      add(`${path}[${index}].statement`, claim.statement);
+      add(semantics, `${path}[${index}].statement`, claim.statement);
   };
 
-  add('dealSnapshot.accountName', brief.dealSnapshot.accountName);
-  add('dealSnapshot.opportunityName', brief.dealSnapshot.opportunityName);
-  add('dealSnapshot.stage', brief.dealSnapshot.stage);
-  add('dealSnapshot.owner', brief.dealSnapshot.owner);
-  addClaims('dealSnapshot.claims', brief.dealSnapshot.claims);
+  add('metadata', 'dealSnapshot.accountName', brief.dealSnapshot.accountName);
+  add('metadata', 'dealSnapshot.opportunityName', brief.dealSnapshot.opportunityName);
+  add('metadata', 'dealSnapshot.stage', brief.dealSnapshot.stage);
+  add('metadata', 'dealSnapshot.owner', brief.dealSnapshot.owner);
+  addClaims('deal-position', 'dealSnapshot.claims', brief.dealSnapshot.claims);
 
-  add('executiveSummary.narrative', brief.executiveSummary.narrative);
-  addClaims('executiveSummary.claims', brief.executiveSummary.claims);
+  add('deal-position', 'executiveSummary.narrative', brief.executiveSummary.narrative);
+  addClaims('deal-position', 'executiveSummary.claims', brief.executiveSummary.claims);
 
-  addAll('buyerGoalsAndBusinessDrivers.goals', brief.buyerGoalsAndBusinessDrivers.goals);
   addAll(
+    'reported-context',
+    'buyerGoalsAndBusinessDrivers.goals',
+    brief.buyerGoalsAndBusinessDrivers.goals
+  );
+  addAll(
+    'reported-context',
     'buyerGoalsAndBusinessDrivers.businessDrivers',
     brief.buyerGoalsAndBusinessDrivers.businessDrivers
   );
-  addClaims('buyerGoalsAndBusinessDrivers.claims', brief.buyerGoalsAndBusinessDrivers.claims);
+  addClaims(
+    'reported-context',
+    'buyerGoalsAndBusinessDrivers.claims',
+    brief.buyerGoalsAndBusinessDrivers.claims
+  );
 
-  addAll('stakeholderMap.coverageGaps', brief.stakeholderMap.coverageGaps);
-  addClaims('stakeholderMap.claims', brief.stakeholderMap.claims);
+  addAll('review', 'stakeholderMap.coverageGaps', brief.stakeholderMap.coverageGaps);
+  addClaims('reported-context', 'stakeholderMap.claims', brief.stakeholderMap.claims);
   for (const [index, stakeholder] of brief.stakeholderMap.stakeholders.entries()) {
     const path = `stakeholderMap.stakeholders[${index}]`;
-    add(`${path}.name`, stakeholder.name);
-    add(`${path}.title`, stakeholder.title);
-    add(`${path}.organization`, stakeholder.organization);
-    addAll(`${path}.goals`, stakeholder.goals);
-    addAll(`${path}.concerns`, stakeholder.concerns);
-    addClaims(`${path}.claims`, stakeholder.claims);
+    add('metadata', `${path}.name`, stakeholder.name);
+    add('metadata', `${path}.title`, stakeholder.title);
+    add('metadata', `${path}.organization`, stakeholder.organization);
+    addAll('reported-context', `${path}.goals`, stakeholder.goals);
+    addAll('reported-context', `${path}.concerns`, stakeholder.concerns);
+    addClaims('reported-context', `${path}.claims`, stakeholder.claims);
   }
 
-  add('negotiationState.currentState', brief.negotiationState.currentState);
-  addAll('negotiationState.leverage', brief.negotiationState.leverage);
-  addAll('negotiationState.risks', brief.negotiationState.risks);
-  addClaims('negotiationState.claims', brief.negotiationState.claims);
+  add('deal-position', 'negotiationState.currentState', brief.negotiationState.currentState);
+  addAll('deal-position', 'negotiationState.leverage', brief.negotiationState.leverage);
+  addAll('deal-position', 'negotiationState.risks', brief.negotiationState.risks);
+  addClaims('deal-position', 'negotiationState.claims', brief.negotiationState.claims);
 
   for (const [index, action] of brief.recommendedNextActions.actions.entries()) {
     const path = `recommendedNextActions.actions[${index}]`;
-    add(`${path}.action`, action.action);
-    add(`${path}.rationale`, action.rationale);
-    add(`${path}.owner`, action.owner);
-    addClaims(`${path}.claims`, action.claims);
+    add('deal-position', `${path}.action`, action.action);
+    add('metadata', `${path}.audience`, action.audience);
+    add('deal-position', `${path}.rationale`, action.rationale);
+    add('metadata', `${path}.owner`, action.owner);
+    addClaims('deal-position', `${path}.claims`, action.claims);
   }
 
   for (const [index, item] of brief.missingInformation.items.entries()) {
     const path = `missingInformation.items[${index}]`;
-    add(`${path}.question`, item.question);
-    add(`${path}.whyItMatters`, item.whyItMatters);
-    add(`${path}.owner`, item.owner);
+    add('review', `${path}.question`, item.question);
+    add('review', `${path}.whyItMatters`, item.whyItMatters);
+    add('metadata', `${path}.owner`, item.owner);
   }
 
   for (const [index, summary] of brief.sourceEvidence.evidence.entries()) {
     const path = `sourceEvidence.evidence[${index}]`;
-    add(`${path}.summary`, summary.summary);
-    addClaims(`${path}.claims`, summary.claims);
+    add('evidence', `${path}.summary`, summary.summary);
+    addClaims('evidence', `${path}.claims`, summary.claims);
   }
 
   for (const [index, warning] of brief.confidenceAndReviewWarnings.warnings.entries())
-    add(`confidenceAndReviewWarnings.warnings[${index}].message`, warning.message);
+    add('review', `confidenceAndReviewWarnings.warnings[${index}].message`, warning.message);
 
   return fields;
 }
@@ -213,31 +238,40 @@ export function supportedStakeholderNames(brief: DealBrief): readonly string[] {
     .map((stakeholder) => stakeholder.name);
 }
 
-/** One generated claim together with the path at which the brief presents it. */
+/** One generated claim together with its location and typed role in the brief. */
 export type BriefClaimField = Readonly<{
   path: string;
   claim: DealBrief['executiveSummary']['claims'][number];
+  semantics: Extract<ProseSemantics, 'deal-position' | 'reported-context' | 'evidence'>;
 }>;
 
 /** Collects every claim the brief carries, wherever it sits, with the path that presents it. */
 export function collectClaims(brief: DealBrief): readonly BriefClaimField[] {
   const fields: BriefClaimField[] = [];
-  const addAll = (path: string, claims: DealBrief['executiveSummary']['claims']): void => {
+  const addAll = (
+    semantics: BriefClaimField['semantics'],
+    path: string,
+    claims: DealBrief['executiveSummary']['claims']
+  ): void => {
     for (const [index, claim] of (claims ?? []).entries())
-      fields.push({ path: `${path}[${index}]`, claim });
+      fields.push({ path: `${path}[${index}]`, claim, semantics });
   };
 
-  addAll('dealSnapshot.claims', brief.dealSnapshot.claims);
-  addAll('executiveSummary.claims', brief.executiveSummary.claims);
-  addAll('buyerGoalsAndBusinessDrivers.claims', brief.buyerGoalsAndBusinessDrivers.claims);
-  addAll('stakeholderMap.claims', brief.stakeholderMap.claims);
+  addAll('deal-position', 'dealSnapshot.claims', brief.dealSnapshot.claims);
+  addAll('deal-position', 'executiveSummary.claims', brief.executiveSummary.claims);
+  addAll(
+    'reported-context',
+    'buyerGoalsAndBusinessDrivers.claims',
+    brief.buyerGoalsAndBusinessDrivers.claims
+  );
+  addAll('reported-context', 'stakeholderMap.claims', brief.stakeholderMap.claims);
   for (const [index, stakeholder] of brief.stakeholderMap.stakeholders.entries())
-    addAll(`stakeholderMap.stakeholders[${index}].claims`, stakeholder.claims);
-  addAll('negotiationState.claims', brief.negotiationState.claims);
+    addAll('reported-context', `stakeholderMap.stakeholders[${index}].claims`, stakeholder.claims);
+  addAll('deal-position', 'negotiationState.claims', brief.negotiationState.claims);
   for (const [index, action] of brief.recommendedNextActions.actions.entries())
-    addAll(`recommendedNextActions.actions[${index}].claims`, action.claims);
+    addAll('deal-position', `recommendedNextActions.actions[${index}].claims`, action.claims);
   for (const [index, summary] of brief.sourceEvidence.evidence.entries())
-    addAll(`sourceEvidence.evidence[${index}].claims`, summary.claims);
+    addAll('evidence', `sourceEvidence.evidence[${index}].claims`, summary.claims);
 
   return fields;
 }
@@ -343,41 +377,26 @@ export function evaluateBriefQuality(
         });
   }
 
-  // 7. A brief that states where the deal stands commercially - a discount, an uplift, payment or
-  //    contract terms, a Deal Desk gate - must be able to show where that position comes from. The
-  //    pricing notes and the Deal Desk policy are the records that establish it; a contact record
-  //    or a call transcript only reports that somebody spoke about money. Without the rule a brief
-  //    can recommend a commercial position, cite an unrelated CRM row, and pass clean.
+  // 7. A claim that states where the deal stands commercially or legally must resolve one of its
+  //    own citations to a pricing note or policy entry in Source Evidence. Document-wide evidence
+  //    is unrelated to the claim, and an evidence-id prefix is untrusted until an actual Source
+  //    Evidence entry resolves it. Typed claim semantics keep reported stakeholder context, source
+  //    summaries, and metadata such as an action owner outside this rule.
   const sourceTypeByEvidenceId = new Map(
     brief.sourceEvidence.evidence.map((entry) => [entry.evidenceId, entry.sourceType as string])
   );
-  /** The source family a citation draws on, from the evidence section or the evidence id itself. */
-  const citedSourceType = (evidenceId: string): string =>
-    sourceTypeByEvidenceId.get(evidenceId) ?? evidenceId.split(':')[0] ?? '';
-  const commercialProvenance = sourceTypes.filter((type) =>
-    COMMERCIAL_PROVENANCE_SOURCE_TYPES.includes(type)
-  );
 
-  if (commercialProvenance.length === 0)
-    for (const field of collectUserFacingProse(brief)) {
-      if (!DEAL_POSITION_PATH.test(field.path)) continue;
-      const match = COMMERCIAL_POSITION_WORDING.exec(field.text);
-      if (match === null) continue;
-      violations.push({
-        rule: 'commercial-claim-provenance',
-        detail: `${field.path} states the deal's commercial position ("${match[0]}") but Source Evidence cites no ${COMMERCIAL_PROVENANCE_SOURCE_TYPES.join(' or ')} evidence. Cited: ${sourceTypes.join(', ') || 'none'}.`
-      });
-      break;
-    }
-
-  for (const { path, claim } of collectClaims(brief)) {
-    const term = MATERIAL_COMMERCIAL_TERM.exec(claim.statement);
-    if (term === null) continue;
-    const cited = claim.citations.map((citation) => citedSourceType(citation.evidenceId));
+  for (const { path, claim, semantics } of collectClaims(brief)) {
+    if (semantics !== 'deal-position') continue;
+    const term = materialCommercialOrLegalTerm(claim.statement);
+    if (term === undefined) continue;
+    const cited = claim.citations.map(
+      (citation) => sourceTypeByEvidenceId.get(citation.evidenceId) ?? 'unresolved evidence'
+    );
     if (cited.some((type) => COMMERCIAL_PROVENANCE_SOURCE_TYPES.includes(type))) continue;
     violations.push({
       rule: 'commercial-claim-provenance',
-      detail: `${path} states the commercial term "${term[0]}" ("${claim.statement}") but cites only ${cited.join(', ') || 'nothing'}; a pricing note or the Deal Desk policy must support it.`
+      detail: `${path} states the commercial or legal term "${term}" ("${claim.statement}") but its citations resolve only to ${cited.join(', ') || 'nothing'}; a pricing note or the Deal Desk policy must support this claim.`
     });
   }
 

@@ -1,6 +1,11 @@
 import { type DealBrief, dealBriefSchema } from '../../domain/briefs/schema.js';
 import type { BudgetedModelGateway } from '../model/contracts.js';
-import type { AgentContext, AgentEvidenceRecord, StrategyArtifacts } from './contracts.js';
+import {
+  type AgentContext,
+  type AgentEvidenceRecord,
+  dealBriefAgentOperations,
+  type StrategyArtifacts
+} from './contracts.js';
 import { runAgent } from './runtime.js';
 import {
   validateCommercialArtifact,
@@ -18,7 +23,7 @@ const ALL_SOURCES = new Set<AgentEvidenceRecord['sourceType']>([
   'slack'
 ]);
 const TASK =
-  'Synthesize the three validated specialist artifacts and the authorized manifest into the canonical nine-section deal brief. Every factual claim must cite a manifest record, including evidence no specialist retained. Claim ids use the claim_<unique_suffix> format, stay unique across every section, stakeholder, action and source entry, and never reuse an artifact id. Warning codes are UPPERCASE_WITH_UNDERSCORES naming only claims in this brief. Copy one complete sentence or one line of a record into each claim statement, never a whole record, and make every narrative, goal, business driver, negotiation item, action rationale and source summary exactly equal to one supporting claim statement. Set overallConfidence above zero whenever supported claims survive, and fill every section the manifest supports instead of leaving placeholders. For each stakeholder mint one fresh claim naming the person in full and restating their title exactly as the cited record states it, without naming the company. For each action mint one fresh claim grounding its rationale, copy that statement into the rationale, and write the action as one internal instruction opening on a bounded verb such as schedule, prepare, confirm or verify, with no causal clause. Give every manifest record cited anywhere in this brief its own sourceEvidence entry, and add one for each remaining record that supports the deal, including the Slack account-team updates, the pricing notes and the deal desk policy. Each entry needs one fresh claim quoting one sentence of its record, that sentence as the summary, and sourceType from the record: crm for salesforce, conversation for gong, else policy, pricing or slack. Warn only about what a reviewer must act on. Return only the strict DealBrief.';
+  'Build the strict nine-section DealBrief from the three validated artifacts and manifest. Every factual claim must cite a manifest record, including evidence no specialist retained. Use unique claim_<suffix> ids across all sections and never reuse artifact ids. Warning codes are UPPERCASE_WITH_UNDERSCORES and name only brief claims. Each claim statement copies one complete source sentence or line, never a whole record. Make every narrative, goal, driver, negotiation item, action rationale, and source summary equal one supporting claim statement. Set positive overallConfidence when claims survive and fill every supported section. For each stakeholder mint one fresh claim naming the person in full and restating their title exactly as the cited record states it, without naming the company. For each action mint one fresh claim grounding its rationale; copy that statement into the rationale. Set required audience to internal for deal-team-only work or customer for buyer-side communication, delivery, or coordination; downstream policy must not infer audience from wording. Write each action as one bounded instruction without a causal clause. Give every cited manifest record its own sourceEvidence entry, plus each remaining supporting Slack update, pricing note, and policy. Each entry needs a fresh claim quoting one source sentence, the same summary, and sourceType salesforce=crm, gong=conversation, otherwise policy, pricing, or slack. Warn only about reviewer action. Return only DealBrief.';
 
 /** Combines validated specialist findings into the deal team’s negotiation brief. */
 export class StrategyAgent {
@@ -45,7 +50,7 @@ export class StrategyAgent {
     const result = await runAgent({
       gateway: this.gateway,
       context,
-      operation: 'negotiation-strategy',
+      operation: dealBriefAgentOperations.strategy,
       task: TASK,
       schema: dealBriefSchema,
       allowedSourceTypes: ALL_SOURCES,

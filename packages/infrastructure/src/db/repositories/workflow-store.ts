@@ -27,6 +27,7 @@ import {
   type WorkflowStore
 } from '@slacato/core';
 import type { JSONValue, Sql, TransactionSql } from 'postgres';
+import { z } from 'zod';
 import type { DatabaseClient } from '../client.js';
 import {
   type PersistedGenerationAttempt,
@@ -35,6 +36,14 @@ import {
   type TraceParentReference,
   type WorkflowTraceProjection
 } from './workflow-trace-projector.js';
+
+const validationIssueSchema = z
+  .object({
+    path: z.string(),
+    code: z.string(),
+    message: z.string()
+  })
+  .strict();
 
 type RunRow = Readonly<{
   id: string;
@@ -133,11 +142,13 @@ async function insertCommand(sql: SqlExecutor, command: WorkflowCommand): Promis
 type GenerationAttemptRow = Readonly<{
   id: string;
   logical_generation_id: string;
+  operation: string;
   ordinal: number;
   provider: string;
   model: string;
   output_mode: 'native_schema' | 'prompted_json' | null;
   validation_attempts: number;
+  validation_issues: unknown;
   input_tokens: number | null;
   output_tokens: number | null;
   status: string;
@@ -272,18 +283,20 @@ async function generationAttempts(
 ): Promise<readonly PersistedGenerationAttempt[]> {
   const rows = await sql<
     GenerationAttemptRow[]
-  >`select id, logical_generation_id, ordinal, provider, model, output_mode, validation_attempts,
-      input_tokens, output_tokens, status, possible_duplicate
+  >`select id, logical_generation_id, operation, ordinal, provider, model, output_mode,
+      validation_attempts, validation_issues, input_tokens, output_tokens, status, possible_duplicate
     from generation_attempts where run_id = ${runId} and logical_generation_id = ${logicalGenerationId}
     order by ordinal`;
   return rows.map((attempt) => ({
     id: attempt.id,
     logicalGenerationId: attempt.logical_generation_id,
+    operation: attempt.operation,
     ordinal: attempt.ordinal,
     provider: attempt.provider,
     model: attempt.model,
     outputMode: attempt.output_mode,
     validationAttempts: attempt.validation_attempts,
+    validationIssues: z.array(validationIssueSchema).parse(attempt.validation_issues),
     inputTokens: attempt.input_tokens,
     outputTokens: attempt.output_tokens,
     status: attempt.status,
@@ -525,7 +538,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     )[0];
     return row === undefined ? undefined : asRun(row);
   }
-  /** Finds the currently active workflow run for an opportunity. */
+  /** Finds the currently active workflow run for a requester and opportunity. */
   public async findActiveRun(
     input: Readonly<{
       opportunityId: WorkflowRun['opportunityId'];
@@ -536,6 +549,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
       RunRow[]
     >`select id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash
       from runs where opportunity_id = ${input.opportunityId}
+      and requested_by = ${input.requestedBy}
       and status in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing') order by created_at limit 1`;
     return rows[0] === undefined ? undefined : asRun(rows[0]);
   }
@@ -582,7 +596,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
     if (input.command.runId !== input.id || input.budget.scope !== input.id)
       throw new DomainConflictError('Run, command, and budget scopes do not match');
     return this.database.sql.begin(async (sql) => {
-      await sql`select pg_advisory_xact_lock(hashtext(${`active-run:${input.opportunityId}`}))`;
+      await sql`select pg_advisory_xact_lock(hashtext(${`active-run:${input.opportunityId}`}), hashtext(${input.requestedBy}))`;
       const replay = (
         await sql<
           RunRow[]
@@ -609,7 +623,8 @@ export class PostgresWorkflowStore implements WorkflowStore {
         await sql<
           RunRow[]
         >`select id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash from runs
-        where opportunity_id = ${input.opportunityId} and status in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing') for update`
+        where opportunity_id = ${input.opportunityId} and requested_by = ${input.requestedBy}
+        and status in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing') for update`
       )[0];
       if (active !== undefined) return asRun(active);
       const rows = await sql<
@@ -1355,17 +1370,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
   }
 
   /** Fails a run and records its diagnostic trace before publishing the terminal event. */
-  public async failRun(
-    input: Readonly<{
-      runId: WorkflowRun['id'];
-      expectedVersion: number;
-      invocationId: string;
-      invocationOwner: string;
-      leaseToken: string;
-      causalCommandId: string;
-      reason: string;
-    }>
-  ): Promise<WorkflowRun> {
+  public async failRun(input: Parameters<WorkflowStore['failRun']>[0]): Promise<WorkflowRun> {
     return this.database.sql.begin(async (sql) => {
       const current = await runById(sql, input.runId, true);
       if (current === undefined) throw new DomainNotFoundError('run');
@@ -1380,11 +1385,23 @@ export class PostgresWorkflowStore implements WorkflowStore {
         >`update runs set status = ${status}, version = version + 1, updated_at = now() where id = ${input.runId} and version = ${input.expectedVersion} returning id, opportunity_id, requested_by, status, version, generation_provider, generation_model, start_request_hash`
       )[0];
       if (row === undefined) throw new DomainConflictError('Run version is stale');
+      const persistedAttempts =
+        input.failedGeneration === undefined
+          ? []
+          : await generationAttempts(sql, input.runId, input.failedGeneration.logicalGenerationId);
       const failureProjection = projectWorkflowTrace({
         type: 'failed',
         runId: input.runId,
         version: row.version,
-        reason: input.reason
+        reason: input.reason,
+        ...(input.failedGeneration === undefined
+          ? {}
+          : {
+              generationFailure: {
+                metadata: input.failedGeneration,
+                persistedAttempts
+              }
+            })
       });
       await persistTraceProjection(sql, failureProjection);
       const reasonCode = failureProjection.failureReasonCode;

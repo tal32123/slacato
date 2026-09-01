@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { CANONICAL_FIXTURE_COMMIT, dealBriefSchema } from '@slacato/core';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import postgres, { type Sql } from 'postgres';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import postgres, { type Sql } from 'postgres';
 import { createApiApplication } from '../../apps/api/src/main';
 import { ingestFixtureRecords } from '../../scripts/ingest';
 
@@ -15,7 +15,8 @@ const origin = 'http://127.0.0.1:4173';
 const browserHeaders = { Origin: origin, 'Sec-Fetch-Site': 'same-site' };
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const isoDateTime = z.iso.datetime({ offset: true });
-const sourceDatabaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const sourceDatabaseUrl =
+  process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const databaseName = `catohw_deals_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
 const databaseNamePattern = /^catohw_deals_[a-z0-9]{16}$/;
 function databaseUrlFor(name: string): string {
@@ -37,8 +38,16 @@ const sectionIds = [
 ] as const;
 const workspaceDraftRunId = `deal-workspace-draft-${process.pid}`;
 const workspaceDraftSubjectId = `deal-workspace-draft-subject-${process.pid}`;
+const workspaceSupersededSubjectId = `deal-workspace-superseded-subject-${process.pid}`;
+const workspaceFinalizedRunId = `deal-workspace-finalized-${process.pid}`;
+const workspaceFinalizedBriefId = `deal-workspace-finalized-brief-${process.pid}`;
+const workspaceFinalizedSubjectId = `deal-workspace-finalized-subject-${process.pid}`;
 const generatedDraft = dealBriefSchema.parse({
-  dealSnapshot: { accountName: 'Northstar Foods Cooperative', opportunityName: 'Global Access Renewal', stage: 'Order Review' },
+  dealSnapshot: {
+    accountName: 'Northstar Foods Cooperative',
+    opportunityName: 'Global Access Renewal',
+    stage: 'Order Review'
+  },
   executiveSummary: { narrative: 'A generated draft is ready for seller review.' },
   buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
   stakeholderMap: { stakeholders: [] },
@@ -62,8 +71,12 @@ const generatedDraft = dealBriefSchema.parse({
 async function authenticate(app: NestExpressApplication, userId: string) {
   const agent = request.agent(app.getHttpServer());
   const bootstrap = await agent.get('/api/auth/csrf').set(browserHeaders).expect(200);
-  await agent.post('/api/auth/persona').set(browserHeaders)
-    .set('X-CSRF-Token', bootstrap.body.csrfToken as string).send({ userId }).expect(201);
+  await agent
+    .post('/api/auth/persona')
+    .set(browserHeaders)
+    .set('X-CSRF-Token', bootstrap.body.csrfToken as string)
+    .send({ userId })
+    .expect(201);
   return agent;
 }
 
@@ -95,14 +108,16 @@ describe('authorized deal API projection', () => {
       ('grant:USR-91202:ACC-2003:slack', 'USR-91202', 'ACC-2003', 'slack', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
       ('grant:USR-91203:ACC-2001:salesforce', 'USR-91203', 'ACC-2001', 'salesforce', true, true, false, false, false, ${CANONICAL_FIXTURE_COMMIT}),
       ('grant:USR-91203:ACC-2001:slack', 'USR-91203', 'ACC-2001', 'slack', true, false, false, false, false, ${CANONICAL_FIXTURE_COMMIT})`;
-    app = await createApiApplication({ environment: {
-      ...process.env,
-      NODE_ENV: 'test',
-      DATABASE_URL: databaseUrl,
-      SESSION_SECRET: 'task-12-integration-session-secret-long-enough',
-      AI_PROVIDER: 'mock',
-      WEB_ORIGIN: origin
-    } });
+    app = await createApiApplication({
+      environment: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_URL: databaseUrl,
+        SESSION_SECRET: 'task-12-integration-session-secret-long-enough',
+        AI_PROVIDER: 'mock',
+        WEB_ORIGIN: origin
+      }
+    });
     await app.init();
   });
 
@@ -121,17 +136,31 @@ describe('authorized deal API projection', () => {
     const maya = await authenticate(app, 'USR-5001');
     const response = await maya.get('/api/deals').set(browserHeaders).expect(200);
 
-    const parsed = z.object({
-      sessionVersion: z.string().min(1),
-      deals: z.array(z.object({
-        opportunityId: z.string(), opportunityName: z.string(), accountName: z.string(), stage: z.string(),
-        owner: z.string().nullable(), closeDate: isoDate.nullable(), amount: z.number().nullable(),
-        currency: z.string().length(3).nullable(), probability: z.number().nullable(),
-        riskLevel: z.enum(['low', 'medium', 'high', 'unknown']), restricted: z.boolean(),
-        createdAt: isoDateTime,
-        latestRun: z.object({ status: z.string(), updatedAt: isoDateTime }).nullable()
-      }).strict())
-    }).strict().parse(response.body);
+    const parsed = z
+      .object({
+        sessionVersion: z.string().min(1),
+        deals: z.array(
+          z
+            .object({
+              opportunityId: z.string(),
+              opportunityName: z.string(),
+              accountName: z.string(),
+              stage: z.string(),
+              owner: z.string().nullable(),
+              closeDate: isoDate.nullable(),
+              amount: z.number().nullable(),
+              currency: z.string().length(3).nullable(),
+              probability: z.number().nullable(),
+              riskLevel: z.enum(['low', 'medium', 'high', 'unknown']),
+              restricted: z.boolean(),
+              createdAt: isoDateTime,
+              latestRun: z.object({ status: z.string(), updatedAt: isoDateTime }).nullable()
+            })
+            .strict()
+        )
+      })
+      .strict()
+      .parse(response.body);
 
     expect(parsed.deals.map((deal) => deal.opportunityId)).toEqual(['OPP-1001']);
     expect(JSON.stringify(parsed)).not.toContain('OPP-1003');
@@ -143,54 +172,122 @@ describe('authorized deal API projection', () => {
 
     const body = response.body as Record<string, unknown>;
     expect(z.string().min(1).parse(body.sessionVersion)).toBeTruthy();
-    expect(z.object({
-      opportunityId: z.literal('OPP-1001'), opportunityName: z.string(), accountName: z.string(),
-      stage: z.string(), closeDate: isoDate.nullable(), amount: z.number().nullable(),
-      currency: z.string().length(3).nullable(), owner: z.string().nullable(), probability: z.number().nullable(),
-      riskLevel: z.enum(['low', 'medium', 'high', 'unknown']), restricted: z.boolean(),
-      createdAt: isoDateTime, latestRun: z.object({ status: z.string(), updatedAt: isoDateTime }).nullable()
-    }).strict().parse(body.deal)).toBeTruthy();
+    expect(
+      z
+        .object({
+          opportunityId: z.literal('OPP-1001'),
+          opportunityName: z.string(),
+          accountName: z.string(),
+          stage: z.string(),
+          closeDate: isoDate.nullable(),
+          amount: z.number().nullable(),
+          currency: z.string().length(3).nullable(),
+          owner: z.string().nullable(),
+          probability: z.number().nullable(),
+          riskLevel: z.enum(['low', 'medium', 'high', 'unknown']),
+          restricted: z.boolean(),
+          createdAt: isoDateTime,
+          latestRun: z.object({ status: z.string(), updatedAt: isoDateTime }).nullable()
+        })
+        .strict()
+        .parse(body.deal)
+    ).toBeTruthy();
 
-    const brief = z.object({
-      status: z.enum(['source_backed', 'generated']),
-      overallConfidence: z.number().min(0).max(1),
-      sections: z.record(z.string(), z.object({
-        title: z.string(), paragraphs: z.array(z.string()), items: z.array(z.string()),
-        citationIds: z.array(z.string()), accountTeamUpdateImpact: z.boolean()
-      }).strict()),
-      stakeholders: z.array(z.object({
-        name: z.string(), title: z.string().nullable(), role: z.string(), influence: z.string(),
-        relationship: z.string(), goals: z.array(z.string()), concerns: z.array(z.string()), citationIds: z.array(z.string())
-      }).strict()),
-      actions: z.array(z.object({ action: z.string(), owner: z.string().nullable(), priority: z.string(), dueDate: isoDate.nullable(), rationale: z.string(), citationIds: z.array(z.string()), accountTeamUpdateImpact: z.boolean() }).strict()),
-      warnings: z.array(z.object({ severity: z.string(), message: z.string(), citationIds: z.array(z.string()), accountTeamUpdateImpact: z.boolean() }).strict())
-    }).strict().parse(body.brief);
+    const brief = z
+      .object({
+        status: z.enum(['source_backed', 'generated']),
+        overallConfidence: z.number().min(0).max(1),
+        sections: z.record(
+          z.string(),
+          z
+            .object({
+              title: z.string(),
+              paragraphs: z.array(z.string()),
+              items: z.array(z.string()),
+              citationIds: z.array(z.string()),
+              accountTeamUpdateImpact: z.boolean()
+            })
+            .strict()
+        ),
+        stakeholders: z.array(
+          z
+            .object({
+              name: z.string(),
+              title: z.string().nullable(),
+              role: z.string(),
+              influence: z.string(),
+              relationship: z.string(),
+              goals: z.array(z.string()),
+              concerns: z.array(z.string()),
+              citationIds: z.array(z.string())
+            })
+            .strict()
+        ),
+        actions: z.array(
+          z
+            .object({
+              action: z.string(),
+              audience: z.enum(['internal', 'customer']),
+              owner: z.string().nullable(),
+              priority: z.string(),
+              dueDate: isoDate.nullable(),
+              rationale: z.string(),
+              citationIds: z.array(z.string()),
+              accountTeamUpdateImpact: z.boolean()
+            })
+            .strict()
+        ),
+        warnings: z.array(
+          z
+            .object({
+              severity: z.string(),
+              message: z.string(),
+              citationIds: z.array(z.string()),
+              accountTeamUpdateImpact: z.boolean()
+            })
+            .strict()
+        )
+      })
+      .strict()
+      .parse(body.brief);
     expect(Object.keys(brief.sections)).toEqual(sectionIds);
     expect(brief.sections.missingInformation.accountTeamUpdateImpact).toBe(true);
 
-    const evidence = z.array(z.object({
-      id: z.string(), sourceType: z.string(), sourcePath: z.string(), stableKey: z.string(), stableId: z.string(),
-      citationLabel: z.string(), chunkId: z.string(), capturedAt: isoDateTime, content: z.string()
-    }).strict()).parse(body.evidence);
+    const evidence = z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            sourceType: z.string(),
+            sourcePath: z.string(),
+            stableKey: z.string(),
+            stableId: z.string(),
+            citationLabel: z.string(),
+            chunkId: z.string(),
+            capturedAt: isoDateTime,
+            content: z.string()
+          })
+          .strict()
+      )
+      .parse(body.evidence);
     const slack = evidence.find((item) => item.sourceType === 'slack');
     if (slack === undefined) throw new Error('Authorized Slack evidence is unavailable');
     expect(slack).toMatchObject({
-      sourcePath: 'slack/account_team_updates.tsv',
+      sourcePath: 'synthetic_data/slack/account_team_updates.tsv',
       stableKey: 'update_id'
     });
     expect(slack.citationLabel).toBe(
-      `source=slack/account_team_updates.tsv, update_id=${slack.stableId}`
+      `source=synthetic_data/slack/account_team_updates.tsv, update_id=${slack.stableId}`
     );
     expect(slack.chunkId).toBe(`slack:${slack.stableId}:0`);
   });
-
 
   it('filters unauthorized source types and denies hidden opportunities with one opaque response', async () => {
     const harper = await authenticate(app, 'USR-5007');
     const allowed = await harper.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
     const allowedText = JSON.stringify(allowed.body);
-    expect(allowedText).not.toContain('\"sourceType\":\"slack\"');
-    expect(allowedText).not.toContain('\"sourceType\":\"pricing\"');
+    expect(allowedText).not.toContain('"sourceType":"slack"');
+    expect(allowedText).not.toContain('"sourceType":"pricing"');
     expect(allowedText).not.toContain('pricing_notes.tsv');
     expect(allowedText).not.toContain('account_team_updates.tsv');
 
@@ -198,23 +295,36 @@ describe('authorized deal API projection', () => {
       select count(*)::int count from audit_events where actor_id = 'USR-5007'`;
 
     for (const opportunityId of ['OPP-1003', 'OPP-does-not-exist']) {
-      const denied = await harper.get(`/api/deals/${opportunityId}`).set(browserHeaders).expect(403);
-      expect(denied.body).toEqual({ code: 'FORBIDDEN', message: 'Request could not be authorized' });
+      const denied = await harper
+        .get(`/api/deals/${opportunityId}`)
+        .set(browserHeaders)
+        .expect(403);
+      expect(denied.body).toEqual({
+        code: 'FORBIDDEN',
+        message: 'Request could not be authorized'
+      });
       expect(JSON.stringify(denied.body)).not.toContain(opportunityId);
     }
 
     // The tour tells a reviewer the denial is audited. It is - and the record proves the refusal
     // happened without describing what was refused, so a restricted deal and a deal that does not
     // exist leave rows nothing can tell apart.
-    const denialAudit = await seedDatabase<{
-      run_id: string | null;
-      actor_id: string;
-      type: string;
-      payload: unknown;
-    }[]>`select run_id, actor_id, type, payload from audit_events
+    const denialAudit = await seedDatabase<
+      {
+        run_id: string | null;
+        actor_id: string;
+        type: string;
+        payload: unknown;
+      }[]
+    >`select run_id, actor_id, type, payload from audit_events
       where actor_id = 'USR-5007' order by created_at`;
     expect(denialAudit).toHaveLength((auditedBefore[0]?.count ?? 0) + 2);
-    const denialRow = { run_id: null, actor_id: 'USR-5007', type: 'deal_brief_access_denied', payload: { reason: 'forbidden' } };
+    const denialRow = {
+      run_id: null,
+      actor_id: 'USR-5007',
+      type: 'deal_brief_access_denied',
+      payload: { reason: 'forbidden' }
+    };
     expect(denialAudit.slice(-2)).toEqual([denialRow, denialRow]);
     expect(JSON.stringify(denialAudit.slice(-2))).not.toMatch(
       /OPP-1003|OPP-does-not-exist|ACC-2003|Northstar|restricted|evidence|slack|pricing/i
@@ -231,15 +341,34 @@ describe('authorized deal API projection', () => {
   it('does not project Salesforce list fields or non-restricted source grants across authorization scopes', async () => {
     const gongOnly = await authenticate(app, 'USR-91201');
     const list = await gongOnly.get('/api/deals').set(browserHeaders).expect(200);
-    expect(list.body.deals).toEqual([expect.objectContaining({
-      opportunityId: 'OPP-1001', opportunityName: 'OPP-1001', accountName: 'ACC-2001',
-      stage: 'Stage unavailable', owner: null, closeDate: null, amount: null,
-      probability: null, riskLevel: 'unknown'
-    })]);
-    expect(JSON.stringify(list.body)).not.toMatch(/Global Access Renewal|Northstar Foods Cooperative|gong_summary|stale:/);
-    const staleWorkspace = await gongOnly.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
-    expect(staleWorkspace.body.evidence.every((item: { sourceType: string }) => item.sourceType === 'gong_summary')).toBe(true);
-    expect(JSON.stringify(staleWorkspace.body)).not.toMatch(/account_team_updates|pricing_notes|salesforce\/opportunities/);
+    expect(list.body.deals).toEqual([
+      expect.objectContaining({
+        opportunityId: 'OPP-1001',
+        opportunityName: 'OPP-1001',
+        accountName: 'ACC-2001',
+        stage: 'Stage unavailable',
+        owner: null,
+        closeDate: null,
+        amount: null,
+        probability: null,
+        riskLevel: 'unknown'
+      })
+    ]);
+    expect(JSON.stringify(list.body)).not.toMatch(
+      /Global Access Renewal|Northstar Foods Cooperative|gong_summary|stale:/
+    );
+    const staleWorkspace = await gongOnly
+      .get('/api/deals/OPP-1001')
+      .set(browserHeaders)
+      .expect(200);
+    expect(
+      staleWorkspace.body.evidence.every(
+        (item: { sourceType: string }) => item.sourceType === 'gong_summary'
+      )
+    ).toBe(true);
+    expect(JSON.stringify(staleWorkspace.body)).not.toMatch(
+      /account_team_updates|pricing_notes|salesforce\/opportunities/
+    );
 
     await seedDatabase`insert into document_versions
       (id, external_id, version, source_type, content_hash, content)
@@ -257,11 +386,13 @@ describe('authorized deal API projection', () => {
       on conflict do nothing`;
     const mixed = await authenticate(app, 'USR-91202');
     const workspace = await mixed.get('/api/deals/OPP-1003').set(browserHeaders).expect(200);
-    expect(workspace.body.evidence).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceType: 'slack' })
-    ]));
+    expect(workspace.body.evidence).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ sourceType: 'slack' })])
+    );
     expect(JSON.stringify(workspace.body)).not.toContain('account_team_updates.tsv');
-    expect(JSON.stringify(workspace.body)).not.toContain('PRIVATE STANDARD SLACK ON RESTRICTED DEAL');
+    expect(JSON.stringify(workspace.body)).not.toContain(
+      'PRIVATE STANDARD SLACK ON RESTRICTED DEAL'
+    );
     expect(JSON.stringify(workspace.body)).not.toContain('SLK-TASK12-STANDARD-RESTRICTED-DEAL');
   });
 
@@ -299,7 +430,9 @@ describe('authorized deal API projection', () => {
       on conflict do nothing`;
     const maya = await authenticate(app, 'USR-5001');
     const mayaWorkspace = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
-    expect(JSON.stringify(mayaWorkspace.body)).not.toContain('PRIVATE LEGACY ROW WITHOUT PROVENANCE');
+    expect(JSON.stringify(mayaWorkspace.body)).not.toContain(
+      'PRIVATE LEGACY ROW WITHOUT PROVENANCE'
+    );
     expect(JSON.stringify(mayaWorkspace.body)).not.toContain('source/unavailable');
   });
 
@@ -319,17 +452,28 @@ describe('authorized deal API projection', () => {
       on conflict do nothing`;
     const harper = await authenticate(app, 'USR-5007');
     const list = await harper.get('/api/deals').set(browserHeaders).expect(200);
-    expect(list.body.deals).toEqual([expect.objectContaining({
-      opportunityId: 'OPP-1001', stage: '6.0 Order Review', owner: 'Maya Levin',
-      closeDate: '2026-05-17', amount: 4_217_500, probability: 78, riskLevel: 'medium'
-    })]);
+    expect(list.body.deals).toEqual([
+      expect.objectContaining({
+        opportunityId: 'OPP-1001',
+        stage: '6.0 Order Review',
+        owner: 'Maya Levin',
+        closeDate: '2026-05-17',
+        amount: 4_217_500,
+        probability: 78,
+        riskLevel: 'medium'
+      })
+    ]);
     expect(JSON.stringify(list.body)).not.toContain('SECRET');
   });
-  it('models deterministic records as a source snapshot and keeps a generated draft with its producing run separate', async () => {
+  it('separates generated output and projects only the actor-authorized current approval subject', async () => {
     const maya = await authenticate(app, 'USR-5001');
     const beforeGeneration = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
     expect(beforeGeneration.body).toMatchObject({
-      sourceSnapshot: { type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: { status: 'source_backed' } },
+      sourceSnapshot: {
+        type: 'source_snapshot',
+        label: 'Source snapshot',
+        evidenceOverview: { status: 'source_backed' }
+      },
       generatedOutput: null
     });
 
@@ -338,21 +482,57 @@ describe('authorized deal API projection', () => {
       values (${workspaceDraftRunId}, 'OPP-1001', 'USR-5001', 'awaiting_approval', 'mock', 'draft-preview', ${'d'.repeat(64)}, 1)`;
     await seedDatabase`insert into approval_subjects
       (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
-      values (${workspaceDraftSubjectId}, ${workspaceDraftRunId}, 1, ${'e'.repeat(64)}, ${JSON.stringify(generatedDraft)}::jsonb,
+      values
+      (${workspaceSupersededSubjectId}, ${workspaceDraftRunId}, 0, ${'c'.repeat(64)}, ${JSON.stringify(generatedDraft)}::jsonb,
+        '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'deal-brief-approval-v1'),
+      (${workspaceDraftSubjectId}, ${workspaceDraftRunId}, 1, ${'e'.repeat(64)}, ${JSON.stringify(generatedDraft)}::jsonb,
         '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'deal-brief-approval-v1')`;
+    await seedDatabase`update approval_subjects
+      set superseded_by_subject_id = ${workspaceDraftSubjectId}
+      where id = ${workspaceSupersededSubjectId}`;
+    await seedDatabase`insert into approval_requirement_entries
+      (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
+      values
+      ('deal-workspace-superseded-entry', ${workspaceSupersededSubjectId}, 'customer_communication',
+        '["account_owner"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0),
+      ('deal-workspace-current-entry', ${workspaceDraftSubjectId}, 'customer_communication',
+        '["account_owner"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0)`;
 
     const response = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
     expect(response.body).toMatchObject({
-      sourceSnapshot: { type: 'source_snapshot', label: 'Source snapshot', evidenceOverview: { status: 'source_backed' } },
+      sourceSnapshot: {
+        type: 'source_snapshot',
+        label: 'Source snapshot',
+        evidenceOverview: { status: 'source_backed' }
+      },
       generatedOutput: {
         type: 'generated_output',
         lifecycle: 'draft',
         producingRun: { id: workspaceDraftRunId, status: 'awaiting_approval' },
+        approvalReview: { approvalSubjectId: workspaceDraftSubjectId },
         content: { status: 'generated' }
       },
       brief: { status: 'generated' }
     });
     expect(response.body.generatedOutput.producingRun.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(response.body.generatedOutput.approvalReview).toEqual({
+      approvalSubjectId: workspaceDraftSubjectId
+    });
+    expect(JSON.stringify(response.body.generatedOutput.approvalReview)).not.toContain(
+      workspaceSupersededSubjectId
+    );
+
+    const nonApprover = await authenticate(app, 'USR-91203');
+    const nonApproverWorkspace = await nonApprover
+      .get('/api/deals/OPP-1001')
+      .set(browserHeaders)
+      .expect(200);
+    expect(nonApproverWorkspace.body.generatedOutput).toMatchObject({
+      lifecycle: 'draft',
+      approvalReview: null
+    });
+    expect(JSON.stringify(nonApproverWorkspace.body)).not.toContain(workspaceDraftSubjectId);
+    expect(JSON.stringify(nonApproverWorkspace.body)).not.toContain(workspaceSupersededSubjectId);
 
     const partialReader = await authenticate(app, 'USR-5007');
     const partialWorkspace = await partialReader
@@ -368,5 +548,35 @@ describe('authorized deal API projection', () => {
       brief: { status: 'source_backed' }
     });
     expect(JSON.stringify(partialWorkspace.body)).not.toContain('Private Slack summary.');
+    expect(JSON.stringify(partialWorkspace.body)).not.toContain(workspaceDraftSubjectId);
+
+    await seedDatabase`insert into runs
+      (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version, updated_at)
+      values (${workspaceFinalizedRunId}, 'OPP-1001', 'USR-5001', 'completed', 'mock', 'finalized-preview',
+        ${'f'.repeat(64)}, 2, now() + interval '1 minute')`;
+    await seedDatabase`insert into approval_subjects
+      (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
+      values (${workspaceFinalizedSubjectId}, ${workspaceFinalizedRunId}, 0, ${'b'.repeat(64)},
+        ${JSON.stringify(generatedDraft)}::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
+        '[]'::jsonb, 'deal-brief-approval-v1')`;
+    await seedDatabase`insert into approval_requirement_entries
+      (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
+      values ('deal-workspace-finalized-entry', ${workspaceFinalizedSubjectId}, 'customer_communication',
+        '["account_owner"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0)`;
+    await seedDatabase`insert into briefs
+      (id, run_id, approval_subject_id, draft_version, payload, subject_hash, finalized_at)
+      values (${workspaceFinalizedBriefId}, ${workspaceFinalizedRunId}, ${workspaceFinalizedSubjectId}, 0,
+        ${JSON.stringify(generatedDraft)}::jsonb, ${'b'.repeat(64)}, now())`;
+
+    const finalizedWorkspace = await maya
+      .get('/api/deals/OPP-1001')
+      .set(browserHeaders)
+      .expect(200);
+    expect(finalizedWorkspace.body.generatedOutput).toMatchObject({
+      lifecycle: 'finalized',
+      producingRun: { id: workspaceFinalizedRunId, status: 'completed' },
+      approvalReview: null
+    });
+    expect(JSON.stringify(finalizedWorkspace.body)).not.toContain(workspaceFinalizedSubjectId);
   });
 });

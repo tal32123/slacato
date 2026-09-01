@@ -13,11 +13,11 @@ import {
 /**
  * Returns the canonical demo to a state a reviewer can walk from the beginning.
  *
- * `runs_one_active_opportunity_uq` permits one active run per opportunity, and `awaiting_approval`
- * is a resting state, so one complete demo pass leaves the canonical opportunities holding runs
- * that never terminate on their own. Every later pass then joins that run instead of starting one:
- * "Generate Brief" lands on finished work, "watch the work happen" has nothing to watch, and the
- * approval inbox is empty because its entries were already decided.
+ * `runs_one_active_requester_opportunity_uq` permits one active run per requester and opportunity,
+ * and `awaiting_approval` is a resting state, so one complete demo pass leaves the canonical
+ * requesters holding runs that never terminate on their own. Every later pass then joins those runs
+ * instead of starting new ones: "Generate Brief" lands on finished work, "watch the work happen"
+ * has nothing to watch, and the approval inbox is empty because its entries were already decided.
  *
  * The uniqueness rule is a real concurrency control and is left alone. This removes the run history
  * instead - every run, approval subject, decision, brief, event, trace, queued command and run-bound

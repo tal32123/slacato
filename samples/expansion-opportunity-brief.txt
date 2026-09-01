@@ -98,6 +98,7 @@ Finance proposed payment tied to proof acceptance and first factory rollout\.
 
 ## 6. Recommended Next Actions
 ### 1. Schedule delivery of the reporting proof pack and factory cutover risk register\.
+- **Audience:** Internal
 - **Priority:** high
 - **Due date:** 2026\-05\-08
 - **Rationale:** Deliver reporting proof pack and factory cutover risk register by 2026\-05\-08
@@ -225,26 +226,26 @@ Finance proposed payment tied to proof acceptance and first factory rollout\.
 #### Claims
 - callId: CALL\-018 (confidence: 1.00) [^citation_9bb35181e1c3b910732d442928f7af172ed4e2cb]
 ### Citation Labels
-[^citation_0271d05f2df2af487fb2b7239033bdbf139ae3f0]: source=gong/gong_call_summaries.tsv, call_id=CALL-013
-[^citation_02c89dc1b30887143b9feff2d8c2388ecbb8d30d]: source=gong/gong_call_summaries.tsv, call_id=CALL-010
-[^citation_07dabcbc5832aa5ed140e631f6f9ae821e209578]: source=salesforce/contacts.tsv, contact_id=CON-3007
-[^citation_18f06e864e3e8450f6b4ae0825f1bfcf49f6ba3a]: source=salesforce/contacts.tsv, contact_id=CON-3009
-[^citation_2927b8e811bc1655c2432675e30ce444d97d543b]: source=gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
-[^citation_29a90b21149f09facd28774c617c1ca6d5a3ca2b]: source=gong/gong_call_summaries.tsv, call_id=CALL-017
-[^citation_738fd42e7763ffa046513e8aab2d92c39ed01ee9]: source=policies/deal_desk_policy.md, policy_id=deal-desk-policy
-[^citation_8dde58fe1119de87f4230fa0d4301650d1a02669]: source=salesforce/contacts.tsv, contact_id=CON-3010
-[^citation_906da08b2b8515f7b0b384567d46d21f6591c99c]: source=pricing/pricing_notes.tsv, pricing_note_id=PN-4003
-[^citation_908d19c5dd70edec1b820aae0ef8b01089b32d60]: source=gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
-[^citation_924dec6b22ae49ac904117ad9ced6992d308efae]: source=salesforce/contacts.tsv, contact_id=CON-3008
-[^citation_9bb35181e1c3b910732d442928f7af172ed4e2cb]: source=gong/gong_call_summaries.tsv, call_id=CALL-018
-[^citation_ad38d7099badf2ef4ab597481d6b1257192a74cd]: source=slack/account_team_updates.tsv, update_id=SLK-9005
-[^citation_b240a9ee6b2aab180c62b17701d458020d0bc36e]: source=slack/account_team_updates.tsv, update_id=SLK-9004
-[^citation_cd56ef825d473e447f1af0dffb0d01300e45f335]: source=gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
-[^citation_d80c24bff3959d49107e5cdd1a7a3e652693a5f2]: source=salesforce/accounts.tsv, account_id=ACC-2002
-[^citation_e35230ffda5ca9cea900357c000c003d9ef19638]: source=salesforce/opportunities.tsv, opportunity_id=OPP-1002
-[^citation_ebea4a778ae00c10a09944c1495127ce3e21830b]: source=gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
-[^citation_ee30027b71adb89f8902eca3932f0daa8c7f2423]: source=gong/gong_call_summaries.tsv, call_id=CALL-012
-[^citation_f78fc94a120c2160cbcbe9fbf51688bb9f8c4f71]: source=salesforce/contacts.tsv, contact_id=CON-3006
+[^citation_0271d05f2df2af487fb2b7239033bdbf139ae3f0]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-013
+[^citation_02c89dc1b30887143b9feff2d8c2388ecbb8d30d]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-010
+[^citation_07dabcbc5832aa5ed140e631f6f9ae821e209578]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3007
+[^citation_18f06e864e3e8450f6b4ae0825f1bfcf49f6ba3a]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3009
+[^citation_2927b8e811bc1655c2432675e30ce444d97d543b]: source=synthetic_data/gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
+[^citation_29a90b21149f09facd28774c617c1ca6d5a3ca2b]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-017
+[^citation_738fd42e7763ffa046513e8aab2d92c39ed01ee9]: source=synthetic_data/policies/deal_desk_policy.md, policy_id=deal-desk-policy
+[^citation_8dde58fe1119de87f4230fa0d4301650d1a02669]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3010
+[^citation_906da08b2b8515f7b0b384567d46d21f6591c99c]: source=synthetic_data/pricing/pricing_notes.tsv, pricing_note_id=PN-4003
+[^citation_908d19c5dd70edec1b820aae0ef8b01089b32d60]: source=synthetic_data/gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
+[^citation_924dec6b22ae49ac904117ad9ced6992d308efae]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3008
+[^citation_9bb35181e1c3b910732d442928f7af172ed4e2cb]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-018
+[^citation_ad38d7099badf2ef4ab597481d6b1257192a74cd]: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9005
+[^citation_b240a9ee6b2aab180c62b17701d458020d0bc36e]: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9004
+[^citation_cd56ef825d473e447f1af0dffb0d01300e45f335]: source=synthetic_data/gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
+[^citation_d80c24bff3959d49107e5cdd1a7a3e652693a5f2]: source=synthetic_data/salesforce/accounts.tsv, account_id=ACC-2002
+[^citation_e35230ffda5ca9cea900357c000c003d9ef19638]: source=synthetic_data/salesforce/opportunities.tsv, opportunity_id=OPP-1002
+[^citation_ebea4a778ae00c10a09944c1495127ce3e21830b]: source=synthetic_data/gong/transcripts/OPP-1002_CALL-018.md, call_id=CALL-018
+[^citation_ee30027b71adb89f8902eca3932f0daa8c7f2423]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-012
+[^citation_f78fc94a120c2160cbcbe9fbf51688bb9f8c4f71]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3006
 
 ## 9. Confidence and Review Warnings
 - **Overall confidence:** 0.95

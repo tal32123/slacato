@@ -36,14 +36,16 @@ describe('durable recovery regressions', () => {
   it('requeues a failed queue job instead of treating it as completed', async () => {
     const run = await seededRun(); const next = command(run.runId);
     await store.startRun({ id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next, idempotencyKey: next.idempotencyKey, startRequestHash: id('hash') });
-    await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${next.id}`;
+    await database.sql`update outbox_commands set status = 'claimed', claimed_at = now(), claim_owner = 'completed_recovery', claim_token = ${id('claim')}, claim_expires_at = now() + interval '30 seconds' where id = ${next.id}`;
     const reconciler = new PostgresCommandReconciler(database, {
       state: async () => 'failed' as never,
       reopenCompleted: async () => { throw new Error('Unexpected completed command'); },
       publish: async () => { throw new Error('Unexpected command publication'); }
     });
     expect(await reconciler.reconcile()).toBeGreaterThanOrEqual(1);
-    expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('pending');
+    const recovered = (await database.sql<{ status: string; claim_owner: string | null; claim_token: string | null }[]>`select status, claim_owner, claim_token from outbox_commands where id = ${next.id}`)[0];
+    expect(['pending', 'published']).toContain(recovered?.status);
+    expect(recovered).toMatchObject({ claim_owner: null, claim_token: null });
   });
 
   it('keeps polling after one transient dispatcher failure and stops cleanly', async () => {

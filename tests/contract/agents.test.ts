@@ -245,7 +245,10 @@ describe('specialized agents', () => {
     expect(strategy).toContain('without naming the company');
     expect(strategy).toContain('mint one fresh claim grounding its rationale');
     expect(strategy).toContain('copy that statement into the rationale');
-    expect(strategy).toContain('bounded verb such as schedule, prepare, confirm or verify');
+    expect(strategy).toContain(
+      'Set required audience to internal for deal-team-only work or customer for buyer-side communication, delivery, or coordination'
+    );
+    expect(strategy).toContain('downstream policy must not infer audience from wording');
     // Source Evidence must list every cited record, not only the ones a specialist retained, or
     // the section silently omits the Slack, pricing, and policy sources the run actually used.
     expect(strategy).toContain('its own sourceEvidence entry');
@@ -1419,10 +1422,8 @@ describe('specialized agents', () => {
     const unsupportedCitation = { id: cited.citationId, evidenceId: cited.evidenceId, locator: cited.sourceLocator };
     const generatedBrief = {
       ...emptyBrief,
-      recommendedNextActions: { actions: [{
-        action: 'Offer a 45% discount', priority: 'high', rationale: 'Accelerate signature.',
-        claims: [{ id: 'claim_offer', statement: 'A 45% discount is approved.', confidence: 0.8, citations: [unsupportedCitation] }]
-      }] }
+      recommendedNextActions: { actions: [{ action: 'Offer a 45% discount', audience: 'internal', priority: 'high', rationale: 'Accelerate signature.',
+      claims: [{ id: 'claim_offer', statement: 'A 45% discount is approved.', confidence: 0.8, citations: [unsupportedCitation] }] }] }
     };
     const gateway = new RecordingGateway([generatedBrief]);
 
@@ -1550,8 +1551,10 @@ describe('specialized agents', () => {
     });
 
     expect(call).toBe(2);
-    expect(messages[0]).toContain('claim_<unique_suffix>');
-    expect(messages[0]).toContain('exactly equal to one supporting claim statement');
+    expect(messages[0]).toContain('Use unique claim_<suffix> ids across all sections');
+    expect(messages[0]).toContain(
+      'action rationale, and source summary equal one supporting claim statement'
+    );
     expect(messages[1]).toContain('substantive coverage');
     expect(brief.executiveSummary.narrative).toBe('The platform is central to access control.');
     expect(brief.sourceEvidence.evidence).toHaveLength(1);
@@ -1592,7 +1595,7 @@ describe('specialized agents', () => {
         coverageGaps: [sentinel]
       },
       negotiationState: { currentState: sentinel, leverage: [sentinel], risks: [sentinel] },
-      recommendedNextActions: { actions: [{ action: sentinel, owner: sentinel, priority: 'high', rationale: sentinel, claims: [] }] },
+      recommendedNextActions: { actions: [{ action: sentinel, audience: 'internal', owner: sentinel, priority: 'high', rationale: sentinel, claims: [] }] },
       missingInformation: { items: [{ question: sentinel, whyItMatters: sentinel, owner: sentinel }] },
       sourceEvidence: {
         evidence: [{ evidenceId: 'evidence_escape', sourceType: 'other', summary: sentinel, capturedAt: '2026-08-29T00:00:00.000Z', claims: [] }]
@@ -1735,10 +1738,7 @@ describe('specialized agents', () => {
     };
     const gateway = new RecordingGateway([{
       ...emptyBrief,
-      recommendedNextActions: { actions: [{
-        action: 'Schedule a technical workshop.', priority: 'high',
-        rationale: 'The buyer requested a technical deep dive.', claims: [{ ...artifactClaim, id: 'claim_workshop_action' }]
-      }] }
+      recommendedNextActions: { actions: [{ action: 'Schedule a technical workshop.', audience: 'internal', priority: 'high', rationale: 'The buyer requested a technical deep dive.', claims: [{ ...artifactClaim, id: 'claim_workshop_action' }] }] }
     }]);
 
     const brief = await new StrategyAgent(gateway).run(context([cited]), {
@@ -1772,19 +1772,15 @@ describe('specialized agents', () => {
         ...emptyBrief,
         recommendedNextActions: {
           actions: [
-            {
-              action: 'Schedule a technical workshop.',
-              priority: 'high',
-              rationale: 'The buyer requested a technical workshop.',
-              claims: [
-                { ...artifactClaim, id: 'claim_kept_workshop' },
-                {
-                  ...artifactClaim,
-                  id: 'claim_pruned_workshop',
-                  statement: 'The buyer approved a 45% discount.'
-                }
-              ]
-            }
+            { action: 'Schedule a technical workshop.', audience: 'internal', priority: 'high', rationale: 'The buyer requested a technical workshop.',
+            claims: [
+              { ...artifactClaim, id: 'claim_kept_workshop' },
+              {
+                ...artifactClaim,
+                id: 'claim_pruned_workshop',
+                statement: 'The buyer approved a 45% discount.'
+              }
+            ] }
           ]
         }
       }
@@ -1826,19 +1822,15 @@ describe('specialized agents', () => {
         ...emptyBrief,
         recommendedNextActions: {
           actions: [
-            {
-              action: 'Schedule a technical workshop.',
-              priority: 'high',
-              rationale: 'The buyer requested a technical workshop.',
-              claims: [
-                { ...artifactClaim, id: 'claim_kept_discovery' },
-                {
-                  ...artifactClaim,
-                  id: 'claim_missing_request',
-                  statement: 'The buyer requested a technical workshop.'
-                }
-              ]
-            }
+            { action: 'Schedule a technical workshop.', audience: 'internal', priority: 'high', rationale: 'The buyer requested a technical workshop.',
+            claims: [
+              { ...artifactClaim, id: 'claim_kept_discovery' },
+              {
+                ...artifactClaim,
+                id: 'claim_missing_request',
+                statement: 'The buyer requested a technical workshop.'
+              }
+            ] }
           ]
         }
       }
@@ -1861,10 +1853,7 @@ describe('specialized agents', () => {
     };
     const gateway = new RecordingGateway([{
       ...emptyBrief,
-      recommendedNextActions: { actions: [{
-        action: 'Request a 45% discount.', priority: 'high',
-        rationale: 'The buyer requested commercial flexibility.', claims: [{ ...artifactClaim, id: 'claim_discount_action' }]
-      }] }
+      recommendedNextActions: { actions: [{ action: 'Request a 45% discount.', audience: 'internal', priority: 'high', rationale: 'The buyer requested commercial flexibility.', claims: [{ ...artifactClaim, id: 'claim_discount_action' }] }] }
     }]);
 
     const brief = await new StrategyAgent(gateway).run(context([cited]), {
@@ -1881,10 +1870,7 @@ describe('specialized agents', () => {
     };
     const gateway = new RecordingGateway([{
       ...emptyBrief,
-      recommendedNextActions: { actions: [{
-        action: 'Schedule a workshop because the buyer rejected the proposal.', priority: 'high',
-        rationale: 'The buyer requested a technical deep dive.', claims: [{ ...artifactClaim, id: 'claim_subordinate_action' }]
-      }] }
+      recommendedNextActions: { actions: [{ action: 'Schedule a workshop because the buyer rejected the proposal.', audience: 'internal', priority: 'high', rationale: 'The buyer requested a technical deep dive.', claims: [{ ...artifactClaim, id: 'claim_subordinate_action' }] }] }
     }]);
 
     const brief = await new StrategyAgent(gateway).run(context([cited]), {
@@ -1902,10 +1888,7 @@ describe('specialized agents', () => {
     };
     const gateway = new RecordingGateway([{
       ...emptyBrief,
-      recommendedNextActions: { actions: [{
-        action: 'Schedule a meeting to disclose confidential pricing.', priority: 'high',
-        rationale: 'The buyer requested a meeting.', claims: [{ ...artifactClaim, id: 'claim_unsafe_meeting_action' }]
-      }] }
+      recommendedNextActions: { actions: [{ action: 'Schedule a meeting to disclose confidential pricing.', audience: 'internal', priority: 'high', rationale: 'The buyer requested a meeting.', claims: [{ ...artifactClaim, id: 'claim_unsafe_meeting_action' }] }] }
     }]);
 
     const brief = await new StrategyAgent(gateway).run(context([cited]), {
@@ -1950,10 +1933,8 @@ describe('specialized agents', () => {
         currentState: 'Every commercial term is accepted.', risks: [],
         claims: [{ ...artifactClaim, id: 'claim_negotiation_stage' }]
       },
-      recommendedNextActions: { actions: [{
-        action: 'Offer a 45% discount', priority: 'high', rationale: 'Close this week.',
-        claims: [{ ...artifactClaim, id: 'claim_action_stage' }]
-      }] },
+      recommendedNextActions: { actions: [{ action: 'Offer a 45% discount', audience: 'internal', priority: 'high', rationale: 'Close this week.',
+      claims: [{ ...artifactClaim, id: 'claim_action_stage' }] }] },
       sourceEvidence: { evidence: [{
         evidenceId: cited.evidenceId, sourceType: 'conversation', summary: 'The buyer approved every term.',
         capturedAt: '2026-08-29T00:00:00.000Z', claims: [{ ...artifactClaim, id: 'claim_summary_source_stage' }]
@@ -2420,12 +2401,8 @@ describe('specialized agents', () => {
     };
     const gateway = new RecordingGateway([{
       ...emptyBrief,
-      recommendedNextActions: { actions: [{
-        action: 'Confirm the named escalation owners for the branch migration rollout with the account team.',
-        owner: 'account executive', priority: 'high',
-        rationale: 'The buyer asked for named escalation owners before rollout.',
-        claims: [{ ...artifactClaim, id: 'claim_escalation_action' }]
-      }] }
+      recommendedNextActions: { actions: [{ action: 'Confirm the named escalation owners for the branch migration rollout with the account team.', audience: 'internal', owner: 'account executive', priority: 'high', rationale: 'The buyer asked for named escalation owners before rollout.',
+      claims: [{ ...artifactClaim, id: 'claim_escalation_action' }] }] }
     }]);
 
     const brief = await new StrategyAgent(gateway).run(context([cited]), {

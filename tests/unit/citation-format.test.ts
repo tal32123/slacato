@@ -4,22 +4,22 @@ import { describe, expect, it } from 'vitest';
 describe('citation format', () => {
   it('names the source file and stable source ID for every canonical source', () => {
     expect(formatEvidenceCitation('gong/gong_call_summaries.tsv#CALL-008#chunk-0')).toBe(
-      'source=gong/gong_call_summaries.tsv, call_id=CALL-008'
+      'source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-008'
     );
     expect(formatEvidenceCitation('gong/transcripts/OPP-1001_CALL-008.md#chunk-1')).toBe(
-      'source=gong/transcripts/OPP-1001_CALL-008.md, call_id=CALL-008'
+      'source=synthetic_data/gong/transcripts/OPP-1001_CALL-008.md, call_id=CALL-008'
     );
     expect(formatEvidenceCitation('slack/account_team_updates.tsv#SLK-9002#chunk-0')).toBe(
-      'source=slack/account_team_updates.tsv, update_id=SLK-9002'
+      'source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9002'
     );
     expect(
       formatEvidenceCitation('salesforce/contacts.tsv#CON-3003/opportunity/OPP-1001#chunk-0')
-    ).toBe('source=salesforce/contacts.tsv, contact_id=CON-3003');
+    ).toBe('source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3003');
     expect(formatEvidenceCitation('pricing/pricing_notes.tsv#PN-4004#chunk-0')).toBe(
-      'source=pricing/pricing_notes.tsv, pricing_note_id=PN-4004'
+      'source=synthetic_data/pricing/pricing_notes.tsv, pricing_note_id=PN-4004'
     );
     expect(formatEvidenceCitation('policies/deal_desk_policy.md#chunk-2')).toBe(
-      'source=policies/deal_desk_policy.md, policy_id=deal-desk-policy'
+      'source=synthetic_data/policies/deal_desk_policy.md, policy_id=deal-desk-policy'
     );
   });
 
@@ -70,6 +70,6 @@ describe('citation format', () => {
 
     const markdown = exportBrief(brief, 'markdown');
 
-    expect(markdown).toContain('source=slack/account_team_updates.tsv, update_id=SLK-9002');
+    expect(markdown).toContain('source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9002');
   });
 });

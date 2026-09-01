@@ -24,7 +24,8 @@ import {
 const safePolicy: ApprovalRequirementInput = {
   discountPercent: 0, renewalUpliftPercent: 1, liabilityCapChanged: false,
   dataRetentionLanguage: false, restrictedResearchLanguage: false,
-  customerSpecificSecurityLanguage: false, customerFacingConcessionLanguage: false,
+  customerSpecificSecurityLanguage: false, customerFacingLanguage: false,
+  customerFacingConcessionLanguage: false,
   overallConfidence: 0.9, conflictingEvidence: false, missingMaterialEvidence: false
 };
 
@@ -110,7 +111,7 @@ class MemoryWorkflowStore {
   private readonly commands: WorkflowCommand[] = [];
   private readonly consumed = new Set<string>();
   private readonly idempotentRuns = new Map<string, string>();
-  private readonly activeByOpportunity = new Map<string, string>();
+  private readonly activeByRequesterOpportunity = new Map<string, string>();
   private readonly decisionResults = new Map<string, Readonly<Record<string, unknown>>>();
   private readonly regenerations = new Map<string, Readonly<{ requestHash: string; runId: string }>>();
 
@@ -118,18 +119,18 @@ class MemoryWorkflowStore {
     const id = this.idempotentRuns.get(`${input.requestedBy}:${input.opportunityId}:${input.idempotencyKey}`); return id === undefined ? undefined : this.runs.get(id);
   }
   public async findActiveRun(input: Readonly<{ opportunityId: string; requestedBy: string }>) {
-    const id = this.activeByOpportunity.get(input.opportunityId); const run = id === undefined ? undefined : this.runs.get(id);
+    const id = this.activeByRequesterOpportunity.get(`${input.requestedBy}:${input.opportunityId}`); const run = id === undefined ? undefined : this.runs.get(id);
     return run === undefined || ['completed', 'rejected', 'failed'].includes(run.status) ? undefined : run;
   }
   public async getRun(runId: string) { return this.runs.get(runId); }
   public async startRun(input: Parameters<WorkflowStore['startRun']>[0]) {
     const existing = this.runs.get(input.id); if (existing !== undefined) return existing;
-    const activeId = this.activeByOpportunity.get(input.opportunityId); const active = activeId === undefined ? undefined : this.runs.get(activeId);
+    const activeId = this.activeByRequesterOpportunity.get(`${input.requestedBy}:${input.opportunityId}`); const active = activeId === undefined ? undefined : this.runs.get(activeId);
     if (active !== undefined && !['completed', 'rejected', 'failed'].includes(active.status)) return active;
     const run = { id: input.id, opportunityId: input.opportunityId, requestedBy: input.requestedBy, status: input.status,
       version: 0, generationProvider: input.generationProvider, generationModel: input.generationModel, startRequestHash: input.startRequestHash } satisfies MutableRun;
     this.runs.set(input.id, run); this.idempotentRuns.set(`${input.requestedBy}:${input.opportunityId}:${input.idempotencyKey}`, input.id);
-    this.activeByOpportunity.set(input.opportunityId, input.id);
+    this.activeByRequesterOpportunity.set(`${input.requestedBy}:${input.opportunityId}`, input.id);
     this.commands.push(input.command); return run;
   }
   public async claimStep(input: Parameters<WorkflowStore['claimStep']>[0]) {
@@ -762,14 +763,38 @@ describe('durable DealBrief workflow', () => {
     expect(system.memory.runs.get(runId)?.status).toBe('failed'); expect(system.memory.briefs.has(runId)).toBe(false);
   });
 
+  it('scopes active-run reuse to requester and opportunity', async () => {
+    const system = harness();
+    const first = await system.start.execute({
+      opportunityId: 'OPP-1001',
+      requestedBy: 'USR-5001',
+      idempotencyKey: 'requester-one'
+    });
+    const secondRequester = await system.start.execute({
+      opportunityId: 'OPP-1001',
+      requestedBy: 'USR-5002',
+      idempotencyKey: 'requester-two'
+    });
+    const sameRequester = await system.start.execute({
+      opportunityId: 'OPP-1001',
+      requestedBy: 'USR-5001',
+      idempotencyKey: 'requester-one-later'
+    });
+
+    expect(first.disposition).toBe('created');
+    expect(secondRequester.disposition).toBe('created');
+    expect(secondRequester.runId).not.toBe(first.runId);
+    expect(sameRequester).toEqual({ runId: first.runId, disposition: 'joined' });
+  });
+
   it('rejoins concurrent starts and duplicate delivery skips every committed generation', async () => {
     const system = harness();
     const [first, second] = await Promise.all([
       system.start.execute({ opportunityId: 'OPP-1001', requestedBy: 'USR-5001', idempotencyKey: 'one' }),
       system.start.execute({ opportunityId: 'OPP-1001', requestedBy: 'USR-5001', idempotencyKey: 'two' })
     ]);
-    // One active run per opportunity is the guarantee; saying which caller got the existing run
-    // rather than a new one is the honesty the guarantee was missing.
+    // One active run per requester and opportunity is the guarantee; saying which
+    // caller got the existing run rather than a new one makes that reuse explicit.
     expect(second.runId).toBe(first.runId);
     expect([first.disposition, second.disposition].sort()).toEqual(['created', 'joined']);
     const later = await system.start.execute({ opportunityId: 'OPP-1001', requestedBy: 'USR-5001', idempotencyKey: 'three' });

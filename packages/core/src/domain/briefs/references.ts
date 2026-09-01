@@ -76,6 +76,21 @@ export function collectDealBriefReferences(brief: DealBrief): DealBriefReference
 /** The stable, source-specific identity a citation points at. */
 export type EvidenceIdentity = Readonly<{ sourcePath: string; key: string; id: string }>;
 
+/**
+ * Dataset root the assignment's citation format names, as in
+ * `source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-008`.
+ *
+ * Locators are stored relative to this root, so it is applied here - at the single point every
+ * citation surface resolves through - rather than baked into ingested locators, where changing a
+ * display convention would force a re-ingest and a re-embed.
+ */
+const DATASET_ROOT = 'synthetic_data/';
+
+/** Roots a stored locator path in the cited dataset without double-prefixing an already-rooted path. */
+function datasetPath(sourcePath: string): string {
+  return sourcePath.startsWith(DATASET_ROOT) ? sourcePath : `${DATASET_ROOT}${sourcePath}`;
+}
+
 /** Returns the record identifier encoded in an evidence locator. */
 function locatorRecordId(locator: string): string | undefined {
   return locator.split('#')[1]?.split('/')[0];
@@ -89,7 +104,7 @@ function identity(
 ): EvidenceIdentity | undefined {
   return id === undefined || id.trim().length === 0
     ? undefined
-    : { sourcePath, key, id: id.trim() };
+    : { sourcePath: datasetPath(sourcePath), key, id: id.trim() };
 }
 
 /**
@@ -123,7 +138,7 @@ export function resolveEvidenceIdentity(
   if (sourcePath.endsWith('/account_team_updates.tsv'))
     return identity(sourcePath, 'update_id', fields.updateId ?? recordId);
   if (sourcePath.endsWith('/deal_desk_policy.md'))
-    return { sourcePath, key: 'policy_id', id: 'deal-desk-policy' };
+    return { sourcePath: datasetPath(sourcePath), key: 'policy_id', id: 'deal-desk-policy' };
   return identity(sourcePath, 'record_id', recordId);
 }
 

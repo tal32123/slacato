@@ -1,17 +1,43 @@
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, type Page, test } from '@playwright/test';
 import postgres, { type Sql } from 'postgres';
-import { MOCK_EMBEDDING_PROFILE_COLUMNS, mockEmbeddingVectorLiteral } from './support/mock-embeddings';
+import {
+  MOCK_EMBEDDING_PROFILE_COLUMNS,
+  mockEmbeddingVectorLiteral
+} from './support/mock-embeddings';
 
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
+const databaseUrl =
+  process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
 const suffix = `task13e2e-${process.pid}-${Date.now()}`;
 const canonicalCommit = '076c659c3c7afd416f8d26729774b67042a55761';
 const approvalOpportunity = `OPP-approval-${suffix}`;
 const fixtures = {
-  quorum: { opportunity: `OPP-quorum-${suffix}`, run: `run-quorum-${suffix}`, subject: `subject-quorum-${suffix}`, desk: `entry-desk-${suffix}`, leader: `entry-leader-${suffix}` },
-  edit: { opportunity: `OPP-edit-${suffix}`, run: `run-edit-${suffix}`, subject: `subject-edit-${suffix}`, entry: `entry-edit-${suffix}` },
-  reject: { opportunity: `OPP-reject-${suffix}`, run: `run-reject-${suffix}`, subject: `subject-reject-${suffix}`, entry: `entry-reject-${suffix}` }
+  quorum: {
+    opportunity: `OPP-quorum-${suffix}`,
+    run: `run-quorum-${suffix}`,
+    subject: `subject-quorum-${suffix}`,
+    desk: `entry-desk-${suffix}`,
+    leader: `entry-leader-${suffix}`
+  },
+  edit: {
+    opportunity: `OPP-edit-${suffix}`,
+    run: `run-edit-${suffix}`,
+    subject: `subject-edit-${suffix}`,
+    entry: `entry-edit-${suffix}`
+  },
+  reject: {
+    opportunity: `OPP-reject-${suffix}`,
+    run: `run-reject-${suffix}`,
+    subject: `subject-reject-${suffix}`,
+    entry: `entry-reject-${suffix}`
+  },
+  embedded: {
+    opportunity: `OPP-embedded-${suffix}`,
+    run: `run-embedded-${suffix}`,
+    subject: `subject-embedded-${suffix}`,
+    entry: `entry-embedded-${suffix}`
+  }
 } as const;
 const leaderId = `USR-${7_000_000 + process.pid}`;
 const leaderName = `Task 13 Sales Leader ${process.pid}`;
@@ -24,65 +50,77 @@ const payload = {
     accountName: 'Eclipse BioMaterials Ltd',
     opportunityName: 'Restricted Account Renewal',
     stage: 'Negotiation',
-    claims: [{
-      id: `claim_snapshot_${suffix}`,
-      statement: 'The renewal is ready for a documented commercial review.',
-      confidence: 0.8,
-      citations: [citation]
-    }]
+    claims: [
+      {
+        id: `claim_snapshot_${suffix}`,
+        statement: 'The renewal is ready for a documented commercial review.',
+        confidence: 0.8,
+        citations: [citation]
+      }
+    ]
   },
   executiveSummary: {
     narrative: 'The renewal is ready for a documented commercial review.',
-    claims: [{
-      id: `claim_summary_${suffix}`,
-      statement: 'The renewal is ready for a documented commercial review.',
-      confidence: 0.8,
-      citations: [citation]
-    }]
+    claims: [
+      {
+        id: `claim_summary_${suffix}`,
+        statement: 'The renewal is ready for a documented commercial review.',
+        confidence: 0.8,
+        citations: [citation]
+      }
+    ]
   },
   buyerGoalsAndBusinessDrivers: {
     goals: ['Complete the renewal with reviewed commercial terms.'],
     businessDrivers: [],
-    claims: [{
-      id: `claim_goal_${suffix}`,
-      statement: 'Complete the renewal with reviewed commercial terms.',
-      confidence: 0.8,
-      citations: [citation]
-    }]
+    claims: [
+      {
+        id: `claim_goal_${suffix}`,
+        statement: 'Complete the renewal with reviewed commercial terms.',
+        confidence: 0.8,
+        citations: [citation]
+      }
+    ]
   },
   stakeholderMap: { stakeholders: [] },
   negotiationState: {
     currentState: 'The commercial position is awaiting authorized approval.',
     risks: [],
-    claims: [{
-      id: `claim_negotiation_${suffix}`,
-      statement: 'The commercial position is awaiting authorized approval.',
-      confidence: 0.8,
-      citations: [citation]
-    }]
+    claims: [
+      {
+        id: `claim_negotiation_${suffix}`,
+        statement: 'The commercial position is awaiting authorized approval.',
+        confidence: 0.8,
+        citations: [citation]
+      }
+    ]
   },
   recommendedNextActions: { actions: [] },
   missingInformation: { items: [] },
   sourceEvidence: {
-    evidence: [{
-      evidenceId,
-      sourceType: 'crm',
-      summary: 'The renewal is ready for a documented commercial review.',
-      // capturedAt is code-owned: validateDealBrief discards whatever the payload carries and
-      // re-stamps it from the cited evidence row's own event_date as `<date>T00:00:00Z` (see
-      // packages/core/src/application/agents/validation.ts). edit_and_approve re-grounds the
-      // submitted payload and requires the result to hash-equal it, so this fixture -- which is
-      // written straight into approval_subjects by SQL, never through the grounding pass a real
-      // brief goes through -- has to already be in that canonical form. Spelling the same instant
-      // as `...T00:00:00.000Z` re-stamps to a different string and 400s the edit.
-      capturedAt: '2026-08-29T00:00:00Z',
-      claims: [{
-        id: `claim_source_${suffix}`,
-        statement: 'The renewal is ready for a documented commercial review.',
-        confidence: 0.8,
-        citations: [citation]
-      }]
-    }]
+    evidence: [
+      {
+        evidenceId,
+        sourceType: 'crm',
+        summary: 'The renewal is ready for a documented commercial review.',
+        // capturedAt is code-owned: validateDealBrief discards whatever the payload carries and
+        // re-stamps it from the cited evidence row's own event_date as `<date>T00:00:00Z` (see
+        // packages/core/src/application/agents/validation.ts). edit_and_approve re-grounds the
+        // submitted payload and requires the result to hash-equal it, so this fixture -- which is
+        // written straight into approval_subjects by SQL, never through the grounding pass a real
+        // brief goes through -- has to already be in that canonical form. Spelling the same instant
+        // as `...T00:00:00.000Z` re-stamps to a different string and 400s the edit.
+        capturedAt: '2026-08-29T00:00:00Z',
+        claims: [
+          {
+            id: `claim_source_${suffix}`,
+            statement: 'The renewal is ready for a documented commercial review.',
+            confidence: 0.8,
+            citations: [citation]
+          }
+        ]
+      }
+    ]
   },
   confidenceAndReviewWarnings: { overallConfidence: 0.8, warnings: [] }
 };
@@ -93,7 +131,10 @@ function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value !== null && typeof value === 'object') {
     const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(',')}}`;
   }
   const serialized = JSON.stringify(value);
   if (serialized === undefined) throw new TypeError('Value is not serializable');
@@ -108,7 +149,16 @@ async function loginAs(page: Page, name: string, returnTo: string): Promise<void
   await expect(page).toHaveURL(returnTo);
 }
 
-async function seedApproval(opportunityId: string, runId: string, subjectId: string, entries: readonly Readonly<{ id: string; authority: 'deal_desk' | 'sales_leader' }>[]): Promise<void> {
+async function seedApproval(
+  opportunityId: string,
+  runId: string,
+  subjectId: string,
+  entries: readonly Readonly<{
+    id: string;
+    authority: 'account_owner' | 'deal_desk' | 'sales_leader';
+    policyTriggers?: readonly string[];
+  }>[]
+): Promise<void> {
   const localEvidenceId = `${evidenceId}-${runId}`;
   const localCitationId = `${citationId}-${runId}`;
   const localSourceLocator = `salesforce/opportunities.tsv#${opportunityId}`;
@@ -221,7 +271,7 @@ async function seedApproval(opportunityId: string, runId: string, subjectId: str
   for (const [ordinal, entry] of entries.entries()) {
     await sql`insert into approval_requirement_entries
       (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
-      values (${entry.id}, ${subjectId}, 'commercial_discount', ${sql.json([entry.authority])}, ${sql.json(['discount'])}, ${sql.json([])}, ${ordinal})`;
+      values (${entry.id}, ${subjectId}, 'commercial_discount', ${sql.json([entry.authority])}, ${sql.json(entry.policyTriggers ?? ['discount'])}, ${sql.json([])}, ${ordinal})`;
   }
 }
 
@@ -236,23 +286,96 @@ test.beforeAll(async () => {
     { id: fixtures.quorum.desk, authority: 'deal_desk' },
     { id: fixtures.quorum.leader, authority: 'sales_leader' }
   ]);
-  await seedApproval(fixtures.edit.opportunity, fixtures.edit.run, fixtures.edit.subject, [{ id: fixtures.edit.entry, authority: 'deal_desk' }]);
-  await seedApproval(fixtures.reject.opportunity, fixtures.reject.run, fixtures.reject.subject, [{ id: fixtures.reject.entry, authority: 'deal_desk' }]);
+  await seedApproval(fixtures.edit.opportunity, fixtures.edit.run, fixtures.edit.subject, [
+    { id: fixtures.edit.entry, authority: 'deal_desk' }
+  ]);
+  await seedApproval(fixtures.reject.opportunity, fixtures.reject.run, fixtures.reject.subject, [
+    { id: fixtures.reject.entry, authority: 'deal_desk' }
+  ]);
+  await seedApproval(
+    fixtures.embedded.opportunity,
+    fixtures.embedded.run,
+    fixtures.embedded.subject,
+    [
+      {
+        id: fixtures.embedded.entry,
+        authority: 'account_owner',
+        policyTriggers: ['p'.repeat(128)]
+      }
+    ]
+  );
 });
-test.afterAll(async () => { await sql.end({ timeout: 1 }); });
+test.afterAll(async () => {
+  await sql.end({ timeout: 1 });
+});
 
-test('partial quorum remains awaiting until a distinct authorized persona satisfies the next entry', async ({ page }) => {
+test('embedded deal approval fails closed on refetch errors and refreshes after a terminal decision', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await loginAs(page, 'Nora Chen', `/deals/${fixtures.embedded.opportunity}`);
+  await page.getByRole('tab', { name: 'AI Brief' }).click();
+  await expect(page.getByRole('heading', { name: 'Approval requirements' })).toBeVisible();
+  await expect(page.getByText(`Reasons: P${'p'.repeat(127)}`, { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )
+  ).toBe(true);
+
+  let forceConflict = true;
+  await page.route('**/api/approvals/decisions', async (route) => {
+    if (!forceConflict) return route.continue();
+    forceConflict = false;
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'CONFLICT', message: 'Approval changed' })
+    });
+  });
+  await page.getByRole('button', { name: 'Approve unchanged' }).click();
+  await expect(page.getByRole('button', { name: 'Reload approval' })).toBeVisible();
+  await page.route(`**/api/approvals/${fixtures.embedded.subject}`, (route) =>
+    route.abort('connectionreset')
+  );
+  await page.getByRole('button', { name: 'Reload approval' }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Approval controls are temporarily unavailable.'
+  );
+  await expect(page.getByRole('button', { name: 'Approve unchanged' })).toHaveCount(0);
+
+  await page.unroute(`**/api/approvals/${fixtures.embedded.subject}`);
+  await page.unroute('**/api/approvals/decisions');
+  await page.reload();
+  await page.getByRole('tab', { name: 'AI Brief' }).click();
+  await page.getByRole('button', { name: 'Approve unchanged' }).click();
+  await expect(page.getByRole('heading', { name: 'Approval requirements' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Approve unchanged' })).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByText('Finalizing', { exact: true })).toBeVisible();
+});
+
+test('partial quorum remains awaiting until a distinct authorized persona satisfies the next entry', async ({
+  page
+}) => {
   await loginAs(page, 'Rina Vale', `/approvals/${fixtures.quorum.subject}`);
   await expect(page.getByRole('heading', { name: 'Required approvals' })).toBeVisible();
   await expect(page.getByText('Quorum 0 of 2')).toBeVisible();
   let decisionAttempt = 0;
   let releaseConflict: (() => void) | undefined;
-  const conflictGate = new Promise<void>((resolve) => { releaseConflict = resolve; });
+  const conflictGate = new Promise<void>((resolve) => {
+    releaseConflict = resolve;
+  });
   await page.route('**/api/approvals/decisions', async (route) => {
     decisionAttempt += 1;
     if (decisionAttempt === 1) {
       await conflictGate;
-      await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'CONFLICT', message: 'Approval changed' }) });
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'CONFLICT', message: 'Approval changed' })
+      });
     } else if (decisionAttempt === 2) {
       await route.abort('connectionreset');
     } else {
@@ -299,27 +422,44 @@ test('partial quorum remains awaiting until a distinct authorized persona satisf
   await expect(success).toContainText('Approval quorum is satisfied');
   await expect(success).toBeFocused();
   await expect(page.getByText('Finalizing', { exact: true })).toBeVisible();
-  await expect(page.getByText('Finalizing', { exact: true }).locator('..').locator('.lucide-circle-dashed')).toBeVisible();
+  await expect(
+    page.getByText('Finalizing', { exact: true }).locator('..').locator('.lucide-circle-dashed')
+  ).toBeVisible();
 });
 
-test('edit and approve validates semantic fields, reflows at 320px and 200%-equivalent, and keeps replacement success focused', async ({ page }) => {
+test('edit and approve validates semantic fields, reflows at 320px and 200%-equivalent, and keeps replacement success focused', async ({
+  page
+}) => {
   let decisionRequestCount = 0;
   page.on('request', (request) => {
-    if (request.url().includes('/api/approvals/') && request.method() === 'POST') decisionRequestCount += 1;
+    if (request.url().includes('/api/approvals/') && request.method() === 'POST')
+      decisionRequestCount += 1;
   });
   await page.setViewportSize({ width: 1440, height: 700 });
   await loginAs(page, 'Rina Vale', `/approvals/${fixtures.edit.subject}`);
   await expect(page).toHaveTitle('Approvals | SlaCato');
-  await expect(page.getByRole('link', { name: 'Approvals', exact: true }).first()).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('link', { name: 'Approvals', exact: true }).first()).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
   for (const heading of [
-    'Deal snapshot', 'Executive summary', 'Buyer goals and business drivers', 'Stakeholder map',
-    'Negotiation state', 'Recommended next actions', 'Missing information',
-    'Authorized evidence summaries', 'Confidence and review warnings'
-  ]) await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    'Deal snapshot',
+    'Executive summary',
+    'Buyer goals and business drivers',
+    'Stakeholder map',
+    'Negotiation state',
+    'Recommended next actions',
+    'Missing information',
+    'Authorized evidence summaries',
+    'Confidence and review warnings'
+  ])
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
   // Section prose and the claims backing it can carry the same sentence - a claim statement is
   // often the goal or risk it supports, verbatim - so assert the text is present, not that it is
   // present exactly once.
-  await expect(page.getByText(payload.executiveSummary.narrative, { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText(payload.executiveSummary.narrative, { exact: true }).first()
+  ).toBeVisible();
   await expect(
     page.getByText(payload.buyerGoalsAndBusinessDrivers.goals[0] ?? '', { exact: true }).first()
   ).toBeVisible();
@@ -362,10 +502,18 @@ test('edit and approve validates semantic fields, reflows at 320px and 200%-equi
   await expect(page.getByText('Enter the negotiation state.')).toBeVisible();
   await negotiation.fill(payload.negotiationState.currentState);
   await page.setViewportSize({ width: 320, height: 700 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )
+  ).toBe(true);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.setViewportSize({ width: 640, height: 700 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )
+  ).toBe(true);
   const confidence = page.getByLabel('Overall confidence');
   await confidence.fill('');
   await submit.focus();
@@ -373,12 +521,17 @@ test('edit and approve validates semantic fields, reflows at 320px and 200%-equi
   await expect(confidence).toBeFocused();
   await expect(confidence).toHaveAttribute('aria-invalid', 'true');
   await expect(confidence).toHaveAttribute('aria-describedby', 'confidence-error');
-  await expect(page.getByText('Enter a confidence value from 0 to 1.', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Enter a confidence value from 0 to 1.', { exact: true })
+  ).toBeVisible();
   expect(decisionRequestCount).toBe(0);
   await confidence.fill('0.7');
   await expect(page.getByRole('heading', { name: 'Change preview' })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`${fixtures.edit.subject}$`));
-  const decisionResponse = page.waitForResponse((response) => response.url().includes('/api/approvals/') && response.request().method() === 'POST');
+  const decisionResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/approvals/') && response.request().method() === 'POST'
+  );
   await submit.focus();
   await page.keyboard.press('Enter');
   const response = await decisionResponse;
@@ -392,7 +545,9 @@ test('edit and approve validates semantic fields, reflows at 320px and 200%-equi
   await expect(page.getByText('Awaiting approval', { exact: true }).first()).toBeVisible();
 });
 
-test('reject is terminal, duplicate action is disabled, and history remains inspectable', async ({ page }) => {
+test('reject is terminal, duplicate action is disabled, and history remains inspectable', async ({
+  page
+}) => {
   await loginAs(page, 'Rina Vale', `/approvals/${fixtures.reject.subject}`);
   const reject = page.getByRole('button', { name: 'Reject' });
   await reject.focus();
@@ -405,7 +560,12 @@ test('reject is terminal, duplicate action is disabled, and history remains insp
   await expect(rejectionStatus).toContainText('run was rejected');
   await expect(rejectionStatus).toBeFocused();
   await expect(page.getByText('Rejected', { exact: true }).first()).toBeVisible();
-  const rejectedIcon = page.getByText('Rejected', { exact: true }).first().locator('..').locator('svg').first();
+  const rejectedIcon = page
+    .getByText('Rejected', { exact: true })
+    .first()
+    .locator('..')
+    .locator('svg')
+    .first();
   await expect(rejectedIcon).toBeVisible();
   await expect(rejectedIcon).not.toHaveClass(/lock-keyhole/);
   await expect(page.getByRole('heading', { name: 'Decision history' })).toBeVisible();
@@ -413,11 +573,17 @@ test('reject is terminal, duplicate action is disabled, and history remains insp
   await expect(page.getByRole('heading', { name: 'Approval rejected' })).toBeVisible();
 });
 
-test('approval inbox is stacked and accessible on mobile while forbidden deep links stay opaque', async ({ page }) => {
+test('approval inbox is stacked and accessible on mobile while forbidden deep links stay opaque', async ({
+  page
+}) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await loginAs(page, 'Rina Vale', '/approvals');
   await expect(page.getByRole('heading', { name: 'Approval inbox' })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )
+  ).toBe(true);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await page.goto('/settings');

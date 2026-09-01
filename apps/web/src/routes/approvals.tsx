@@ -129,6 +129,16 @@ function ApprovalRow({
         <p className="mt-1 break-words text-sm text-muted-foreground">
           {entry.accountName} · {entry.opportunityId}
         </p>
+        {entry.policyTriggers.length > 0 && (
+          <p className="mt-1 break-words text-xs text-muted-foreground">
+            Reasons:{' '}
+            {entry.policyTriggers
+              .map((trigger) =>
+                trigger.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+              )
+              .join(', ')}
+          </p>
+        )}
       </div>
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
         <dt className="text-muted-foreground">Authority</dt>

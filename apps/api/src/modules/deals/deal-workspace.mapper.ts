@@ -23,7 +23,7 @@ import type {
   LatestDealRun,
   ReviewWarning
 } from '@slacato/core';
-import { projectEvidenceDetail } from '@slacato/core';
+import { isExplicitBriefUncertainty, projectEvidenceDetail } from '@slacato/core';
 
 const sectionTitles = {
   dealSnapshot: 'Deal Snapshot',
@@ -152,6 +152,7 @@ function renderGeneratedOutput(
       status: input.producingRun.status,
       updatedAt: serializeDateTime(input.producingRun.updatedAt)
     },
+    approvalReview: input.producingRun.approvalReview,
     content: renderFinalizedDealBrief(brief, evidenceById, claims)
   };
 }
@@ -226,6 +227,7 @@ function renderFinalizedDealBrief(
     const citationIds = collectClaimEvidenceIds(action.claims);
     return {
       action: action.action,
+      audience: action.audience,
       owner: action.owner ?? null,
       priority: action.priority,
       dueDate: action.dueDate ?? null,
@@ -236,16 +238,16 @@ function renderFinalizedDealBrief(
   });
   const warnings = brief.confidenceAndReviewWarnings.warnings
     .map((warning): ReviewWarningView | undefined => {
-      const citationIds = collectWarningEvidenceIds(warning, claimsById);
-      // Warning prose is free text an approver can edit, so it is only shown when it is bound to
-      // claims this viewer is already authorized to read. An unbound or dangling warning would
-      // otherwise carry a fact out of a source the viewer has no grant on.
-      if (citationIds === undefined || citationIds.length === 0) return undefined;
+      const binding = resolveWarningEvidenceBinding(warning, claimsById);
+      // Warning code, severity, and message are reviewer-editable metadata, so none establishes a
+      // narrower-viewer warning. Only a cited canonical claim that independently states a review
+      // concern survives, rendered with projection-owned severity and its immutable statement.
+      if (binding === undefined) return undefined;
       return {
-        severity: warning.severity,
-        message: warning.message,
-        citationIds,
-        accountTeamUpdateImpact: referencesAccountTeamEvidence(citationIds, evidenceById)
+        severity: 'warning',
+        message: binding.subject.statement,
+        citationIds: binding.citationIds,
+        accountTeamUpdateImpact: referencesAccountTeamEvidence(binding.citationIds, evidenceById)
       };
     })
     .filter((warning): warning is ReviewWarningView => warning !== undefined);
@@ -395,21 +397,38 @@ function canonicalEvidenceIsAuthorized(
   return referencedEvidenceIds.every((evidenceId) => evidenceById.has(evidenceId));
 }
 
-/** Resolves warning claim references into authorized evidence IDs, or nothing when one is unresolvable.
+const CANONICAL_REVIEW_CONCERN =
+  /\b(?:absence|absent|missing|unknown|unconfirmed|unresolved|uncertain|uncertainty|unverified)\b|\bnot\s+(?:available|confirmed|known|resolved|verified)\b|\brequires?\s+(?:review|verification)\b|\binsufficient\s+(?:supported\s+)?evidence\b/iu;
+
+type WarningEvidenceBinding = Readonly<{
+  subject: Claim;
+  citationIds: string[];
+}>;
+
+/** Resolves a warning to its narrowest cited canonical review concern and authorized evidence IDs.
  *
  * Validation legitimately keeps a warning about a claim it then discarded from the brief, so an
- * unresolvable reference is an unrenderable warning rather than a server fault: the caller drops it. */
-function collectWarningEvidenceIds(
+ * unresolvable reference is an unrenderable warning rather than a server fault: the caller drops it.
+ * Every reference must resolve; arbitrary metadata bound to a harmless claim does not create a
+ * warning, and only the independently reviewable subject contributes public citations. */
+function resolveWarningEvidenceBinding(
   warning: ReviewWarning,
   claimsById: ReadonlyMap<string, Claim>
-): string[] | undefined {
+): WarningEvidenceBinding | undefined {
   const claims: Claim[] = [];
   for (const claimId of warning.claimIds) {
     const claim = claimsById.get(claimId);
     if (claim === undefined) return undefined;
     claims.push(claim);
   }
-  return collectClaimEvidenceIds(claims);
+  const subject = claims.find(
+    (claim) =>
+      claim.citations.length > 0 &&
+      (isExplicitBriefUncertainty(claim.statement) ||
+        CANONICAL_REVIEW_CONCERN.test(claim.statement))
+  );
+  if (subject === undefined) return undefined;
+  return { subject, citationIds: collectClaimEvidenceIds([subject]) };
 }
 
 /** Projects canonical claim citations onto their immutable evidence IDs. */
@@ -622,6 +641,7 @@ function buildSourceBackedActions(
   if (fields.nextStep !== undefined)
     actions.push({
       action: fields.nextStep,
+      audience: 'internal',
       owner: deal.owner,
       priority: deal.riskLevel === 'high' ? 'critical' : 'high',
       dueDate: extractIsoDate(fields.nextStep),
@@ -632,6 +652,7 @@ function buildSourceBackedActions(
   if (unresolvedUpdate !== undefined)
     actions.push({
       action: 'Confirm the latest account-team information gap before finalizing the packet.',
+      audience: 'internal',
       owner: deal.owner,
       priority: 'high',
       dueDate: deal.closeDate,
@@ -644,6 +665,7 @@ function buildSourceBackedActions(
     actions.push({
       action:
         conversationFields.nextSteps ?? 'Confirm the next negotiation step with the account team.',
+      audience: 'internal',
       owner: deal.owner,
       priority: 'medium',
       dueDate: extractIsoDate(conversationFields.nextSteps),

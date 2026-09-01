@@ -181,6 +181,58 @@ function assertAttemptEvidence(spans: readonly TraceSpan[], attempt: TraceSpan):
   }
 }
 
+const nonGenerationFatalTriggerKinds = {
+  authorization_lookup: true,
+  evidence_retrieval: true,
+  validation: true,
+  repair: true,
+  guardrail: true,
+  policy_decision: true,
+  approval_requirement: true,
+  approval_decision: true,
+  recommendation: true,
+  finalization: true,
+  partial_failure: true
+} satisfies Partial<Record<TraceSpan['kind'], true>>;
+
+/** Requires a failed logical generation to retain lineage to real durable provider attempts. */
+function assertFatalGenerationLineage(
+  spans: readonly TraceSpan[],
+  attempt: TraceFor<'specialist_attempt'> | TraceFor<'strategy_attempt'>
+): void {
+  const models = spansOfKind(spans, 'model_call').filter(
+    (span) => span.parentSpanId === attempt.spanId
+  );
+  if (models.length === 0) {
+    throw new TraceCompletenessError(
+      `Failed ${attempt.step} generation has no durable provider attempt lineage`
+    );
+  }
+  const ordinals = new Set<number>();
+  const durableAttemptIds = new Set<string>();
+  for (const model of models) {
+    if (
+      model.data.logicalGenerationId !== attempt.data.logicalGenerationId ||
+      ordinals.has(model.data.ordinal) ||
+      durableAttemptIds.has(model.data.durableAttemptId)
+    ) {
+      throw new TraceCompletenessError(
+        `Failed ${attempt.step} generation has conflicting provider attempt lineage`
+      );
+    }
+    ordinals.add(model.data.ordinal);
+    durableAttemptIds.add(model.data.durableAttemptId);
+    const usage = spansOfKind(spans, 'usage').find(
+      (span) => span.parentSpanId === model.spanId && span.step === attempt.step
+    );
+    if (usage === undefined || usage.status !== model.status) {
+      throw new TraceCompletenessError(
+        `Failed ${attempt.step} provider attempt ${model.data.ordinal} is missing matching usage`
+      );
+    }
+  }
+}
+
 /** Deterministically verifies linkage and state-specific evidence without treating authorization reads as evidence. */
 export function assertTraceComplete(runId: string, input: readonly TraceSpan[]): void {
   const spans = input.map((span) => traceSpanSchema.parse(span));
@@ -197,10 +249,13 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
   if (traceIds.size !== 1) throw new TraceCompletenessError('Trace contains multiple trace IDs');
   for (const span of spans) {
     if (span.parentSpanId !== undefined && !byId.has(span.parentSpanId)) {
-      if (span.kind === 'partial_failure' || span.kind === 'fatal_failure') {
+      if (span.kind === 'partial_failure') {
         throw new TraceCompletenessError(
-          `${span.kind === 'partial_failure' ? 'Partial' : 'Fatal'} decision is not linked to its triggering attempt`
+          'Partial decision is not linked to its triggering attempt'
         );
+      }
+      if (span.kind === 'fatal_failure') {
+        throw new TraceCompletenessError('Fatal decision is not linked to its triggering state');
       }
       throw new TraceCompletenessError(`Trace span ${span.spanId} has a missing parent`);
     }
@@ -261,18 +316,38 @@ export function assertTraceComplete(runId: string, input: readonly TraceSpan[]):
 
   const fatalFailures = spansOfKind(spans, 'fatal_failure');
   for (const fatal of fatalFailures) {
-    const triggering = parentOf(fatal, byId);
-    if (
-      triggering === undefined ||
-      triggering.status !== 'failed' ||
-      !['specialist_attempt', 'strategy_attempt'].includes(triggering.kind)
-    ) {
-      throw new TraceCompletenessError(
-        'Fatal decision is not linked to a failed triggering attempt'
-      );
-    }
     if (fatal.status !== 'failed' || fatal.data.decision !== 'fatal') {
       throw new TraceCompletenessError('Fatal decision is not typed as failed');
+    }
+    const triggering = parentOf(fatal, byId);
+    if (fatal.data.reasonCode === 'draft_validation_failed') {
+      if (
+        triggering?.kind !== 'validation' ||
+        triggering.status !== 'failed' ||
+        triggering.data.decision !== 'rejected'
+      ) {
+        throw new TraceCompletenessError(
+          'Draft validation fatal decision is not linked to a failed validation state'
+        );
+      }
+      continue;
+    }
+    if (triggering?.kind === 'specialist_attempt' || triggering?.kind === 'strategy_attempt') {
+      if (triggering.status !== 'failed') {
+        throw new TraceCompletenessError(
+          'Fatal decision is not linked to a valid triggering state'
+        );
+      }
+      assertFatalGenerationLineage(spans, triggering);
+      continue;
+    }
+    if (
+      triggering === undefined ||
+      !Object.hasOwn(nonGenerationFatalTriggerKinds, triggering.kind) ||
+      (triggering.kind === 'validation' &&
+        (triggering.status !== 'failed' || triggering.data.decision !== 'rejected'))
+    ) {
+      throw new TraceCompletenessError('Fatal decision is not linked to a valid triggering state');
     }
   }
   const failedAttempts = attempts.filter((span) => span.status === 'failed');

@@ -35,6 +35,7 @@ const approvalCategorySchema = z.enum([
   'commercial_discount',
   'legal_terms',
   'evidence_review',
+  'customer_communication',
   'customer_concession'
 ]);
 const approvalAuthoritySchema = z.enum([

@@ -160,6 +160,7 @@ describe('production DealBrief seams', () => {
           dataRetentionLanguage: false,
           restrictedResearchLanguage: false,
           customerSpecificSecurityLanguage: false,
+          customerFacingLanguage: false,
           customerFacingConcessionLanguage: false,
           overallConfidence: 0.9,
           conflictingEvidence: false,

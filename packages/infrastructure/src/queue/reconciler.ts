@@ -125,14 +125,16 @@ export class PostgresCommandReconciler {
     return restored;
   }
 
-  /** Reopens and republishes a completed recovery claim, or resumes at the last recoverable boundary. */
+  /** Resumes a completed-job recovery claim according to the queue's current authoritative state. */
   private async recoverCompletedClaim(row: OutboxRow): Promise<boolean> {
     if (row.claim_token === null) return false;
     const inspection = await this.inspect(row.id);
     if (inspection.state === 'completed') {
       await this.commands.reopenCompleted(row.id);
-    } else if (inspection.state === 'live' || inspection.state === 'failed') {
+    } else if (inspection.state === 'live') {
       return (await this.markRecoveredPublished(row)) > 0;
+    } else if (inspection.state === 'failed') {
+      return (await this.markRecoveredPending(row)) > 0;
     }
     const marked = await this.markRecoveredPublished(row);
     if (marked === 0) return false;
@@ -151,6 +153,14 @@ export class PostgresCommandReconciler {
   private async markRecoveredPublished(row: OutboxRow): Promise<number> {
     const result = await this.database
       .sql`update outbox_commands set status = 'published', published_at = now(), claim_owner = null, claim_token = null, claim_expires_at = null
+      where id = ${row.id} and status = 'claimed' and claim_owner = 'completed_recovery' and claim_token = ${row.claim_token} and consumed_at is null`;
+    return result.count;
+  }
+
+  /** Requeues a failed completed-recovery claim while preserving its fencing guarantees. */
+  private async markRecoveredPending(row: OutboxRow): Promise<number> {
+    const result = await this.database
+      .sql`update outbox_commands set status = 'pending', available_at = now(), claimed_at = null, claim_owner = null, claim_token = null, claim_expires_at = null
       where id = ${row.id} and status = 'claimed' and claim_owner = 'completed_recovery' and claim_token = ${row.claim_token} and consumed_at is null`;
     return result.count;
   }

@@ -37,11 +37,12 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@biomejs/biome": "2.5.11",
-    "@slacato/infrastructure": "workspace:*",
     "@nestjs/common": "12.0.1",
     "@nestjs/core": "12.0.1",
     "@nestjs/platform-express": "12.0.1",
     "@playwright/test": "^1.62.1",
+    "@slacato/infrastructure": "workspace:*",
+    "@tanstack/react-query": "5.102.8",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.4.0",

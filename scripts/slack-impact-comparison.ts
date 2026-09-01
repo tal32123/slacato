@@ -63,7 +63,11 @@ type Brief = Readonly<{
   };
   negotiationState: BriefSection;
   recommendedNextActions: {
-    actions: readonly Readonly<{ action: string; claims: readonly Claim[] }>[];
+    actions: readonly Readonly<{
+      action: string;
+      audience: 'internal' | 'customer';
+      claims: readonly Claim[];
+    }>[];
   };
   sourceEvidence: { evidence: readonly Readonly<{ evidenceId: string; summary: string }>[] };
 }>;

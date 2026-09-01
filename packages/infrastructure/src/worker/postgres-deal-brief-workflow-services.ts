@@ -9,8 +9,11 @@ import {
   type ConversationArtifact,
   createEvidenceScopeBinding,
   type DealBrief,
+  type DealBriefAgentOperation,
+  type DealBriefGenerationMetadata,
   type DealBriefRetrievalContext,
   type DealBriefWorkflowServices,
+  dealBriefAgentOperations,
   dealBriefSchema,
   hashEvidenceScopeBinding,
   StakeholderAgent,
@@ -23,11 +26,6 @@ import type { ConfiguredModelGateways } from '../model/provider.js';
 import type { DealBriefContextRepository } from './postgres-deal-brief-context.repository.js';
 
 type DurableDealBriefContext = Omit<AgentContext, 'generation'>;
-type AgentOperation =
-  | 'conversation-intelligence'
-  | 'stakeholder-mapping'
-  | 'commercial-policy'
-  | 'negotiation-strategy';
 
 /** Requires every durable field needed to construct a provider-neutral agent context. */
 function requireDurableDealBriefContext(
@@ -158,13 +156,15 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
   public async conversation(
     run: WorkflowRun,
     context: DealBriefRetrievalContext,
-    invocationId: string
+    generation: DealBriefGenerationMetadata
   ): Promise<ConversationArtifact> {
+    this.assertGenerationMetadata(run, generation, dealBriefAgentOperations.conversation);
     const invocation = await this.createAuthorizedAgentInvocation(
       run,
       context,
-      invocationId,
-      'conversation-intelligence'
+      generation.invocationId,
+      generation.operation,
+      generation.logicalGenerationId
     );
     return new ConversationAgent(invocation.gateway).run(invocation.agentContext);
   }
@@ -173,13 +173,15 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
   public async stakeholder(
     run: WorkflowRun,
     context: DealBriefRetrievalContext,
-    invocationId: string
+    generation: DealBriefGenerationMetadata
   ): Promise<StakeholderArtifact> {
+    this.assertGenerationMetadata(run, generation, dealBriefAgentOperations.stakeholder);
     const invocation = await this.createAuthorizedAgentInvocation(
       run,
       context,
-      invocationId,
-      'stakeholder-mapping'
+      generation.invocationId,
+      generation.operation,
+      generation.logicalGenerationId
     );
     return new StakeholderAgent(invocation.gateway).run(invocation.agentContext);
   }
@@ -188,13 +190,15 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
   public async commercial(
     run: WorkflowRun,
     context: DealBriefRetrievalContext,
-    invocationId: string
+    generation: DealBriefGenerationMetadata
   ): Promise<CommercialArtifact> {
+    this.assertGenerationMetadata(run, generation, dealBriefAgentOperations.commercial);
     const invocation = await this.createAuthorizedAgentInvocation(
       run,
       context,
-      invocationId,
-      'commercial-policy'
+      generation.invocationId,
+      generation.operation,
+      generation.logicalGenerationId
     );
     return new CommercialAgent(invocation.gateway).run(invocation.agentContext);
   }
@@ -208,13 +212,15 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
       stakeholder: StakeholderArtifact;
       commercial: CommercialArtifact;
     }>,
-    invocationId: string
+    generation: DealBriefGenerationMetadata
   ): Promise<DealBrief> {
+    this.assertGenerationMetadata(run, generation, dealBriefAgentOperations.strategy);
     const invocation = await this.createAuthorizedAgentInvocation(
       run,
       input.context,
-      invocationId,
-      'negotiation-strategy'
+      generation.invocationId,
+      generation.operation,
+      generation.logicalGenerationId
     );
     return new StrategyAgent(invocation.gateway).run(invocation.agentContext, {
       conversation: input.conversation,
@@ -238,14 +244,17 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
     run: WorkflowRun,
     context: DealBriefRetrievalContext,
     invocationId: string,
-    operation: AgentOperation
+    operation: DealBriefAgentOperation,
+    logicalGenerationId: string
   ) {
+    if (logicalGenerationId === '') {
+      throw new Error(`Authorized ${operation} invocation requires a logical generation ID`);
+    }
     this.assertPersistedModelMatchesConfiguration(run);
     const durableContext = requireDurableDealBriefContext(context);
     await this.assertContextRemainsAuthorized(run, durableContext);
 
     const budget = await this.contextRepository.readRunBudget(run.id);
-    const logicalGenerationId = this.createStableGenerationId(run.id, operation);
     const limits = {
       maxCalls: 4,
       maxSchemaRepairs: 2,
@@ -334,6 +343,23 @@ export class PostgresDealBriefWorkflowServices implements DealBriefWorkflowServi
     );
     if (!manifestMatches) {
       throw new Error('Immutable evidence manifest no longer matches generation context');
+    }
+  }
+
+  /** Rejects workflow metadata that does not identify the agent operation and persisted run model. */
+  private assertGenerationMetadata(
+    run: WorkflowRun,
+    generation: DealBriefGenerationMetadata,
+    expectedOperation: DealBriefAgentOperation
+  ): void {
+    if (
+      generation.operation !== expectedOperation ||
+      generation.provider !== run.generationProvider ||
+      generation.model !== run.generationModel
+    ) {
+      throw new Error(
+        'Workflow generation metadata does not match the authorized agent invocation'
+      );
     }
   }
 

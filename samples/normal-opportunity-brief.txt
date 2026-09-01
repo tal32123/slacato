@@ -92,6 +92,7 @@ No new concession requested in final document review, legal language remains the
 
 ## 6. Recommended Next Actions
 ### 1. Schedule revised order form and migration success plan by 2026\-04\-28
+- **Audience:** Customer
 - **Priority:** high
 - **Rationale:** Send revised order form and migration success plan by 2026\-04\-28
 #### Claims
@@ -200,23 +201,23 @@ No new concession requested in final document review, legal language remains the
 #### Claims
 - Action items: vendor sends revised liability language, payment schedule options (confidence: 1.00) [^citation_5be9bcd03e9a87f03cd217f9437afb191809bade]
 ### Citation Labels
-[^citation_08570de09440ad1c31cd395bcd978c57e6f259a3]: source=gong/gong_call_summaries.tsv, call_id=CALL-001
-[^citation_1340496c9db45023fe4bb9ff55248cd69c89c4f4]: source=gong/gong_call_summaries.tsv, call_id=CALL-008
-[^citation_32a971e9bd23d6b4051075d1fd81c63708b113c6]: source=salesforce/contacts.tsv, contact_id=CON-3004
-[^citation_3a8801a18cb37b6960452b16fbf54a2a0613b8e5]: source=pricing/pricing_notes.tsv, pricing_note_id=PN-4001
-[^citation_53cae82ac20c4e266c674e0deaaeb4b317c0d789]: source=policies/deal_desk_policy.md, policy_id=deal-desk-policy
-[^citation_5b9930c187adcdbc4c7ca5230a22c86e7e83c2b3]: source=slack/account_team_updates.tsv, update_id=SLK-9002
-[^citation_5be9bcd03e9a87f03cd217f9437afb191809bade]: source=gong/transcripts/OPP-1001_CALL-004.md, call_id=CALL-004
-[^citation_7265e9aa7e2f501ae3f27964997f33648f8985fe]: source=gong/transcripts/OPP-1001_CALL-008.md, call_id=CALL-008
-[^citation_78d2f603c9b12e9cd9a407a5b087f4801a0c5491]: source=salesforce/opportunities.tsv, opportunity_id=OPP-1001
-[^citation_852fca63176e63990ead5fbc819374d90bc03446]: source=pricing/pricing_notes.tsv, pricing_note_id=PN-4002
-[^citation_956568cf930bb4e6be4f3a2b104112f9169e85cf]: source=salesforce/contacts.tsv, contact_id=CON-3005
-[^citation_9eebfc7cfb6291f774bb21e94b07cf1f1483233b]: source=salesforce/contacts.tsv, contact_id=CON-3003
-[^citation_ae14eecb4b4ac9c13a173d89ac1dba4cf4d52318]: source=slack/account_team_updates.tsv, update_id=SLK-9001
-[^citation_b78548b701e7c05fef6dffc1a58be9a870510ed3]: source=salesforce/contacts.tsv, contact_id=CON-3002
-[^citation_d8b1bfdf303d839b5e3acb2979640cb8d52f3d76]: source=salesforce/accounts.tsv, account_id=ACC-2001
-[^citation_f3d8b11889571927a1de760df801139ab5f3f7f8]: source=gong/gong_call_summaries.tsv, call_id=CALL-005
-[^citation_fc3c13fb9634f1684b45b2f8af6d3b6717b5dc4c]: source=salesforce/contacts.tsv, contact_id=CON-3001
+[^citation_08570de09440ad1c31cd395bcd978c57e6f259a3]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-001
+[^citation_1340496c9db45023fe4bb9ff55248cd69c89c4f4]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-008
+[^citation_32a971e9bd23d6b4051075d1fd81c63708b113c6]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3004
+[^citation_3a8801a18cb37b6960452b16fbf54a2a0613b8e5]: source=synthetic_data/pricing/pricing_notes.tsv, pricing_note_id=PN-4001
+[^citation_53cae82ac20c4e266c674e0deaaeb4b317c0d789]: source=synthetic_data/policies/deal_desk_policy.md, policy_id=deal-desk-policy
+[^citation_5b9930c187adcdbc4c7ca5230a22c86e7e83c2b3]: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9002
+[^citation_5be9bcd03e9a87f03cd217f9437afb191809bade]: source=synthetic_data/gong/transcripts/OPP-1001_CALL-004.md, call_id=CALL-004
+[^citation_7265e9aa7e2f501ae3f27964997f33648f8985fe]: source=synthetic_data/gong/transcripts/OPP-1001_CALL-008.md, call_id=CALL-008
+[^citation_78d2f603c9b12e9cd9a407a5b087f4801a0c5491]: source=synthetic_data/salesforce/opportunities.tsv, opportunity_id=OPP-1001
+[^citation_852fca63176e63990ead5fbc819374d90bc03446]: source=synthetic_data/pricing/pricing_notes.tsv, pricing_note_id=PN-4002
+[^citation_956568cf930bb4e6be4f3a2b104112f9169e85cf]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3005
+[^citation_9eebfc7cfb6291f774bb21e94b07cf1f1483233b]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3003
+[^citation_ae14eecb4b4ac9c13a173d89ac1dba4cf4d52318]: source=synthetic_data/slack/account_team_updates.tsv, update_id=SLK-9001
+[^citation_b78548b701e7c05fef6dffc1a58be9a870510ed3]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3002
+[^citation_d8b1bfdf303d839b5e3acb2979640cb8d52f3d76]: source=synthetic_data/salesforce/accounts.tsv, account_id=ACC-2001
+[^citation_f3d8b11889571927a1de760df801139ab5f3f7f8]: source=synthetic_data/gong/gong_call_summaries.tsv, call_id=CALL-005
+[^citation_fc3c13fb9634f1684b45b2f8af6d3b6717b5dc4c]: source=synthetic_data/salesforce/contacts.tsv, contact_id=CON-3001
 
 ## 9. Confidence and Review Warnings
 - **Overall confidence:** 0.95

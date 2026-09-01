@@ -2,7 +2,11 @@ import { type StakeholderArtifact, stakeholderArtifactSchema } from '../../domai
 import { withSerializedByteLimit } from '../../domain/shared/serialized-size.js';
 import { MAX_STAKEHOLDER_ARTIFACT_BYTES } from '../briefs/prompts.js';
 import type { BudgetedModelGateway } from '../model/contracts.js';
-import type { AgentContext, AgentEvidenceRecord } from './contracts.js';
+import {
+  type AgentContext,
+  type AgentEvidenceRecord,
+  dealBriefAgentOperations
+} from './contracts.js';
 import { runAgent } from './runtime.js';
 import { validateStakeholderArtifact } from './validation.js';
 
@@ -29,7 +33,7 @@ export class StakeholderAgent {
     const result = await runAgent({
       gateway: this.gateway,
       context,
-      operation: 'stakeholder-intelligence',
+      operation: dealBriefAgentOperations.stakeholder,
       task: TASK,
       schema: agentArtifactSchema,
       allowedSourceTypes: SOURCES,

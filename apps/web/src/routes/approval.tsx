@@ -177,6 +177,11 @@ function ApprovalDecisionContent({
                 <p className="mt-1 text-sm text-muted-foreground">
                   Required: {entry.requiredAuthorities.map(label).join(' or ')}
                 </p>
+                {entry.policyTriggers.length > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Reasons: {entry.policyTriggers.map(label).join(', ')}
+                  </p>
+                )}
                 {entry.dependsOn.length > 0 && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     Depends on {entry.dependsOn.join(', ')}

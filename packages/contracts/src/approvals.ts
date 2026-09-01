@@ -10,12 +10,18 @@ const opaqueIdSchema = z
 const timestampSchema = z.iso.datetime({ offset: true });
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const shortTextSchema = z.string().min(1).max(2_000);
+const policyTriggerSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[a-z][a-z0-9_]*$/);
 const sectionTextSchema = z.string().min(1).max(8_000);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const approvalCategorySchema = z.enum([
   'commercial_discount',
   'legal_terms',
   'evidence_review',
+  'customer_communication',
   'customer_concession'
 ]);
 export const approvalAuthoritySchema = z.enum([
@@ -83,6 +89,7 @@ const stakeholderSchema = z
 const actionSchema = z
   .object({
     action: shortTextSchema,
+    audience: z.enum(['internal', 'customer']),
     owner: shortTextSchema.optional(),
     priority: z.enum(['low', 'medium', 'high', 'critical']),
     rationale: shortTextSchema,
@@ -278,6 +285,7 @@ export const approvalInboxEntrySchema = z
     accountName: z.string().min(1).max(2_000),
     entryId: opaqueIdSchema,
     category: approvalCategorySchema,
+    policyTriggers: z.array(policyTriggerSchema).max(20),
     requiredAuthorities: z.array(approvalAuthoritySchema).min(1).max(4),
     availableAuthority: approvalAuthoritySchema,
     assignedApprover: z.string().min(1).max(256).nullable(),
@@ -302,6 +310,7 @@ export const approvalRequirementViewSchema = z
   .object({
     entryId: opaqueIdSchema,
     category: approvalCategorySchema,
+    policyTriggers: z.array(policyTriggerSchema).max(20),
     requiredAuthorities: z.array(approvalAuthoritySchema).min(1).max(4),
     availableAuthority: approvalAuthoritySchema.nullable(),
     dependsOn: z.array(opaqueIdSchema).max(20),

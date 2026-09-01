@@ -82,12 +82,8 @@ function generatedBrief(overrides: Partial<DealBrief> = {}) {
     },
     recommendedNextActions: {
       actions: [
-        {
-          action: 'Confirm the final owner matrix with the account team.',
-          priority: 'high',
-          rationale: slackStatement,
-          claims: [fixtureClaim('claim_act_1', slackStatement, 'slack:SLK-9002:0')]
-        }
+        { action: 'Confirm the final owner matrix with the account team.', audience: 'internal', priority: 'high', rationale: slackStatement,
+        claims: [fixtureClaim('claim_act_1', slackStatement, 'slack:SLK-9002:0')] }
       ]
     },
     missingInformation: { items: [] },

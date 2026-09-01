@@ -215,7 +215,7 @@ describe.sequential('run and approval query APIs', () => {
     await sql`insert into approval_requirement_entries
       (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
       values (${ids.entry}, ${ids.subject}, 'legal_terms', ${JSON.stringify(['legal_reviewer'])}::jsonb,
-        ${JSON.stringify(['legal_terms'])}::jsonb, '[]'::jsonb, 0)`;
+        ${JSON.stringify(['customer_facing_language', 'customer_facing_concession_language'])}::jsonb, '[]'::jsonb, 0)`;
     app = await createApiApplication({ environment: {
       ...process.env, NODE_ENV: 'test', DATABASE_URL: databaseUrl,
       SESSION_SECRET: 'task-13-query-api-session-secret-long-enough', AI_PROVIDER: 'mock', WEB_ORIGIN: origin
@@ -247,20 +247,23 @@ describe.sequential('run and approval query APIs', () => {
     const snapshot = runSnapshotSchema.parse((await approver.get(`/api/runs/${ids.run}`).set(browserHeaders).expect(200)).body);
     expect(snapshot.watermark).toBe(`event-2-${suffix}`);
   });
-  it('returns an existing active run to every canonical readable starter and rejects stale grant provenance across boundaries', async () => {
+  it('starts a distinct run for another canonical readable requester and rejects stale grant provenance across boundaries', async () => {
     const reader = await authenticateWithCsrf(app, ids.reader);
     const start = await reader.agent.post('/api/runs/deal-brief').set(browserHeaders)
       .set('X-CSRF-Token', reader.csrfToken).send({
         opportunityId: ids.opportunity,
         idempotencyKey: `reader-start-${suffix}`,
       }).expect(201);
-    expect(start.body).toEqual({ runId: ids.run });
-    // The caller asked for a new brief and was handed the run already in flight. The body cannot
-    // say so - it is a strict shared contract - so the header has to, or the product silently
-    // claims to have started work it did not start.
-    expect(start.headers['x-run-disposition']).toBe('joined');
+    expect(start.body).toEqual({ runId: expect.any(String) });
+    const readerRunId = start.body.runId as string;
+    expect(readerRunId).not.toBe(ids.run);
+    expect(start.headers['x-run-disposition']).toBe('created');
     expect((await reader.agent.get('/api/runs').set(browserHeaders).expect(200)).body.runs)
-      .toEqual(expect.arrayContaining([expect.objectContaining({ runId: ids.run })]));
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ runId: ids.run }),
+        expect.objectContaining({ runId: readerRunId })
+      ]));
+    await reader.agent.get(`/api/runs/${readerRunId}/detail`).set(browserHeaders).expect(200);
     await reader.agent.get(`/api/runs/${ids.run}/detail`).set(browserHeaders).expect(200);
     await reader.agent.get(`/api/runs/${ids.run}`).set(browserHeaders).expect(200);
     const failed = (await reader.agent.get(`/api/runs/${ids.failedRun}/detail`).set(browserHeaders).expect(200)).body;
@@ -315,7 +318,8 @@ describe.sequential('run and approval query APIs', () => {
     const inbox = approvalInboxResponseSchema.parse((await approver.get('/api/approvals').set(browserHeaders).expect(200)).body);
     expect(inbox.pending).toEqual([expect.objectContaining({
       approvalSubjectId: ids.subject, runId: ids.run, entryId: ids.entry,
-      availableAuthority: 'legal_reviewer', decision: null
+      availableAuthority: 'legal_reviewer', decision: null,
+      policyTriggers: ['customer_facing_language', 'customer_facing_concession_language']
     })]);
     expect(inbox.history).toEqual([]);
 
@@ -328,7 +332,9 @@ describe.sequential('run and approval query APIs', () => {
     await sql`insert into approval_requirement_entries
       (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
       values (${ids.replacementEntry}, ${ids.replacementSubject}, 'legal_terms',
-        ${JSON.stringify(['legal_reviewer'])}::jsonb, ${JSON.stringify(['legal_terms'])}::jsonb, '[]'::jsonb, 0)`;
+        ${JSON.stringify(['legal_reviewer'])}::jsonb,
+        ${JSON.stringify(['customer_facing_language', 'customer_facing_concession_language'])}::jsonb,
+        '[]'::jsonb, 0)`;
     const afterEdit = approvalInboxResponseSchema.parse((await approver.get('/api/approvals').set(browserHeaders).expect(200)).body);
     expect(afterEdit.pending.map(({ approvalSubjectId, entryId }) => ({ approvalSubjectId, entryId }))).toEqual([{
       approvalSubjectId: ids.replacementSubject,
@@ -348,7 +354,10 @@ describe.sequential('run and approval query APIs', () => {
       (await approver.get(`/api/approvals/${ids.replacementSubject}`).set(browserHeaders).expect(200)).body
     );
     expect(detail.entries).toEqual([expect.objectContaining({
-      entryId: ids.replacementEntry, availableAuthority: 'legal_reviewer', decided: false
+      entryId: ids.replacementEntry,
+      availableAuthority: 'legal_reviewer',
+      decided: false,
+      policyTriggers: ['customer_facing_language', 'customer_facing_concession_language']
     })]);
     expect(detail.payload.executiveSummary.narrative).toBe(
       replacementPayload.executiveSummary.narrative
@@ -365,10 +374,10 @@ describe.sequential('run and approval query APIs', () => {
       {
         id: ids.crmEvidence,
         sourceType: 'salesforce',
-        sourcePath: 'salesforce/opportunities.tsv',
+        sourcePath: 'synthetic_data/salesforce/opportunities.tsv',
         stableKey: 'opportunity_id',
         stableId: 'task13:0',
-        citationLabel: 'source=salesforce/opportunities.tsv, opportunity_id=task13:0',
+        citationLabel: 'source=synthetic_data/salesforce/opportunities.tsv, opportunity_id=task13:0',
         chunkId: ids.crmEvidence,
         capturedAt: '2026-08-29T00:00:00.000Z',
         content: 'Readable CRM fixture'

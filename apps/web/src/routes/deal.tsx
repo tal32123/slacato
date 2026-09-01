@@ -1,12 +1,13 @@
-import type { DealWorkspaceView } from '@slacato/contracts';
+import type { DealWorkspaceView, DemoSession } from '@slacato/contracts';
 import type { LoaderFunctionArgs } from 'react-router';
-import { useLoaderData } from 'react-router';
+import { useLoaderData, useRevalidator, useRouteLoaderData } from 'react-router';
 import {
   queryClient,
   SessionInvalidatedError,
   sessionQueryOptions,
   sessionRuntime
 } from '@/api/session';
+import { DealApprovalDecision } from '@/features/approvals/deal-approval-decision';
 import { DealBrief } from '@/features/briefs/deal-brief';
 import { EvidenceExplorer } from '@/features/briefs/evidence-explorer';
 import { dealWorkspaceQueryOptions } from '@/features/deals/queries';
@@ -46,6 +47,9 @@ export async function dealLoader({
 /** Presents a deal workspace and lets users inspect the evidence behind its brief. */
 export function DealRoute(): React.JSX.Element {
   const workspace = useLoaderData() as DealWorkspaceView;
+  const session = useRouteLoaderData('protected-root') as DemoSession;
+  const revalidator = useRevalidator();
+  const approvalReview = workspace.generatedOutput?.approvalReview ?? null;
   return (
     <EvidenceExplorer evidence={workspace.evidence}>
       {({ selectedEvidenceId, onEvidence }) => (
@@ -53,6 +57,15 @@ export function DealRoute(): React.JSX.Element {
           workspace={workspace}
           selectedEvidenceId={selectedEvidenceId}
           onEvidence={onEvidence}
+          approvalDecision={
+            approvalReview === null ? undefined : (
+              <DealApprovalDecision
+                approvalReview={approvalReview}
+                session={session}
+                onWorkspaceRevalidate={() => revalidator.revalidate()}
+              />
+            )
+          }
           primaryAction={
             <GenerateBriefAction
               opportunityId={workspace.deal.opportunityId}

@@ -120,12 +120,12 @@
     .guide-item { min-width: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; }
     .guide-item h4 { color: var(--teal-dark); }
     .guide-item p { margin: 4px 0 0; color: #4f5d65; font-size: 14px; line-height: 1.5; }
-    .change-marker { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 20px; padding: 10px 12px; border: 1px solid #d8b46b; border-radius: 10px; background: var(--warning-soft); color: #68400e; text-align: left; cursor: pointer; }
-    .change-zone { outline: 2px solid rgba(21,136,100,.28); outline-offset: 4px; }
-    .change-marker strong { flex: 0 0 auto; color: var(--warning); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
-    .change-marker span { min-width: 0; font-size: 13px; line-height: 1.35; }
-    .change-marker small { margin-left: auto; color: #795822; white-space: nowrap; }
-    .change-marker:hover, .change-marker:focus-visible { border-color: var(--warning); outline: none; }
+    .table-wrap { max-width: 100%; overflow-x: auto; }
+    .table-wrap table { min-width: 720px; }
+    .table-wrap:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+    .commands { margin: 14px 0 0; padding-left: 1.3em; }
+    .commands code { overflow-wrap: anywhere; }
+    section code { overflow-wrap: anywhere; }
     .readiness-list { display: grid; gap: 18px; margin: 24px 0 34px; }
     .readiness-card { min-width: 0; padding: 24px; border: 1px solid var(--line); border-left: 4px solid var(--teal); border-radius: 14px; background: #fbfcfb; }
     .readiness-card > h3 { margin: 0 0 6px; }
@@ -152,6 +152,11 @@
     table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 14px; }
     th, td { padding: 13px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
     th { color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+    td, th { overflow-wrap: anywhere; }
+    .contracts th:nth-child(1) { width: 16%; }
+    .contracts th:nth-child(2) { width: 22%; }
+    .contracts th:nth-child(3) { width: 36%; }
+    .contracts th:nth-child(4) { width: 26%; }
     footer { max-width: 1180px; margin: -60px auto 60px; padding: 0 24px; color: var(--muted); font-size: 13px; }
     @media (max-width: 800px) {
       .grid-2, .grid-3, .diagram-guide, .readiness-columns { grid-template-columns: 1fr; }
@@ -166,7 +171,9 @@
       .hero { padding-top: 40px; }
       section { box-shadow: none; break-inside: avoid; }
       .diagram { overflow: visible; }
-      .change-marker { display: none; }
+      .diagram svg { min-width: 0; }
+      .table-wrap { overflow: visible; }
+      .table-wrap table { min-width: 0; table-layout: fixed; }
     }
   </style>
 </head>
@@ -215,75 +222,112 @@
       <h2>Thin apps around durable domain and infrastructure seams.</h2>
       <p>The browser requests work. The API checks access. The worker builds the brief. Core holds the business rules; infrastructure connects them to storage, queues, search, and models.</p>
 
-      <h3>Logical view</h3>
+      <div>
+        <h3>Logical view</h3>
+        <p class="diagram-note"><strong>Inspect:</strong> follow authorization into draft review in the web/API, then verify the approval quorum gates only finalization, export, and customer-facing use.</p>
+        <div class="diagram" data-diagram="logical-architecture" role="group" aria-label="Logical architecture diagram">
+          <svg viewBox="0 0 1500 900" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="logical-title logical-desc">
+            <title id="logical-title">Authorized draft review with approval-gated final output</title>
+            <desc id="logical-desc">An authorized reviewer request enters Authorized hybrid RAG. A durable orchestrator sends typed context to Conversation, Stakeholder, Commercial, and Strategy agents and checkpoints their typed artifacts. Validation and guardrails produce an authorized draft that reviewers may inspect in the web application and API before approvals complete. The human approval quorum gates finalization, export, and customer-facing use. Retrieval, model, validation, approval, and final-output events all feed the trace and audit projection.</desc>
+            <defs><marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
+            <rect x="24" y="24" width="1452" height="852" rx="22" fill="#fbfcfb" stroke="#dce3df"/>
+            <style>
+              .la-app{fill:#fff;stroke:#158864;stroke-width:2}.la-core{fill:#eaf6f1;stroke:#158864;stroke-width:2}.la-infra{fill:#eef1f2;stroke:#65737b;stroke-width:2}.la-human{fill:#fff7e8;stroke:#9a5a10;stroke-width:2}
+              .la-title{font:700 17px system-ui;fill:#0A141D}.la-copy{font:12px system-ui;fill:#4d5b63}.la-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowA)}.la-event{stroke:#158864;stroke-width:1.7;stroke-dasharray:6 6;fill:none;marker-end:url(#arrowA)}.la-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}.la-label{font:700 11px system-ui;fill:#52616a;letter-spacing:.5px}
+            </style>
+            <text x="50" y="62" class="la-g">AUTHORIZED DRAFT REVIEW; APPROVAL-GATED FINAL USE</text>
 
-      <div class="diagram" data-diagram="logical-architecture" role="img" aria-label="Component architecture showing web, API, worker, core, infrastructure, PostgreSQL, Redis, and model providers">
-        <svg viewBox="0 0 1160 760" xmlns="http://www.w3.org/2000/svg">
-          <defs><marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
-          <rect x="28" y="28" width="1104" height="704" rx="22" fill="#fbfcfb" stroke="#dce3df"/>
-          <style>
-            .la-app{fill:#fff;stroke:#158864;stroke-width:2}.la-core{fill:#eaf6f1;stroke:#158864;stroke-width:2}.la-infra{fill:#eef1f2;stroke:#65737b;stroke-width:2}.la-store{fill:#fff;stroke:#65737b;stroke-width:1.5}
-            .la-title{font:700 18px system-ui;fill:#0A141D}.la-copy{font:13px system-ui;fill:#4d5b63}.la-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowA)}.la-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}
-          </style>
-          <text x="52" y="64" class="la-g">EACH BOX STATES THE ONE JOB IT OWNS</text>
+            <g><title>The API authenticates the requester and proves deal and source grants before retrieval.</title><rect class="la-app" x="45" y="155" width="225" height="145" rx="16"/><text x="158" y="192" text-anchor="middle" class="la-title">API authorization</text><text x="158" y="226" text-anchor="middle" class="la-copy">Checks requester, deal,</text><text x="158" y="247" text-anchor="middle" class="la-copy">and source permissions.</text><text x="158" y="275" text-anchor="middle" class="la-label">DENY BEFORE RETRIEVAL</text></g>
+            <path class="la-a" d="M270 228H325"/>
 
-          <g><rect class="la-app" x="40" y="96" width="300" height="150" rx="16"/><text x="190" y="132" text-anchor="middle" class="la-title">Web reviewer</text><text x="190" y="168" text-anchor="middle" class="la-copy">The seller starts a brief, then reviews</text><text x="190" y="190" text-anchor="middle" class="la-copy">its evidence, timeline, and approvals.</text></g>
-          <g><rect class="la-app" x="430" y="96" width="300" height="150" rx="16"/><text x="580" y="132" text-anchor="middle" class="la-title">API</text><text x="580" y="168" text-anchor="middle" class="la-copy">Checks access, records work, and returns</text><text x="580" y="190" text-anchor="middle" class="la-copy">safe results to the reviewer.</text></g>
-          <g><rect class="la-app" x="820" y="96" width="300" height="150" rx="16"/><text x="970" y="132" text-anchor="middle" class="la-title">Worker</text><text x="970" y="168" text-anchor="middle" class="la-copy">Runs retrieval and model steps, then resumes</text><text x="970" y="190" text-anchor="middle" class="la-copy">interrupted work from checkpoints.</text></g>
-          <path class="la-a" d="M340 171H430"/><path class="la-a" d="M730 171H820"/>
+            <g><title>Authorized hybrid RAG combines exact CRM, full-text, vector, and reciprocal-rank-fusion retrieval only inside the requester's allowed evidence scope.</title><rect class="la-core" x="325" y="140" width="260" height="175" rx="16"/><text x="455" y="179" text-anchor="middle" class="la-title">Authorized hybrid RAG</text><text x="455" y="213" text-anchor="middle" class="la-copy">Exact CRM + full-text + vector</text><text x="455" y="234" text-anchor="middle" class="la-copy">search, fused and frozen as an</text><text x="455" y="255" text-anchor="middle" class="la-copy">authorized evidence manifest.</text><text x="455" y="286" text-anchor="middle" class="la-label">PERMISSION FILTERED</text></g>
+            <path class="la-a" d="M585 228H640"/>
 
-          <g><rect class="la-core" x="70" y="310" width="470" height="170" rx="18"/><text x="305" y="350" text-anchor="middle" class="la-title">Core business rules</text><text x="305" y="390" text-anchor="middle" class="la-copy">Defines workflow, approval, and citation rules</text><text x="305" y="412" text-anchor="middle" class="la-copy">without depending on a database or model vendor.</text></g>
-          <g><rect class="la-infra" x="620" y="310" width="470" height="170" rx="18"/><text x="855" y="350" text-anchor="middle" class="la-title">Infrastructure adapters</text><text x="855" y="390" text-anchor="middle" class="la-copy">Connects those rules to Postgres, queues, search,</text><text x="855" y="412" text-anchor="middle" class="la-copy">recovery, and model providers.</text></g>
-          <path class="la-a" d="M580 246V278H305V310"/><path class="la-a" d="M970 246V278H855V310"/>
-          <path d="M540 395H620" stroke="#63727a" stroke-width="2" marker-start="url(#arrowA)" marker-end="url(#arrowA)"/>
+            <g><title>The durable orchestrator owns workflow transitions, typed AgentContext assembly, specialist fan-out, checkpoint persistence, and typed artifact fan-in.</title><rect class="la-infra" x="640" y="130" width="270" height="195" rx="18"/><text x="775" y="170" text-anchor="middle" class="la-title">Durable orchestrator</text><text x="775" y="204" text-anchor="middle" class="la-copy">Builds typed AgentContext,</text><text x="775" y="225" text-anchor="middle" class="la-copy">fans out specialists, checkpoints</text><text x="775" y="246" text-anchor="middle" class="la-copy">typed artifacts, then fans in.</text><text x="775" y="285" text-anchor="middle" class="la-label">POSTGRESQL CHECKPOINTS</text></g>
 
-          <g><rect class="la-store" x="40" y="550" width="330" height="140" rx="15"/><text x="205" y="588" text-anchor="middle" class="la-title">PostgreSQL + pgvector</text><text x="205" y="624" text-anchor="middle" class="la-copy">Stores permissions, evidence, run state,</text><text x="205" y="646" text-anchor="middle" class="la-copy">checkpoints, approvals, and final briefs.</text></g>
-          <g><rect class="la-store" x="415" y="550" width="330" height="140" rx="15"/><text x="580" y="588" text-anchor="middle" class="la-title">Redis + BullMQ</text><text x="580" y="624" text-anchor="middle" class="la-copy">Delivers queued work to workers; Postgres</text><text x="580" y="646" text-anchor="middle" class="la-copy">can rebuild it after a failure.</text></g>
-          <g><rect class="la-store" x="790" y="550" width="330" height="140" rx="15"/><text x="955" y="588" text-anchor="middle" class="la-title">Model gateway</text><text x="955" y="624" text-anchor="middle" class="la-copy">Controls every model call, retry, budget,</text><text x="955" y="646" text-anchor="middle" class="la-copy">and response validation.</text></g>
-          <path class="la-a" d="M730 480L290 550"/><path class="la-a" d="M855 480L650 550"/><path class="la-a" d="M965 480L955 550"/>
-        </svg>
+            <path class="la-a" d="M910 178H955"/><path class="la-a" d="M910 228H955"/><path class="la-a" d="M910 278H955"/>
+            <g><title>Conversation receives AgentContext and returns a validated ConversationArtifact.</title><rect class="la-core" x="955" y="70" width="220" height="105" rx="14"/><text x="1065" y="105" text-anchor="middle" class="la-title">Conversation</text><text x="1065" y="135" text-anchor="middle" class="la-copy">AgentContext →</text><text x="1065" y="155" text-anchor="middle" class="la-copy">ConversationArtifact</text></g>
+            <g><title>Stakeholder receives AgentContext and returns a validated StakeholderArtifact.</title><rect class="la-core" x="955" y="185" width="220" height="105" rx="14"/><text x="1065" y="220" text-anchor="middle" class="la-title">Stakeholder</text><text x="1065" y="250" text-anchor="middle" class="la-copy">AgentContext →</text><text x="1065" y="270" text-anchor="middle" class="la-copy">StakeholderArtifact</text></g>
+            <g><title>Commercial receives AgentContext and returns a validated CommercialArtifact.</title><rect class="la-core" x="955" y="300" width="220" height="105" rx="14"/><text x="1065" y="335" text-anchor="middle" class="la-title">Commercial</text><text x="1065" y="365" text-anchor="middle" class="la-copy">AgentContext →</text><text x="1065" y="385" text-anchor="middle" class="la-copy">CommercialArtifact</text></g>
+
+            <path class="la-a" d="M1175 122H1215V238H1255"/><path class="la-a" d="M1175 238H1255"/><path class="la-a" d="M1175 352H1215V238H1255"/><path class="la-a" d="M910 310H930V430H1380V295"/>
+            <g><title>Strategy receives AgentContext plus the three validated StrategyArtifacts and returns the typed DealBrief.</title><rect class="la-core" x="1255" y="170" width="210" height="135" rx="14"/><text x="1360" y="202" text-anchor="middle" class="la-title">Strategy</text><text x="1360" y="230" text-anchor="middle" class="la-copy">AgentContext +</text><text x="1360" y="250" text-anchor="middle" class="la-copy">StrategyArtifacts → DealBrief</text><text x="1360" y="280" text-anchor="middle" class="la-label">CHECKPOINTED FAN-IN</text></g>
+
+            <path class="la-a" d="M1360 305V475"/>
+            <g><title>Deterministic validation restores code-owned citations, checks support and schema rules, and applies safety and policy guardrails.</title><rect class="la-app" x="1195" y="475" width="270" height="135" rx="16"/><text x="1330" y="514" text-anchor="middle" class="la-title">Validation + guardrails</text><text x="1330" y="547" text-anchor="middle" class="la-copy">Schema, citation, support, safety,</text><text x="1330" y="568" text-anchor="middle" class="la-copy">and deterministic policy checks.</text><text x="1330" y="594" text-anchor="middle" class="la-label">CODE-ENFORCED</text></g>
+            <path class="la-a" d="M1195 543H1135"/>
+
+            <g><title>The validated, authorized draft is available to authorized reviewers in the web application and API before approvals complete; it cannot yet finalize or export.</title><rect class="la-app" x="885" y="475" width="250" height="135" rx="16"/><text x="1010" y="514" text-anchor="middle" class="la-title">Authorized draft review</text><text x="1010" y="547" text-anchor="middle" class="la-copy">Web + API may show the draft</text><text x="1010" y="568" text-anchor="middle" class="la-copy">before approval quorum.</text><text x="1010" y="594" text-anchor="middle" class="la-label">PREAPPROVAL REVIEW</text></g>
+            <path class="la-a" d="M885 543H825"/>
+            <g><title>Every required human approval must resolve before the draft can finalize, export, or support customer-facing use.</title><rect class="la-human" x="575" y="475" width="250" height="135" rx="16"/><text x="700" y="514" text-anchor="middle" class="la-title">HITL approval quorum</text><text x="700" y="547" text-anchor="middle" class="la-copy">Required authorities resolve before</text><text x="700" y="568" text-anchor="middle" class="la-copy">finalization, export, or external use.</text><text x="700" y="594" text-anchor="middle" class="la-label">GATES FINAL USE</text></g>
+            <path class="la-a" d="M575 543H515"/>
+            <g><title>After approval quorum, reviewer channels expose the finalized brief and controlled exports may support customer-facing use.</title><rect class="la-app" x="265" y="475" width="250" height="135" rx="16"/><text x="390" y="514" text-anchor="middle" class="la-title">Reviewer output channels</text><text x="390" y="547" text-anchor="middle" class="la-copy">Final brief · controlled export ·</text><text x="390" y="568" text-anchor="middle" class="la-copy">customer-facing use</text><text x="390" y="594" text-anchor="middle" class="la-label">AFTER APPROVAL QUORUM</text></g>
+
+            <path class="la-event" d="M455 315V710"/><path class="la-event" d="M1065 405V675H735V710"/><path class="la-event" d="M1330 610V710"/><path class="la-event" d="M1010 610V710"/><path class="la-event" d="M700 610V710"/><path class="la-event" d="M390 610V710"/>
+            <g><title>The trace and audit projection receives events from retrieval, every model invocation, validation and guardrail decisions, approval decisions, and final output.</title><rect class="la-infra" x="245" y="710" width="1010" height="125" rx="18"/><text x="750" y="751" text-anchor="middle" class="la-title">Trace + audit projection</text><text x="750" y="783" text-anchor="middle" class="la-copy">Fed by retrieval · model · validation · approval · final output</text><text x="750" y="811" text-anchor="middle" class="la-label">PERSISTED RUN TIMELINE, USAGE, DECISIONS, AND PROVENANCE</text></g>
+          </svg>
+        </div>
+        <div class="diagram-guide" aria-label="Logical architecture explanations">
+          <div class="guide-item"><h4>Authorized hybrid RAG</h4><p>Authorization narrows the corpus before exact CRM, full-text, and vector search. Reciprocal-rank fusion produces a frozen evidence manifest that every downstream step must honor.</p></div>
+          <div class="guide-item"><h4>Durable typed orchestration</h4><p>The orchestrator supplies typed <code>AgentContext</code> to each specialist, checkpoints their artifacts, and invokes Strategy with both <code>AgentContext</code> and typed <code>StrategyArtifacts</code>.</p></div>
+          <div class="guide-item"><h4>Validation + guardrails</h4><p>Schema, citation ownership, semantic support, unsafe-language, and approval-policy checks run in deterministic code around model output.</p></div>
+          <div class="guide-item"><h4>Draft review and finalization quorum</h4><p>Authorized reviewers may inspect the validated draft in the web application and API before approvals complete. The human quorum gates finalization, export, and customer-facing use—not draft visibility.</p></div>
+          <div class="guide-item"><h4>Trace + audit projection</h4><p>Retrieval, model, validation, approval, and final-output events feed one persisted reviewer timeline rather than separate, unverifiable logs.</p></div>
+          <div class="guide-item"><h4>Asymmetric failure boundary</h4><p>Recoverable specialist degradation is explicit and checkpointed; unsafe commercial or synthesis failure stops the run instead of producing a misleading brief.</p></div>
+        </div>
       </div>
 
-      <h3>Deployment view</h3>
-      <p>The API proves who may request work, the worker performs it, PostgreSQL preserves the history needed to recover it, and the model gateway contains external model access.</p>
-      <div class="diagram" data-diagram="deployment" role="img" aria-label="Deployment flow from reviewer browser through the web gateway and API to the worker, PostgreSQL, Redis, and model gateway">
-        <svg viewBox="0 0 1240 560" xmlns="http://www.w3.org/2000/svg">
-          <desc>A request starts in the reviewer browser. The web gateway keeps the browser and API on one trusted origin. The API authorizes and records work, the worker performs it, PostgreSQL preserves recovery state, Redis delivers pending work, and the model gateway controls provider traffic.</desc>
-          <defs><marker id="arrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
-          <rect width="1240" height="560" fill="#fbfcfb"/>
-          <style>
-            .dp-svc{fill:#fff;stroke:#158864;stroke-width:2}.dp-store{fill:#fff;stroke:#65737b;stroke-width:1.6}.dp-ext{fill:#eaf6f1;stroke:#158864;stroke-width:1.6}
-            .dp-h{font:700 16px system-ui;fill:#0A141D}.dp-s{font:12px system-ui;fill:#52616a}.dp-l{font:11px system-ui;fill:#6b7880}.dp-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}.dp-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowD)}
-          </style>
-          <text x="28" y="32" class="dp-g">HOW A REQUEST MOVES THROUGH THE DEPLOYED SYSTEM</text>
+      <div>
+        <h3>Deployment view</h3>
+        <p class="diagram-note"><strong>Inspect:</strong> compare the current server-side environment configuration and application logs/health with the dashed production-target Secrets manager and multi-service telemetry paths.</p>
+        <p>Today, server-side environment configuration supplies credentials and the application exposes logs and health signals. The production target adds managed secret injection and centralized monitoring without changing the API, worker, PostgreSQL, Redis, or model-gateway responsibilities.</p>
+        <div class="diagram" data-diagram="deployment" role="group" aria-label="Current deployment and production-target operations diagram">
+          <svg viewBox="0 0 1500 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="deployment-title deployment-desc">
+            <title id="deployment-title">Current services with production-target secret injection and telemetry</title>
+            <desc id="deployment-desc">The current reviewer browser reaches the web gateway and API. The API records work for the worker, which uses PostgreSQL, Redis, and the model gateway; credentials come from server-side environment configuration and the application emits logs and health signals. Dashed production-target nodes and edges show a future Secrets manager injecting credentials into the API, worker, and model gateway, and centralized Monitoring and telemetry receiving signals from API, worker, PostgreSQL, Redis, and model gateway.</desc>
+            <defs><marker id="arrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
+            <rect width="1500" height="720" fill="#fbfcfb"/>
+            <style>
+              .dp-svc{fill:#fff;stroke:#158864;stroke-width:2}.dp-store{fill:#fff;stroke:#65737b;stroke-width:1.6}.dp-ext{fill:#eaf6f1;stroke:#158864;stroke-width:1.6}.dp-ops{fill:#eef1f2;stroke:#65737b;stroke-width:1.8;stroke-dasharray:8 5}
+              .dp-h{font:700 16px system-ui;fill:#0A141D}.dp-s{font:12px system-ui;fill:#52616a}.dp-l{font:700 10px system-ui;fill:#6b7880;letter-spacing:.5px}.dp-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}.dp-a{stroke:#63727a;stroke-width:2;fill:none;marker-end:url(#arrowD)}.dp-secret{stroke:#9a5a10;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arrowD)}.dp-tele{stroke:#158864;stroke-width:1.7;stroke-dasharray:4 5;fill:none;marker-end:url(#arrowD)}
+            </style>
+            <text x="28" y="32" class="dp-g">CURRENT SERVICES + DASHED PRODUCTION-TARGET OPERATIONS</text>
 
-          <g><title>The seller’s browser is a review surface only. It never receives database or model-provider credentials.</title><rect class="dp-store" x="30" y="78" width="210" height="132" rx="14"/><text x="48" y="112" class="dp-h">Reviewer browser</text><text x="48" y="142" class="dp-s">Starts a brief and reviews</text><text x="48" y="161" class="dp-s">evidence and approvals.</text><text x="48" y="190" class="dp-s">Holds no provider keys.</text></g>
-          <path class="dp-a" d="M240 144H285"/><text x="262" y="134" text-anchor="middle" class="dp-l">HTTPS</text>
+            <g><title>The reviewer browser is a review surface only and never receives database or model-provider credentials.</title><rect class="dp-store" x="30" y="80" width="190" height="125" rx="14"/><text x="48" y="114" class="dp-h">Reviewer browser</text><text x="48" y="144" class="dp-s">Starts and reviews briefs.</text><text x="48" y="164" class="dp-s">Holds no provider keys.</text></g>
+            <path class="dp-a" d="M220 143H270"/><text x="245" y="133" text-anchor="middle" class="dp-l">HTTPS</text>
 
-          <g><title>The web gateway serves the interface and forwards API traffic on the same origin, which keeps session cookies out of cross-origin flows.</title><rect class="dp-svc" x="285" y="78" width="220" height="132" rx="14"/><text x="303" y="112" class="dp-h">Web gateway</text><text x="303" y="142" class="dp-s">Serves the React interface</text><text x="303" y="161" class="dp-s">and forwards API requests</text><text x="303" y="180" class="dp-s">on the same trusted origin.</text></g>
-          <path class="dp-a" d="M505 144H550"/>
+            <g><title>The web gateway serves the interface and forwards API traffic under one trusted origin.</title><rect class="dp-svc" x="270" y="80" width="190" height="125" rx="14"/><text x="288" y="114" class="dp-h">Web gateway</text><text x="288" y="144" class="dp-s">Serves React and forwards</text><text x="288" y="164" class="dp-s">same-origin API traffic.</text></g>
+            <path class="dp-a" d="M460 143H510"/>
 
-          <g><title>The API authenticates the requester, applies permissions, records a durable command, and returns read models. It stays responsive because generation runs elsewhere.</title><rect class="dp-svc" x="550" y="68" width="260" height="152" rx="14"/><text x="568" y="102" class="dp-h">API service</text><text x="568" y="132" class="dp-s">Authenticates and authorizes.</text><text x="568" y="151" class="dp-s">Records durable commands.</text><text x="568" y="170" class="dp-s">Returns timelines, briefs,</text><text x="568" y="189" class="dp-s">evidence, and approvals.</text></g>
-          <path class="dp-a" d="M680 220V300"/>
+            <g><title>The current API authenticates, authorizes, records durable commands, and returns safe read models using server-side environment configuration.</title><rect class="dp-svc" x="510" y="65" width="235" height="155" rx="14"/><text x="530" y="100" class="dp-h">API service</text><text x="530" y="130" class="dp-s">Authenticates and authorizes.</text><text x="530" y="150" class="dp-s">Records durable commands.</text><text x="530" y="170" class="dp-s">Returns safe reviewer views.</text><text x="530" y="198" class="dp-l">SERVER-SIDE ENV CONFIG</text></g>
+            <path class="dp-a" d="M628 220V300"/>
 
-          <g><title>The worker owns retrieval, generation, validation, and recovery. Keeping this work outside the API prevents a slow provider from tying up an HTTP request.</title><rect class="dp-svc" x="550" y="300" width="260" height="152" rx="14"/><text x="568" y="334" class="dp-h">Worker service</text><text x="568" y="364" class="dp-s">Runs retrieval, agents,</text><text x="568" y="383" class="dp-s">validation, and finalization.</text><text x="568" y="412" class="dp-s">Resumes interrupted steps</text><text x="568" y="431" class="dp-s">from saved checkpoints.</text></g>
+            <g><title>The current worker owns Authorized hybrid RAG, agent execution, checkpoints, validation, approval routing, and finalization using server-side environment configuration.</title><rect class="dp-svc" x="510" y="300" width="235" height="165" rx="14"/><text x="530" y="335" class="dp-h">Worker service</text><text x="530" y="365" class="dp-s">Runs retrieval and agents.</text><text x="530" y="385" class="dp-s">Checkpoints and validates.</text><text x="530" y="405" class="dp-s">Routes approvals and finalizes.</text><text x="530" y="440" class="dp-l">SERVER-SIDE ENV CONFIG</text></g>
 
-          <g><title>PostgreSQL is the recovery authority. It stores permissions, evidence, workflow state, checkpoints, approvals, citations, and finalized briefs.</title><rect class="dp-store" x="865" y="62" width="335" height="170" rx="14"/><text x="885" y="98" class="dp-h">PostgreSQL + pgvector</text><text x="885" y="128" class="dp-s">Source of truth for permissions,</text><text x="885" y="147" class="dp-s">evidence, run state, checkpoints,</text><text x="885" y="166" class="dp-s">approvals, citations, and briefs.</text><text x="885" y="200" class="dp-s">A restart can recover from here.</text></g>
-          <path class="dp-a" d="M810 132H865"/>
-          <path class="dp-a" d="M810 330C838 330 838 190 865 190"/>
+            <g><title>PostgreSQL with pgvector is the recovery authority for permissions, evidence, run state, checkpoints, approvals, citations, and finalized briefs.</title><rect class="dp-store" x="820" y="60" width="300" height="175" rx="14"/><text x="840" y="96" class="dp-h">PostgreSQL + pgvector</text><text x="840" y="126" class="dp-s">Permissions and evidence.</text><text x="840" y="146" class="dp-s">Run state and checkpoints.</text><text x="840" y="166" class="dp-s">Approvals, citations, briefs.</text><text x="840" y="202" class="dp-l">RECOVERY AUTHORITY</text></g>
+            <path class="dp-a" d="M745 135H820"/><path class="dp-a" d="M745 335C780 335 780 190 820 190"/>
 
-          <g><title>Redis and BullMQ wake workers and deliver pending commands. They are intentionally not the source of truth, so lost queue state can be reconstructed from PostgreSQL.</title><rect class="dp-store" x="865" y="278" width="335" height="112" rx="14"/><text x="885" y="314" class="dp-h">Redis + BullMQ</text><text x="885" y="344" class="dp-s">Delivers pending work to workers.</text><text x="885" y="363" class="dp-s">Can be rebuilt from PostgreSQL.</text></g>
-          <path class="dp-a" d="M810 354H865"/>
+            <g><title>Redis and BullMQ deliver pending commands to workers and can be rebuilt from PostgreSQL.</title><rect class="dp-store" x="820" y="285" width="300" height="115" rx="14"/><text x="840" y="321" class="dp-h">Redis + BullMQ</text><text x="840" y="351" class="dp-s">Delivers pending work.</text><text x="840" y="371" class="dp-s">Rebuildable queue state.</text></g>
+            <path class="dp-a" d="M745 358H820"/>
 
-          <g><title>The model gateway is the only path to a model provider. It applies provider-independent request contracts, retries, and output validation.</title><rect class="dp-ext" x="865" y="426" width="335" height="104" rx="14"/><text x="885" y="462" class="dp-h">Model gateway</text><text x="885" y="491" class="dp-s">Single controlled path for model</text><text x="885" y="510" class="dp-s">generation and embeddings.</text></g>
-          <path class="dp-a" d="M810 410C838 410 838 478 865 478"/>
-        </svg>
-      </div>
-      <div class="diagram-guide" aria-label="Deployment diagram explanations">
-        <div class="guide-item"><h4>Why one browser origin?</h4><p>The web gateway serves the interface and forwards API calls under one origin, so secure session cookies do not need cross-origin exceptions.</p></div>
-        <div class="guide-item"><h4>Why split API and worker?</h4><p>The API can answer quickly after recording a command. Slow retrieval and model calls happen in the worker and can retry without holding an HTTP request open.</p></div>
-        <div class="guide-item"><h4>Why does PostgreSQL own recovery?</h4><p>Workflow state and checkpoints survive process or queue loss. Redis can be cleared and rebuilt without losing which step should run next.</p></div>
-        <div class="guide-item"><h4>Why one model gateway?</h4><p>Every provider call crosses one boundary where budgets, retries, validation, and diagnostics can be applied consistently.</p></div>
+            <g><title>The current model gateway is the only provider path and reads provider credentials from server-side environment configuration.</title><rect class="dp-ext" x="820" y="455" width="300" height="125" rx="14"/><text x="840" y="491" class="dp-h">Model gateway</text><text x="840" y="521" class="dp-s">Generation and embeddings.</text><text x="840" y="541" class="dp-s">Controlled provider boundary.</text><text x="840" y="565" class="dp-l">SERVER-SIDE ENV CONFIG</text></g>
+            <path class="dp-a" d="M745 430C780 430 780 518 820 518"/>
+
+            <g><title>Production target: a managed Secrets manager injects only the credentials needed by the API, worker, and model gateway; this is not part of the current prototype.</title><rect class="dp-ops" x="30" y="505" width="300" height="135" rx="14"/><text x="50" y="542" class="dp-l">PRODUCTION TARGET</text><text x="50" y="568" class="dp-h">Secrets manager</text><text x="50" y="594" class="dp-s">Injects scoped credentials into</text><text x="50" y="614" class="dp-s">API, worker, and model gateway.</text></g>
+            <path class="dp-secret" d="M330 545H430V190H510"/><path class="dp-secret" d="M330 570H470V410H510"/><path class="dp-secret" d="M330 600H785V548H820"/><text x="362" y="532" class="dp-l">TARGET CREDENTIAL INJECTION</text>
+
+            <g><title>Production target: centralized Monitoring and telemetry receives health, metrics, traces, and diagnostics from the API, worker, PostgreSQL, Redis, and model gateway; current operation uses application logs and health signals.</title><rect class="dp-ops" x="1210" y="235" width="260" height="220" rx="14"/><text x="1230" y="273" class="dp-l">PRODUCTION TARGET</text><text x="1230" y="301" class="dp-h">Monitoring + telemetry</text><text x="1230" y="333" class="dp-s">API and worker health.</text><text x="1230" y="353" class="dp-s">Queue and database signals.</text><text x="1230" y="373" class="dp-s">Model latency and failures.</text><text x="1230" y="408" class="dp-l">METRICS · TRACES · ALERTS</text></g>
+            <path class="dp-tele" d="M745 105H1160V270H1210"/><path class="dp-tele" d="M745 380H1160V305H1210"/><path class="dp-tele" d="M1120 125H1175V340H1210"/><path class="dp-tele" d="M1120 342H1185V375H1210"/><path class="dp-tele" d="M1120 518H1175V410H1210"/><text x="1142" y="220" class="dp-l">TARGET TELEMETRY</text>
+          </svg>
+        </div>
+        <div class="diagram-guide" aria-label="Deployment diagram explanations">
+          <div class="guide-item"><h4>Why one browser origin?</h4><p>The web gateway serves the interface and forwards API calls under one origin, so secure session cookies do not need cross-origin exceptions.</p></div>
+          <div class="guide-item"><h4>Why split API and worker?</h4><p>The API can answer after recording a command. Slow retrieval and model calls run in the worker without holding an HTTP request open.</p></div>
+          <div class="guide-item"><h4>Why does PostgreSQL own recovery?</h4><p>Workflow state and checkpoints survive process or queue loss. Redis can be rebuilt without losing which durable step runs next.</p></div>
+          <div class="guide-item"><h4>Why one model gateway?</h4><p>Every provider call crosses one boundary where request contracts, retries, validation, usage, and diagnostics are applied consistently.</p></div>
+          <div class="guide-item"><h4>How are secrets supplied?</h4><p>Current services read validated server-only environment configuration. The dashed production target replaces long-lived file or environment secrets with scoped Secrets manager injection into the API, worker, and model gateway.</p></div>
+          <div class="guide-item"><h4>What feeds operations?</h4><p>Current operation exposes application logs and health signals. The dashed production target centralizes API, worker, PostgreSQL, Redis, and model-gateway metrics, traces, diagnostics, dashboards, and alerts.</p></div>
+        </div>
       </div>
     </section>
 
@@ -296,6 +340,48 @@
         <div class="card"><h4>Stakeholder Map</h4><p><strong>What:</strong> identifies champions, decision-makers, blockers, and missing relationships.<br><strong>Why:</strong> a good commercial plan fails if the wrong people are engaged.<br><strong>Inputs:</strong> authorized Salesforce contacts, Gong summaries and transcripts, and Slack updates.<br><strong>Tools:</strong> none. Same contract as every specialist: evidence in, a stakeholder object out, no way to fetch more.</p></div>
         <div class="card"><h4>Commercial Analysis</h4><p><strong>What:</strong> reviews pricing, policy, legal concerns, and sensitive concessions.<br><strong>Why:</strong> high-impact terms need focused scrutiny and human approval.<br><strong>Inputs:</strong> authorized Salesforce records, pricing notes, and Deal Desk policy evidence.<br><strong>Tools:</strong> none. Evidence in, a commercial object out. The approval policy that gates concessions is deterministic code, not something this agent decides.</p></div>
         <div class="card"><h4>Negotiation Strategy</h4><p><strong>What:</strong> combines the three specialist views into the final brief and next actions.<br><strong>Why:</strong> the seller needs one prioritized, evidence-backed view of the deal.<br><strong>Inputs:</strong> all three validated specialist outputs and the full authorized evidence list.<br><strong>Tools:</strong> none. It sees only the three validated specialist outputs and the authorized evidence list, and returns the brief.</p></div>
+      </div>
+
+      <div>
+        <h3>Executable contracts and failure disposition</h3>
+        <p class="diagram-note"><strong>Inspect:</strong> compare each typed input/output contract, its evidence-validation boundary, and the deliberate degraded-versus-fatal failure decision.</p>
+        <p>Each role is an executable typed boundary, not only a prompt persona. The same frozen, authorized evidence manifest binds input, output validation, citations, and the checkpoint written for that invocation.</p>
+        <div class="table-wrap" role="region" aria-label="Agent executable contracts" tabindex="0">
+          <table class="contracts">
+            <thead>
+              <tr><th>Agent</th><th>Executable contract</th><th>Evidence and validation constraints</th><th>Failure disposition</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Conversation</strong></td>
+                <td><code>AgentContext → ConversationArtifact</code></td>
+                <td>Receives only authorized Gong summaries, transcripts, and Slack updates. Manifest binding, strict schema, citation ownership and support checks apply; the serialized artifact is capped at 6,000 bytes.</td>
+                <td><strong>Degraded.</strong> Checkpoint an empty, schema-valid artifact with an explicit warning; omit conversation-dependent claims.</td>
+              </tr>
+              <tr>
+                <td><strong>Stakeholder</strong></td>
+                <td><code>AgentContext → StakeholderArtifact</code></td>
+                <td>Receives only authorized Salesforce, Gong, and Slack evidence. Identity, title, manifest, citation and support rules apply; the serialized artifact is capped at 8,192 bytes.</td>
+                <td><strong>Degraded.</strong> Checkpoint an empty, schema-valid artifact with an explicit warning; omit stakeholder-dependent claims.</td>
+              </tr>
+              <tr>
+                <td><strong>Commercial</strong></td>
+                <td><code>AgentContext → CommercialArtifact</code></td>
+                <td>Receives only authorized Salesforce, pricing, and policy evidence. Manifest, strict schema, citation, support, commercial-term and approval inputs are validated; the serialized artifact is capped at 6,000 bytes.</td>
+                <td><strong>Fatal.</strong> End the run as <code>commercial_specialist_failed</code>; commercial uncertainty cannot be silently downgraded.</td>
+              </tr>
+              <tr>
+                <td><strong>Strategy</strong></td>
+                <td><code>(AgentContext, StrategyArtifacts) → DealBrief</code></td>
+                <td>Receives the same authorized <code>AgentContext</code> plus the three validated specialist artifacts. It must return the canonical nine-section schema; citation, support, safety and policy validation run before approval routing.</td>
+                <td><strong>Fatal.</strong> End the run as <code>strategy_generation_failed</code>; no partial final brief is emitted.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <p><strong>Fan-out, checkpoint, fan-in:</strong> missing specialists start together under <code>Promise.allSettled</code>. The workflow persists each outcome in deterministic Conversation → Stakeholder → Commercial order, then fans the three checkpoints into Strategy. The failure policy is deliberately asymmetric: Conversation and Stakeholder may continue as explicit empty degraded artifacts, while Commercial and Strategy failures are fatal.</p>
+        </div>
       </div>
     </section>
 
@@ -368,6 +454,33 @@
           <g><rect class="ar-box" x="1350" y="195" width="120" height="130" rx="15"/><text x="1410" y="240" text-anchor="middle" class="ar-title">Final brief</text><text x="1410" y="274" text-anchor="middle" class="ar-copy">Reviewed</text><text x="1410" y="294" text-anchor="middle" class="ar-copy">and cited.</text></g>
         </svg>
       </div>
+
+      <div>
+        <h3>Live-model controls</h3>
+        <p class="diagram-note"><strong>Inspect:</strong> distinguish local context, schema, retry, call, and deadline controls from provider defaults and limits the adapter does not claim.</p>
+        <p>Live generation runs behind deterministic authorization, shape, retry, and durable-run boundaries. These are application controls; they do not imply provider-side limits that the adapter does not send.</p>
+        <div class="grid-2">
+          <div class="card">
+            <h4>Authorized context selection</h4>
+            <p>Exact canonical CRM evidence and Authorized hybrid RAG results are selected only from the requester’s allowed deal and source scope, then frozen in a retrieval evidence manifest capped at 60,000 characters. Each agent prompt separately selects at most 20 authorized records within a 22,000-character evidence cap and trims any one record to 6,000 characters.</p>
+          </div>
+          <div class="card">
+            <h4>Artifact and schema limits</h4>
+            <p>Conversation and Commercial artifacts are capped at 6,000 serialized bytes; Stakeholder is capped at 8,192, and persisted artifacts remain bounded by the shared 128 KiB ceiling. In <code>prompted_json</code> mode only, the raw JSON parser enforces 128 KiB, 32 nesting levels, and 10,000 nodes. <code>native_schema</code> instead uses provider-native schema output followed by full local schema and evidence-support validation.</p>
+          </div>
+          <div class="card">
+            <h4>Invocation and run budgets</h4>
+            <p>One agent invocation may make at most <strong>4 calls</strong>, including no more than <strong>2 schema repairs</strong> and <strong>1 transport retry</strong>. The shared run budget allows <strong>24 calls</strong> and has a persisted <strong>600-second deadline</strong>, so a replacement worker inherits the same deadline rather than resetting it.</p>
+          </div>
+          <div class="card">
+            <h4>Usage and provider parameters</h4>
+            <p>Every durable attempt records reported input and output token usage with its operation and provider diagnostics. The adapter leaves <code>temperature</code> and <code>topP</code> at provider defaults. It sends no provider-side <code>maxOutputTokens</code> and enforces no aggregate currency cap; local byte/schema bounds plus call and deadline limits are the current controls.</p>
+          </div>
+        </div>
+        <div class="callout">
+          <p><strong>OpenRouter embeddings:</strong> the default indexing profile is <code>OPENROUTER_EMBEDDING_DIMENSION=1536</code>. The setting must be an integer from <strong>1</strong> through <strong>16000</strong>. It may be omitted only for the default <code>openai/text-embedding-3-small</code> model, whose required dimension is fixed at 1,536; selecting a different embedding model requires its explicit matching dimension so incompatible vectors are rejected rather than compared.</p>
+        </div>
+      </div>
     </section>
 
 
@@ -380,7 +493,12 @@
         <div class="card"><h4>Human approval before action</h4><p><strong>What:</strong> an accountable person must approve sensitive recommendations before the brief can finalize.<br><strong>Why:</strong> these are high-value deals with real pricing, legal, and customer commitments.<br><strong>How:</strong> the workflow pauses and routes each issue to Deal Desk, Sales leadership, legal, or the account owner; it continues only after every required approval is recorded.</p></div>
         <div class="card"><h4>Review and recovery history</h4><p><strong>What:</strong> reviewers can see which evidence, agents, and decisions produced the brief.<br><strong>Why:</strong> the business must explain outcomes and recover interrupted work without repeating approvals.<br><strong>How:</strong> PostgreSQL stores run progress, retrieved evidence, model calls, approvals, and the final brief; a replacement worker resumes from the last saved stage.</p></div>
       </div>
-      <div class="callout"><p><strong>Generated Slack updates:</strong> three clearly synthetic updates per opportunity add useful context, uncertainty, and conflicting signals. They are permissioned and ingested like any other evidence source.</p></div>
+      <div>
+        <h3>Generated Slack evidence</h3>
+        <p>The <a href="../samples/slack-impact.html">Slack impact comparison</a> shows how the generated account-team updates change the rendered brief and identifies the cited updates.</p>
+        <p>The canonical dataset is <code>fixtures/cato/slack/account_team_updates.tsv</code>; its reviewed live-generation record is <code>fixtures/cato/slack/generation.json</code>. Each TSV row carries stable update, opportunity, and account identifiers; a scenario date; a fictional channel and author role; a synthetic marker; an access level; and the update text. The fixture generator creates three clearly synthetic updates per opportunity: one reinforcing fact, one missing-context signal, and one ambiguity or conflict.</p>
+        <p>Fixture loading validates the format, unique IDs, synthetic notices, opportunity/account bindings, chronology, per-opportunity coverage, and reviewed output hash before ingestion. The standard ingestion pipeline stores each row as <code>sourceType=slack</code>, classifies its declared access level, and preserves the stable locator <code>slack/account_team_updates.tsv#&lt;update_id&gt;</code>. Retrieval requires an effective <code>slack</code> source grant and rechecks the run’s authorized evidence manifest before any row reaches an agent.</p>
+      </div>
       <div class="callout danger"><p><strong>Before production:</strong> add enterprise identity, managed secrets and rotation, rate limits, spending controls, high availability, monitoring and alerting, operational support, and stronger personal-data protection. <a href="#production">Production readiness</a> covers these gaps.</p></div>
     </section>
 
@@ -392,7 +510,11 @@
         <div class="card"><h4>A · Runnable prototype</h4><p>A working web experience, API, background processing, retrieval, approvals, and live-model configuration.</p></div>
         <div class="card"><h4>B · Architecture diagrams</h4><p>Logical, deployment, agent, and workflow views cover retrieval, state, approvals, guardrails, observability, storage, and model access.</p></div>
         <div class="card"><h4>C · Documentation</h4><p>The README, this overview, and security notes explain setup, permissions, saved state, and generated Slack ingestion.</p></div>
-        <div class="card"><h4>D · Sample run artifacts</h4><p><code>samples/</code> includes live-model briefs, generated Slack data, approval output, denied access, traces, and logs. <a href="../samples/slack-impact.html">Slack impact comparison</a> shows the same deal generated with and without the account-team updates.</p></div>
+        <div class="card">
+          <h4>D · Sample run artifacts</h4>
+          <p class="diagram-note"><strong>Inspect:</strong> confirm the repository sample index is <code>samples/index.html</code> while raw Slack data and generation provenance remain canonical under <code>fixtures/cato/slack/</code>.</p>
+          <p><code>samples/index.html</code> is the repository sample-artifact index for live-model briefs, approval output, denied access, traces, logs, and the <a href="../samples/slack-impact.html">served Slack impact comparison</a>. The raw generated Slack TSV and its generation provenance remain canonical under <code>fixtures/cato/slack/</code>: <code>account_team_updates.tsv</code> and <code>generation.json</code>.</p>
+        </div>
         <div class="card"><h4>E · Interview walkthrough</h4><p>A 15-minute narrative should cover business value, design choices, a live demo, evaluation results, and production risks.</p></div>
       </div>
 
@@ -474,10 +596,11 @@
 
         <article class="readiness-card">
           <h3>Cost and capacity</h3>
+          <p class="diagram-note"><strong>Inspect:</strong> separate the implemented local call, deadline, shape, and usage controls from currency accounting and team budgets that remain production work.</p>
           <p><strong>What it is:</strong> keeping model spend and processing time predictable as usage grows.</p>
           <div class="readiness-columns">
             <div class="readiness-block"><h4>Why it matters</h4><ul><li>A provider change, retry storm, or traffic spike can increase both latency and cost unexpectedly.</li></ul></div>
-            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Attempt and time limits:</strong> stop a run from retrying forever.</li><li><strong>Context and output limits:</strong> cap how much text each model call can process or return.</li><li><strong>Usage records:</strong> save actual token counts for later analysis.</li></ul></div>
+            <div class="readiness-block"><h4>Already works</h4><ul><li><strong>Call and deadline limits:</strong> stop one invocation or run from retrying forever.</li><li><strong>Local shape limits:</strong> bound selected context and serialized artifacts; <code>prompted_json</code> additionally bounds strict JSON complexity. The adapter does not claim or send a provider-side output-token cap.</li><li><strong>Usage records:</strong> save reported input and output token counts for later analysis.</li></ul></div>
             <div class="readiness-block"><h4>Before production</h4><ul><li><strong>Currency-level accounting:</strong> convert provider usage into actual money spent.</li><li><strong>Team budgets:</strong> cap or alert on spend by tenant or team.</li><li><strong>Forecasts and anomaly alerts:</strong> detect unusual growth before a bill arrives.</li><li><strong>Measured model routing:</strong> choose models only after comparing quality, latency, and price for each agent task.</li></ul></div>
           </div>
         </article>
@@ -514,42 +637,6 @@
       });
       toolbar.append(button);
       diagram.prepend(toolbar);
-    }
-    for (const zone of document.querySelectorAll('.change-zone')) {
-      const changeId = zone.dataset.changeId;
-      const storageKey = `technical-overview-change:${changeId}`;
-      let dismissed = false;
-      try {
-        dismissed = sessionStorage.getItem(storageKey) === 'dismissed';
-      } catch {
-        dismissed = false;
-      }
-      if (dismissed) {
-        zone.classList.remove('change-zone');
-        continue;
-      }
-
-      const marker = document.createElement('button');
-      marker.type = 'button';
-      marker.className = 'change-marker';
-      marker.setAttribute('aria-label', `Updated: ${zone.dataset.change}. Click to dismiss this highlight.`);
-      const label = document.createElement('strong');
-      label.textContent = 'Updated';
-      const description = document.createElement('span');
-      description.textContent = zone.dataset.change;
-      const action = document.createElement('small');
-      action.textContent = 'Click to dismiss';
-      marker.append(label, description, action);
-      marker.addEventListener('click', () => {
-        try {
-          sessionStorage.setItem(storageKey, 'dismissed');
-        } catch {
-          // The marker still dismisses when storage is unavailable.
-        }
-        marker.remove();
-        zone.classList.remove('change-zone');
-      });
-      zone.prepend(marker);
     }
 
 

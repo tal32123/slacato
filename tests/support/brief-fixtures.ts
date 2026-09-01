@@ -186,12 +186,8 @@ export function healthyBrief(): DealBrief {
     },
     recommendedNextActions: {
       actions: [
-        {
-          action: 'Confirm the named escalation owners for the branch migration rollout.',
-          priority: 'high',
-          rationale: contact.note,
-          claims: [fixtureClaim('claim_act_1', contact.note, contactEvidence)]
-        }
+        { action: 'Confirm the named escalation owners for the branch migration rollout.', audience: 'internal', priority: 'high', rationale: contact.note,
+        claims: [fixtureClaim('claim_act_1', contact.note, contactEvidence)] }
       ]
     },
     missingInformation: {

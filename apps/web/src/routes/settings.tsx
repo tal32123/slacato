@@ -1,6 +1,13 @@
 import type { DemoSession } from '@slacato/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpenCheck, Check, LockKeyhole, ShieldCheck } from 'lucide-react';
+import {
+  BookOpenCheck,
+  Check,
+  ExternalLink,
+  FileText,
+  LockKeyhole,
+  ShieldCheck
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { LoaderFunctionArgs } from 'react-router';
 import { Link, useNavigate, useRevalidator, useRouteLoaderData } from 'react-router';
@@ -288,6 +295,40 @@ export function SettingsRoute(): React.JSX.Element {
         {/* Renders itself only where the server designated a sandbox and this persona may clear
             it, so an ordinary deployment shows no destructive control here at all. */}
         <ResetSandboxCard sessionVersion={session.version} />
+      </section>
+
+      <section aria-labelledby="reference-heading" className="border-t pt-7">
+        <h2 id="reference-heading" className="sr-only">
+          Reference
+        </h2>
+        <Card className="gap-4 shadow-none">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-md bg-secondary text-secondary-foreground">
+                <FileText aria-hidden="true" />
+              </span>
+              <div>
+                <CardTitle>Technical overview</CardTitle>
+                <CardDescription>
+                  Architecture, agent roles, request lifecycle, and security notes
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm leading-6 text-muted-foreground">
+              A self-contained document covering how briefs are generated, how permissions are
+              enforced, and what is production-ready. It opens in a new tab and works offline.
+            </p>
+            <Button asChild className="mt-5 min-h-11" variant="outline">
+              <a href="/technical-overview.html" target="_blank" rel="noopener noreferrer">
+                Open technical overview
+                <ExternalLink aria-hidden="true" />
+                <span className="sr-only">(opens in a new tab)</span>
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
       </section>
     </div>
   );
