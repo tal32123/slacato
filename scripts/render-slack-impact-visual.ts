@@ -17,10 +17,6 @@ import { resolve } from 'node:path';
 
 const DEFAULT_INPUT = 'samples/slack-impact-comparison.json';
 const DEFAULT_OUTPUT = 'samples/slack-impact.html';
-// The web app serves apps/web/public at its root, so the same page is reachable at
-// /slack-impact.html during a live demo without adding a route or a nav entry. Writing both
-// copies from this one generator is what keeps them from drifting apart.
-const WEB_PUBLIC_OUTPUT = 'apps/web/public/slack-impact.html';
 const CITATION_SOURCES = [
   'samples/restricted-opportunity-brief.txt',
   'samples/normal-opportunity-brief.txt',
@@ -568,10 +564,8 @@ async function main(): Promise<void> {
   const citationLabels = await loadCitationLabels();
   const page = render(comparison, citationLabels);
   await writeFile(outputPath, page, 'utf8');
-  if (outputArgument === undefined)
-    await writeFile(resolve(process.cwd(), WEB_PUBLIC_OUTPUT), page, 'utf8');
   process.stdout.write(
-    `wrote ${outputArgument ?? `${DEFAULT_OUTPUT} and ${WEB_PUBLIC_OUTPUT}`} (${comparison.runs.withSlack.brief.claimsOutsideSourceEvidenceCitingSlack.length} cited claims, ` +
+    `wrote ${outputArgument ?? DEFAULT_OUTPUT} (${comparison.runs.withSlack.brief.claimsOutsideSourceEvidenceCitingSlack.length} cited claims, ` +
       `${comparison.reviewerVisibleImpact.badgedSections.length} badged sections)\n`
   );
 }
