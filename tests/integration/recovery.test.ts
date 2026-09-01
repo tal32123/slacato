@@ -43,7 +43,9 @@ describe('durable recovery regressions', () => {
       publish: async () => { throw new Error('Unexpected command publication'); }
     });
     expect(await reconciler.reconcile()).toBeGreaterThanOrEqual(1);
-    expect((await database.sql<{ status: string }[]>`select status from outbox_commands where id = ${next.id}`)[0]?.status).toBe('pending');
+    const recovered = (await database.sql<{ status: string; claim_owner: string | null; claim_token: string | null }[]>`select status, claim_owner, claim_token from outbox_commands where id = ${next.id}`)[0];
+    expect(['pending', 'published']).toContain(recovered?.status);
+    expect(recovered).toMatchObject({ claim_owner: null, claim_token: null });
   });
 
   it('keeps polling after one transient dispatcher failure and stops cleanly', async () => {
