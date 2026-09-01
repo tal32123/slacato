@@ -663,14 +663,74 @@ describe('durable migration catalog', () => {
           select policy_triggers from approval_subjects
           where id = 'legacy-audience-completed-subject'`
       ).toEqual([{ policy_triggers: [] }]);
+      const migratedPolicyHash = hashApprovalPayload({
+        policyTriggers: ['customer_facing_language'],
+        quorumVersion: 'deal-brief-approval-v1'
+      });
+      const customerRequirementPolicyHash = hashApprovalPayload([
+        'customer_facing_language'
+      ]);
+      expect(
+        await sql<{ payload: Record<string, unknown> }[]>`
+          select payload from trace_spans
+          where run_id = 'legacy-audience-run' and kind = 'policy_decision'`
+      ).toEqual([
+        {
+          payload: {
+            decision: 'approval_required',
+            policyHash: migratedPolicyHash,
+            subjectHash: migrated.subject_hash
+          }
+        }
+      ]);
+      expect(
+        await sql<{ payload: Record<string, unknown> }[]>`
+          select payload from trace_spans
+          where id = 'legacy-audience-requirement-span'`
+      ).toEqual([
+        {
+          payload: {
+            subjectHash: migrated.subject_hash,
+            entryId: 'legacy-audience-entry',
+            category: 'legal_terms',
+            authorities: ['legal_reviewer'],
+            policyHash: hashApprovalPayload([])
+          }
+        }
+      ]);
+      expect(
+        await sql<
+          {
+            id: string;
+            span_id: string;
+            parent_id: string | null;
+            payload: Record<string, unknown>;
+          }[]
+        >`
+          select id, span_id, parent_id, payload from trace_spans
+          where id = ${customerRequirementSpanId}`
+      ).toEqual([
+        {
+          id: customerRequirementSpanId,
+          span_id: customerRequirementSpanId,
+          parent_id: policySpanId,
+          payload: {
+            subjectHash: migrated.subject_hash,
+            entryId: customerRequirementId,
+            category: 'customer_communication',
+            authorities: ['account_owner'],
+            policyHash: customerRequirementPolicyHash
+          }
+        }
+      ]);
       expect(
         await sql<{ kind: string; payload: Record<string, unknown> }[]>`
           select kind, payload from trace_spans
           where run_id = 'legacy-audience-run'
+            and kind in ('approval_decision', 'finalization', 'recommendation')
           order by kind`
       ).toEqual([
         { kind: 'approval_decision', payload: { subjectHash: migrated.approved_hash } },
-        { kind: 'approval_requirement', payload: { subjectHash: migrated.subject_hash } },
         { kind: 'finalization', payload: { artifactHash: migrated.subject_hash } },
         { kind: 'recommendation', payload: { recommendationIds: migrated.recommendation_ids } }
       ]);
@@ -702,15 +762,21 @@ describe('durable migration catalog', () => {
             and category in ('customer_communication', 'customer_concession')`
       ).toEqual([{ count: 1 }]);
       expect(
-        await sql<{ kind: string; payload: Record<string, unknown> }[]>`
-          select kind, payload from trace_spans
-          where run_id = 'legacy-audience-run'
-          order by kind`
+        await sql<{ count: number }[]>`
+          select count(*)::integer count from trace_spans
+          where id = ${customerRequirementSpanId}`
+      ).toEqual([{ count: 1 }]);
+      expect(
+        await sql<{ payload: Record<string, unknown> }[]>`
+          select payload from trace_spans where id = ${policySpanId}`
       ).toEqual([
-        { kind: 'approval_decision', payload: { subjectHash: migrated.approved_hash } },
-        { kind: 'approval_requirement', payload: { subjectHash: migrated.subject_hash } },
-        { kind: 'finalization', payload: { artifactHash: migrated.subject_hash } },
-        { kind: 'recommendation', payload: { recommendationIds: migrated.recommendation_ids } }
+        {
+          payload: {
+            decision: 'approval_required',
+            policyHash: migratedPolicyHash,
+            subjectHash: migrated.subject_hash
+          }
+        }
       ]);
     } finally {
       await sql.end({ timeout: 1 });

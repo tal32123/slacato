@@ -557,6 +557,107 @@ FROM recommendation_mapping AS mapping
 WHERE span.run_id = mapping.run_id
   AND span.payload->'recommendationIds' = mapping.old_recommendation_ids;
 --> statement-breakpoint
+UPDATE trace_spans AS span
+SET payload = span.payload || jsonb_build_object(
+  'subjectHash',
+  subject.subject_hash,
+  'policyHash',
+  public.canonical_jsonb_sha256(
+    jsonb_build_object(
+      'policyTriggers',
+      subject.policy_triggers,
+      'quorumVersion',
+      subject.quorum_version
+    )
+  )
+)
+FROM public.legacy_deal_brief_audience_live_subject_backfill AS live
+JOIN approval_subjects AS subject ON subject.id = live.subject_id
+WHERE span.run_id = live.run_id
+  AND span.kind = 'policy_decision'
+  AND span.payload->>'decision' = 'approval_required'
+  AND span.payload->>'subjectHash' = subject.subject_hash;
+--> statement-breakpoint
+INSERT INTO trace_spans
+  (
+    id,
+    trace_id,
+    span_id,
+    run_id,
+    parent_id,
+    step,
+    attempt,
+    kind,
+    status,
+    payload,
+    started_at,
+    ended_at
+  )
+SELECT span_identity.span_id,
+  policy.trace_id,
+  span_identity.span_id,
+  live.run_id,
+  policy.span_id,
+  'approval',
+  1,
+  'approval_requirement',
+  'completed',
+  jsonb_build_object(
+    'subjectHash',
+    subject.subject_hash,
+    'entryId',
+    requirement.id,
+    'category',
+    requirement.category,
+    'authorities',
+    requirement.eligible_authorities,
+    'policyHash',
+    public.canonical_jsonb_sha256(requirement.policy_triggers)
+  ),
+  now(),
+  now()
+FROM public.legacy_deal_brief_customer_requirement_backfill AS canonical
+JOIN public.legacy_deal_brief_audience_live_subject_backfill AS live
+  ON live.subject_id = canonical.subject_id
+JOIN approval_subjects AS subject ON subject.id = canonical.subject_id
+JOIN approval_requirement_entries AS requirement
+  ON requirement.approval_subject_id = canonical.subject_id
+  AND requirement.id = canonical.entry_id
+JOIN LATERAL (
+  SELECT span.trace_id, span.span_id
+  FROM trace_spans AS span
+  WHERE span.run_id = live.run_id
+    AND span.kind = 'policy_decision'
+    AND span.payload->>'decision' = 'approval_required'
+    AND span.payload->>'subjectHash' = subject.subject_hash
+  ORDER BY span.started_at DESC, span.span_id DESC
+  LIMIT 1
+) AS policy ON true
+CROSS JOIN LATERAL (
+  SELECT 'span_' || public.canonical_jsonb_sha256(
+    jsonb_build_object(
+      'runId',
+      live.run_id,
+      'kind',
+      'approval_requirement',
+      'discriminator',
+      canonical.subject_id || ':' || canonical.entry_id
+    )
+  ) AS span_id
+) AS span_identity
+ON CONFLICT (id) DO UPDATE
+SET trace_id = EXCLUDED.trace_id,
+  span_id = EXCLUDED.span_id,
+  run_id = EXCLUDED.run_id,
+  parent_id = EXCLUDED.parent_id,
+  step = EXCLUDED.step,
+  attempt = EXCLUDED.attempt,
+  kind = EXCLUDED.kind,
+  status = EXCLUDED.status,
+  payload = EXCLUDED.payload,
+  ended_at = EXCLUDED.ended_at;
+SET CONSTRAINTS trace_spans_parent_fk IMMEDIATE;
+--> statement-breakpoint
 ALTER TABLE trace_spans ENABLE TRIGGER trace_spans_append_only;
 --> statement-breakpoint
 DROP TABLE public.legacy_deal_brief_customer_requirement_backfill;
