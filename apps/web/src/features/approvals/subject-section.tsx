@@ -1,16 +1,15 @@
 import type { ApprovalBriefPayload, ApprovalCitation, ApprovalClaim } from '@slacato/contracts';
-import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 
 /** Presents the validated brief under review: every section of the immutable approval subject. */
 export function ApprovalSubjectDetail({
   payload,
   evidenceIds,
-  opportunityId
+  onEvidence
 }: Readonly<{
   payload: ApprovalBriefPayload;
   evidenceIds: ReadonlySet<string>;
-  opportunityId: string;
+  onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
 }>): React.JSX.Element {
   const numbers = numberEvidence(payload);
   const claims = indexClaims(payload);
@@ -239,12 +238,12 @@ export function ApprovalSubjectDetail({
                   )}
                 </p>
                 {evidenceIds.has(evidence.evidenceId) && (
-                  <Button asChild variant="link" className="h-auto min-h-11 px-0">
-                    <Link
-                      to={`/deals/${encodeURIComponent(opportunityId)}?evidence=${encodeURIComponent(evidence.evidenceId)}`}
-                    >
-                      Open authorized evidence
-                    </Link>
+                  <Button
+                    variant="link"
+                    className="h-auto min-h-11 px-0"
+                    onClick={(event) => onEvidence(evidence.evidenceId, event.currentTarget)}
+                  >
+                    Open authorized evidence
                   </Button>
                 )}
               </li>

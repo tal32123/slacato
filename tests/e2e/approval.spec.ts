@@ -307,6 +307,7 @@ test('edit and approve validates semantic fields, reflows at 320px and 200%-equi
   page.on('request', (request) => {
     if (request.url().includes('/api/approvals/') && request.method() === 'POST') decisionRequestCount += 1;
   });
+  await page.setViewportSize({ width: 1440, height: 700 });
   await loginAs(page, 'Rina Vale', `/approvals/${fixtures.edit.subject}`);
   await expect(page).toHaveTitle('Approvals | SlaCato');
   await expect(page.getByRole('link', { name: 'Approvals', exact: true }).first()).toHaveAttribute('aria-current', 'page');
@@ -325,6 +326,18 @@ test('edit and approve validates semantic fields, reflows at 320px and 200%-equi
   await expect(
     page.getByText(payload.negotiationState.currentState, { exact: true }).first()
   ).toBeVisible();
+  const evidenceButton = page.getByRole('button', { name: 'Open authorized evidence' });
+  await evidenceButton.click();
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/approvals/${fixtures.edit.subject}\\?evidence=${encodeURIComponent(`${evidenceId}-${fixtures.edit.run}`)}$`
+    )
+  );
+  await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Validated brief under review' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close evidence detail' }).click();
+  await expect(page).toHaveURL(`/approvals/${fixtures.edit.subject}`);
+  await expect(evidenceButton).toBeFocused();
   const edit = page.getByRole('button', { name: 'Edit and approve' });
   await edit.focus();
   await page.keyboard.press('Enter');

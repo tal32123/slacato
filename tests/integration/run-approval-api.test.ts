@@ -359,9 +359,21 @@ describe.sequential('run and approval query APIs', () => {
     );
     expect(detail.capabilities).toEqual({
       canReadDeal: true,
-      canEditPayload: false,
-      evidenceIds: [ids.crmEvidence]
+      canEditPayload: false
     });
+    expect(detail.evidence).toEqual([
+      {
+        id: ids.crmEvidence,
+        sourceType: 'salesforce',
+        sourcePath: 'salesforce/opportunities.tsv',
+        stableKey: 'opportunity_id',
+        stableId: 'task13:0',
+        citationLabel: 'source=salesforce/opportunities.tsv, opportunity_id=task13:0',
+        chunkId: ids.crmEvidence,
+        capturedAt: '2026-08-29T00:00:00.000Z',
+        content: 'Readable CRM fixture'
+      }
+    ]);
     const editCsrf = await approver.get('/api/auth/csrf').set(browserHeaders).expect(200);
     const readableCitation = replacementClaim.citations[0];
     const readableClaim = (id: string) => ({

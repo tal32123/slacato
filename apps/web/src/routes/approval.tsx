@@ -14,7 +14,11 @@ import { Button } from '@/components/ui/button';
 import { ApprovalDecisionForm } from '@/features/approvals/approval-decision-form';
 import { approvalDetailQueryOptions } from '@/features/approvals/queries';
 import { ApprovalSubjectDetail } from '@/features/approvals/subject-section';
-import { useApprovalDecision } from '@/features/approvals/use-approval-decision';
+import {
+  type UseApprovalDecisionResult,
+  useApprovalDecision
+} from '@/features/approvals/use-approval-decision';
+import { EvidenceExplorer } from '@/features/briefs/evidence-explorer';
 import { throwProtectedLoaderError } from './loader-security';
 
 /** Loads the requested approval while preserving protected-session transition guarantees. */
@@ -76,6 +80,25 @@ function ApprovalDecisionPage({
   refetch: () => Promise<unknown>;
 }>): React.JSX.Element {
   const decision = useApprovalDecision(detail, session, refetch);
+  return (
+    <EvidenceExplorer evidence={detail.evidence}>
+      {({ onEvidence }) => (
+        <ApprovalDecisionContent detail={detail} decision={decision} onEvidence={onEvidence} />
+      )}
+    </EvidenceExplorer>
+  );
+}
+
+/** Renders the approval content inside the shared evidence explorer. */
+function ApprovalDecisionContent({
+  detail,
+  decision,
+  onEvidence
+}: Readonly<{
+  detail: ApprovalDetailResponse;
+  decision: UseApprovalDecisionResult;
+  onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
+}>): React.JSX.Element {
   return (
     <article className="min-w-0" aria-labelledby="approval-title">
       <Button asChild variant="link" className="min-h-11 px-0">
@@ -188,7 +211,7 @@ function ApprovalDecisionPage({
         <ApprovalSubjectDetail
           payload={detail.payload}
           evidenceIds={decision.evidenceIds}
-          opportunityId={detail.opportunityId}
+          onEvidence={onEvidence}
         />
       </section>
 
