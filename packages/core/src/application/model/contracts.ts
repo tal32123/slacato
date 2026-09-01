@@ -111,6 +111,9 @@ export interface BudgetedModelGateway {
   generateObject<Value>(request: GenerateObjectRequest<Value>): Promise<GenerationResult<Value>>;
 }
 
+/** Lets a caller cancel an embedding request that outlives the budget it was issued under. */
+export type EmbeddingRequestOptions = Readonly<{ signal?: AbortSignal }>;
+
 export interface EmbeddingGateway {
-  embed(values: readonly string[]): Promise<number[][]>;
+  embed(values: readonly string[], options?: EmbeddingRequestOptions): Promise<number[][]>;
 }

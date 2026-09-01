@@ -2,6 +2,7 @@ import {
   type BudgetedModelGateway,
   createBudgetedModelGateway,
   type EmbeddingGateway,
+  type EmbeddingRequestOptions,
   ModelGatewayTransportError,
   type ModelRegistry,
   type ModelTransport,
@@ -34,6 +35,7 @@ export type OllamaGatewayConfig = Readonly<{
   generationModelId: string;
   embeddingModelId: string;
   attemptLedger: ProviderAttemptLedger;
+  fetch?: typeof globalThis.fetch;
 }>;
 
 /** Converts SDK/provider structured errors to the provider-neutral core contract. */
@@ -107,7 +109,8 @@ class OllamaTransport implements ModelTransport {
 function createProvider(config: OllamaGatewayConfig) {
   return createOllama({
     baseURL: config.baseURL,
-    headers: { Authorization: `Bearer ${config.apiKey}` }
+    headers: { Authorization: `Bearer ${config.apiKey}` },
+    ...(config.fetch === undefined ? {} : { fetch: config.fetch })
   });
 }
 
@@ -134,13 +137,17 @@ export function createOllamaModelGateways(
       config.attemptLedger
     ),
     embeddingGateway: {
-      async embed(values: readonly string[]): Promise<number[][]> {
+      async embed(
+        values: readonly string[],
+        options?: EmbeddingRequestOptions
+      ): Promise<number[][]> {
         if (values.length === 0) return [];
         try {
           const result = await embedMany({
             model: provider.embedding(config.embeddingModelId),
             values: [...values],
-            maxRetries: 0
+            maxRetries: 0,
+            ...(options?.signal === undefined ? {} : { abortSignal: options.signal })
           });
           return result.embeddings.map((embedding) => [...embedding]);
         } catch (error) {
