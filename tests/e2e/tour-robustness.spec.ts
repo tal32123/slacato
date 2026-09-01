@@ -8,9 +8,22 @@ const STORAGE_KEY = 'slacato.guided-tour.v3';
 // tour's step count changes, update this constant (and the fixed step indices used below).
 const TOTAL_STEPS = 20;
 
+/**
+ * Dispatches the tour's start event only once the component listening for it has mounted.
+ *
+ * The listener is registered in an effect (guided-tour.tsx), and the event is fire-and-forget, so
+ * dispatching before that effect runs drops it silently and the tour never opens - which on a
+ * loaded runner looks like the app ignoring the request. The launcher button comes from the same
+ * component and is rendered unconditionally, so its presence is proof the listener is in place.
+ */
+async function startTour(page: import('@playwright/test').Page): Promise<void> {
+  await expect(page.locator('[data-tour="tour-launcher"]')).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event('slacato:start-guided-tour')));
+}
+
 async function startTourAsMaya(page: import('@playwright/test').Page): Promise<void> {
   await loginAs(page, 'Maya Levin', '/deals');
-  await page.evaluate(() => window.dispatchEvent(new Event('slacato:start-guided-tour')));
+  await startTour(page);
   await expect(page).toHaveURL('/login');
   await page.getByRole('button', { name: /Continue as Maya Levin/ }).click();
   await expect(page).toHaveURL('/deals');
@@ -18,7 +31,9 @@ async function startTourAsMaya(page: import('@playwright/test').Page): Promise<v
 }
 
 test.describe('guided tour: click containment', () => {
-  test('the dimmed backdrop blocks pointer clicks outside the highlighted target', async ({ page }) => {
+  test('the dimmed backdrop blocks pointer clicks outside the highlighted target', async ({
+    page
+  }) => {
     await startTourAsMaya(page);
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page).toHaveURL('/deals/OPP-1001');
@@ -58,7 +73,9 @@ test.describe('guided tour: step navigation edge cases', () => {
     await expect(page.getByText(`Step 4 of ${TOTAL_STEPS}`)).not.toBeVisible();
   });
 
-  test('Back from the first non-required step returns to the required login step and its route', async ({ page }) => {
+  test('Back from the first non-required step returns to the required login step and its route', async ({
+    page
+  }) => {
     await startTourAsMaya(page);
     // Step index 1 (deal-list) has a Back button; step index 0 (Maya's persona card) requires an
     // interaction instead and shows no Next/Back pair at all -- Back must still land there cleanly.
@@ -69,17 +86,23 @@ test.describe('guided tour: step navigation edge cases', () => {
     await expect(page.getByRole('button', { name: 'Next' })).toHaveCount(0);
   });
 
-  test('reloading mid-tour resumes at the same step and route from persisted state', async ({ page }) => {
+  test('reloading mid-tour resumes at the same step and route from persisted state', async ({
+    page
+  }) => {
     await startTourAsMaya(page);
     await page.reload();
     await expect(page).toHaveURL('/deals');
     await expect(page.getByText(`Step 2 of ${TOTAL_STEPS}`)).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Only the deals this person may see' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Only the deals this person may see' })
+    ).toBeVisible();
   });
 
-  test('starting the tour from a mid-flow deep link always restarts at step one', async ({ page }) => {
+  test('starting the tour from a mid-flow deep link always restarts at step one', async ({
+    page
+  }) => {
     await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
-    await page.evaluate(() => window.dispatchEvent(new Event('slacato:start-guided-tour')));
+    await startTour(page);
     await expect(page).toHaveURL('/login');
     await expect(page.getByText(`Step 1 of ${TOTAL_STEPS}`)).toBeVisible();
   });
@@ -139,11 +162,17 @@ test.describe('guided tour: permission mismatch mid-flow', () => {
     // restricted step while signed in as a persona who cannot read that deal.
     await loginAs(page, 'Harper Noor', '/settings');
     await page.evaluate(
-      (key) => window.localStorage.setItem(key, JSON.stringify({ active: true, stepIndex: 6, dismissed: false })),
+      (key) =>
+        window.localStorage.setItem(
+          key,
+          JSON.stringify({ active: true, stepIndex: 6, dismissed: false })
+        ),
       STORAGE_KEY
     );
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Select the restricted deal owner' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Select the restricted deal owner' })
+    ).toBeVisible();
 
     // A persona the step did not name sits behind the backdrop and cannot be selected.
     const other = page.getByRole('radio', { name: /Owen Patel/ });
@@ -152,20 +181,29 @@ test.describe('guided tour: permission mismatch mid-flow', () => {
     await page.mouse.click(otherBox.x + otherBox.width / 2, otherBox.y + otherBox.height / 2);
     await page.waitForTimeout(150);
     await expect(other).not.toBeChecked();
-    await expect(page.getByRole('heading', { name: 'Select the restricted deal owner' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Select the restricted deal owner' })
+    ).toBeVisible();
 
     // The persona the step DID name is reachable, so the step is completable rather than locked.
     const narrated = page.getByRole('radio', { name: /Nora Chen/ });
     const narratedBox = await narrated.boundingBox();
     if (narratedBox === null) throw new Error('Expected the narrated persona radio to be rendered');
-    await page.mouse.click(narratedBox.x + narratedBox.width / 2, narratedBox.y + narratedBox.height / 2);
+    await page.mouse.click(
+      narratedBox.x + narratedBox.width / 2,
+      narratedBox.y + narratedBox.height / 2
+    );
     await expect(narrated).toBeChecked();
     await expect(page.getByRole('heading', { name: 'Apply the persona change' })).toBeVisible();
 
     // Harper is still the signed-in persona. Resuming the tour at the restricted deal's own step
     // puts a persona with no permission on a step whose route she cannot read.
     await page.evaluate(
-      (key) => window.localStorage.setItem(key, JSON.stringify({ active: true, stepIndex: 8, dismissed: false })),
+      (key) =>
+        window.localStorage.setItem(
+          key,
+          JSON.stringify({ active: true, stepIndex: 8, dismissed: false })
+        ),
       STORAGE_KEY
     );
     await page.reload();
@@ -176,7 +214,9 @@ test.describe('guided tour: permission mismatch mid-flow', () => {
     // spotlight: a query observer the tour kept mounted on every screen disturbed the protected
     // loaders enough to turn this clean denial into a generic "could not be loaded" error.
     await expect(page).toHaveURL('/forbidden');
-    await expect(page.getByRole('heading', { name: 'This workspace is not available' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'This workspace is not available' })
+    ).toBeVisible();
     expectOpaque(await page.locator('body').innerText());
 
     const continueAnyway = page.getByRole('button', { name: 'Continue anyway' });
@@ -194,7 +234,7 @@ test.describe('guided tour: the spotlight frames one control', () => {
     // gray". Narrowing the target is only half the fix -- the dimmed backdrop must now cover the
     // persona cards that used to sit inside the highlighted region.
     await page.goto('/login');
-    await page.evaluate(() => window.dispatchEvent(new Event('slacato:start-guided-tour')));
+    await startTour(page);
     await expect(page.getByText(`Step 1 of ${TOTAL_STEPS}`)).toBeVisible();
 
     const maya = page.locator('[data-tour="persona-USR-5001"]');
@@ -220,10 +260,14 @@ test.describe('guided tour: the spotlight frames one control', () => {
 });
 
 test.describe('guided tour: following an instruction is progress, not a detour', () => {
-  test('opening the deal workspace the step names advances instead of warning', async ({ page }) => {
+  test('opening the deal workspace the step names advances instead of warning', async ({
+    page
+  }) => {
     // Reported: "it tells me i'm on wrong place when i clicked what it wanted".
     await startTourAsMaya(page);
-    await expect(page.getByRole('heading', { name: 'Only the deals this person may see' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Only the deals this person may see' })
+    ).toBeVisible();
 
     await page.getByRole('link', { name: 'Open OPP-1001 workspace' }).first().click();
 
@@ -254,11 +298,13 @@ test.describe('guided tour: the dialog never covers the control it names', () =>
     return await page.evaluate(() => {
       const dialog = document.querySelector('[data-tour-dialog="true"]');
       const target = document.querySelector('[data-tour-active="true"]');
-      if (dialog === null || target === null) throw new Error('Expected a spotlit target and a step dialog');
+      if (dialog === null || target === null)
+        throw new Error('Expected a spotlit target and a step dialog');
       const d = dialog.getBoundingClientRect();
       const t = target.getBoundingClientRect();
       const button = target.querySelector('button');
-      if (button === null) throw new Error('Expected the spotlit persona card to contain its own button');
+      if (button === null)
+        throw new Error('Expected the spotlit persona card to contain its own button');
       const b = button.getBoundingClientRect();
       const point = { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) };
       const hit = document.elementFromPoint(point.x, point.y);
@@ -278,10 +324,12 @@ test.describe('guided tour: the dialog never covers the control it names', () =>
     // viewport is also 422, so the old "which half is the centre in?" rule answered "upper",
     // pinned the dialog to the bottom edge, and laid it over "Continue as Maya Levin" -- on a
     // step that requires that click and therefore offers no Next to escape by.
-    test(`step one keeps its own button clear and tappable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    test(`step one keeps its own button clear and tappable at ${viewport.width}x${viewport.height}`, async ({
+      page
+    }) => {
       await page.setViewportSize(viewport);
       await loginAs(page, 'Maya Levin', '/deals');
-      await page.evaluate(() => window.dispatchEvent(new Event('slacato:start-guided-tour')));
+      await startTour(page);
       await expect(page).toHaveURL('/login');
       await expect(page.getByText(`Step 1 of ${TOTAL_STEPS}`)).toBeVisible();
       // The dialog is placed twice: once before the target has been measured, then again from the
@@ -300,7 +348,9 @@ test.describe('guided tour: the dialog never covers the control it names', () =>
 });
 
 test.describe('guided tour: leaving and coming back', () => {
-  test('Escape then the launcher resumes the same step instead of restarting at step one', async ({ page }) => {
+  test('Escape then the launcher resumes the same step instead of restarting at step one', async ({
+    page
+  }) => {
     // Reported from a live walkthrough: Escape at step 14 cost thirteen steps, two persona
     // switches and a recorded approval decision, because the launcher always called settle(0)
     // -- and closing also hides the invitation banner, so the launcher was the only way back.
@@ -311,7 +361,9 @@ test.describe('guided tour: leaving and coming back', () => {
 
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    const launcher = page.getByRole('button', { name: `Resume guided tour at step 3 of ${TOTAL_STEPS}` });
+    const launcher = page.getByRole('button', {
+      name: `Resume guided tour at step 3 of ${TOTAL_STEPS}`
+    });
     await expect(launcher).toBeFocused();
 
     await launcher.click();
@@ -319,8 +371,9 @@ test.describe('guided tour: leaving and coming back', () => {
     await expect(page.getByText(`Step 3 of ${TOTAL_STEPS}`)).toBeVisible();
     await expect(page).toHaveURL('/deals/OPP-1001');
     // Closing deliberately silences the invitation banner; resuming must not undo that.
-    expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? 'null'), STORAGE_KEY))
-      .toEqual({ active: true, stepIndex: 2, dismissed: true });
+    expect(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? 'null'), STORAGE_KEY)
+    ).toEqual({ active: true, stepIndex: 2, dismissed: true });
   });
 
   test('"Start over" is the deliberate way back to step one', async ({ page }) => {
