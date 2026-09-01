@@ -6,7 +6,14 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!fixtures/**", "!docs/**", "!.superpowers/**", "!evals/reports/**"]
+    "includes": [
+      "**",
+      "!fixtures/**",
+      "!docs/**",
+      "!.superpowers/**",
+      "!evals/reports/**",
+      "!apps/web/public/technical-overview.html"
+    ]
   },
   "formatter": {
     "enabled": true,
