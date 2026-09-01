@@ -561,17 +561,32 @@ describe('DealBrief citations', () => {
       expect(button.textContent).not.toContain('source=');
   });
 
-  it('keeps the guided tour anchor on a labeled row of section sources', () => {
+  it('labels every section source row rather than leaving a bare pile of chips', () => {
     const { container } = renderBrief(buildCitedWorkspace());
     openAiBrief();
 
-    const anchors = [...container.querySelectorAll('[data-tour="citations"]')];
-    expect(anchors.length).toBeGreaterThan(0);
-    for (const anchor of anchors) {
-      expect(anchor.textContent).toContain('Sources');
-      expect(anchor.querySelectorAll('button').length).toBeGreaterThan(0);
-    }
+    const rows = [...container.querySelectorAll('.border-t.pt-4')].filter((row) =>
+      row.textContent?.includes('Sources')
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row.querySelectorAll('button').length).toBeGreaterThan(0);
   });
+
+  it.each([true, false])(
+    'keeps the AI Brief tour anchor on the tab itself, reachable with the panel closed (%s)',
+    (withGeneratedOutput) => {
+      // Reported live: step 5 rendered with no spotlight at all and a dialog clipped to its
+      // footer. Its anchor sat on a section source row inside the AI Brief panel, which the deal
+      // workspace opens closed -- so the element the step framed did not exist when the step
+      // arrived, on every pass. The anchor has to be the control the step asks the user to press.
+      const { container } = renderBrief(buildWorkspace(withGeneratedOutput));
+
+      const anchors = container.querySelectorAll('[data-tour="ai-brief"]');
+      expect(anchors).toHaveLength(1);
+      expect(anchors[0]).toBe(screen.getByRole('tab', { name: 'AI Brief' }));
+      expect(anchors[0]).toBeVisible();
+    }
+  );
 
   it('opens the record a marker cites and shows which one is selected', () => {
     const onEvidence = vi.fn();

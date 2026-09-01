@@ -315,6 +315,22 @@ describe('guided tour: run steps wait for the run to reach a real outcome', () =
     await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).toBeEnabled());
     expect(screen.getByRole('status').textContent).toMatch(/did not finish|failed|ended/i);
   });
+
+  it('says a failed run left no brief, and where the reason is, instead of promising later steps', async () => {
+    // Reported live: a run failed mid-tour, the notice said "the next steps describe a run that
+    // reached one of those", and the steps that followed narrated a brief that was never
+    // produced. Nothing accounted for the failure until the diagnostics step at the very end.
+    const index = stepIndexWhere((step) => step.target === 'run-progress-detail');
+    runDetail = runIn('failed', true);
+    renderRunStepWithTour(index);
+
+    await screen.findByRole('dialog');
+    const notice = await screen.findByRole('status');
+    await waitFor(() => expect(notice.textContent).toMatch(/produced no brief/));
+    expect(notice.textContent).toMatch(/timeline/);
+    expect(notice.textContent).toMatch(/Diagnostics/);
+    expect(notice.textContent).not.toMatch(/the next steps describe a run that reached/);
+  });
 });
 
 describe('guided tour: no run status can hang a step', () => {
@@ -553,6 +569,19 @@ describe('guided tour: no step narrates a state the reviewer cannot see', () => 
     // to place them there rather than fold them into what it is pointing at.
     expect(step?.body).toMatch(/outside the spotlight/);
     expect(step?.body).toMatch(/Canonical permission view/);
+  });
+
+  it('frames the AI Brief tab the citation step needs opened, and names the disabled case', () => {
+    // The step used to frame a section source row inside the AI Brief panel. That panel opens
+    // closed, so on every pass the step arrived with no such element on the page: no spotlight,
+    // and the "not ready on screen yet" fallback in place of the step it promised.
+    const step = stepAt((candidate) => candidate.target === 'ai-brief');
+
+    expect(step?.body).toMatch(/spotlight is on AI Brief/);
+    expect(step?.body).toMatch(/re-authorized on open/);
+    // A failed run leaves the tab disabled, which is exactly the state the reporter hit.
+    expect(step?.body).toMatch(/stays disabled/);
+    expect(step?.body).toMatch(/Diagnostics/);
   });
 
   it('describes the Slack step against the raw Source Records view its anchor opens', () => {

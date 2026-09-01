@@ -176,6 +176,7 @@ export function DealBrief({
             value="ai-brief"
             className="text-foreground/80"
             disabled={generatedOutput === null}
+            data-tour="ai-brief"
           >
             AI Brief
           </TabsTrigger>
@@ -484,8 +485,9 @@ function CitationMarkers({
  * Closes a section with the numbered sources behind it.
  *
  * This row replaced a wrapping wall of full-label buttons that pushed the prose off the screen and
- * repeated the same long strings in every section. It keeps the guided tour's `citations` anchor,
- * now framing a labeled row rather than an unexplained pile of chips.
+ * repeated the same long strings in every section. It used to carry the guided tour's `citations`
+ * anchor; the tour frames the AI Brief tab itself now, because this row only exists once that tab
+ * is open and the step arrives with it closed.
  */
 function SectionCitations({
   citationIds,
@@ -502,10 +504,7 @@ function SectionCitations({
 }>): React.JSX.Element | null {
   if (resolveCitations(citationIds, evidence).length === 0) return null;
   return (
-    <div
-      data-tour="citations"
-      className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 border-t pt-4"
-    >
+    <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 border-t pt-4">
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         Sources
       </span>
