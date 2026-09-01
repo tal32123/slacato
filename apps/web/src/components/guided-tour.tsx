@@ -292,7 +292,7 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     route: '/deals',
     scenario: 'Scenario 3 \u00b7 Unauthorized attempt',
     title: 'The restricted deal simply is not there',
-    body: 'Harper\u2019s list contains no row, no name, no account, and no count for the restricted deal. Nothing about it was retrieved, summarized, or cited, so there is nothing on this page to redact.'
+    body: 'The row you can see is the one Harper is entitled to: she holds access to Northstar Foods Cooperative, so OPP-1001 is listed for her exactly as it is for its owner. What is missing is the restricted renewal \u2014 no row, no name, no account, no count, nowhere on this page. Nothing about it was retrieved, summarized, or cited, so there is nothing here to redact.'
   },
   {
     target: 'denial-notice',

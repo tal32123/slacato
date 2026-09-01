@@ -604,6 +604,23 @@ describe('guided tour: no step narrates a state the reviewer cannot see', () => 
     expect(step?.body).toMatch(/names what stopped it/);
   });
 
+  it('accounts for the row Harper can actually see instead of implying an empty list', () => {
+    // Reported live: "i do see a row". Harper holds ACC-2001, so OPP-1001 is listed for her --
+    // correctly. The step opened "Harper's list contains no row, no name, no account, and no
+    // count for the restricted deal", which parses as a claim about the restricted deal but reads
+    // as a claim about the list, so a reviewer looking straight at a row concludes the boundary
+    // failed at the exact moment it is working.
+    const step = tourSteps.filter(
+      (candidate) => candidate.target === 'deal-list' && candidate.body.includes('Harper')
+    )[0];
+    expect(step).toBeDefined();
+
+    expect(step?.body).toMatch(/row you can see/);
+    expect(step?.body).toMatch(/OPP-1001/);
+    // The absence claim has to be scoped to the restricted renewal, never to the page as a whole.
+    expect(step?.body).not.toMatch(/list contains no row/);
+  });
+
   it('describes the Slack step against the raw Source Records view its anchor opens', () => {
     const step = stepAt((candidate) => candidate.target === 'slack-evidence');
 
