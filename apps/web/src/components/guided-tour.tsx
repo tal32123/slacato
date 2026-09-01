@@ -320,12 +320,23 @@ type DialogPlacement = Readonly<{ side: 'top' | 'bottom'; maxHeight: number }>;
  * viewport, target size and target position can make the two overlap -- except when the spotlight
  * fills the viewport outright and no non-overlapping placement exists, where the floor above
  * keeps the dialog usable.
+ *
+ * That floor is for a spotlight that fills the screen and nothing else. It used to catch the
+ * unanchored case too, because the viewport height was read off the absent anchor as zero: every
+ * step with no measured target -- an anchor inside a closed tab, a page still loading, a form
+ * already submitted -- rendered as a 144px stub showing a slice of its own footer, hiding the
+ * step, its body, and on a required-interaction step the only escape it had. The unanchored
+ * viewport height is therefore passed in rather than derived from the anchor that is not there.
  */
 export function placeTourDialog(
   anchor: TourAnchor | undefined,
-  requiresInteraction: boolean
+  requiresInteraction: boolean,
+  unanchoredViewportHeight: number
 ): DialogPlacement {
-  const viewportHeight = anchor?.viewportHeight ?? 0;
+  // An anchored placement uses the viewport the box was measured against, never a freshly read
+  // one, so a resize between measurement and render cannot mix two viewports and drop the dialog
+  // onto its own target. With no box there is nothing to pair with, so the live height stands in.
+  const viewportHeight = anchor?.viewportHeight ?? unanchoredViewportHeight;
   const usable = Math.max(MIN_DIALOG_HEIGHT, viewportHeight - DIALOG_MARGIN * 2);
   // Without a measured target the spotlight is not framing anything yet, so there is nothing to
   // avoid: keep the prior default of floating interactive steps near the top.
@@ -608,7 +619,7 @@ export function GuidedTour(): React.JSX.Element {
   }, [active, location.pathname, step.requiresInteraction, stepIndex]);
 
   const offPath = targetMissing && step.route !== undefined && location.pathname !== step.route;
-  const placement = placeTourDialog(anchor, step.requiresInteraction === true);
+  const placement = placeTourDialog(anchor, step.requiresInteraction === true, window.innerHeight);
   // A closed tour that stopped past step one has a position worth returning to, so the launcher
   // says so rather than presenting itself as a fresh start it no longer performs.
   const resumable = !active && stepIndex > 0;
