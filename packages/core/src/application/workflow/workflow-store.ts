@@ -6,6 +6,7 @@ import type {
 import type { DealBrief } from '../../domain/briefs/schema.js';
 import type { RunEvent, RunStatus } from '../../domain/runs/contracts.js';
 import type { OpportunityId, RunId, UserId } from '../../domain/shared/ids.js';
+import type { DealBriefGenerationMetadata } from '../agents/contracts.js';
 import type { RunBudgetLimits } from '../model/contracts.js';
 import type { WorkflowCommand } from './command-queue.js';
 
@@ -261,6 +262,7 @@ export interface StepExecutionStore extends RunReader {
       leaseToken: string;
       causalCommandId: string;
       reason: string;
+      failedGeneration?: DealBriefGenerationMetadata | undefined;
     }>
   ): Promise<WorkflowRun>;
 }

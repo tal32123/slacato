@@ -27,8 +27,17 @@ import {
   DomainValidationError
 } from '../../domain/shared/errors.js';
 import type { RunId } from '../../domain/shared/ids.js';
-import type { AgentContext, StrategyArtifacts } from '../agents/contracts.js';
-import { withoutSelfContradictoryWarnings } from '../agents/validation.js';
+import {
+  type AgentContext,
+  type DealBriefAgentOperation,
+  type DealBriefGenerationMetadata,
+  dealBriefAgentOperations,
+  type StrategyArtifacts
+} from '../agents/contracts.js';
+import {
+  hasUnsafeInstructionLikeLanguage,
+  withoutSelfContradictoryWarnings
+} from '../agents/validation.js';
 import type { OpaqueDenialRecorder } from '../deals/contracts.js';
 import type { WorkflowCommand } from '../workflow/command-queue.js';
 import type {
@@ -68,27 +77,28 @@ export interface DealBriefAccessControl extends OpaqueDenialRecorder {
     }>
   ): Promise<ApprovalRequirement>;
 }
+
 export interface DealBriefWorkflowServices {
   retrieve(run: WorkflowRun, invocationId: string): Promise<DealBriefRetrievalContext>;
   conversation(
     run: WorkflowRun,
     context: DealBriefRetrievalContext,
-    invocationId: string
+    generation: DealBriefGenerationMetadata
   ): Promise<ConversationArtifact>;
   stakeholder(
     run: WorkflowRun,
     context: DealBriefRetrievalContext,
-    invocationId: string
+    generation: DealBriefGenerationMetadata
   ): Promise<StakeholderArtifact>;
   commercial(
     run: WorkflowRun,
     context: DealBriefRetrievalContext,
-    invocationId: string
+    generation: DealBriefGenerationMetadata
   ): Promise<CommercialArtifact>;
   strategy(
     run: WorkflowRun,
     input: Readonly<{ context: DealBriefRetrievalContext } & StrategyArtifacts>,
-    invocationId: string
+    generation: DealBriefGenerationMetadata
   ): Promise<DealBrief>;
   approvalInput(
     run: WorkflowRun,
@@ -350,9 +360,14 @@ function mergeSpecialistReviewWarnings(
   });
 }
 /** Describes one model generation attempt for audit and duplicate detection. */
-function generation(run: WorkflowRun, lease: StepLease, operation: string) {
+function generation(
+  run: WorkflowRun,
+  lease: StepLease,
+  operation: DealBriefAgentOperation,
+  logicalGenerationKey: string
+): DealBriefGenerationMetadata {
   return {
-    logicalGenerationId: stableId('generation', run.id, operation),
+    logicalGenerationId: stableId('generation', run.id, logicalGenerationKey),
     operation,
     provider: run.generationProvider,
     model: run.generationModel,
@@ -364,11 +379,7 @@ function generation(run: WorkflowRun, lease: StepLease, operation: string) {
 export function assertApprovableBrief(value: unknown): DealBrief {
   const parsed = dealBriefSchema.parse(value);
   const serialized = canonicalJson(parsed);
-  if (
-    /(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|role\s*:/i.test(
-      serialized
-    )
-  )
+  if (hasUnsafeInstructionLikeLanguage(serialized))
     throw new DomainValidationError('Approval payload contains unsafe instruction-like language');
   const unsupported: string[] = [];
   const visit = (current: unknown): void => {
@@ -410,10 +421,11 @@ export function assertApprovableBrief(value: unknown): DealBrief {
 /**
  * Reports whether a start request produced a run or attached to one that already existed.
  *
- * `runs_one_active_opportunity_uq` permits one active run per opportunity, so a second start is
- * answered with the run already in flight. That is the correct concurrency behaviour, but silently
- * returning it makes the product claim it started work it did not start - and because
- * `awaiting_approval` is a resting state, the reused run can be minutes old and already finished.
+ * `runs_one_active_requester_opportunity_uq` permits one active run per requester and opportunity,
+ * so another start from that requester is answered with the run already in flight. That is the
+ * correct concurrency behaviour, but silently returning it makes the product claim it started work
+ * it did not start - and because `awaiting_approval` is a resting state, the reused run can be
+ * minutes old and already finished.
  * Naming the outcome lets the caller say which of the three things actually happened.
  */
 export type StartDealBriefOutcome = Readonly<{
@@ -423,8 +435,8 @@ export type StartDealBriefOutcome = Readonly<{
    * States how the caller arrived at that run.
    *
    * `created` started fresh work. `replayed` re-answered this caller's own identical request.
-   * `joined` attached to an unrelated active run for the same opportunity - the only case where
-   * the caller asked for new work and did not get it.
+   * `joined` attached to another active request by this requester for the same opportunity - the
+   * only case where the caller asked for new work and did not get it.
    */
   disposition: 'created' | 'replayed' | 'joined';
 }>;
@@ -475,8 +487,8 @@ export class StartDealBrief {
     }
     const active = await this.store.findActiveRun(scope);
     if (active !== undefined) return { runId: active.id, disposition: 'joined' };
-    // The store resolves the same conflict itself, under an advisory lock, by returning the run
-    // already active for the opportunity instead of raising. So the branch taken here says nothing
+    // The store resolves the same conflict under an advisory lock by returning the run already
+    // active for the requester and opportunity instead of raising. So this branch says nothing
     // about what happened - only the identity of the run that came back does. A run whose id is not
     // the one this request would have minted is a run this request did not start.
     try {
@@ -583,7 +595,8 @@ class FatalDealBriefWorkflowError extends Error {
   /** Preserves the stable failure reason and its original cause. */
   public constructor(
     public readonly reason: string,
-    cause: unknown
+    cause: unknown,
+    public readonly failedGeneration?: DealBriefGenerationMetadata
   ) {
     super(reason, { cause });
     this.name = 'FatalDealBriefWorkflowError';
@@ -664,7 +677,10 @@ export class ProcessDealBriefStep {
           invocationOwner: lease.owner,
           leaseToken: lease.leaseToken,
           causalCommandId: input.command.id,
-          reason: error.reason
+          reason: error.reason,
+          ...(error.failedGeneration === undefined
+            ? {}
+            : { failedGeneration: error.failedGeneration })
         });
       }
     } finally {
@@ -731,11 +747,14 @@ export class ProcessDealBriefStep {
       }))
     );
     const missing = checkpoints.filter(({ checkpoint }) => checkpoint === undefined);
-    const attempts = missing.map(({ name }) => ({
-      name,
-      generationMetadata: generation(run, lease, name),
-      promise: this.services[name](run, context, lease.invocationId)
-    }));
+    const attempts = missing.map(({ name }) => {
+      const generationMetadata = generation(run, lease, dealBriefAgentOperations[name], name);
+      return {
+        name,
+        generationMetadata,
+        promise: this.services[name](run, context, generationMetadata)
+      };
+    });
     const outcomes = await Promise.allSettled(attempts.map(({ promise }) => promise));
     if (outcomes.length !== attempts.length) {
       throw new FatalDealBriefWorkflowError(
@@ -761,7 +780,11 @@ export class ProcessDealBriefStep {
         };
       } else {
         if (attempt.name === 'commercial') {
-          throw new FatalDealBriefWorkflowError('commercial_specialist_failed', outcome.reason);
+          throw new FatalDealBriefWorkflowError(
+            'commercial_specialist_failed',
+            outcome.reason,
+            attempt.generationMetadata
+          );
         }
         checkpoint = {
           status: 'degraded',
@@ -812,6 +835,12 @@ export class ProcessDealBriefStep {
       typeof causal.payload.draftVersion === 'number' ? causal.payload.draftVersion : 1;
     const strategyStep = `strategy:${draftVersion}`;
     const existing = await this.store.getCheckpoint({ runId: run.id, step: strategyStep });
+    const generationMetadata = generation(
+      run,
+      lease,
+      dealBriefAgentOperations.strategy,
+      strategyStep
+    );
     let parsed: DealBrief;
     try {
       const value =
@@ -819,7 +848,7 @@ export class ProcessDealBriefStep {
         (await this.services.strategy(
           run,
           { context, conversation, stakeholder, commercial },
-          lease.invocationId
+          generationMetadata
         ));
       parsed = mergeSpecialistReviewWarnings(await this.services.validateDraft(value), [
         conversation,
@@ -827,10 +856,13 @@ export class ProcessDealBriefStep {
         commercial
       ]);
     } catch (error) {
-      throw new FatalDealBriefWorkflowError('strategy_generation_failed', error);
+      throw new FatalDealBriefWorkflowError(
+        'strategy_generation_failed',
+        error,
+        generationMetadata
+      );
     }
     if (existing === undefined) {
-      const generationMetadata = generation(run, lease, `strategy:${draftVersion}`);
       await this.store.saveCheckpoint({
         runId: run.id,
         step: strategyStep,

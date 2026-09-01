@@ -36,7 +36,7 @@ describe('durable recovery regressions', () => {
   it('requeues a failed queue job instead of treating it as completed', async () => {
     const run = await seededRun(); const next = command(run.runId);
     await store.startRun({ id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', command: next, idempotencyKey: next.idempotencyKey, startRequestHash: id('hash') });
-    await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${next.id}`;
+    await database.sql`update outbox_commands set status = 'claimed', claimed_at = now(), claim_owner = 'completed_recovery', claim_token = ${id('claim')}, claim_expires_at = now() + interval '30 seconds' where id = ${next.id}`;
     const reconciler = new PostgresCommandReconciler(database, {
       state: async () => 'failed' as never,
       reopenCompleted: async () => { throw new Error('Unexpected completed command'); },

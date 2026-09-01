@@ -172,6 +172,7 @@ export function ApprovalSubjectDetail({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {[
                     action.owner && `Owner: ${action.owner}`,
+                    `Audience: ${label(action.audience)}`,
                     `Priority: ${label(action.priority)}`,
                     action.dueDate && `Due: ${action.dueDate}`
                   ]

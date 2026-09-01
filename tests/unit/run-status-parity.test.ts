@@ -35,7 +35,7 @@ const extractQuotedLiterals = (listBody: string): string[] =>
  * honest approach here: importing Drizzle internals to introspect a raw sql`
  * tagged template would not be meaningfully more robust, and the constraint
  * name anchors the match so it can't accidentally grab the neighboring
- * `runs_one_active_opportunity_uq` list instead.
+ * `runs_one_active_requester_opportunity_uq` list instead.
  */
 const readSchemaCheckConstraintStatuses = (): string[] => {
   const source = readFileSync(schemaTsPath, 'utf8');
@@ -51,19 +51,19 @@ const readSchemaCheckConstraintStatuses = (): string[] => {
 };
 
 /**
- * Pulls the 7-member non-terminal subset out of the `runs_one_active_opportunity_uq`
- * partial-unique-index predicate in schema.ts.
+ * Pulls the 7-member non-terminal subset out of the
+ * `runs_one_active_requester_opportunity_uq` partial-unique-index predicate in schema.ts.
  */
 const readSchemaNonTerminalStatuses = (): string[] => {
   const source = readFileSync(schemaTsPath, 'utf8');
   const match = source.match(
-    /runs_one_active_opportunity_uq['"]?\)[\s\S]*?\$\{table\.status\} in \(([^)]+)\)/
+    /runs_one_active_requester_opportunity_uq['"]?\)[\s\S]*?\$\{table\.status\} in \(([^)]+)\)/
   );
   if (match === null) {
     throw new Error(
-      'run-status-parity.test.ts could not locate the runs_one_active_opportunity_uq ' +
-        `partial index predicate in ${schemaTsPath}. If it was renamed or reshaped, update ` +
-        'the regex in this test alongside it.'
+      'run-status-parity.test.ts could not locate the ' +
+        'runs_one_active_requester_opportunity_uq partial index predicate in ' +
+        `${schemaTsPath}. If it was renamed or reshaped, update the regex in this test alongside it.`
     );
   }
   return extractQuotedLiterals(match[1]);
@@ -143,7 +143,7 @@ describe('run-status parity across unlinked layers', () => {
     expect(
       missingFromReconciler,
       `Status(es) ${JSON.stringify(missingFromReconciler)} are in the ` +
-        'runs_one_active_opportunity_uq non-terminal subset in ' +
+        'runs_one_active_requester_opportunity_uq non-terminal subset in ' +
         'packages/infrastructure/src/db/schema.ts but not in the dead-letter acknowledgement ' +
         'guard in packages/infrastructure/src/queue/reconciler.ts. Update reconciler.ts to match.'
     ).toEqual([]);
@@ -151,7 +151,7 @@ describe('run-status parity across unlinked layers', () => {
       missingFromSchema,
       `Status(es) ${JSON.stringify(missingFromSchema)} are in the dead-letter acknowledgement ` +
         'guard in packages/infrastructure/src/queue/reconciler.ts but not in the ' +
-        'runs_one_active_opportunity_uq non-terminal subset in ' +
+        'runs_one_active_requester_opportunity_uq non-terminal subset in ' +
         'packages/infrastructure/src/db/schema.ts. Update schema.ts to match (this requires a ' +
         'migration).'
     ).toEqual([]);
@@ -160,8 +160,8 @@ describe('run-status parity across unlinked layers', () => {
     expect(
       schemaNonTerminal.size,
       'Expected exactly 7 non-terminal statuses in schema.ts\'s ' +
-        'runs_one_active_opportunity_uq predicate; the extraction regex may be matching the ' +
-        'wrong SQL literal.'
+        'runs_one_active_requester_opportunity_uq predicate; the extraction regex may be ' +
+        'matching the wrong SQL literal.'
     ).toBe(7);
 
     // The two files could stay in sync with each other while both drifting from

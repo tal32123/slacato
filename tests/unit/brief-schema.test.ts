@@ -6,6 +6,7 @@ import {
   dealBriefSchema,
   evidenceSummarySchema,
   evidenceIdSchema,
+  recommendedActionSchema,
   stakeholderArtifactSchema,
   strategyArtifactSchema,
   userIdSchema
@@ -35,6 +36,23 @@ describe('DealBrief schema', () => {
 
   it('rejects unknown fields at its external boundary', () => {
     expect(() => dealBriefSchema.parse({ ...validBrief, internalNotes: 'do not persist' })).toThrow();
+  });
+
+  it('requires an explicit closed action audience without defaults', () => {
+    const action = {
+      action: 'Use arbitrary wording.',
+      priority: 'high',
+      rationale: 'The source records the next step.',
+      claims: []
+    };
+    expect(recommendedActionSchema.parse({ ...action, audience: 'internal' }).audience).toBe(
+      'internal'
+    );
+    expect(recommendedActionSchema.parse({ ...action, audience: 'customer' }).audience).toBe(
+      'customer'
+    );
+    expect(() => recommendedActionSchema.parse(action)).toThrow();
+    expect(() => recommendedActionSchema.parse({ ...action, audience: 'partner' })).toThrow();
   });
 
   it('validates prefixed opaque IDs at runtime', () => {

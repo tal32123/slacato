@@ -1,5 +1,5 @@
 import { dealWorkspaceViewSchema } from '@slacato/contracts';
-import type { AuthorizedDeal, DealEvidence, LatestDealRun } from '@slacato/core';
+import { dealBriefSchema, type AuthorizedDeal, type DealEvidence, type LatestDealRun } from '@slacato/core';
 import { expect, it } from 'vitest';
 import { renderDealWorkspace } from '../../apps/api/src/modules/deals/deal-workspace.mapper';
 
@@ -31,6 +31,7 @@ it('accepts a source snapshot and a separately run-linked generated draft in the
     generatedOutput: {
       type: 'generated_output', lifecycle: 'draft',
       producingRun: { id: 'run-42', status: 'awaiting_approval', updatedAt: '2026-08-29T01:00:00.000Z' },
+      approvalReview: { approvalSubjectId: 'approval-1' },
       content
     },
     brief: content,
@@ -148,7 +149,8 @@ it('surfaces the latest run status without producing generated output when no dr
     runId: 'run-1',
     status: 'awaiting_approval',
     updatedAt: '2026-08-29T02:00:00.000Z',
-    generatedOutput: null
+    generatedOutput: null,
+    approvalReview: null
   };
 
   const workspace = renderDealWorkspace({
@@ -167,4 +169,60 @@ it('surfaces the latest run status without producing generated output when no dr
   });
   expect(workspace.generatedOutput).toBeNull();
   expect(workspace.brief).toEqual(workspace.sourceSnapshot.evidenceOverview);
+});
+
+const generatedBrief = dealBriefSchema.parse({
+  dealSnapshot: {
+    accountName: 'Northstar',
+    opportunityName: 'Renewal',
+    stage: 'Negotiation'
+  },
+  executiveSummary: { narrative: 'A generated draft is ready for review.' },
+  buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
+  stakeholderMap: { stakeholders: [] },
+  negotiationState: { currentState: 'The renewal remains active.', risks: [] },
+  recommendedNextActions: { actions: [] },
+  missingInformation: { items: [] },
+  sourceEvidence: { evidence: [] },
+  confidenceAndReviewWarnings: { overallConfidence: 0.5, warnings: [] }
+});
+
+function generatedLatestRun(
+  approvalReview: LatestDealRun['approvalReview']
+): LatestDealRun {
+  return {
+    runId: 'run-generated',
+    status: 'awaiting_approval',
+    updatedAt: '2026-08-29T03:00:00.000Z',
+    generatedOutput: { lifecycle: 'draft', brief: generatedBrief },
+    approvalReview
+  };
+}
+
+it('projects only the current approval subject descriptor beside an authorized generated output', () => {
+  const workspace = renderDealWorkspace({
+    sessionVersion: 'session-v5',
+    target,
+    latestRun: generatedLatestRun({ approvalSubjectId: 'approval-current' }),
+    opportunityRows: [opportunityEvidence],
+    stakeholderRows: [],
+    supplementalRows: []
+  });
+
+  expect(workspace.generatedOutput?.approvalReview).toEqual({
+    approvalSubjectId: 'approval-current'
+  });
+});
+
+it('projects a null approval review when an authorized generated output has no current subject', () => {
+  const workspace = renderDealWorkspace({
+    sessionVersion: 'session-v6',
+    target,
+    latestRun: generatedLatestRun(null),
+    opportunityRows: [opportunityEvidence],
+    stakeholderRows: [],
+    supplementalRows: []
+  });
+
+  expect(workspace.generatedOutput?.approvalReview).toBeNull();
 });

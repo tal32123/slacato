@@ -15,6 +15,15 @@ test('keeps Settings scoped to signed persona and session controls', async ({ pa
   await expect(page.getByText('Signed demo session')).toBeVisible();
   await expect(page.getByRole('radio', { name: /Maya Levin/ })).toBeChecked();
   await expect(page.getByLabel('Session controls').getByRole('link', { name: 'Demo Diagnostics' })).toBeVisible();
+  const reference = page.getByRole('region', { name: 'Reference' });
+  await expect(reference).toBeVisible();
+  await expect(reference.getByText('Technical overview', { exact: true })).toBeVisible();
+  const overviewLink = reference.getByRole('link', {
+    name: 'Open technical overview (opens in a new tab)'
+  });
+  await expect(overviewLink).toHaveAttribute('href', '/technical-overview.html');
+  await expect(overviewLink).toHaveAttribute('target', '_blank');
+  await expect(overviewLink).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(page.getByText(/model|index health|permission matrix/i)).toHaveCount(0);
 });
 

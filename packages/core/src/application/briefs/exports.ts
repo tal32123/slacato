@@ -166,6 +166,7 @@ function renderMarkdown(brief: DealBrief, citations: ReadonlyMap<string, Citatio
       `### ${index + 1}. ${escapeMarkdown(action.action)}`,
       ...compact([
         valueLine('Owner', action.owner),
+        valueLine('Audience', action.audience === 'customer' ? 'Customer' : 'Internal'),
         valueLine('Priority', action.priority),
         valueLine('Due date', action.dueDate),
         valueLine('Rationale', action.rationale)

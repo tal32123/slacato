@@ -197,9 +197,9 @@ async function runRetrievalEvaluation(): Promise<ReturnType<typeof evaluateRetri
           }
         });
       } catch (error) {
-        // Leaving the run in 'retrieving' would trip runs_one_active_opportunity_uq on the next
-        // case sharing this opportunity (the golden set has two OPP-1003 cases), masking the real
-        // failure behind a confusing unique-constraint violation instead of surfacing it directly.
+        // Leaving the run in 'retrieving' would trip runs_one_active_requester_opportunity_uq on
+        // the next case sharing this requester and opportunity, masking the real failure behind a
+        // confusing unique-constraint violation instead of surfacing it directly.
         await database.sql`update runs set status = 'failed' where id = ${runId}`;
         throw error;
       }

@@ -92,6 +92,7 @@ export const stakeholderViewSchema = z
 export const recommendedActionViewSchema = z
   .object({
     action: z.string().min(1).max(2_000),
+    audience: z.enum(['internal', 'customer']),
     owner: z.string().min(1).max(256).nullable(),
     priority: z.enum(['low', 'medium', 'high', 'critical']),
     dueDate: isoDateSchema.nullable(),
@@ -156,6 +157,10 @@ export const generatedDealOutputViewSchema = z
         updatedAt: isoDateTimeSchema
       })
       .strict(),
+    approvalReview: z
+      .object({ approvalSubjectId: z.string().min(1).max(256) })
+      .strict()
+      .nullable(),
     content: dealBriefViewSchema.extend({ status: z.literal('generated') }).strict()
   })
   .strict();

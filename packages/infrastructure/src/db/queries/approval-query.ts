@@ -29,6 +29,7 @@ type ApprovalRow = Readonly<{
   account_name: string;
   entry_id: string;
   category: string;
+  policy_triggers: unknown;
   eligible_authorities: unknown;
   available_authority: string;
   operable: boolean;
@@ -61,6 +62,7 @@ type ApprovalEntryRow = Readonly<{
   entry_id: string;
   category: string;
   eligible_authorities: unknown;
+  policy_triggers: unknown;
   depends_on: unknown;
 }>;
 type DecisionRow = Readonly<{
@@ -95,7 +97,8 @@ export class PostgresApprovalQueryRepository {
     const rows = await this.database.sql<ApprovalRow[]>`
       select subject.id approval_subject_id, run.id run_id, run.version run_version, run.status run_status,
         subject.subject_hash, opportunity.id opportunity_id, opportunity.name opportunity_name, account.name account_name,
-        entry.id entry_id, entry.category, entry.eligible_authorities, available.authority available_authority,
+        entry.id entry_id, entry.category, entry.policy_triggers, entry.eligible_authorities,
+        available.authority available_authority,
         available.operable, subject.created_at subject_created_at, run.updated_at run_updated_at,
         subject.superseded_by_subject_id,
         (select count(*)::integer from approval_requirement_entries required where required.approval_subject_id = subject.id) required_count,
@@ -176,7 +179,7 @@ export class PostgresApprovalQueryRepository {
     ] = await Promise.all([
       this.database.sql<
         ApprovalEntryRow[]
-      >`select id entry_id, category, eligible_authorities, depends_on from approval_requirement_entries where approval_subject_id = ${subjectId} order by ordinal`,
+      >`select id entry_id, category, policy_triggers, eligible_authorities, depends_on from approval_requirement_entries where approval_subject_id = ${subjectId} order by ordinal`,
       this.database.sql<
         { authority: string }[]
       >`select authority from authorized_run_approval_grants
@@ -252,6 +255,7 @@ export class PostgresApprovalQueryRepository {
         return {
           entryId: entry.entry_id,
           category: entry.category,
+          policyTriggers: parseStringArray(entry.policy_triggers),
           requiredAuthorities: required,
           availableAuthority: required.find((authority) => actorAuthorities.has(authority)) ?? null,
           dependsOn: parseStringArray(entry.depends_on),
@@ -458,6 +462,7 @@ function mapApprovalInboxEntry(row: ApprovalRow): ApprovalInboxEntry {
     accountName: row.account_name,
     entryId: row.entry_id,
     category: row.category as ApprovalInboxEntry['category'],
+    policyTriggers: parseStringArray(row.policy_triggers),
     requiredAuthorities: parseApprovalAuthorities(row.eligible_authorities),
     availableAuthority: parseApprovalAuthority(row.available_authority),
     assignedApprover: row.decision_actor_name,

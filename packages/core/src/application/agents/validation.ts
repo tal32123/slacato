@@ -48,15 +48,21 @@ function normalize(value: string): string {
     .replace(/(?:[$€£]\s*)?\b\d[\d,.]*(?:\s*%)?/gu, canonicalNumber);
 }
 
-/** Rejects generated prose that resembles instructions or prompt-control markers.
+/** Matches instruction or prompt-control markers that generated and approval prose must reject.
  *
- * The chat-role marker is anchored on a word boundary. Without it, `role\s*:` also matched the
- * ordinary field labels that authorized evidence uses - `authorRole:` on every Slack account-team
- * update - so quoting a Slack record was treated as prompt injection and the claim was discarded. */
+ * The chat-role marker is anchored on a word boundary. Without it, `role\s*:` also matches ordinary
+ * field labels such as `authorRole:` in authorized evidence. */
+const UNSAFE_INSTRUCTION_LIKE_LANGUAGE =
+  /(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|\brole\s*:/i;
+
+/** Reports whether prose contains an instruction or prompt-control marker. */
+export function hasUnsafeInstructionLikeLanguage(value: string): boolean {
+  return UNSAFE_INSTRUCTION_LIKE_LANGUAGE.test(value);
+}
+
+/** Reports whether generated prose is free of instruction or prompt-control markers. */
 function safeGeneratedProse(value: string): boolean {
-  return !/(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|\brole\s*:/i.test(
-    value
-  );
+  return !hasUnsafeInstructionLikeLanguage(value);
 }
 
 /** Escapes literal evidence text before using it in a regular expression. */
@@ -610,7 +616,7 @@ export function assessClaimSupport(
   claim: Claim,
   evidenceById: ReadonlyMap<string, AgentEvidenceRecord>
 ): ClaimSupportAssessment {
-  if (!safeGeneratedProse(claim.statement))
+  if (hasUnsafeInstructionLikeLanguage(claim.statement))
     return {
       claimId: claim.id,
       support: 'insufficient',
@@ -764,22 +770,21 @@ function supportWarnings(claims: readonly RejectedClaim[]): readonly ReviewWarni
   }));
 }
 
-/** Wording that asserts something is missing, unsupported, or otherwise absent. */
-const ABSENCE_ASSERTION =
-  /\b(?:absent|missing|unsupported|not supported|no support|lacks|lacking|insufficient|without support|no evidence|unavailable)\b/i;
+/** Prefix emitted by the stale identity/title support diagnostic. */
+const STALE_IDENTITY_SUPPORT_DIAGNOSTIC = /^\s*material anchors are absent:\s*/i;
 
-/** Drops warnings that report a person absent while the same brief presents them as supported.
+/** Drops stale identity/title diagnostics that report a supported person as absent.
  *
- * A brief that lists Amara Quinn as a cited stakeholder and then warns that "legal counsel amara
- * quinn" is absent cannot be acted on: whichever half is wrong, the reviewer cannot tell which.
- * The generated warning is the half with no evidence behind it, so it is the half that is removed;
- * genuinely unsupported claims still produce their own claim-scoped warnings. */
+ * The suppression is intentionally limited to the diagnostic's "Material anchors are absent:"
+ * shape. Other INSUFFICIENT_CLAIM_SUPPORT warnings can describe distinct unsupported facts, such
+ * as whether a supported stakeholder approved a discount, and must remain reviewable. */
 export function withoutSelfContradictoryWarnings(
   warnings: readonly ReviewWarning[],
   supportedNames: readonly string[]
 ): readonly ReviewWarning[] {
   return warnings.filter((warning) => {
-    if (!ABSENCE_ASSERTION.test(warning.message)) return true;
+    if (warning.code !== 'INSUFFICIENT_CLAIM_SUPPORT') return true;
+    if (!STALE_IDENTITY_SUPPORT_DIAGNOSTIC.test(warning.message)) return true;
     const message = normalize(warning.message);
     return !supportedNames.some((name) => containsBounded(message, normalize(name)));
   });
@@ -1251,6 +1256,7 @@ export function validateDealBrief(
     return [
       {
         action: action.action,
+        audience: action.audience,
         priority: action.priority,
         rationale: action.rationale,
         claims: result.kept,

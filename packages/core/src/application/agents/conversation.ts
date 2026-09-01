@@ -5,7 +5,11 @@ import {
 import { withSerializedByteLimit } from '../../domain/shared/serialized-size.js';
 import { MAX_SPECIALIST_ARTIFACT_BYTES } from '../briefs/prompts.js';
 import type { BudgetedModelGateway } from '../model/contracts.js';
-import type { AgentContext, AgentEvidenceRecord } from './contracts.js';
+import {
+  type AgentContext,
+  type AgentEvidenceRecord,
+  dealBriefAgentOperations
+} from './contracts.js';
 import { runAgent } from './runtime.js';
 import { validateConversationArtifact } from './validation.js';
 
@@ -31,7 +35,7 @@ export class ConversationAgent {
     const result = await runAgent({
       gateway: this.gateway,
       context,
-      operation: 'conversation-intelligence',
+      operation: dealBriefAgentOperations.conversation,
       task: TASK,
       schema: agentArtifactSchema,
       allowedSourceTypes: SOURCES,

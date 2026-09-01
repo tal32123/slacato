@@ -98,6 +98,7 @@ Finance proposed payment tied to proof acceptance and first factory rollout\.
 
 ## 6. Recommended Next Actions
 ### 1. Schedule delivery of the reporting proof pack and factory cutover risk register\.
+- **Audience:** Internal
 - **Priority:** high
 - **Due date:** 2026\-05\-08
 - **Rationale:** Deliver reporting proof pack and factory cutover risk register by 2026\-05\-08

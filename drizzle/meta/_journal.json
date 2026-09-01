@@ -8,6 +8,20 @@
       "when": 1788730200000,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788730200001,
+      "tag": "0001_requester_scoped_active_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788730200002,
+      "tag": "0002_customer_communication_approval",
+      "breakpoints": true
     }
   ]
 }

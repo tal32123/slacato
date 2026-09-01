@@ -136,6 +136,7 @@
     "actions": [
       {
         "action": "Schedule delivery of the reporting proof pack and factory cutover risk register.",
+        "audience": "internal",
         "claims": [
           {
             "citations": [

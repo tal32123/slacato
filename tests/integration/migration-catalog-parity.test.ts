@@ -30,13 +30,14 @@ if (!process.env.DATABASE_URL) {
 const databaseUrl = process.env.DATABASE_URL;
 const databasePrefix = 'catohw_catalog_';
 const databaseNamePattern = /^catohw_catalog_[a-z0-9]{16}$/;
-// The migration catalog is a single squashed migration (drizzle/0000_initial.sql,
-// see README/history for why 0000-0021 were combined). There is no longer a
-// meaningful "apply an old subset, then the rest" upgrade path to exercise —
-// a fresh install only ever runs this one file.
-const migrationFiles = ['0000_initial'].map((migration) =>
-  resolve(process.cwd(), 'drizzle', `${migration}.sql`)
-);
+// The historical catalog was squashed into drizzle/0000_initial.sql. Forward
+// migrations remain separate so existing databases and fresh installs traverse
+// the same sequence without rewriting the baseline.
+const migrationFiles = [
+  '0000_initial',
+  '0001_requester_scoped_active_runs',
+  '0002_customer_communication_approval'
+].map((migration) => resolve(process.cwd(), 'drizzle', `${migration}.sql`));
 const temporaryDatabases: string[] = [];
 const execFile = promisify(execFileCallback);
 
@@ -140,17 +141,11 @@ afterEach(async () => {
 
 describe('durable migration catalog', () => {
   it('gives clean installs the same catalog as pnpm db:migrate produces', async () => {
-    // The migration catalog used to be 22 files (0000-0021), which let this test
-    // exercise a "clean install" path against an "incrementally upgraded" path
-    // built by applying an old subset, seeding legacy rows, then applying the
-    // rest. drizzle/0000-0021 have since been squashed into a single
-    // drizzle/0000_initial.sql (see README) because 0021 was a no-op on a fresh
-    // database and 21 migrations added nothing but churn for a greenfield
-    // project. There is no more intermediate schema state to upgrade from, so
-    // this test now proves the remaining two independent ways of applying the
-    // catalog agree: applying the raw SQL directly, and running it through
-    // drizzle-kit's own migrator (`pnpm db:migrate`, the command a developer
-    // actually runs).
+    // The historical 0000-0021 catalog was squashed into 0000_initial.sql (see
+    // README), but forward migrations remain independent. This test proves the
+    // two supported clean-install paths agree: applying the complete ordered SQL
+    // catalog directly, and running it through drizzle-kit's own migrator
+    // (`pnpm db:migrate`, the command a developer actually runs).
     const cleanName = makeDatabaseName();
     const runnerName = makeDatabaseName();
     await Promise.all([createTemporaryDatabase(cleanName), createTemporaryDatabase(runnerName)]);
@@ -242,6 +237,18 @@ describe('durable migration catalog', () => {
       expect(serialized).toContain('vector_dims(embedding) = embedding_dimension');
       expect(serialized).toContain('briefs_approval_subject_run_fk');
       expect(serialized).toContain('step_invocations_one_active_causal_command_uq');
+      const activeRunIndexes = (cleanCatalog.indexes as readonly {
+        table_name: string; name: string; definition: string
+      }[]).filter((index) =>
+        index.table_name === 'runs' && index.name.startsWith('runs_one_active_')
+      );
+      expect(activeRunIndexes).toEqual([
+        expect.objectContaining({
+          table_name: 'runs',
+          name: 'runs_one_active_requester_opportunity_uq',
+          definition: expect.stringContaining('(opportunity_id, requested_by)')
+        })
+      ]);
       expect(serialized).toContain('run_budget_reservations_attempt_fk');
       expect(serialized).toContain('run_budget_reservations_generation_operation_ordinal_uq');
       expect(serialized).toContain('document_versions_provenance_ck');
@@ -359,7 +366,7 @@ describe('durable migration catalog', () => {
     expect(Object.keys(runs)).toEqual(expect.arrayContaining(['idempotencyKey', 'startRequestHash']));
     const runIndexes = getTableConfig(runs).indexes;
     expect(runIndexes.find((entry) => entry.config.name === 'runs_idempotency_key_uq')?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['idempotency_key']);
-    expect(runIndexes.find((entry) => entry.config.name === 'runs_one_active_opportunity_uq')?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['opportunity_id']);
+    expect(runIndexes.find((entry) => entry.config.name === 'runs_one_active_requester_opportunity_uq')?.config.columns.map((column) => 'name' in column ? column.name : undefined)).toEqual(['opportunity_id', 'requested_by']);
     expect(Object.keys(runBudgets)).toEqual(expect.arrayContaining(['reservedOutputTokens', 'deadlineMs', 'deadlineAt']));
     // max_input_tokens/max_output_tokens were dead run_budgets columns — never
     // read by any application code, un-enforced since 0019_remove_token_budgets

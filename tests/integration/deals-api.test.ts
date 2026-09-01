@@ -37,6 +37,9 @@ const sectionIds = [
 ] as const;
 const workspaceDraftRunId = `deal-workspace-draft-${process.pid}`;
 const workspaceDraftSubjectId = `deal-workspace-draft-subject-${process.pid}`;
+const workspaceSupersededSubjectId = `deal-workspace-superseded-subject-${process.pid}`;
+const workspaceFinalizedRunId = `deal-workspace-finalized-${process.pid}`;
+const workspaceFinalizedBriefId = `deal-workspace-finalized-brief-${process.pid}`;
 const generatedDraft = dealBriefSchema.parse({
   dealSnapshot: { accountName: 'Northstar Foods Cooperative', opportunityName: 'Global Access Renewal', stage: 'Order Review' },
   executiveSummary: { narrative: 'A generated draft is ready for seller review.' },
@@ -162,7 +165,7 @@ describe('authorized deal API projection', () => {
         name: z.string(), title: z.string().nullable(), role: z.string(), influence: z.string(),
         relationship: z.string(), goals: z.array(z.string()), concerns: z.array(z.string()), citationIds: z.array(z.string())
       }).strict()),
-      actions: z.array(z.object({ action: z.string(), owner: z.string().nullable(), priority: z.string(), dueDate: isoDate.nullable(), rationale: z.string(), citationIds: z.array(z.string()), accountTeamUpdateImpact: z.boolean() }).strict()),
+      actions: z.array(z.object({ action: z.string(), audience: z.enum(['internal', 'customer']), owner: z.string().nullable(), priority: z.string(), dueDate: isoDate.nullable(), rationale: z.string(), citationIds: z.array(z.string()), accountTeamUpdateImpact: z.boolean() }).strict()),
       warnings: z.array(z.object({ severity: z.string(), message: z.string(), citationIds: z.array(z.string()), accountTeamUpdateImpact: z.boolean() }).strict())
     }).strict().parse(body.brief);
     expect(Object.keys(brief.sections)).toEqual(sectionIds);
@@ -338,8 +341,21 @@ describe('authorized deal API projection', () => {
       values (${workspaceDraftRunId}, 'OPP-1001', 'USR-5001', 'awaiting_approval', 'mock', 'draft-preview', ${'d'.repeat(64)}, 1)`;
     await seedDatabase`insert into approval_subjects
       (id, run_id, draft_version, subject_hash, payload, section_ids, recommendation_ids, citation_ids, policy_triggers, quorum_version)
-      values (${workspaceDraftSubjectId}, ${workspaceDraftRunId}, 1, ${'e'.repeat(64)}, ${JSON.stringify(generatedDraft)}::jsonb,
+      values
+      (${workspaceSupersededSubjectId}, ${workspaceDraftRunId}, 0, ${'c'.repeat(64)}, ${JSON.stringify(generatedDraft)}::jsonb,
+        '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'deal-brief-approval-v1'),
+      (${workspaceDraftSubjectId}, ${workspaceDraftRunId}, 1, ${'e'.repeat(64)}, ${JSON.stringify(generatedDraft)}::jsonb,
         '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'deal-brief-approval-v1')`;
+    await seedDatabase`update approval_subjects
+      set superseded_by_subject_id = ${workspaceDraftSubjectId}
+      where id = ${workspaceSupersededSubjectId}`;
+    await seedDatabase`insert into approval_requirement_entries
+      (id, approval_subject_id, category, eligible_authorities, policy_triggers, depends_on, ordinal)
+      values
+      ('deal-workspace-superseded-entry', ${workspaceSupersededSubjectId}, 'customer_communication',
+        '["account_owner"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0),
+      ('deal-workspace-current-entry', ${workspaceDraftSubjectId}, 'customer_communication',
+        '["account_owner"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0)`;
 
     const response = await maya.get('/api/deals/OPP-1001').set(browserHeaders).expect(200);
     expect(response.body).toMatchObject({
@@ -348,11 +364,18 @@ describe('authorized deal API projection', () => {
         type: 'generated_output',
         lifecycle: 'draft',
         producingRun: { id: workspaceDraftRunId, status: 'awaiting_approval' },
+        approvalReview: { approvalSubjectId: workspaceDraftSubjectId },
         content: { status: 'generated' }
       },
       brief: { status: 'generated' }
     });
     expect(response.body.generatedOutput.producingRun.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(response.body.generatedOutput.approvalReview).toEqual({
+      approvalSubjectId: workspaceDraftSubjectId
+    });
+    expect(JSON.stringify(response.body.generatedOutput.approvalReview)).not.toContain(
+      workspaceSupersededSubjectId
+    );
 
     const partialReader = await authenticate(app, 'USR-5007');
     const partialWorkspace = await partialReader
@@ -368,5 +391,25 @@ describe('authorized deal API projection', () => {
       brief: { status: 'source_backed' }
     });
     expect(JSON.stringify(partialWorkspace.body)).not.toContain('Private Slack summary.');
+    expect(JSON.stringify(partialWorkspace.body)).not.toContain(workspaceDraftSubjectId);
+
+    await seedDatabase`insert into runs
+      (id, opportunity_id, requested_by, status, generation_provider, generation_model, start_request_hash, version, updated_at)
+      values (${workspaceFinalizedRunId}, 'OPP-1001', 'USR-5001', 'completed', 'mock', 'finalized-preview',
+        ${'f'.repeat(64)}, 2, now() + interval '1 minute')`;
+    await seedDatabase`insert into briefs
+      (id, run_id, draft_version, payload, subject_hash, finalized_at)
+      values (${workspaceFinalizedBriefId}, ${workspaceFinalizedRunId}, 0,
+        ${JSON.stringify(generatedDraft)}::jsonb, ${'f'.repeat(64)}, now())`;
+
+    const finalizedWorkspace = await maya
+      .get('/api/deals/OPP-1001')
+      .set(browserHeaders)
+      .expect(200);
+    expect(finalizedWorkspace.body.generatedOutput).toMatchObject({
+      lifecycle: 'finalized',
+      producingRun: { id: workspaceFinalizedRunId, status: 'completed' },
+      approvalReview: null
+    });
   });
 });

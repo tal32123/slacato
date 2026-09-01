@@ -310,8 +310,8 @@ export const runs = pgTable(
     uniqueIndex('runs_idempotency_key_uq')
       .on(table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null`),
-    uniqueIndex('runs_one_active_opportunity_uq')
-      .on(table.opportunityId)
+    uniqueIndex('runs_one_active_requester_opportunity_uq')
+      .on(table.opportunityId, table.requestedBy)
       .where(
         sql`${table.status} in ('created','retrieving','specialists_running','synthesizing','validating','awaiting_approval','finalizing')`
       ),
@@ -720,7 +720,7 @@ export const approvalRequirementEntries = pgTable(
     ),
     check(
       'approval_requirement_entries_category_ck',
-      sql`${table.category} in ('commercial_discount','legal_terms','evidence_review','customer_concession')`
+      sql`${table.category} in ('commercial_discount','legal_terms','evidence_review','customer_communication','customer_concession')`
     ),
     check('approval_requirement_entries_ordinal_ck', sql`${table.ordinal} >= 0`)
   ]

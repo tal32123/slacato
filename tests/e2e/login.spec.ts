@@ -5,6 +5,13 @@ test('keyboard persona login and persona switching update the authenticated work
   await expect(page.getByRole('heading', { name: 'Choose your demo persona' })).toBeVisible();
   await expect(page.locator('[data-slot="card-title"]', { hasText: 'Maya Levin' })).toBeVisible();
   await expect(page.getByText('No passwords. No invented roles.')).toBeVisible();
+  const overviewLink = page
+    .locator('aside')
+    .getByRole('link', { name: 'Technical overview (opens in a new tab)' });
+  await expect(overviewLink).toBeVisible();
+  await expect(overviewLink).toHaveAttribute('href', '/technical-overview.html');
+  await expect(overviewLink).toHaveAttribute('target', '_blank');
+  await expect(overviewLink).toHaveAttribute('rel', 'noopener noreferrer');
 
   const maya = page.getByRole('button', { name: /Continue as Maya Levin/ });
   await maya.focus();

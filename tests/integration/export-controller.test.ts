@@ -62,7 +62,7 @@ const brief = {
     coverageGaps: ['Legal reviewer'], claims: [claim]
   },
   negotiationState: { currentState: 'Negotiation is active.', leverage: ['Renewal timing'], risks: ['Legal timing'], claims: [claim] },
-  recommendedNextActions: { actions: [{ action: 'Schedule review', owner: 'Avery Owner', priority: 'high' as const, rationale: 'Resolve timing.', dueDate: '2026-09-01', claims: [claim] }] },
+  recommendedNextActions: { actions: [{ action: 'Schedule review', audience: 'internal', owner: 'Avery Owner', priority: 'high' as const, rationale: 'Resolve timing.', dueDate: '2026-09-01', claims: [claim] }] },
   missingInformation: { items: [{ question: 'Who signs?', whyItMatters: 'Confirms process.', owner: 'Avery Owner' }] },
   sourceEvidence: { evidence: [
     { evidenceId: ids.crmEvidence, sourceType: 'crm' as const, summary: 'CRM opportunity summary.', capturedAt: '2026-08-29T10:00:00.000Z', claims: [claim] },

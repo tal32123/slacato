@@ -3,7 +3,15 @@ import { expect, it } from 'vitest';
 import { renderDealWorkspace } from '../../apps/api/src/modules/deals/deal-workspace.mapper';
 
 const AUTHORIZED_EVIDENCE_ID = 'salesforce:OPP-1:0';
-const RESTRICTED_FACT = 'Board memo says the buyer will be acquired by Rival Corp for 40M.';
+const CANONICAL_PROGRESS_CLAIM = 'The renewal is progressing.';
+const FALSE_BOUND_RESTRICTED_FACT =
+  'Restricted board memo says the buyer will be acquired by Rival Corp for 40M.';
+const REASSOCIATED_CLOSE_DATE_WARNING =
+  'Confirm the renewal close date is 2026-09-15 with the deal desk.';
+const CANONICAL_UNCERTAINTY_CLAIM = 'The renewal close date is uncertain.';
+const EDITED_UNCERTAINTY_WARNING =
+  'Review the uncertainty in the renewal close date with the deal desk.';
+const CANONICAL_UNCONFIRMED_CLAIM = 'Payment schedule is unconfirmed.';
 
 const target: AuthorizedDeal = {
   opportunityId: 'OPP-1',
@@ -16,7 +24,6 @@ const target: AuthorizedDeal = {
   latestRun: null
 };
 
-/** One evidence record the narrower viewer is authorized to read. */
 const authorizedEvidence: DealEvidence = {
   id: AUTHORIZED_EVIDENCE_ID,
   sourceType: 'salesforce',
@@ -28,7 +35,6 @@ const authorizedEvidence: DealEvidence = {
     'opportunityId: OPP-1\nopportunityName: Renewal\naccountName: Northstar\nstage: Negotiation\nowner: Test Owner\ncloseDate: 2026-09-30\nacv: 1000\nprobability: 60\nriskLevel: medium\nnextStep: Confirm renewal terms by 2026-09-15'
 };
 
-/** Builds a claim citing only evidence the viewer is authorized to read. */
 function authorizedClaim(id: string, statement: string): Claim {
   return {
     id,
@@ -44,13 +50,9 @@ function authorizedClaim(id: string, statement: string): Claim {
   } as Claim;
 }
 
-/**
- * A finalized brief whose claims all cite authorized evidence, so the generated output is
- * projected, plus review warnings with the three possible claim bindings.
- */
 function briefWithWarnings(
   warnings: readonly unknown[],
-  warningSubject = 'The renewal is progressing.'
+  warningSubject = CANONICAL_PROGRESS_CLAIM
 ): DealBrief {
   return {
     dealSnapshot: {
@@ -82,33 +84,9 @@ function briefWithWarnings(
   } as DealBrief;
 }
 
-/** Warning text a broad approver preserved or edited in, carrying no claim binding at all. */
-const unboundWarning = {
-  code: 'UNBOUND_REVIEWER_NOTE',
-  severity: 'critical',
-  message: RESTRICTED_FACT,
-  claimIds: []
-};
-
-/** Warning bound to a claim whose citation the narrower viewer is authorized to read. */
-const boundWarning = {
-  code: 'BOUND_REVIEWER_NOTE',
-  severity: 'warning',
-  message: 'Confirm the renewal close date with the deal desk.',
-  claimIds: ['claim_es_1']
-};
-
-/** Warning bound to a claim the validator dropped from the finalized brief. */
-const danglingWarning = {
-  code: 'INSUFFICIENT_CLAIM_SUPPORT',
-  severity: 'warning',
-  message: `Discarded claim reported: ${RESTRICTED_FACT}`,
-  claimIds: ['claim_rejected_1']
-};
-
 function renderWorkspaceForNarrowerViewer(
   warnings: readonly unknown[],
-  warningSubject = 'The renewal is progressing.'
+  warningSubject = CANONICAL_PROGRESS_CLAIM
 ) {
   const latestRun: LatestDealRun = {
     runId: 'run-1',
@@ -129,51 +107,83 @@ function renderWorkspaceForNarrowerViewer(
   });
 }
 
-it('withholds review-warning text that is not bound to a claim the viewer is authorized to read', () => {
-  const workspace = renderWorkspaceForNarrowerViewer([unboundWarning, boundWarning]);
+it('does not authorize restricted warning prose through an unrelated harmless claim binding', () => {
+  const warnings = [
+    {
+      code: 'FALSE_BOUND_REVIEWER_NOTE',
+      severity: 'critical',
+      message: FALSE_BOUND_RESTRICTED_FACT,
+      claimIds: ['claim_es_1']
+    }
+  ];
 
-  // The generated output must actually be projected, or the assertions below pass vacuously.
+  const workspace = renderWorkspaceForNarrowerViewer(warnings);
   expect(workspace.generatedOutput).not.toBeNull();
-  const content = workspace.generatedOutput?.content;
-  expect(content?.warnings.map((warning) => warning.message)).not.toContain(RESTRICTED_FACT);
-  expect(content?.sections.confidenceAndReviewWarnings.items).not.toContain(RESTRICTED_FACT);
-  expect(JSON.stringify(workspace)).not.toContain(RESTRICTED_FACT);
-});
 
-it('withholds arbitrary warning metadata bound to a harmless authorized claim', () => {
-  const workspace = renderWorkspaceForNarrowerViewer([unboundWarning, boundWarning]);
   const content = workspace.generatedOutput?.content;
-
   expect(content?.warnings).toEqual([]);
   expect(content?.sections.confidenceAndReviewWarnings.items).toEqual([]);
+
+  const serializedWorkspace = JSON.stringify(workspace);
+  expect(serializedWorkspace).not.toContain(FALSE_BOUND_RESTRICTED_FACT);
 });
 
-it('drops a warning that references a claim the finalized brief no longer contains', () => {
-  const warnings = [danglingWarning, boundWarning];
-  expect(() => renderWorkspaceForNarrowerViewer(warnings)).not.toThrow();
-  const messages = renderWorkspaceForNarrowerViewer(warnings).generatedOutput?.content.warnings.map(
-    (warning) => warning.message
+it('does not authorize a close date by reassociating words from separate authorized fields', () => {
+  const workspace = renderWorkspaceForNarrowerViewer([
+    {
+      code: 'REASSOCIATED_CLOSE_DATE',
+      severity: 'critical',
+      message: REASSOCIATED_CLOSE_DATE_WARNING,
+      claimIds: ['claim_es_1']
+    }
+  ]);
+
+  const warnings = workspace.generatedOutput?.content.warnings;
+  expect(warnings).toEqual([]);
+  expect(JSON.stringify(workspace)).not.toContain(REASSOCIATED_CLOSE_DATE_WARNING);
+});
+
+it('retains an authorized uncertainty warning after a harmless reviewer paraphrase', () => {
+  const workspace = renderWorkspaceForNarrowerViewer(
+    [
+      {
+        code: 'CLOSE_DATE_UNCERTAINTY',
+        severity: 'critical',
+        message: EDITED_UNCERTAINTY_WARNING,
+        claimIds: ['claim_es_1']
+      }
+    ],
+    CANONICAL_UNCERTAINTY_CLAIM
   );
-  expect(messages).not.toContain(`Discarded claim reported: ${RESTRICTED_FACT}`);
+
+  const warnings = workspace.generatedOutput?.content.warnings;
+  expect(warnings).toEqual([
+    expect.objectContaining({
+      severity: 'warning',
+      message: CANONICAL_UNCERTAINTY_CLAIM,
+      citationIds: [AUTHORIZED_EVIDENCE_ID]
+    })
+  ]);
+  expect(JSON.stringify(warnings)).not.toContain(EDITED_UNCERTAINTY_WARNING);
 });
 
-it('recognizes the canonical unconfirmed domain wording as a review concern', () => {
+it('retains an authorized unconfirmed warning with projection-owned severity', () => {
   const workspace = renderWorkspaceForNarrowerViewer(
     [
       {
         code: 'PAYMENT_SCHEDULE_REVIEW',
         severity: 'critical',
-        message: 'Reviewer-authored prose is not authoritative.',
+        message: 'Escalate this reviewer-authored payment note.',
         claimIds: ['claim_es_1']
       }
     ],
-    'Payment schedule is unconfirmed.'
+    CANONICAL_UNCONFIRMED_CLAIM
   );
 
   expect(workspace.generatedOutput?.content.warnings).toEqual([
     expect.objectContaining({
       severity: 'warning',
-      message: 'Payment schedule is unconfirmed.',
+      message: CANONICAL_UNCONFIRMED_CLAIM,
       citationIds: [AUTHORIZED_EVIDENCE_ID]
     })
   ]);

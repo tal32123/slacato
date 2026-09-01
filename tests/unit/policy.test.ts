@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   DEMO_APPROVAL_IDENTITIES,
   dealBriefSchema,
+  classifyCustomerFacingLanguage,
   decideApprovalRequirement,
   extractEditedPolicySignals,
   hashApprovalPayload,
+  requiresCustomerFacingApprovalAfterEdit,
   validateDealBrief,
   type ApprovalRequirementInput
 } from '@slacato/core';
@@ -15,6 +17,7 @@ const safe: ApprovalRequirementInput = {
   dataRetentionLanguage: false,
   restrictedResearchLanguage: false,
   customerSpecificSecurityLanguage: false,
+  customerFacingLanguage: false,
   customerFacingConcessionLanguage: false,
   overallConfidence: 0.7,
   conflictingEvidence: false,
@@ -43,7 +46,66 @@ function editedBrief(narrative: string) {
   });
 }
 
+function actionBrief(action: string, audience: 'internal' | 'customer') {
+  return dealBriefSchema.parse({
+    ...editedBrief('The commercial position is settled.'),
+    recommendedNextActions: {
+      actions: [
+        {
+          action,
+          audience,
+          priority: 'high',
+          rationale: 'Complete the recorded next step.',
+          claims: []
+        }
+      ]
+    }
+  });
+}
+
 describe('deterministic brief approval policy', () => {
+  it.each([
+    ['Use any arbitrary wording at all', 'customer', true],
+    ['Send the signed proposal to the buyer immediately', 'internal', false],
+    ['We can provide the packet to the customer', 'internal', false]
+  ] as const)(
+    'treats typed action audience as authoritative regardless wording: %s',
+    (action, audience, expected) => {
+      expect(classifyCustomerFacingLanguage(actionBrief(action, audience))).toMatchObject({
+        customerAudienceAction: expected,
+        customerFacingLanguage: expected
+      });
+    }
+  );
+
+  it('does not let an approval edit downgrade an existing customer audience requirement', () => {
+    const internal = actionBrief('Semantically identical arbitrary wording', 'internal');
+    const customer = actionBrief('Semantically identical arbitrary wording', 'customer');
+
+    expect(requiresCustomerFacingApprovalAfterEdit(customer, internal)).toBe(true);
+    expect(requiresCustomerFacingApprovalAfterEdit(internal, customer)).toBe(true);
+    expect(requiresCustomerFacingApprovalAfterEdit(internal, internal)).toBe(false);
+  });
+
+  it('preserves both reasons in one account-owner entry when communication and concession overlap', () => {
+    const requirement = decideApprovalRequirement({
+      ...safe,
+      customerFacingLanguage: true,
+      customerFacingConcessionLanguage: true
+    });
+
+    expect(requirement.entries).toEqual([
+      expect.objectContaining({
+        category: 'customer_communication',
+        eligibleAuthorities: ['account_owner'],
+        policyTriggers: [
+          'customer_facing_language',
+          'customer_facing_concession_language'
+        ]
+      })
+    ]);
+  });
+
   it('does not gate exact discount and confidence boundaries', () => {
     expect(entries({ discountPercent: 10, overallConfidence: 0.7 })).toEqual([]);
   });
@@ -105,6 +167,29 @@ describe('deterministic brief approval policy', () => {
     ['we can offer a reduction', { liabilityCapChanged: false, customerFacingConcessionLanguage: true }]
   ] as const)('semantically gates adversarial edited wording: %s', (narrative, expected) => {
     expect(extractEditedPolicySignals(editedBrief(narrative))).toMatchObject(expected);
+  });
+
+  it('never combines unrelated customer and security concepts across prose fields', () => {
+    const genericSecurity = dealBriefSchema.parse({
+      ...actionBrief('Use arbitrary customer-facing wording.', 'customer'),
+      negotiationState: {
+        currentState: 'Security review is complete.',
+        risks: []
+      }
+    });
+    const genericSignals = extractEditedPolicySignals(genericSecurity);
+    const explicitSignals = extractEditedPolicySignals(
+      editedBrief('Customer-specific security language is required.')
+    );
+
+    expect(genericSignals.customerSpecificSecurityLanguage).toBe(false);
+    expect(entries(genericSignals)).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ category: 'legal_terms' })])
+    );
+    expect(explicitSignals.customerSpecificSecurityLanguage).toBe(true);
+    expect(entries(explicitSignals)).toEqual([
+      { category: 'legal_terms', eligibleAuthorities: ['legal_reviewer'], dependsOn: [] }
+    ]);
   });
 
   it('changes unsupported free narrative under the production claim-support validator', () => {

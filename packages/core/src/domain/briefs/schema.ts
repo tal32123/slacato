@@ -99,11 +99,15 @@ export const stakeholderSchema = immutableSchema(
     .strict()
 );
 
+/** Explicit audience for a recommended action; policy never infers it from generated prose. */
+export const recommendedActionAudienceSchema = z.enum(['internal', 'customer']);
+
 /** Prioritized concrete action recommended for the deal team. */
 export const recommendedActionSchema = immutableSchema(
   z
     .object({
       action: shortTextSchema,
+      audience: recommendedActionAudienceSchema,
       owner: shortTextSchema.optional(),
       priority: z.enum(['low', 'medium', 'high', 'critical']),
       rationale: shortTextSchema,
@@ -308,6 +312,8 @@ export type Claim = z.infer<typeof claimSchema>;
 export type ReviewWarning = z.infer<typeof reviewWarningSchema>;
 /** Immutable validated stakeholder record. */
 export type Stakeholder = z.infer<typeof stakeholderSchema>;
+/** Explicit validated audience of a recommended action. */
+export type RecommendedActionAudience = z.infer<typeof recommendedActionAudienceSchema>;
 /** Immutable validated recommended action. */
 export type RecommendedAction = z.infer<typeof recommendedActionSchema>;
 /** Immutable validated authorized evidence summary. */

@@ -5,6 +5,8 @@ import {
   type ApprovalRequirementInput,
   AuthorizationDeniedError,
   CANONICAL_FIXTURE_COMMIT,
+  classifyCustomerFacingLanguage,
+  requiresCustomerFacingApprovalAfterEdit,
   collectDealBriefReferences,
   type DealBrief,
   type DealBriefAccessControl,
@@ -194,11 +196,16 @@ export class PostgresDealBriefAccessControl implements DealBriefAccessControl {
     }
     const facts = await new PostgresDealBriefPolicyFacts(this.database).forBrief(
       input.opportunityId,
-      input.payload
+      grounded
     );
-    const semantic = extractEditedPolicySignals(input.payload);
+    const semantic = extractEditedPolicySignals(grounded);
+    const customerFacingLanguage = requiresCustomerFacingApprovalAfterEdit(
+      input.originalPayload,
+      grounded
+    );
     return decideApprovalRequirement({
       ...facts,
+      customerFacingLanguage,
       liabilityCapChanged: facts.liabilityCapChanged || semantic.liabilityCapChanged,
       dataRetentionLanguage: facts.dataRetentionLanguage || semantic.dataRetentionLanguage,
       restrictedResearchLanguage:
@@ -211,7 +218,7 @@ export class PostgresDealBriefAccessControl implements DealBriefAccessControl {
   }
 }
 
-/** Authoritative structured policy facts; generated prose is never a policy decision input. */
+/** Authoritative structured policy facts and typed brief signals for approval decisions. */
 export class PostgresDealBriefPolicyFacts {
   /** Creates policy-fact access backed by the database. */
   public constructor(private readonly database: DatabaseClient) {}
@@ -249,6 +256,7 @@ export class PostgresDealBriefPolicyFacts {
       dataRetentionLanguage: facts.data_retention_language,
       restrictedResearchLanguage: facts.restricted_research_language,
       customerSpecificSecurityLanguage: facts.customer_specific_security_language,
+      customerFacingLanguage: classifyCustomerFacingLanguage(brief).customerFacingLanguage,
       customerFacingConcessionLanguage: facts.customer_facing_concession_language,
       overallConfidence: brief.confidenceAndReviewWarnings.overallConfidence,
       conflictingEvidence: facts.conflicting_evidence || warningCodes.has('CONFLICTING_EVIDENCE'),

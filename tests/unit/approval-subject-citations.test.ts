@@ -66,14 +66,10 @@ function buildPayload(): ApprovalBriefPayload {
     },
     recommendedNextActions: {
       actions: [
-        {
-          action: 'Send the revised order form.',
-          priority: 'high',
-          rationale: 'The buyer is waiting on it.',
-          claims: [
-            buildClaim('claim_act_1', 'The revised order form is outstanding.', readableEvidenceId)
-          ]
-        }
+        { action: 'Send the revised order form.', audience: 'customer', priority: 'high', rationale: 'The buyer is waiting on it.',
+        claims: [
+          buildClaim('claim_act_1', 'The revised order form is outstanding.', readableEvidenceId)
+        ] }
       ]
     },
     missingInformation: { items: [] },

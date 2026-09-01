@@ -9,9 +9,18 @@ const sections = [
   'Negotiation State',
   'Recommended Next Actions',
   'Missing Information',
-  'Source Evidence',
-  'Confidence and Review Warnings'
+  'Confidence and Review Warnings',
+  'Source Evidence'
 ] as const;
+
+const sourceTypeLabels = {
+  gong_summary: 'Gong Summary',
+  gong_transcript: 'Gong Transcript',
+  policy: 'Policy',
+  pricing: 'Pricing',
+  salesforce: 'Salesforce',
+  slack: 'Slack'
+} as const;
 
 async function loginAs(page: Page, name: string, returnTo = '/deals'): Promise<void> {
   await page.goto(`/login?returnTo=${encodeURIComponent(returnTo)}`);
@@ -31,9 +40,65 @@ async function openCitation(_page: Page, citation: Locator): Promise<void> {
   await expect.poll(() => element.getAttribute('aria-pressed')).toBe('true');
 }
 
+async function mockGeneratedWorkspace(
+  page: Page,
+  runId: string
+): Promise<{ preview: string }> {
+  const workspace = await page.evaluate(async () => {
+    const response = await fetch('/api/deals/OPP-1001', { credentials: 'same-origin' });
+    return response.json() as Record<string, unknown>;
+  });
+  const sourceSnapshot = workspace.sourceSnapshot as {
+    evidenceOverview: Record<string, unknown> & {
+      sections: Record<string, Record<string, unknown>>;
+    };
+  };
+  const preview = 'AI-generated preview: Northstar has a supported renewal path with open execution details.';
+  const generatedContent = {
+    ...sourceSnapshot.evidenceOverview,
+    status: 'generated',
+    sections: {
+      ...sourceSnapshot.evidenceOverview.sections,
+      executiveSummary: {
+        ...sourceSnapshot.evidenceOverview.sections.executiveSummary,
+        paragraphs: [preview]
+      }
+    }
+  };
+  const generatedWorkspace = {
+    ...workspace,
+    generatedOutput: {
+      type: 'generated_output',
+      lifecycle: 'draft',
+      producingRun: {
+        id: runId,
+        status: 'awaiting_approval',
+        updatedAt: '2026-08-29T01:00:00.000Z'
+      },
+      content: generatedContent
+    },
+    brief: generatedContent
+  };
+  await page.route('**/api/deals/OPP-1001', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(generatedWorkspace)
+    });
+  });
+  return { preview };
+}
+
+async function openSourceRecords(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'Source Records' }).click();
+  await expect(page.getByRole('heading', { name: 'Authorized source records' })).toBeVisible();
+}
+
 test.describe.configure({ mode: 'serial' });
 
-test('lists only the signed persona authorized deals and opens the source-snapshot workspace', async ({ page }) => {
+test('lists only the signed persona authorized deals and opens the pre-generation Overview and raw source records', async ({
+  page
+}) => {
   await loginAs(page, 'Maya Levin');
 
   await expect(page.getByRole('heading', { name: 'Authorized deals' })).toBeVisible();
@@ -46,104 +111,225 @@ test('lists only the signed persona authorized deals and opens the source-snapsh
   await expect(desktopRow).toContainText('Latest run: No run yet');
   await expect(desktopRow).toContainText('Access: Standard deal');
 
+  const workspaceExpectations = await page.evaluate(async () => {
+    const response = await fetch('/api/deals/OPP-1001', { credentials: 'same-origin' });
+    const workspace = await response.json() as {
+      deal: {
+        opportunityId: string;
+        opportunityName: string;
+        accountName: string;
+        stage: string;
+        owner: string | null;
+        closeDate: string | null;
+        amount: number | null;
+        probability: number | null;
+        riskLevel: string;
+        createdAt: string;
+      };
+      evidence: { sourceType: keyof typeof sourceTypeLabels }[];
+    };
+    const counts = new Map<keyof typeof sourceTypeLabels, number>();
+    for (const record of workspace.evidence)
+      counts.set(record.sourceType, (counts.get(record.sourceType) ?? 0) + 1);
+    return {
+      deal: workspace.deal,
+      sourceAvailability: [...counts].map(([sourceType, count]) => ({ sourceType, count }))
+    };
+  });
+
   await page.getByRole('link', { name: /Open OPP-1001/ }).click();
   await expect(page).toHaveURL('/deals/OPP-1001');
-  await expect(page.getByRole('heading', { level: 1, name: /Northstar Foods Cooperative/ })).toBeVisible();
-  await expect(page.getByText('OPP-1001', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(/Order Review/).first()).toBeVisible();
-  await expect(page.getByText(/medium risk/i).first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Source snapshot', exact: true })).toBeVisible();
-  await expect(page.getByText('Evidence overview assembled deterministically from currently authorized, ingested records. It is not AI-generated and is not produced by a run.')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Generated draft', exact: true })).toHaveCount(0);
-
-  for (const section of sections) {
-    await expect(page.getByRole('heading', { name: section, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', {
+    level: 1,
+    name: 'Northstar Foods Cooperative - Global Access Renewal'
+  })).toBeVisible();
+  const dealFacts = page.getByRole('heading', { name: 'Deal facts' }).locator('..');
+  const expectedDealFacts = [
+    ['Opportunity ID', workspaceExpectations.deal.opportunityId],
+    ['Opportunity', workspaceExpectations.deal.opportunityName],
+    ['Account', workspaceExpectations.deal.accountName],
+    ['Stage', workspaceExpectations.deal.stage],
+    ['Owner', workspaceExpectations.deal.owner ?? 'Not recorded'],
+    ['Close date', workspaceExpectations.deal.closeDate ?? 'Not recorded'],
+    [
+      'Amount',
+      workspaceExpectations.deal.amount === null
+        ? 'Not recorded'
+        : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(
+            workspaceExpectations.deal.amount
+          )
+    ],
+    [
+      'Probability',
+      workspaceExpectations.deal.probability === null
+        ? 'Not recorded'
+        : `${workspaceExpectations.deal.probability}%`
+    ],
+    [
+      'Risk',
+      `${workspaceExpectations.deal.riskLevel.charAt(0).toUpperCase()}${workspaceExpectations.deal.riskLevel.slice(1)}`
+    ],
+    ['Access', 'Authorized'],
+    ['Created', workspaceExpectations.deal.createdAt],
+    ['Latest run', 'No run yet']
+  ] as const;
+  for (const [label, value] of expectedDealFacts) {
+    await expect(dealFacts.getByText(label, { exact: true })).toBeVisible();
+    await expect(dealFacts.getByText(value, { exact: true })).toBeVisible();
   }
-  await expect(page.getByRole('table', { name: 'Stakeholders' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Goals' })).toBeVisible();
-  const elena = page.getByRole('table', { name: 'Stakeholders' }).getByRole('row').filter({ hasText: 'Elena Voss' });
-  await expect(elena).toContainText('None recorded');
-  await expect(elena).toContainText('Wants a clean renewal path');
-  await expect(page.getByRole('table', { name: 'Recommended actions' })).toBeVisible();
-  await expect(page.getByText('Account-team update impact').first()).toBeVisible();
-  await expect(page.getByRole('button', {
-    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
-  }).first()).toBeVisible();
-  const sourceEvidence = page.getByRole('heading', { name: 'Source Evidence', exact: true }).locator('..').locator('..');
-  await expect(sourceEvidence.getByText('source=slack/account_team_updates.tsv, update_id=SLK-9002', { exact: true })).toHaveCount(1);
+
+  await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(page.getByRole('tab', { name: 'AI Brief' })).toBeDisabled();
+  await expect(page.getByRole('tab', { name: 'Source Records' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No AI brief yet' })).toBeVisible();
+  const availableInputs = page
+    .getByRole('heading', { name: 'Authorized inputs available' })
+    .locator('..');
+  const renderedAvailability = (await availableInputs.getByRole('listitem').allTextContents())
+    .map((item) => item.trim())
+    .sort();
+  const expectedAvailability = workspaceExpectations.sourceAvailability
+    .map(({ sourceType, count }) =>
+      `${sourceTypeLabels[sourceType]} · ${count} ${count === 1 ? 'record' : 'records'}`
+    )
+    .sort();
+  expect(renderedAvailability).toEqual(expectedAvailability);
+  for (const section of sections)
+    await expect(page.getByRole('heading', { name: section, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('table', { name: 'Stakeholders' })).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Stakeholders' })).toHaveCount(0);
+  await expect(page.getByRole('table', { name: 'Recommended actions' })).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Recommended actions' })).toHaveCount(0);
+  await expect(page.getByText('Account-team update impact')).toHaveCount(0);
+  const slackTourAnchors = page.locator('[data-tour="slack-evidence"]');
+  await expect(slackTourAnchors).toHaveCount(1);
+  await expect(slackTourAnchors).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  const historyCitation = page.getByRole('button', {
-    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
-  }).first();
-  await openCitation(page, historyCitation);
+  await openSourceRecords(page);
+  const slackRecord = page.getByRole('button', {
+    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+  });
+  await expect(slackRecord).toBeVisible();
+  for (const { sourceType } of workspaceExpectations.sourceAvailability)
+    await expect(page.getByRole('heading', {
+      name: sourceTypeLabels[sourceType],
+      exact: true
+    })).toBeVisible();
+  await openCitation(page, slackRecord);
+  await expect(page.getByText('slack:SLK-9002:0', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Close evidence detail' }).click();
   await page.goBack();
   await expect(page).toHaveURL('/deals');
 });
 
-test('shows a generated draft separately from the source snapshot and names its producing run', async ({ page }) => {
+test('defaults a generated workspace to Overview, then exposes the AI Brief and raw Source Records', async ({
+  page
+}) => {
   await loginAs(page, 'Maya Levin');
-  const workspace = await page.evaluate(async () => {
-    const response = await fetch('/api/deals/OPP-1001', { credentials: 'same-origin' });
-    return response.json() as Record<string, unknown>;
-  });
-  const sourceSnapshot = workspace.sourceSnapshot as { evidenceOverview: Record<string, unknown> };
-  const generatedContent = { ...sourceSnapshot.evidenceOverview, status: 'generated' };
-  const generatedWorkspace = {
-    ...workspace,
-    generatedOutput: {
-      type: 'generated_output', lifecycle: 'draft',
-      producingRun: { id: 'run-workspace-draft', status: 'awaiting_approval', updatedAt: '2026-08-29T01:00:00.000Z' },
-      content: generatedContent
-    },
-    brief: generatedContent
-  };
-  await page.route('**/api/deals/OPP-1001', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(generatedWorkspace) });
-  });
+  const { preview } = await mockGeneratedWorkspace(page, 'run-workspace-draft');
 
   await page.getByRole('link', { name: /Open OPP-1001/ }).click();
-  await expect(page.getByRole('heading', { name: 'Source snapshot', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Generated draft', exact: true })).toBeVisible();
-  await expect(page.getByText('Produced by run run-workspace-draft · awaiting approval')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(page.getByRole('heading', { name: 'AI brief is ready' })).toBeVisible();
+  const previewRegion = page.getByRole('heading', { name: 'AI-generated preview' }).locator('..');
+  await expect(previewRegion.getByText(preview, { exact: true })).toBeVisible();
+  for (const metadata of [
+    'Lifecycle',
+    'Draft',
+    'Run ID',
+    'run-workspace-draft',
+    'Run status',
+    'Awaiting approval',
+    'Updated',
+    '2026-08-29T01:00:00.000Z'
+  ])
+    await expect(page.getByText(metadata, { exact: true })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'AI Brief' }).click();
+  await expect(page.getByRole('tab', { name: 'AI Brief' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  for (const section of sections)
+    await expect(page.getByRole('heading', { name: section, exact: true })).toBeVisible();
+  const renderedSectionOrder = (await page.getByRole('heading').allTextContents()).filter((heading) =>
+    sections.includes(heading as (typeof sections)[number])
+  );
+  expect(renderedSectionOrder).toEqual(sections);
+
+  const provenance = page.getByRole('heading', { name: 'AI provenance' }).locator('..');
+  const provenanceRoles = provenance.getByRole('listitem');
+  await expect(provenanceRoles).toHaveCount(4);
+  const roleResponsibilities = [
+    [
+      'Conversation Intelligence',
+      'Finds buyer goals, concerns, commitments, objections, and missing context in authorized conversation evidence.'
+    ],
+    [
+      'Stakeholder Intelligence',
+      'Builds the stakeholder map, influence assessment, relationship state, and coverage gaps.'
+    ],
+    [
+      'Commercial Policy Analysis',
+      'Analyzes authorized commercial terms, pricing, policy triggers, and required approvals.'
+    ],
+    [
+      'Negotiation Strategy',
+      'Synthesizes validated specialist findings into negotiation state, prioritized actions, warnings, and the final brief.'
+    ]
+  ] as const;
+  for (const [role, responsibility] of roleResponsibilities) {
+    const entry = provenanceRoles.filter({ hasText: role });
+    await expect(entry).toHaveCount(1);
+    await expect(entry).toContainText(responsibility);
+  }
+
+  const generatedCitation = page.getByRole('button', {
+    name: /Open evidence: source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
+  }).first();
+  await openCitation(page, generatedCitation);
+  await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close evidence detail' }).click();
+
+  await openSourceRecords(page);
+  await expect(page.getByRole('button', {
+    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+  })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 });
 
-test('does not overflow horizontally at a narrow viewport when the run id is a long unbroken hash', async ({ page }) => {
+test('does not overflow the generated Overview at a narrow viewport with a long unbroken run id', async ({
+  page
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAs(page, 'Maya Levin');
-  const workspace = await page.evaluate(async () => {
-    const response = await fetch('/api/deals/OPP-1001', { credentials: 'same-origin' });
-    return response.json() as Record<string, unknown>;
-  });
-  const sourceSnapshot = workspace.sourceSnapshot as { evidenceOverview: Record<string, unknown> };
-  const generatedContent = { ...sourceSnapshot.evidenceOverview, status: 'generated' };
   const longRunId = 'run_bf0be74fedb74b4ca1e29d8c6f5b3a71fe0d92c4b7a1e6f803d2c9b5a7e1f04';
-  const generatedWorkspace = {
-    ...workspace,
-    generatedOutput: {
-      type: 'generated_output', lifecycle: 'draft',
-      producingRun: { id: longRunId, status: 'awaiting_approval', updatedAt: '2026-08-29T01:00:00.000Z' },
-      content: generatedContent
-    },
-    brief: generatedContent
-  };
-  await page.route('**/api/deals/OPP-1001', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(generatedWorkspace) });
-  });
+  await mockGeneratedWorkspace(page, longRunId);
 
   await page.goto('/deals/OPP-1001');
-  await expect(page.getByText(`Produced by run ${longRunId}`, { exact: false })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(page.getByText(longRunId, { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
 test('desktop evidence uses one non-modal complementary region with replace and back history', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 600 });
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
+  await openSourceRecords(page);
 
   const first = page.getByRole('button', {
-    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
-  }).first();
+    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+  });
   await openCitation(page, first);
 
   const detail = page.getByRole('complementary', { name: 'Evidence detail' });
@@ -159,8 +345,8 @@ test('desktop evidence uses one non-modal complementary region with replace and 
   expect(mainWidth).toBeGreaterThanOrEqual(640);
 
   const second = page.getByRole('button', {
-    name: /source=gong\/gong_call_summaries\.tsv, call_id=CALL-008/
-  }).first();
+    name: 'Open source record: source=gong/gong_call_summaries.tsv, call_id=CALL-008'
+  });
   await second.click();
   await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toHaveCount(1);
   await expect(second).toHaveAttribute('aria-pressed', 'true');
@@ -189,12 +375,13 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
 
   await expect(page.getByRole('table', { name: 'Stakeholders' })).toHaveCount(0);
-  await expect(page.getByRole('list', { name: 'Stakeholders' })).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Recommended actions' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Stakeholders' })).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Recommended actions' })).toHaveCount(0);
+  await openSourceRecords(page);
 
   const citation = page.getByRole('button', {
-    name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/
-  }).first();
+    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+  });
   await openCitation(page, citation);
   const sheet = page.getByRole('dialog', { name: 'Evidence detail' });
   await expect(sheet).toBeVisible();
@@ -246,7 +433,10 @@ test('mobile and constrained evidence is a full-height modal sheet with focus, i
 test('uses a modal rather than shrinking the main column when a desktop-width viewport cannot fit both regions', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await loginAs(page, 'Maya Levin', '/deals/OPP-1001');
-  const citation = page.getByRole('button', { name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/ }).first();
+  await openSourceRecords(page);
+  const citation = page.getByRole('button', {
+    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+  });
   await citation.click();
   await expect(page.getByRole('dialog', { name: 'Evidence detail' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Evidence detail' })).toHaveCount(0);
@@ -264,15 +454,21 @@ test('preserves complete responsive records at 320px and a short 200%-zoom equiv
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('link', { name: /Open OPP-1001/ }).click();
-  const stakeholder = page.getByRole('list', { name: 'Stakeholders' }).getByRole('listitem').filter({ hasText: 'Elena Voss' });
-  await expect(stakeholder).toContainText('Goals');
-  await expect(stakeholder).toContainText('None recorded');
-  await expect(stakeholder).toContainText('Wants a clean renewal path');
-  await expect(page.getByText('4,217,500', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  const dealFacts = page.getByRole('heading', { name: 'Deal facts' }).locator('..');
+  await expect(dealFacts.getByText('4,217,500', { exact: true })).toBeVisible();
+  await expect(dealFacts.getByText('78%', { exact: true })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Stakeholders' })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 640, height: 320 });
-  const citation = page.getByRole('button', { name: /source=slack\/account_team_updates\.tsv, update_id=SLK-9002/ }).first();
+  await openSourceRecords(page);
+  const citation = page.getByRole('button', {
+    name: 'Open source record: source=slack/account_team_updates.tsv, update_id=SLK-9002'
+  });
   await citation.click();
   const sheet = page.getByRole('dialog', { name: 'Evidence detail' });
   await expect(sheet).toBeVisible();
@@ -323,37 +519,24 @@ test('renders safe empty list and workspace states with a persona recovery path'
 
   const workspacePage = await context.newPage();
   await workspacePage.route('**/api/deals/OPP-1001', async (route) => {
-    const body = workspaceResponse as {
-      sourceSnapshot: {
-        evidenceOverview: {
-          sections: Record<string, { items: string[]; citationIds: string[]; accountTeamUpdateImpact: boolean }>;
-        };
-      };
-    };
-    const { evidenceOverview } = body.sourceSnapshot;
-    const sectionsWithoutEvidence = Object.fromEntries(Object.entries(evidenceOverview.sections).map(([id, section]) => [
-      id, { ...section, items: [], citationIds: [], accountTeamUpdateImpact: false }
-    ]));
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-      ...body,
-      evidence: [],
-      sourceSnapshot: {
-        ...body.sourceSnapshot,
-        evidenceOverview: {
-          ...evidenceOverview,
-          sections: sectionsWithoutEvidence,
-          stakeholders: [],
-          actions: [],
-          warnings: []
-        }
-      }
-    }) });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...(workspaceResponse as Record<string, unknown>),
+        evidence: []
+      })
+    });
   });
   await workspacePage.goto('/deals/OPP-1001');
-  await expect(workspacePage.getByRole('heading', { name: 'Stakeholder Map' })).toBeVisible();
-  await expect(workspacePage.getByText('No authorized stakeholder records are available.')).toBeVisible();
-  await expect(workspacePage.getByText('No deterministic source cues are available.')).toBeVisible();
-  await expect(workspacePage.getByRole('button', { name: /Open evidence:/ })).toHaveCount(0);
+  await expect(workspacePage.getByRole('heading', { name: 'No AI brief yet' })).toBeVisible();
+  await expect(workspacePage.getByRole('heading', {
+    name: 'Authorized inputs available'
+  })).toBeVisible();
+  await expect(workspacePage.getByText('No authorized source types are available.')).toBeVisible();
+  await openSourceRecords(workspacePage);
+  await expect(workspacePage.getByText('No authorized source records are available.')).toBeVisible();
+  await expect(workspacePage.getByRole('button', { name: /Open source record:/ })).toHaveCount(0);
   await expectNoHorizontalOverflow(workspacePage);
   await workspacePage.close();
 });

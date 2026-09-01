@@ -1,32 +1,32 @@
-import { readFile, readdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import postgres from 'postgres';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type DealBrief, dealBriefSchema } from '@slacato/core';
-import { createDatabaseClient } from '@slacato/infrastructure/db/client';
+import type { DealBrief } from '@slacato/core';
+import { dealBriefSchema, decideApprovalRequirement } from '@slacato/core';
+import type { DatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresDealBriefPolicyFacts } from '@slacato/infrastructure/db/repositories/deal-brief-access';
+import { describe, expect, it } from 'vitest';
+import { parseFixtureSet } from '../../scripts/fixture-loader';
 
-const sourceDatabaseUrl =
-  process.env.DATABASE_URL ?? 'postgres://slacato:slacato@127.0.0.1:54329/slacato';
-const databaseName = `catohw_policyfacts_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
-const databaseNamePattern = /^catohw_policyfacts_[a-z0-9]{16}$/;
+type StoredPolicyFacts = Readonly<{
+  discount_percent: string;
+  renewal_uplift_percent: string;
+  liability_cap_changed: boolean;
+  data_retention_language: boolean;
+  restricted_research_language: boolean;
+  customer_specific_security_language: boolean;
+  customer_facing_concession_language: boolean;
+  conflicting_evidence: boolean;
+  missing_material_evidence: boolean;
+}>;
 
-function databaseUrlFor(name: string): string {
-  const url = new URL(sourceDatabaseUrl);
-  url.pathname = `/${name}`;
-  return url.toString();
-}
+const canonicalFixtures = parseFixtureSet('fixtures/cato');
 
-const databaseUrl = databaseUrlFor(databaseName);
-const database = createDatabaseClient(databaseUrl, 4);
-const facts = new PostgresDealBriefPolicyFacts(database);
-
-/** Builds a brief that trips no structured policy fact, varying only its generated prose. */
+/** Builds a brief whose variable policy signals are actions, confidence, warnings, and open questions. */
 function brief(
   input: Readonly<{
-    missingInformation: DealBrief['missingInformation']['items'];
-    warnings: DealBrief['confidenceAndReviewWarnings']['warnings'];
-  }>
+    missingInformation?: DealBrief['missingInformation']['items'];
+    actions?: DealBrief['recommendedNextActions']['actions'];
+    warnings?: DealBrief['confidenceAndReviewWarnings']['warnings'];
+    overallConfidence?: number;
+  }> = {}
 ): DealBrief {
   return dealBriefSchema.parse({
     dealSnapshot: {
@@ -38,75 +38,68 @@ function brief(
     buyerGoalsAndBusinessDrivers: { goals: [], businessDrivers: [] },
     stakeholderMap: { stakeholders: [] },
     negotiationState: { currentState: 'The commercial position is settled.', risks: [] },
-    recommendedNextActions: { actions: [] },
-    missingInformation: { items: input.missingInformation },
+    recommendedNextActions: { actions: input.actions ?? [] },
+    missingInformation: { items: input.missingInformation ?? [] },
     sourceEvidence: { evidence: [] },
-    confidenceAndReviewWarnings: { overallConfidence: 0.95, warnings: input.warnings }
+    confidenceAndReviewWarnings: {
+      overallConfidence: input.overallConfidence ?? 0.95,
+      warnings: input.warnings ?? []
+    }
   });
 }
 
-async function createTemporaryDatabase(): Promise<void> {
-  if (!databaseNamePattern.test(databaseName))
-    throw new Error(`Refusing to create non-test database ${databaseName}`);
-  const maintenance = postgres(databaseUrlFor('postgres'), { max: 1 });
-  try {
-    await maintenance.unsafe(`CREATE DATABASE "${databaseName}"`);
-  } finally {
-    await maintenance.end({ timeout: 1 });
-  }
-  const migrationFiles = (await readdir(resolve(process.cwd(), 'drizzle')))
-    .filter((file) => /^\d{4}_.+\.sql$/.test(file))
-    .sort();
-  const target = postgres(databaseUrl, { max: 1 });
-  try {
-    for (const file of migrationFiles)
-      await target.unsafe(await readFile(resolve(process.cwd(), 'drizzle', file), 'utf8'));
-  } finally {
-    await target.end({ timeout: 1 });
-  }
+/** Exercises the repository mapping without coupling these policy tests to shared PostgreSQL. */
+function repositoryFor(row: StoredPolicyFacts): PostgresDealBriefPolicyFacts {
+  const sql = (async () => [row]) as unknown as DatabaseClient['sql'];
+  return new PostgresDealBriefPolicyFacts({
+    sql,
+    db: {} as DatabaseClient['db'],
+    close: async () => {}
+  });
 }
 
-async function dropTemporaryDatabase(): Promise<void> {
-  if (!databaseNamePattern.test(databaseName))
-    throw new Error(`Refusing to drop non-test database ${databaseName}`);
-  const maintenance = postgres(databaseUrlFor('postgres'), { max: 1 });
-  try {
-    await maintenance`select pg_terminate_backend(pid) from pg_stat_activity where datname = ${databaseName} and pid <> pg_backend_pid()`;
-    await maintenance.unsafe(`DROP DATABASE IF EXISTS "${databaseName}"`);
-  } finally {
-    await maintenance.end({ timeout: 1 });
-  }
+/** Mirrors scripts/ingest.ts policy-fact derivation for one canonical fixture opportunity. */
+function ingestedFactsFor(opportunityId: string): StoredPolicyFacts {
+  const opportunity = canonicalFixtures.opportunities.find(
+    (candidate) => candidate.opportunityId === opportunityId
+  );
+  if (opportunity === undefined) throw new Error(`Missing canonical fixture ${opportunityId}`);
+  const notes = canonicalFixtures.pricingNotes.filter(
+    (note) => note.opportunityId === opportunityId
+  );
+  const discountPercent = Math.max(0, ...notes.map((note) => note.requestedDiscount));
+  const renewalUpliftPercent =
+    notes.length === 0 ? 0 : Math.min(...notes.map((note) => note.renewalUplift));
+  const liabilityCapChanged = notes.some((note) => /liability language/i.test(note.pricingNotes));
+  const restrictedLanguage = opportunity.restrictedAccess;
+  return {
+    discount_percent: String(discountPercent),
+    renewal_uplift_percent: String(renewalUpliftPercent),
+    liability_cap_changed: liabilityCapChanged,
+    data_retention_language: false,
+    restricted_research_language: restrictedLanguage,
+    customer_specific_security_language: restrictedLanguage,
+    customer_facing_concession_language: restrictedLanguage && discountPercent > 10,
+    conflicting_evidence: false,
+    missing_material_evidence: false
+  };
 }
 
-/** Seeds one opportunity whose structured policy facts require no approval at all. */
-async function seedUntriggeredOpportunity(
-  overrides: Readonly<{ missingMaterialEvidence?: boolean }> = {}
-): Promise<string> {
-  const id = crypto.randomUUID().replaceAll('-', '');
-  const accountId = `account_policy_${id}`;
-  const opportunityId = `opportunity_policy_${id}`;
-  await database.sql`insert into accounts (id, name) values (${accountId}, 'Policy Facts Account')`;
-  await database.sql`insert into opportunities (id, account_id, name) values (${opportunityId}, ${accountId}, 'Policy Facts Opportunity')`;
-  await database.sql`insert into opportunity_policy_facts
-    (opportunity_id, discount_percent, renewal_uplift_percent, missing_material_evidence, source_commit)
-    values (${opportunityId}, 4, 8, ${overrides.missingMaterialEvidence ?? false}, ${'b'.repeat(40)})`;
-  return opportunityId;
+async function requirementFor(
+  opportunityId: string,
+  storedFacts: StoredPolicyFacts,
+  payload: DealBrief
+) {
+  return decideApprovalRequirement(
+    await repositoryFor(storedFacts).forBrief(opportunityId, payload)
+  );
 }
-
-beforeAll(async () => {
-  await createTemporaryDatabase();
-}, 120_000);
-
-afterAll(async () => {
-  await database.close();
-  await dropTemporaryDatabase();
-});
 
 describe('deal brief policy facts', () => {
-  it('does not treat a populated missing-information section as missing material evidence', async () => {
-    const opportunityId = await seedUntriggeredOpportunity();
-    const resolved = await facts.forBrief(
-      opportunityId,
+  it('does not route a standard deal merely because its brief records unsupported-claim follow-up', async () => {
+    const requirement = await requirementFor(
+      'OPP-1001',
+      ingestedFactsFor('OPP-1001'),
       brief({
         missingInformation: [
           {
@@ -124,15 +117,137 @@ describe('deal brief policy facts', () => {
         ]
       })
     );
-    expect(resolved.missingMaterialEvidence).toBe(false);
+
+    expect(requirement.policyTriggers).toEqual([]);
+    expect(requirement.entries).toEqual([]);
   });
 
-  it('reports missing material evidence when the brief raises that warning explicitly', async () => {
-    const opportunityId = await seedUntriggeredOpportunity();
-    const resolved = await facts.forBrief(
-      opportunityId,
+  it('routes a grounded customer-audience action to account-owner approval', async () => {
+    const payload = dealBriefSchema.parse({
+      ...brief(),
+      recommendedNextActions: {
+        actions: [
+          {
+            action: 'Send revised order form and migration success plan by 2026-04-28',
+            audience: 'customer',
+            priority: 'high',
+            rationale: 'Complete the next step recorded on the opportunity.',
+            claims: [
+              {
+                id: 'claim_customer_audience_action',
+                statement: 'Send revised order form and migration success plan by 2026-04-28',
+                confidence: 1,
+                citations: [
+                  {
+                    id: 'citation_customer_audience_action',
+                    evidenceId: 'salesforce:OPP-1001:0',
+                    locator: 'salesforce/opportunities.tsv#OPP-1001#chunk-0'
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    });
+    const requirement = await requirementFor(
+      'OPP-1001',
+      ingestedFactsFor('OPP-1001'),
+      payload
+    );
+
+    expect(requirement.policyTriggers).toEqual(['customer_facing_language']);
+    expect(requirement.entries).toEqual([
+      expect.objectContaining({
+        category: 'customer_communication',
+        eligibleAuthorities: ['account_owner'],
+        policyTriggers: ['customer_facing_language']
+      })
+    ]);
+  });
+
+  it.each([
+    ['Use any arbitrary wording at all', 'customer', true],
+    ['Send the signed proposal to the buyer immediately', 'internal', false],
+    ['We can provide the packet to the customer', 'internal', false]
+  ] as const)(
+    'uses typed audience rather than action wording at the repository-policy boundary: %s',
+    async (action, audience, expected) => {
+      const requirement = await requirementFor(
+        'OPP-1001',
+        ingestedFactsFor('OPP-1001'),
+        brief({
+          actions: [
+            {
+              action,
+              audience,
+              priority: 'high',
+              rationale: 'Complete the recorded next step.',
+              claims: []
+            }
+          ]
+        })
+      );
+
+      expect(requirement.policyTriggers).toEqual(
+        expected ? ['customer_facing_language'] : []
+      );
+      expect(requirement.entries).toEqual(
+        expected
+          ? [
+              expect.objectContaining({
+                category: 'customer_communication',
+                eligibleAuthorities: ['account_owner'],
+                policyTriggers: ['customer_facing_language']
+              })
+            ]
+          : []
+      );
+    }
+  );
+
+  it('deduplicates customer-audience and concession approval into one account-owner quorum entry', async () => {
+    const storedFacts = {
+      ...ingestedFactsFor('OPP-1001'),
+      customer_facing_concession_language: true
+    };
+    const requirement = await requirementFor(
+      'OPP-1001',
+      storedFacts,
       brief({
-        missingInformation: [],
+        actions: [
+          {
+            action: 'Schedule a meeting with the buyer',
+            audience: 'customer',
+            priority: 'high',
+            rationale: 'Complete the grounded next step.',
+            claims: []
+          }
+        ]
+      })
+    );
+
+    expect(requirement.policyTriggers).toEqual([
+      'customer_facing_language',
+      'customer_facing_concession_language'
+    ]);
+    expect(requirement.entries).toEqual([
+      expect.objectContaining({
+        category: 'customer_communication',
+        eligibleAuthorities: ['account_owner'],
+        policyTriggers: [
+          'customer_facing_language',
+          'customer_facing_concession_language'
+        ]
+      })
+    ]);
+  });
+
+  it('routes explicit missing material evidence to scoped human review', async () => {
+    const requirement = await requirementFor(
+      'OPP-1001',
+      ingestedFactsFor('OPP-1001'),
+      brief({
         warnings: [
           {
             code: 'MISSING_MATERIAL_EVIDENCE',
@@ -143,15 +258,61 @@ describe('deal brief policy facts', () => {
         ]
       })
     );
-    expect(resolved.missingMaterialEvidence).toBe(true);
+
+    expect(requirement.policyTriggers).toEqual(['missing_material_evidence']);
+    expect(requirement.entries).toEqual([
+      expect.objectContaining({
+        category: 'evidence_review',
+        eligibleAuthorities: ['account_owner', 'sales_leader'],
+        policyTriggers: ['missing_material_evidence']
+      })
+    ]);
   });
 
-  it('reports missing material evidence recorded as a structured opportunity fact', async () => {
-    const opportunityId = await seedUntriggeredOpportunity({ missingMaterialEvidence: true });
-    const resolved = await facts.forBrief(
-      opportunityId,
-      brief({ missingInformation: [], warnings: [] })
+  it('routes structured missing material evidence even without a generated warning', async () => {
+    const storedFacts = {
+      ...ingestedFactsFor('OPP-1001'),
+      missing_material_evidence: true
+    };
+    const requirement = await requirementFor('OPP-1001', storedFacts, brief());
+
+    expect(requirement.policyTriggers).toEqual(['missing_material_evidence']);
+    expect(requirement.entries[0]).toMatchObject({ category: 'evidence_review' });
+  });
+
+  it('keeps the restricted OPP-1003 demo on deterministic commercial and legal approval paths', async () => {
+    const requirement = await requirementFor(
+      'OPP-1003',
+      ingestedFactsFor('OPP-1003'),
+      brief({
+        missingInformation: [
+          {
+            question: 'Confirm the final negotiation owner.',
+            whyItMatters: 'The account team needs one escalation path.'
+          }
+        ]
+      })
     );
-    expect(resolved.missingMaterialEvidence).toBe(true);
+
+    expect(requirement.policyTriggers).toEqual([
+      'discount_above_10_percent',
+      'negative_renewal_uplift',
+      'discount_above_15_percent',
+      'liability_cap_change',
+      'restricted_research_language',
+      'customer_specific_security_language',
+      'customer_facing_concession_language'
+    ]);
+    expect(
+      requirement.entries.map(({ category, eligibleAuthorities }) => ({
+        category,
+        eligibleAuthorities
+      }))
+    ).toEqual([
+      { category: 'commercial_discount', eligibleAuthorities: ['deal_desk'] },
+      { category: 'commercial_discount', eligibleAuthorities: ['sales_leader'] },
+      { category: 'legal_terms', eligibleAuthorities: ['legal_reviewer'] },
+      { category: 'customer_concession', eligibleAuthorities: ['account_owner'] }
+    ]);
   });
 });

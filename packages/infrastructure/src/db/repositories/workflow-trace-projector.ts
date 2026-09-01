@@ -3,8 +3,11 @@ import {
   type ApprovalAuthority,
   type ApprovalCategory,
   type ApprovalRequirementEntry,
+  type DealBriefGenerationMetadata,
+  dealBriefAgentOperations,
   dealBriefSchema,
-  hashApprovalPayload
+  hashApprovalPayload,
+  type NormalizedValidationIssue
 } from '@slacato/core';
 import { z } from 'zod';
 
@@ -27,14 +30,29 @@ const failureReasonCodeSchema = z.enum([
 ]);
 
 const failureOperations = {
-  conversation_unavailable: 'conversation',
-  stakeholder_unavailable: 'stakeholder',
-  commercial_unavailable: 'commercial',
-  strategy_unavailable: 'strategy',
-  commercial_specialist_failed: 'commercial',
-  strategy_generation_failed: 'strategy',
-  draft_validation_failed: 'strategy',
-  workflow_failed: 'strategy'
+  conversation_unavailable: {
+    step: 'conversation',
+    operation: dealBriefAgentOperations.conversation
+  },
+  stakeholder_unavailable: {
+    step: 'stakeholder',
+    operation: dealBriefAgentOperations.stakeholder
+  },
+  commercial_unavailable: {
+    step: 'commercial',
+    operation: dealBriefAgentOperations.commercial
+  },
+  strategy_unavailable: { step: 'strategy', operation: dealBriefAgentOperations.strategy },
+  commercial_specialist_failed: {
+    step: 'commercial',
+    operation: dealBriefAgentOperations.commercial
+  },
+  strategy_generation_failed: {
+    step: 'strategy',
+    operation: dealBriefAgentOperations.strategy
+  },
+  draft_validation_failed: { step: 'strategy', operation: dealBriefAgentOperations.strategy },
+  workflow_failed: { step: 'strategy', operation: dealBriefAgentOperations.strategy }
 } as const;
 
 type FailureReasonCode = z.infer<typeof failureReasonCodeSchema>;
@@ -79,6 +97,7 @@ export type GenerationAttemptProjection = Readonly<{
   model: string;
   outputMode: 'native_schema' | 'prompted_json' | null;
   validationAttempts: number;
+  validationIssues: readonly NormalizedValidationIssue[];
   possibleDuplicate: boolean;
   inputTokens: number | null;
   outputTokens: number | null;
@@ -87,11 +106,13 @@ export type GenerationAttemptProjection = Readonly<{
 export type PersistedGenerationAttempt = Readonly<{
   id: string;
   logicalGenerationId: string;
+  operation: string;
   ordinal: number;
   provider: string;
   model: string;
   outputMode: 'native_schema' | 'prompted_json' | null;
   validationAttempts: number;
+  validationIssues: readonly NormalizedValidationIssue[];
   inputTokens: number | null;
   outputTokens: number | null;
   status: string;
@@ -174,6 +195,10 @@ type WorkflowTraceProjectionInput =
       runId: string;
       version: number;
       reason: string;
+      generationFailure?: Readonly<{
+        metadata: DealBriefGenerationMetadata;
+        persistedAttempts: readonly PersistedGenerationAttempt[];
+      }>;
     }>;
 
 export type WorkflowTraceProjection = Readonly<{
@@ -285,6 +310,114 @@ function traceSpanId(runId: string, kind: TraceKind, discriminator: string): str
   return `span_${hashApprovalPayload({ runId, kind, discriminator })}`;
 }
 
+/** Maps ledger state to a trace status without treating unresolved delivery as success. */
+function persistedAttemptTraceStatus(
+  attempt: PersistedGenerationAttempt | GenerationAttemptProjection
+): TraceSpan['status'] {
+  if (attempt.status === 'completed') return 'completed';
+  if (attempt.status === 'failed') return 'failed';
+  return 'degraded';
+}
+
+/** Projects only evidence justified by the persisted state of each provider attempt. */
+function projectAttemptEvidence(
+  input: Readonly<{
+    runId: string;
+    discriminator: string;
+    step: string;
+    operation: string;
+    parentSpanId: string;
+    attempts: readonly (PersistedGenerationAttempt | GenerationAttemptProjection)[];
+  }>
+): readonly ProjectedTraceSpan[] {
+  const spans: ProjectedTraceSpan[] = [];
+  for (const attempt of input.attempts) {
+    const status = persistedAttemptTraceStatus(attempt);
+    const modelSpan = projectSpan({
+      runId: input.runId,
+      kind: 'model_call',
+      discriminator: `${input.discriminator}:model:${attempt.id}`,
+      step: input.step,
+      attempt: attempt.ordinal,
+      status,
+      parent: { type: 'direct', spanId: input.parentSpanId },
+      data: {
+        durableAttemptId: attempt.id,
+        logicalGenerationId: attempt.logicalGenerationId,
+        ordinal: attempt.ordinal,
+        provider: attempt.provider,
+        model: attempt.model,
+        parametersHash: hashApprovalPayload({
+          provider: attempt.provider,
+          model: attempt.model,
+          operation: input.operation,
+          outputMode: attempt.outputMode
+        }),
+        outputMode: attempt.outputMode,
+        possibleDuplicate: attempt.possibleDuplicate
+      }
+    });
+    spans.push(
+      modelSpan,
+      projectSpan({
+        runId: input.runId,
+        kind: 'usage',
+        discriminator: `${input.discriminator}:usage:${attempt.id}`,
+        step: input.step,
+        attempt: attempt.ordinal,
+        status,
+        parent: { type: 'direct', spanId: modelSpan.spanId },
+        data: { inputTokens: attempt.inputTokens ?? 0, outputTokens: attempt.outputTokens ?? 0 }
+      })
+    );
+    if (attempt.status !== 'completed') continue;
+    if (attempt.outputMode === null) continue;
+    const validationAccepted = attempt.validationIssues.length === 0;
+    spans.push(
+      projectSpan({
+        runId: input.runId,
+        kind: 'validation',
+        discriminator: `${input.discriminator}:validation:${attempt.id}`,
+        step: input.step,
+        attempt: attempt.ordinal,
+        status: validationAccepted ? 'completed' : 'failed',
+        parent: { type: 'direct', spanId: modelSpan.spanId },
+        data: {
+          decision: validationAccepted ? 'accepted' : 'rejected',
+          validationAttempts: attempt.validationAttempts
+        }
+      })
+    );
+    if (validationAccepted) {
+      spans.push(
+        projectSpan({
+          runId: input.runId,
+          kind: 'guardrail',
+          discriminator: `${input.discriminator}:guardrail:${attempt.id}`,
+          step: input.step,
+          attempt: attempt.ordinal,
+          parent: { type: 'direct', spanId: modelSpan.spanId },
+          data: { decision: 'passed' }
+        })
+      );
+    }
+    if (validationAccepted && attempt.validationAttempts > 0) {
+      spans.push(
+        projectSpan({
+          runId: input.runId,
+          kind: 'repair',
+          discriminator: `${input.discriminator}:repair:${attempt.id}`,
+          step: input.step,
+          attempt: attempt.ordinal,
+          parent: { type: 'direct', spanId: modelSpan.spanId },
+          data: { attempts: attempt.validationAttempts, decision: 'validated' }
+        })
+      );
+    }
+  }
+  return spans;
+}
+
 /** Projects model, validation, guardrail, usage, repair, and degradation spans from a durable generation attempt. */
 function projectGenerationCheckpoint(
   input: Extract<WorkflowTraceProjectionInput, { type: 'generation_checkpoint' }>
@@ -296,13 +429,18 @@ function projectGenerationCheckpoint(
     return { spans: [] };
   }
 
-  const operation = input.step.startsWith('specialist:')
+  const step = input.step.startsWith('specialist:')
     ? input.step.slice('specialist:'.length)
     : 'strategy';
+  const generationMetadata = unknownRecordSchema.parse(input.checkpoint.generation);
+  const operation = z.string().min(1).parse(generationMetadata.operation);
+  if (input.persistedAttempts.some((attempt) => attempt.operation !== operation)) {
+    throw new Error('Persisted provider attempt operation does not match checkpoint generation');
+  }
   const kind: 'specialist_attempt' | 'strategy_attempt' = input.step.startsWith('specialist:')
     ? 'specialist_attempt'
     : 'strategy_attempt';
-  const attemptStatus =
+  const checkpointStatus =
     input.checkpoint.status === 'degraded'
       ? 'degraded'
       : input.checkpoint.status === 'failed'
@@ -310,14 +448,19 @@ function projectGenerationCheckpoint(
         : 'completed';
   const generationAttempt =
     input.persistedAttempts.length === 0
-      ? projectFallbackGenerationAttempt(input, operation, attemptStatus)
+      ? projectFallbackGenerationAttempt(input, operation, checkpointStatus)
       : undefined;
   const attempts = generationAttempt === undefined ? input.persistedAttempts : [generationAttempt];
+  const attemptStatus =
+    checkpointStatus === 'completed' &&
+    attempts.some((attempt) => persistedAttemptTraceStatus(attempt) !== 'completed')
+      ? 'degraded'
+      : checkpointStatus;
   const attemptSpan = projectSpan({
     runId: input.runId,
     kind,
     discriminator: input.step,
-    step: operation,
+    step,
     status: attemptStatus,
     parent: {
       type: 'if_present',
@@ -325,94 +468,29 @@ function projectGenerationCheckpoint(
     },
     data: { operation, logicalGenerationId: input.logicalGenerationId }
   });
-  const spans: ProjectedTraceSpan[] = [attemptSpan];
-
-  for (const attempt of attempts) {
-    const failed = attempt.status === 'failed';
-    const modelSpan = projectSpan({
+  const spans: ProjectedTraceSpan[] = [
+    attemptSpan,
+    ...projectAttemptEvidence({
       runId: input.runId,
-      kind: 'model_call',
-      discriminator: `${input.step}:model:${attempt.id}`,
-      step: operation,
-      attempt: attempt.ordinal,
-      status: failed ? 'failed' : 'completed',
-      parent: { type: 'direct', spanId: attemptSpan.spanId },
-      data: {
-        durableAttemptId: attempt.id,
-        logicalGenerationId: attempt.logicalGenerationId,
-        ordinal: attempt.ordinal,
-        provider: attempt.provider,
-        model: attempt.model,
-        parametersHash: hashApprovalPayload({
-          provider: attempt.provider,
-          model: attempt.model,
-          operation,
-          outputMode: attempt.outputMode
-        }),
-        outputMode: attempt.outputMode,
-        possibleDuplicate: attempt.possibleDuplicate
-      }
-    });
-    spans.push(
-      modelSpan,
-      projectSpan({
-        runId: input.runId,
-        kind: 'validation',
-        discriminator: `${input.step}:validation:${attempt.id}`,
-        step: operation,
-        attempt: attempt.ordinal,
-        status: failed ? 'failed' : 'completed',
-        parent: { type: 'direct', spanId: modelSpan.spanId },
-        data: {
-          decision: failed ? 'rejected' : 'accepted',
-          validationAttempts: attempt.validationAttempts
-        }
-      }),
-      projectSpan({
-        runId: input.runId,
-        kind: 'guardrail',
-        discriminator: `${input.step}:guardrail:${attempt.id}`,
-        step: operation,
-        attempt: attempt.ordinal,
-        parent: { type: 'direct', spanId: modelSpan.spanId },
-        data: { decision: failed ? 'blocked' : 'passed' }
-      }),
-      projectSpan({
-        runId: input.runId,
-        kind: 'usage',
-        discriminator: `${input.step}:usage:${attempt.id}`,
-        step: operation,
-        attempt: attempt.ordinal,
-        parent: { type: 'direct', spanId: modelSpan.spanId },
-        data: { inputTokens: attempt.inputTokens ?? 0, outputTokens: attempt.outputTokens ?? 0 }
-      })
-    );
-    if (attempt.validationAttempts > 0) {
-      spans.push(
-        projectSpan({
-          runId: input.runId,
-          kind: 'repair',
-          discriminator: `${input.step}:repair:${attempt.id}`,
-          step: operation,
-          attempt: attempt.ordinal,
-          parent: { type: 'direct', spanId: modelSpan.spanId },
-          data: { attempts: attempt.validationAttempts, decision: 'validated' }
-        })
-      );
-    }
-  }
-  if (attemptStatus === 'degraded') {
+      discriminator: input.step,
+      step,
+      operation,
+      parentSpanId: attemptSpan.spanId,
+      attempts
+    })
+  ];
+  if (checkpointStatus === 'degraded') {
     spans.push(
       projectSpan({
         runId: input.runId,
         kind: 'partial_failure',
         discriminator: `${input.step}:partial`,
-        step: operation,
+        step,
         status: 'degraded',
         parent: { type: 'direct', spanId: attemptSpan.spanId },
         data: {
           decision: 'partial',
-          reasonCode: partialFailureReasonSchema.parse(`${operation}_unavailable`)
+          reasonCode: partialFailureReasonSchema.parse(`${step}_unavailable`)
         }
       })
     );
@@ -446,6 +524,7 @@ function projectFallbackGenerationAttempt(
     model: model.success ? model.data : 'unknown',
     outputMode: null,
     validationAttempts: 0,
+    validationIssues: [],
     possibleDuplicate: possibleDuplicate.success && possibleDuplicate.data,
     inputTokens: 0,
     outputTokens: 0
@@ -617,46 +696,103 @@ function projectApprovalDecision(
   });
 }
 
+/** Creates a failed synthetic provider attempt only when the ledger has no durable row. */
+function projectFallbackFailureAttempt(
+  runId: string,
+  metadata: DealBriefGenerationMetadata
+): GenerationAttemptProjection {
+  return {
+    runId,
+    id: `attempt_${hashApprovalPayload({
+      runId,
+      logicalGenerationId: metadata.logicalGenerationId,
+      operation: metadata.operation,
+      ordinal: 1
+    })}`,
+    invocationId: metadata.invocationId,
+    logicalGenerationId: metadata.logicalGenerationId,
+    operation: metadata.operation,
+    ordinal: 1,
+    status: 'failed',
+    provider: metadata.provider,
+    model: metadata.model,
+    outputMode: null,
+    validationAttempts: 0,
+    possibleDuplicate: metadata.possibleDuplicate,
+    inputTokens: null,
+    validationIssues: [],
+    outputTokens: null
+  };
+}
+
 /** Projects the failed attempt and terminal failure spans with the same parent fallback order as the workflow. */
 function projectFailure(
   input: Extract<WorkflowTraceProjectionInput, { type: 'failed' }>
 ): WorkflowTraceProjection {
   const reasonCode = failureReasonCode(input.reason);
-  const operation = failureOperations[reasonCode];
+  const identity = failureOperations[reasonCode];
   const attemptKind: 'strategy_attempt' | 'specialist_attempt' =
-    operation === 'strategy' ? 'strategy_attempt' : 'specialist_attempt';
+    identity.step === 'strategy' ? 'strategy_attempt' : 'specialist_attempt';
+  const metadata = input.generationFailure?.metadata;
+  if (metadata !== undefined && metadata.operation !== identity.operation) {
+    throw new Error('Failed generation operation does not match terminal failure reason');
+  }
+  const operation = metadata?.operation ?? identity.operation;
+  const logicalGenerationId =
+    metadata?.logicalGenerationId ??
+    `failed_${hashApprovalPayload({
+      runId: input.runId,
+      operation,
+      reasonCode,
+      version: input.version
+    })}`;
+  const persistedAttempts = input.generationFailure?.persistedAttempts ?? [];
+  if (persistedAttempts.some((attempt) => attempt.operation !== operation)) {
+    throw new Error('Persisted provider attempt operation does not match failed generation');
+  }
+  const generationAttempt =
+    metadata !== undefined && persistedAttempts.length === 0
+      ? projectFallbackFailureAttempt(input.runId, metadata)
+      : undefined;
+  const attempts = generationAttempt === undefined ? persistedAttempts : [generationAttempt];
   const attemptSpan = projectSpan({
     runId: input.runId,
     kind: attemptKind,
-    discriminator: `${operation}:failed:${reasonCode}:${input.version}`,
-    step: operation,
+    discriminator: `${identity.step}:failed:${reasonCode}:${input.version}`,
+    step: identity.step,
     status: 'failed',
     parent: {
       type: 'latest',
       candidates: [
-        { kinds: [attemptKind], step: operation },
+        { kinds: [attemptKind], step: identity.step },
         { kinds: ['evidence_retrieval', 'authorization_lookup'] }
       ]
     },
-    data: {
-      operation,
-      logicalGenerationId: `failed_${hashApprovalPayload({ runId: input.runId, operation, reasonCode, version: input.version })}`
-    }
+    data: { operation, logicalGenerationId }
   });
   return {
     failureReasonCode: reasonCode,
     spans: [
       attemptSpan,
+      ...projectAttemptEvidence({
+        runId: input.runId,
+        discriminator: `${identity.step}:failed:${reasonCode}:${input.version}`,
+        step: identity.step,
+        operation,
+        parentSpanId: attemptSpan.spanId,
+        attempts
+      }),
       projectSpan({
         runId: input.runId,
         kind: 'fatal_failure',
         discriminator: `${reasonCode}:${input.version}`,
-        step: operation,
+        step: identity.step,
         status: 'failed',
         parent: { type: 'direct', spanId: attemptSpan.spanId },
         data: { decision: 'fatal', reasonCode }
       })
-    ]
+    ],
+    ...(generationAttempt === undefined ? {} : { generationAttempt })
   };
 }
 

@@ -30,6 +30,7 @@ export * from './application/sandbox/reset-sandbox.js';
 export * from './application/workflow/command-queue.js';
 export * from './application/workflow/evidence-repository.js';
 export * from './application/workflow/workflow-store.js';
+export * from './domain/briefs/customer-facing.js';
 export * from './domain/briefs/policy.js';
 export * from './domain/briefs/references.js';
 export * from './domain/briefs/schema.js';

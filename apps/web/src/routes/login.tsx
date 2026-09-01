@@ -1,5 +1,13 @@
 import type { Persona } from '@slacato/contracts';
-import { Check, Database, LoaderCircle, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
+import {
+  Check,
+  Database,
+  FileText,
+  LoaderCircle,
+  LockKeyhole,
+  ShieldCheck,
+  Sparkles
+} from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { fetchCsrf, fetchPersonas } from '@/api/client';
@@ -99,6 +107,16 @@ export function LoginRoute(): React.JSX.Element {
               Step into a canonical sales persona to explore grounded account strategy, approvals,
               and evidence.
             </p>
+            <a
+              href="/technical-overview.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex min-h-11 items-center gap-2 text-[13px] font-medium text-brand-pale underline-offset-4 hover:underline"
+            >
+              <FileText aria-hidden="true" className="size-4" />
+              Technical overview
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
           </div>
           <ul className="relative mt-10 grid gap-3 text-sm text-brand-pale/80 sm:grid-cols-3 lg:mt-16 lg:grid-cols-1">
             <TrustItem icon={Database} label="Canonical fixture identities" />

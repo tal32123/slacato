@@ -24,6 +24,26 @@ import type {
 import type { RetryLimits, SharedRunBudget } from '../model/contracts.js';
 import type { ProviderAttemptContext } from '../model/provider-attempt-ledger.js';
 
+/** Canonical provider operation identity for each deal-brief agent. */
+export const dealBriefAgentOperations = {
+  conversation: 'conversation-intelligence',
+  stakeholder: 'stakeholder-intelligence',
+  commercial: 'commercial-policy-analysis',
+  strategy: 'negotiation-strategy'
+} as const;
+export type DealBriefAgentName = keyof typeof dealBriefAgentOperations;
+export type DealBriefAgentOperation = (typeof dealBriefAgentOperations)[DealBriefAgentName];
+
+/** Durable identity and audit metadata shared by one workflow generation and its provider attempt. */
+export type DealBriefGenerationMetadata = Readonly<{
+  logicalGenerationId: string;
+  operation: DealBriefAgentOperation;
+  provider: string;
+  model: string;
+  invocationId: string;
+  possibleDuplicate: boolean;
+}>;
+
 /** Evidence exposed to an agent is explicitly bound to its authorized deal target. */
 export type AgentEvidenceRecord = RetrievedEvidence &
   Readonly<{

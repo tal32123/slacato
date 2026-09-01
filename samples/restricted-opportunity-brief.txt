@@ -100,6 +100,7 @@ Final prep call identified approval gates for discount, liability language, and 
 
 ## 6. Recommended Next Actions
 ### 1. Schedule internal review for pricing packages\.
+- **Audience:** Internal
 - **Priority:** high
 - **Rationale:** Data retention, restricted research data, or customer\-specific security language requires legal approval before it is shared externally\.
 #### Claims
