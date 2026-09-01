@@ -17,6 +17,8 @@ This pnpm monorepo builds a negotiation-preparation brief for a seller from synt
 
 Open the self-contained [technical overview](docs/technical-overview.html) for the architecture, agent roles, request lifecycle, design rationale, security notes, Slack-fixture provenance, and production-readiness assessment. It has no external assets and works offline.
 
+The [15-minute interview presentation](docs/interview-presentation.html) is the timed walkthrough script: a minute budget, the exact demo path for each required scenario, the measured evaluation results, production risks, speaker notes, and a fallback if a live model call fails. It is also self-contained and works offline.
+
 ## Prerequisites
 
 - Node.js 22.23.1 or newer

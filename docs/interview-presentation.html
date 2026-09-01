@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Strategic Deal Intelligence Assistant — 15-Minute Interview Presentation</title>
+  <style>
+    :root {
+      --ink: #0A141D;
+      --teal: #158864;
+      --teal-dark: #0f6d51;
+      --teal-soft: #eaf6f1;
+      --paper: #ffffff;
+      --canvas: #f6f8f7;
+      --wash: #f5faf8;
+      --muted: #5c6870;
+      --line: #dce3df;
+      --line-strong: #b8c6bf;
+      --warning: #9a5a10;
+      --warning-soft: #fff7e8;
+      --danger: #9d342b;
+      --danger-soft: #fff0ee;
+      --shadow: 0 16px 50px rgba(10, 20, 29, .07);
+      --radius: 20px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 132px; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 17px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--teal-dark); text-underline-offset: .18em; }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(220, 227, 223, .9);
+      background: rgba(255, 255, 255, .93);
+      backdrop-filter: blur(18px) saturate(150%);
+    }
+    .nav-inner {
+      max-width: 1180px;
+      margin: auto;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav-inner::-webkit-scrollbar { display: none; }
+    .brand { font-weight: 760; color: var(--ink); white-space: nowrap; margin-right: auto; }
+    nav a { color: #425059; text-decoration: none; font-size: 13px; font-weight: 650; white-space: nowrap; }
+    nav a:hover { color: var(--teal); }
+    nav a b { color: var(--teal); font-variant-numeric: tabular-nums; }
+
+    .clock {
+      position: sticky;
+      top: 49px;
+      z-index: 19;
+      border-bottom: 1px solid var(--line);
+      background: var(--wash);
+    }
+    .clock-inner {
+      max-width: 1180px;
+      margin: auto;
+      padding: 9px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .clock-time { font: 760 22px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+    .clock-now { color: var(--muted); font-size: 13px; margin-right: auto; }
+    .clock-now strong { color: var(--teal-dark); }
+    .clock button {
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--paper);
+      color: var(--ink);
+      padding: 6px 14px;
+      font: 650 13px system-ui;
+      cursor: pointer;
+    }
+    .clock button:hover, .clock button:focus-visible { border-color: var(--teal); color: var(--teal-dark); outline: none; }
+    .clock.over .clock-time { color: var(--danger); }
+
+    .hero { max-width: 1180px; margin: 0 auto; padding: 78px 24px 58px; }
+    .eyebrow { color: var(--teal-dark); font-size: 13px; font-weight: 760; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { max-width: 900px; margin: 18px 0 22px; font-size: clamp(40px, 6.6vw, 72px); line-height: 1.03; letter-spacing: -.05em; font-weight: 760; }
+    .lede { max-width: 72ch; margin: 0; color: #3f4c54; font-size: clamp(18px, 2.2vw, 23px); line-height: 1.55; }
+    .hero-meta { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 10px; }
+    .pill { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 7px 12px; color: #46535b; font-size: 13px; }
+
+    main { max-width: 1180px; margin: 0 auto 90px; padding: 0 24px; }
+    section { margin: 26px 0; padding: clamp(30px, 4.6vw, 60px); border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); box-shadow: var(--shadow); }
+    .section-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+    .section-number { color: var(--teal); font-size: 13px; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; }
+    .budget-tag { margin-left: auto; border: 1px solid var(--teal); border-radius: 999px; background: var(--teal-soft); color: var(--teal-dark); padding: 5px 13px; font: 700 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+    .budget-tag.grey { border-color: var(--line-strong); background: #eef1f2; color: #48555d; }
+    h2 { margin: 8px 0 22px; font-size: clamp(28px, 3.6vw, 44px); line-height: 1.12; letter-spacing: -.035em; }
+    h3 { margin: 32px 0 10px; font-size: 21px; line-height: 1.28; letter-spacing: -.015em; }
+    h4 { margin: 0 0 6px; font-size: 17px; }
+    p, ul, ol { max-width: 76ch; }
+    p { margin: 0 0 18px; }
+    ul, ol { padding-left: 1.3em; }
+    li + li { margin-top: 7px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; background: #f0f3f2; padding: .1em .35em; border-radius: 5px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .card { padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: #fbfcfb; }
+    .card p { color: #4f5d65; font-size: 15px; margin-bottom: 0; }
+    .card p + p { margin-top: 10px; }
+    .callout { margin: 26px 0; padding: 20px 22px; border-left: 4px solid var(--teal); border-radius: 0 12px 12px 0; background: var(--teal-soft); }
+    .callout.warning { border-left-color: var(--warning); background: var(--warning-soft); }
+    .callout.danger { border-left-color: var(--danger); background: var(--danger-soft); }
+    .callout p:last-child { margin-bottom: 0; }
+
+    .notes { margin: 26px 0 0; padding: 24px 26px; border: 1px solid var(--line-strong); border-left: 4px solid var(--ink); border-radius: 0 14px 14px 0; background: var(--wash); }
+    .notes h4 { color: var(--ink); font-size: 12px; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 12px; }
+    .notes p { max-width: 74ch; color: #24333c; font-size: 16.5px; line-height: 1.72; }
+    .notes p:last-child { margin-bottom: 0; }
+
+    table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 14px; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+    td strong { color: var(--ink); }
+    .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .budget-table td:first-child { width: 34%; }
+    .budget-table tfoot td { border-bottom: 0; border-top: 2px solid var(--line-strong); font-weight: 700; }
+    .table-wrap { overflow-x: auto; margin: 22px 0; }
+    .table-wrap table { margin: 0; min-width: 620px; }
+
+    .scenario { margin: 26px 0; border: 1px solid var(--line); border-radius: 16px; background: #fbfcfb; overflow: hidden; }
+    .scenario > header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 18px 24px; border-bottom: 1px solid var(--line); background: var(--paper); }
+    .scenario > header h3 { margin: 0; font-size: 19px; }
+    .scenario > header .tag { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; color: var(--muted); font-size: 12px; }
+    .scenario > header .dur { margin-left: auto; font: 700 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--teal-dark); white-space: nowrap; }
+    .scenario-body { padding: 8px 24px 22px; }
+    .scenario-body dl { display: grid; grid-template-columns: 132px 1fr; gap: 4px 20px; margin: 16px 0 0; }
+    .scenario-body dt { color: var(--teal-dark); font-size: 12px; font-weight: 760; letter-spacing: .07em; text-transform: uppercase; padding-top: 5px; }
+    .scenario-body dd { margin: 0; font-size: 15.5px; color: #3c4a52; }
+    .scenario-body dd ol, .scenario-body dd ul { margin: 0; max-width: none; }
+    .say { border-left: 3px solid var(--teal); padding-left: 14px; color: #24333c; font-size: 16px; }
+
+    .src { display: block; margin-top: 6px; color: var(--muted); font-size: 12.5px; }
+    .src code { background: transparent; padding: 0; font-size: 12.5px; }
+    .stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 24px 0; }
+    .stat { padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: #fbfcfb; }
+    .stat b { display: block; font-size: 30px; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+    .stat span { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .stat.good b { color: var(--teal-dark); }
+    .stat.weak b { color: var(--warning); }
+
+    footer { max-width: 1180px; margin: -50px auto 60px; padding: 0 24px; color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 860px) {
+      .grid-2, .grid-3, .stat-row { grid-template-columns: 1fr; }
+      .scenario-body dl { grid-template-columns: 1fr; gap: 2px; }
+      .scenario-body dt { padding-top: 12px; }
+      section { padding: 26px 20px; }
+      .hero { padding-top: 56px; }
+      html { scroll-padding-top: 150px; }
+    }
+    @media print {
+      nav, .clock { display: none; }
+      body { background: white; font-size: 12.5px; line-height: 1.5; }
+      .hero { padding: 20px 0 24px; }
+      main { margin-bottom: 0; }
+      section { box-shadow: none; break-inside: avoid; margin: 12px 0; padding: 18px 0; border: 0; border-top: 2px solid var(--line-strong); border-radius: 0; }
+      .notes { break-inside: avoid; background: #f4f7f6; }
+      .scenario { break-inside: avoid; }
+      a { color: var(--ink); text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <nav aria-label="Presentation sections">
+    <div class="nav-inner">
+      <span class="brand">Deliverable E · 15 min</span>
+      <a href="#budget">Budget</a>
+      <a href="#value">Business value <b>1:30</b></a>
+      <a href="#design">Design <b>3:00</b></a>
+      <a href="#demo">Demo <b>5:30</b></a>
+      <a href="#evaluation">Evaluation <b>2:00</b></a>
+      <a href="#production">Production <b>2:00</b></a>
+      <a href="#close">Close <b>1:00</b></a>
+      <a href="#fallback">Fallback</a>
+      <a href="#sources">Sources</a>
+    </div>
+  </nav>
+
+  <div class="clock" id="clock" hidden>
+    <div class="clock-inner">
+      <span class="clock-time" id="clock-time">00:00</span>
+      <span class="clock-now" id="clock-now">Not started. You should be in: <strong>Business value</strong>.</span>
+      <button type="button" id="clock-toggle">Start</button>
+      <button type="button" id="clock-reset">Reset</button>
+    </div>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">Deliverable E · interview presentation · offline artifact</div>
+    <h1>Fifteen minutes, spoken.</h1>
+    <p class="lede">The script for the interview walkthrough: what to say, what to click, which numbers are real, and what to do when the model call is slow. Every figure on this page is taken from a file in this repository, and each one names the file it came from.</p>
+    <div class="hero-meta">
+      <span class="pill">6 timed sections · 15:00</span>
+      <span class="pill">4 mandatory demo scenarios · 5:30</span>
+      <span class="pill">1 live LLM generation on stage</span>
+      <span class="pill">Speaker notes throughout</span>
+      <span class="pill">Contingency plan, untimed</span>
+    </div>
+  </header>
+
+  <main>
+    <section id="budget">
+      <div class="section-head">
+        <div class="section-number">00 · Minute budget</div>
+        <span class="budget-tag">Total 15:00</span>
+      </div>
+      <h2>Where the fifteen minutes go.</h2>
+      <p>The running clock is what to watch. If a section overruns, the time comes out of the close, never out of the demo &mdash; the demo is the part the assignment asks to be live.</p>
+
+      <table class="budget-table">
+        <thead><tr><th>Section</th><th class="num">Minutes</th><th class="num">Running clock</th><th>The one thing it must land</th></tr></thead>
+        <tbody>
+          <tr><td><strong><a href="#value">1. Business value</a></strong></td><td class="num">1:30</td><td class="num">00:00 &ndash; 01:30</td><td>Why fragmented context costs deals, and what changes for the account owner.</td></tr>
+          <tr><td><strong><a href="#design">2. Design choices</a></strong></td><td class="num">3:00</td><td class="num">01:30 &ndash; 04:30</td><td>Seven decisions, each with the reason it was made that way.</td></tr>
+          <tr><td><strong><a href="#demo">3. Live demo</a></strong></td><td class="num">5:30</td><td class="num">04:30 &ndash; 10:00</td><td>All four required scenarios, one of them generated live on stage.</td></tr>
+          <tr><td><strong><a href="#evaluation">4. Evaluation results</a></strong></td><td class="num">2:00</td><td class="num">10:00 &ndash; 12:00</td><td>The measured numbers, including the weak ones.</td></tr>
+          <tr><td><strong><a href="#production">5. What breaks in production</a></strong></td><td class="num">2:00</td><td class="num">12:00 &ndash; 14:00</td><td>Honest limits, as engineering judgement rather than apology.</td></tr>
+          <tr><td><strong><a href="#close">6. Close and hand to questions</a></strong></td><td class="num">1:00</td><td class="num">14:00 &ndash; 15:00</td><td>What I would build next, and why that order.</td></tr>
+        </tbody>
+        <tfoot><tr><td>Total</td><td class="num">15:00</td><td class="num">15:00</td><td>&mdash;</td></tr></tfoot>
+      </table>
+
+      <div class="callout">
+        <p><strong>Not in the budget:</strong> the <a href="#fallback">failure fallback</a> and the <a href="#sources">source table</a>. The fallback is only spent if something goes wrong, and every minute it consumes is taken from the section that was running when it did.</p>
+      </div>
+
+      <h3>Pre-flight, done before the call starts</h3>
+      <ol>
+        <li>Docker Compose is up; migrations, <code>pnpm ingest:records</code> and <code>pnpm index:embeddings</code> have already run against a live provider profile. <span class="src">Setup steps: <code>README.md</code></span></li>
+        <li><code>pnpm dev</code> is running and the browser is already logged in and sitting on <code>/walkthrough</code>. <span class="src">Route: <code>apps/web/src/main.tsx</code>, <code>apps/web/src/routes/walkthrough.tsx</code></span></li>
+        <li><code>/diagnostics</code> has been opened once to confirm the provider, chat model and embedding index are healthy. <span class="src">Route: <code>apps/web/src/routes/diagnostics.tsx</code></span></li>
+        <li>Three tabs are pre-opened and parked: <code>samples/index.html</code>, <code>samples/slack-impact.html</code>, <code>docs/technical-overview.html</code>.</li>
+        <li>One brief has already been generated once today so the model, the network path and the embedding profile are known good.</li>
+      </ol>
+
+      <div class="notes">
+        <h4>Speaker notes · opening, ~15 seconds</h4>
+        <p>I have fifteen minutes, so here is the shape of it. Ninety seconds on the problem, three minutes on the design decisions I would defend, five and a half minutes of the system actually running &mdash; including one brief generated live against a real provider &mdash; two minutes on what I measured, two minutes on what I would not yet put in front of a customer, and a minute at the end. Stop me whenever; I would rather answer the question you have than finish the section I am on.</p>
+      </div>
+    </section>
+
+    <section id="value">
+      <div class="section-head">
+        <div class="section-number">01 · Business value</div>
+        <span class="budget-tag">00:00 &ndash; 01:30</span>
+      </div>
+      <h2>The hour before the negotiation.</h2>
+
+      <p>An account owner walks into a strategic negotiation holding five things that do not live together: the CRM record, the last calls, what the account team said in chat, the pricing position, and the Deal Desk policy that governs what may be offered. Assembling that by hand is slow, and the parts that get skipped are the parts that are hardest to find &mdash; the conflicting signal in a chat thread, the policy clause that makes a discount someone else's decision.</p>
+
+      <div class="grid-3">
+        <div class="card"><h4>The deals are large</h4><p>The three fixture opportunities carry annual contract values of <strong>$4.22M</strong>, <strong>$2.38M</strong> and <strong>$1.88M</strong>. A preparation gap on a deal this size is not a minor cost.</p><span class="src"><code>fixtures/cato/salesforce/opportunities.tsv</code></span></div>
+        <div class="card"><h4>The context is split by permission</h4><p>Six users, five source types, and per-user flags for sensitive pricing and restricted-account access. Not every seller may see every signal on their own deal.</p><span class="src"><code>fixtures/cato/policies/access_permissions.tsv</code></span></div>
+        <div class="card"><h4>The commercial position is already contested</h4><p>OPP-1003 carries an 18% requested discount with an <strong>&minus;8%</strong> renewal uplift, marked <code>pending_deal_desk</code>, and an alternative at 12% marked <code>pending_legal_and_manager</code>.</p><span class="src"><code>fixtures/cato/pricing/pricing_notes.tsv</code></span></div>
+      </div>
+
+      <h3>What changes for the account owner</h3>
+      <p>They ask for one deal and get back a nine-section brief in which every factual sentence carries a citation that names the source file and the stable record ID, in the format the assignment asked for &mdash; <code>source=slack/account_team_updates.tsv, update_id=SLK-9007</code>. Anything the Deal Desk policy makes someone else's decision is not quietly written into customer-facing language; the run stops and waits for the named approver.</p>
+      <p>The goal is not to negotiate for the seller. It is to make the preparation reviewable: the seller can see what the assistant knew, where it got it, and what it was not allowed to say yet.</p>
+      <span class="src">Citation format: <code>samples/restricted-opportunity-brief.txt</code> &middot; approval behaviour: <code>samples/restricted-approval-flow.json</code></span>
+
+      <div class="notes">
+        <h4>Speaker notes · 1:30</h4>
+        <p>Cato's problem here is not that the data is missing. It is that it is scattered, and it is scattered across systems with different access rules. Before a negotiation, an account owner has to reconcile the CRM record, the last few Gong calls, whatever the account team said in chat, the pricing position, and the Deal Desk policy that governs what they are even allowed to offer. That takes time they do not have, and the pieces that get dropped are exactly the awkward ones &mdash; the update where two executives disagreed, the policy clause that makes a discount someone else's call.</p>
+        <p>These are not small deals. In the fixture data the three opportunities are worth four point two million, two point four million and one point nine million in annual contract value, and the restricted one already has an eighteen percent discount requested against a negative renewal uplift, sitting pending at Deal Desk. That is precisely the situation where walking in under-prepared is expensive.</p>
+        <p>So what the assistant does is narrow. You give it an opportunity and who you are. It gathers only the evidence you personally are allowed to see, and it hands back one brief where every factual sentence names the file and the record ID it came from. And where the policy says a human owns the decision &mdash; a discount over fifteen percent, a liability cap change, customer-facing concession language &mdash; it does not write that language. It stops and routes it to the person who owns it. I am not trying to replace the seller's judgement. I am trying to make the preparation something a manager can audit.</p>
+      </div>
+    </section>
+
+    <section id="design">
+      <div class="section-head">
+        <div class="section-number">02 · Design choices</div>
+        <span class="budget-tag">01:30 &ndash; 04:30</span>
+      </div>
+      <h2>Seven decisions I would defend.</h2>
+      <p>Three minutes is roughly twenty-five seconds each. Say the decision and the reason; the detail is in the technical overview and I should let them ask for it.</p>
+
+      <h3>1 &middot; Four agents, split by evidence type rather than by step</h3>
+      <p>Conversation Intelligence, Stakeholder Map, and Commercial Analysis each read a different slice of the evidence and return a different typed object; Negotiation Strategy consumes all three and produces the brief. The split is by what the agent has to be good at reading, not by pipeline stage, which is why the three specialists can run concurrently and why one of them failing degrades the brief rather than ending the run.</p>
+      <span class="src"><code>packages/core/src/application/agents/{conversation,stakeholder,commercial,strategy}.ts</code></span>
+
+      <h3>2 &middot; The agents have no tools at all</h3>
+      <p>The shared agent input type deliberately exposes no repository, transport, tool or other-agent handle &mdash; it carries the run, the account, the opportunity, the evidence manifest, the recomputed current scope, and the evidence itself. This is a security decision before it is a design one: an agent that cannot fetch anything cannot widen its own permissions, so the authorization decision taken <em>before</em> generation is the one that holds, and a prompt injection inside evidence has no second path to the data.</p>
+      <span class="src"><code>packages/core/src/application/agents/contracts.ts</code> &mdash; <code>AgentContext</code></span>
+
+      <h3>3 &middot; A persisted state machine, not a free-form agent loop</h3>
+      <p>Ten run states with an exhaustive transition table: <code>created → retrieving → specialists_running → synthesizing → validating → awaiting_approval → finalizing → completed</code>, plus <code>rejected</code>, <code>failed</code> and <code>cancelled</code>. An invalid transition throws rather than being tolerated, and <code>finalizing</code> deliberately accepts only completion or failure, so no agent output can restart synthesis. I chose this over a planner loop because approvals need a state that can outlive the process holding it.</p>
+      <span class="src"><code>packages/core/src/domain/runs/state-machine.ts</code></span>
+
+      <h3>4 &middot; Permissions enforced twice, and the manifest is frozen between</h3>
+      <p>Grants are checked before retrieval, so unauthorized rows never enter the candidate pool; the run's authorized evidence is then frozen into a manifest, and the scope is recomputed and rechecked before evidence reaches a model, so narrowing someone's access mid-run cannot be bypassed by reusing an older manifest. The authorization lookup that maps opportunity to account and requester is recorded as its own trace span, distinct from evidence retrieval.</p>
+      <span class="src"><code>packages/core/src/application/agents/contracts.ts</code> (<code>currentScope</code>) &middot; <code>authorization_lookup</code> span in <code>samples/restricted-run-trace.json</code></span>
+
+      <h3>5 &middot; Retrieval is hybrid, fused, then only gently adjusted</h3>
+      <p>Lexical and semantic candidate lists are combined with reciprocal rank fusion at <code>k = 60</code>. Source reliability and recency then adjust the fused score, but each adjustment is hard-capped at &plusmn;0.02, and policy evidence is exempt from the age penalty because a policy does not get less true with time. Chunking follows each source's own structure &mdash; one record per Salesforce row, one update per Slack row, six-turn windows with one-turn overlap for transcripts.</p>
+      <p>The caller's query is fused with six fixed per-section queries, so the retriever assembles a standard evidence pack for the nine brief sections rather than answering one question. That is the right shape for this product and it is also the cause of the retrieval evaluation's red gate &mdash; I cover that honestly in the <a href="#evaluation">evaluation section</a> rather than presenting it as a free choice.</p>
+      <span class="src"><code>packages/core/src/application/evidence/rrf.ts</code>, <code>retriever.ts</code> (<code>sectionQueries</code>), <code>chunk.ts</code></span>
+
+      <h3>6 &middot; Approval routing is derived from policy, not decided by a model</h3>
+      <p>The commercial agent describes the position; deterministic code maps it to policy triggers and required authorities. On OPP-1003 that produced four separate approval entries requiring four distinct authorities, one of which &mdash; the account owner's customer-concession gate &mdash; declares <code>depends_on</code> the other three and only becomes operable once they clear. The export endpoint returned 404 while the run was still <code>awaiting_approval</code>.</p>
+      <span class="src"><code>samples/restricted-approval-flow.json</code> &middot; policy rules in <code>fixtures/cato/policies/deal_desk_policy.md</code></span>
+
+      <h3>7 &middot; Every claim is re-checked against frozen evidence, and the run leaves a trace</h3>
+      <p>The agent returns each claim with a citation ID; code matches it back to the frozen manifest, restores the trusted source label and locator, and drops claims that are missing, unauthorized, or unsupported by the cited text. The restricted run exported <strong>33 spans across 13 span kinds</strong> and <strong>15 durable events</strong>, covering authorization, retrieval, each model call, validation, guardrails, approval requirements and decisions, and finalization.</p>
+      <span class="src"><code>packages/core/src/application/agents/validation.ts</code> &middot; <code>samples/restricted-run-trace.json</code>, <code>samples/restricted-run-events.json</code></span>
+
+      <div class="notes">
+        <h4>Speaker notes · 3:00</h4>
+        <p>Seven decisions, quickly, and then I will show you them running.</p>
+        <p>First, four agents, split by what they have to read rather than by pipeline stage. Conversation intelligence reads calls and chat. Stakeholder mapping reads contacts and who spoke. Commercial analysis reads pricing and policy. Strategy reads the three of them and writes the brief. That split lets the three specialists run at the same time, and it means one of them failing degrades the brief rather than killing the run.</p>
+        <p>Second, and this is the one I would most want to defend: the agents have no tools. Not few &mdash; none. The shared input type exposes no repository, no transport, no handle to another agent. The workflow hands each specialist a permission-checked bundle of evidence and takes back a typed object, and that is the entire interface. I did that for security, not elegance. An agent that cannot fetch anything cannot widen its own permissions, so the authorization decision I make before generation is the one that actually holds, and a prompt injection buried in a transcript has nowhere to go.</p>
+        <p>Third, orchestration is a persisted state machine, ten states with an exhaustive transition table, not a free-form planner loop. I chose that because of approvals. A run can sit in awaiting-approval for a day, across a worker restart, and it has to come back knowing exactly which step is next and which approvals are already recorded. An invalid transition throws instead of being tolerated, and the finalizing state only accepts completion or failure so no model output can restart synthesis behind my back.</p>
+        <p>Fourth, permissions are enforced twice. Before retrieval, so unauthorized rows never enter the candidate pool at all. Then the authorized evidence is frozen into a manifest, and the scope is recomputed and checked again before anything reaches a model &mdash; so if someone's access is narrowed mid-run, an older manifest cannot be replayed to get around it.</p>
+        <p>Fifth, retrieval is genuinely hybrid: lexical and semantic lists fused with reciprocal rank fusion, then reliability and recency nudge the score. Deliberately nudge &mdash; each adjustment is capped at two hundredths, and policy is exempt from the age penalty, because a policy clause does not get less true because it is old. One thing I will flag now and come back to: the caller's query is fused with six fixed per-section queries, so this retriever assembles a standard evidence pack rather than answering one question. That is right for the product and it is also why my retrieval evaluation is currently failing its own gate.</p>
+        <p>Sixth, what needs approval is decided by code, not by a model. The commercial agent describes the position; deterministic policy code maps it to triggers and authorities. On the restricted deal that produced four separate approvals across four distinct people, and the last one is explicitly dependent on the other three.</p>
+        <p>Seventh, grounding and observability. Every claim comes back with a citation ID, and code matches it against the frozen manifest, restores the trusted label, and drops anything unsupported. The restricted run left thirty-three trace spans across thirteen kinds and fifteen durable events. You do not have to trust the brief; you can read what produced it.</p>
+      </div>
+    </section>
+
+    <section id="demo">
+      <div class="section-head">
+        <div class="section-number">03 · Live demo</div>
+        <span class="budget-tag">04:30 &ndash; 10:00</span>
+      </div>
+      <h2>Four scenarios, five and a half minutes.</h2>
+
+      <p>The assignment asks for a demo that makes live model calls rather than replaying only precomputed responses. Scenario&nbsp;A generates a brief live, on stage, against the configured provider. Scenarios B, C and D open the checked-in runs and artifacts instead of regenerating them. That is a deliberate timing decision, said out loud: three more live generations would consume the whole budget, and the point of B and D is a comparison between recorded runs, which cannot be made live anyway.</p>
+
+      <p>The in-app <code>/walkthrough</code> page already lists these scenarios with their personas and expected proof, so it is a safe place to start from and to return to if a step is lost.</p>
+      <span class="src"><code>apps/web/src/routes/walkthrough.tsx</code></span>
+
+      <div class="scenario">
+        <header>
+          <h3>A &middot; Authorized brief, generated live</h3>
+          <span class="tag">§8 scenario 1</span>
+          <span class="dur">2:00 &nbsp;·&nbsp; 04:30 &ndash; 06:30</span>
+        </header>
+        <div class="scenario-body">
+          <dl>
+            <dt>Persona</dt><dd>Maya Levin, <code>USR-5001</code>, Account Owner on ACC-2001. <span class="src"><code>fixtures/cato/policies/access_permissions.tsv</code></span></dd>
+            <dt>Click path</dt><dd><ol>
+              <li><code>/settings</code> &rarr; select <strong>Maya Levin</strong>.</li>
+              <li><code>/deals</code> &rarr; open <strong>OPP-1001 · Northstar Foods Cooperative &mdash; Global Access Renewal</strong>.</li>
+              <li>Press <strong>Generate brief</strong>. The run opens and moves through retrieving &rarr; specialists &rarr; synthesizing &rarr; validating &rarr; finalizing.</li>
+              <li>When it completes, return to the deal workspace and scroll the nine sections.</li>
+            </ol></dd>
+            <dt>Point at</dt><dd>The phase indicator while it runs. Then, in the finished brief: the Deal Snapshot, and any claim's citation control &mdash; open one and show the source label and the authorized excerpt behind it.</dd>
+            <dt>Say</dt><dd class="say">"This is a live call to the provider, not a replay. While it runs &mdash; you are watching the six workflow phases, and each one is checkpointed, so if I killed the worker right now another one would resume from the last saved phase rather than starting over."</dd>
+            <dt>Expect</dt><dd>Roughly half a minute of model time. The three checked-in sample runs took <strong>32.6s</strong>, <strong>29.0s</strong> and <strong>31.3s</strong> end to end, at 5 model calls and about 32,000 total tokens each. Say that number out loud before pressing the button so the wait is expected rather than awkward. <span class="src"><code>samples/manifest.json</code></span></dd>
+            <dt>If it stalls</dt><dd>Give it until 06:15, then switch to the checked-in OPP-1001 run and keep talking. See <a href="#fallback">Failure fallback</a>.</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="scenario">
+        <header>
+          <h3>B &middot; Restricted deal, approval routing</h3>
+          <span class="tag">§8 scenario 2</span>
+          <span class="dur">1:45 &nbsp;·&nbsp; 06:30 &ndash; 08:15</span>
+        </header>
+        <div class="scenario-body">
+          <dl>
+            <dt>Persona</dt><dd>Nora Chen, <code>USR-5003</code>, Restricted Account Owner on ACC-2003 &mdash; the only fixture user with <code>can_view_restricted_account = true</code> on that account.</dd>
+            <dt>Click path</dt><dd><ol>
+              <li><code>/settings</code> &rarr; select <strong>Nora Chen</strong>.</li>
+              <li><code>/runs</code> &rarr; open the checked-in restricted run <code>run_182ba7ed…</code>, which halted at <strong>Awaiting approval</strong>.</li>
+              <li><code>/approvals</code> &rarr; show the four separate entries and who each is waiting on.</li>
+              <li>Switch persona to <strong>Rina Vale</strong> (<code>USR-5005</code>, Deal Desk), then <strong>Tomas Reed</strong> (<code>USR-5008</code>, Sales Leader), then <strong>Iris Wynn</strong> (<code>USR-5006</code>, Legal) &mdash; showing that each sees only the entry their authority covers.</li>
+              <li>Return to Nora and show the fourth, account-owner entry: it is the dependent one.</li>
+            </ol></dd>
+            <dt>Point at</dt><dd>Four entries, four authorities: <code>commercial_discount / deal_desk</code>, <code>commercial_discount / sales_leader</code>, <code>legal_terms / legal_reviewer</code>, <code>customer_concession / account_owner</code>. The last carries <code>depends_on</code> the other three. Seven policy triggers fired, including <code>discount_above_15_percent</code>, <code>negative_renewal_uplift</code> and <code>liability_cap_change</code>.</dd>
+            <dt>Say</dt><dd class="say">"Four approvals, four different people, and the account owner's gate is deliberately last &mdash; you should not sign off on customer-facing concession language before Deal Desk, sales leadership and legal have cleared the terms underneath it. And while all this is pending, the JSON export of the run returns 404. There is no back door to the unapproved brief."</dd>
+            <dt>Expect</dt><dd>4 requirements, 4 decisions, 4 distinct approvers, export refused before quorum. <span class="src"><code>samples/restricted-approval-flow.json</code>, <code>samples/manifest.json</code> &middot; approver identities: <code>packages/core/src/domain/briefs/policy.ts</code>, <code>apps/web/src/features/personas/demo-personas.ts</code></span></dd>
+            <dt>Fallback</dt><dd>Open <code>samples/restricted-approval-flow.json</code> directly &mdash; it records the whole progression step by step, including which approvals were operable before each decision.</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="scenario">
+        <header>
+          <h3>C &middot; Unauthorized request, nothing leaks</h3>
+          <span class="tag">§8 scenario 3</span>
+          <span class="dur">0:45 &nbsp;·&nbsp; 08:15 &ndash; 09:00</span>
+        </header>
+        <div class="scenario-body">
+          <dl>
+            <dt>Persona</dt><dd>Harper Noor, <code>USR-5007</code>, Unauthorized Requester. Scoped to ACC-2001 only, source types <code>salesforce,gong</code> only, and all three sensitivity flags false. <span class="src"><code>fixtures/cato/policies/access_permissions.tsv</code></span></dd>
+            <dt>Click path</dt><dd><ol>
+              <li><code>/settings</code> &rarr; select <strong>Harper Noor</strong>.</li>
+              <li>Navigate directly to <code>/deals/OPP-1003</code>.</li>
+              <li>Then glance at <code>/deals</code> and <code>/runs</code> while still Harper.</li>
+            </ol></dd>
+            <dt>Point at</dt><dd>The opaque response, and then the absence: no account name, no opportunity name, no source name, no counts, no evidence metadata, no run.</dd>
+            <dt>Say</dt><dd class="say">"This is a 404 with the generic not-found body, not a 403 saying 'you may not see Eclipse BioMaterials'. A 403 on a specific deal ID is itself a disclosure &mdash; it confirms the deal exists and that it is protected. The lists are filtered the same way, so Harper cannot infer the restricted deal from what is missing either."</dd>
+            <dt>Expect</dt><dd>HTTP 404 with <code>{"code":"NOT_FOUND"}</code>. The checked-in leak check records all four assertions false: no account name, no source name, no counts, no evidence metadata. The retrieval evaluation's five denied cases each retrieved <strong>0</strong> rows, and permission leakage is <strong>0</strong> across all 23 cases. <span class="src"><code>samples/denied-access.json</code>, <code>samples/manifest.json</code>, <code>evals/reports/retrieval.json</code></span></dd>
+            <dt>Fallback</dt><dd>Show <code>samples/denied-access.json</code> and the <code>deniedAccessNoLeak</code> block of <code>samples/manifest.json</code>.</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="scenario">
+        <header>
+          <h3>D &middot; Slack updates changing the brief</h3>
+          <span class="tag">§8 scenario 4</span>
+          <span class="dur">1:00 &nbsp;·&nbsp; 09:00 &ndash; 10:00</span>
+        </header>
+        <div class="scenario-body">
+          <dl>
+            <dt>Artifact</dt><dd>Open the pre-parked tab <code>samples/slack-impact.html</code> (same measurement in prose: <code>samples/slack-impact-comparison.md</code>).</dd>
+            <dt>Click path</dt><dd><ol>
+              <li>Show the two runs: same deal, same requester, same pipeline, one input changed &mdash; whether the requester's scope includes the <code>slack</code> source type.</li>
+              <li>Show the retrieval difference, then the brief difference.</li>
+              <li>Switch to the OPP-1003 brief and open the Executive Summary's single citation.</li>
+            </ol></dd>
+            <dt>Point at</dt><dd>The Executive Summary sentence &mdash; "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations" &mdash; and its citation: <code>source=slack/account_team_updates.tsv, update_id=SLK-9009</code>. That update is the generated <code>ambiguity_or_conflict</code> row for this deal, and it ranked first in retrieval at fusion score 0.139.</dd>
+            <dt>Say</dt><dd class="say">"This is the cited generated update the assignment asks for. With Slack authorized, three claims outside the Source Evidence list cite an account-team update and four brief sections carry the account-team-update badge. Revoke only that one grant and re-run, and it drops to zero &mdash; the same sentence becomes a generic 'internal buyer group has conflicting priorities'. The generated data is not decoration; it is carrying the most decision-relevant sentence in the brief."</dd>
+            <dt>Also worth 10 seconds</dt><dd>On OPP-1001, Maya reaches only two of the three updates on her account, because <code>SLK-9003</code> is classified <code>sensitive_pricing</code> and her grant sets <code>can_view_sensitive_pricing = false</code>. That is authorization working, not a gap.</dd>
+            <dt>Expect</dt><dd>9 generated updates, 3 per opportunity, one each of reinforcing / missing-context / conflicting. The fixture was itself produced by a live provider run &mdash; 2 calls, 5,825 tokens, native schema output, marked reviewed. <span class="src"><code>fixtures/cato/slack/generation.json</code>, <code>fixtures/cato/slack/account_team_updates.tsv</code>, <code>samples/slack-impact-comparison.md</code></span></dd>
+            <dt>Fallback</dt><dd>The HTML comparison is already a static file. It cannot fail.</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="notes">
+        <h4>Speaker notes · 5:30, and the only part I should not rush</h4>
+        <p>One thing before I click anything: the assignment asks for a demo that makes live calls rather than replaying precomputed ones, so the first brief is generated live, right now, against the configured provider. The other three scenarios open runs I have already recorded. That is a deliberate choice and I will say why: three more live generations would eat the whole fifteen minutes, and two of these scenarios are comparisons between two recorded runs, which you cannot do live by definition.</p>
+        <p>So &mdash; I am Maya Levin, account owner on the Northstar renewal. I open the deal, I press generate. This takes about half a minute; the three sample runs I shipped took thirty-three, twenty-nine and thirty-one seconds, at five model calls and roughly thirty-two thousand tokens each. While it works: those phases you are watching are real workflow states, and each one is checkpointed to Postgres. If I killed this worker right now, another one would pick it up from the last saved phase rather than starting the deal over. And here it is &mdash; nine sections, and every factual sentence has a citation control. I will open one. That is not the model quoting a filename back at me; the citation ID came back from the model, and then code matched it against the frozen evidence manifest for this run and restored the trusted label and the excerpt.</p>
+        <p>Now the restricted deal. This is the run that stopped. It reached validation, deterministic policy code looked at the commercial position, and seven policy triggers fired &mdash; discount over fifteen percent, negative renewal uplift, a liability cap change, restricted research language. That produced four separate approvals: Deal Desk, sales leader, legal, and the account owner. Watch what happens as I switch personas &mdash; each approver sees only the entry their authority covers. And the account owner's entry is explicitly dependent on the other three, because you should not approve customer-facing concession language before the terms underneath it have cleared. Meanwhile, the JSON export of this run returns a 404. There is no route to the unapproved brief.</p>
+        <p>Third, the one that matters most for trust. I am now Harper Noor, who is not authorized on this account. I go straight to the restricted deal URL. Four-oh-four, generic not-found body. Not a 403, deliberately &mdash; a 403 on a specific deal ID tells you the deal exists and is protected, and that is already a disclosure. And the lists are filtered the same way, so Harper cannot work it out from what is missing either. The retrieval evaluation covers this case too: zero rows retrieved for the denied requester.</p>
+        <p>Last, the generated Slack data. Same deal, same requester, same pipeline, run twice, with exactly one thing changed &mdash; whether that user's authorization scope includes the Slack source type. With it, three claims outside the evidence list cite an account-team update and four sections are badged as account-team impacted. Without it, zero. And look at which sentence it is carrying: the executive summary of the restricted brief is the conflict update, SLK-9009, the generated row I deliberately wrote to introduce ambiguity. Its only citation is that update. Take Slack away and that sentence flattens into a generic line about conflicting priorities. One more detail, ten seconds: on the Northstar deal Maya only reaches two of her three updates, because the third is classified as sensitive pricing and her grant does not allow that. That is the permission model doing its job on generated data exactly as it does on provided data.</p>
+      </div>
+    </section>
+
+    <section id="evaluation">
+      <div class="section-head">
+        <div class="section-number">04 · Evaluation results</div>
+        <span class="budget-tag">10:00 &ndash; 12:00</span>
+      </div>
+      <h2>What I measured, including where it is weak.</h2>
+
+      <div class="stat-row">
+        <div class="stat good"><b>0</b><span>Permission leakage across all 23 retrieval cases</span></div>
+        <div class="stat weak"><b>0.222</b><span>Macro recall@5 over the 18 scored cases &mdash; below the 0.50 floor</span></div>
+        <div class="stat weak"><b>0.133</b><span>Macro precision@5 over the same 18 cases</span></div>
+        <div class="stat good"><b>0</b><span>Brief-quality violations across the 3 shipped briefs</span></div>
+      </div>
+      <span class="src"><code>evals/reports/retrieval.json</code> &middot; <code>evals/golden-retrieval.json</code> &middot; <code>scripts/evaluate.ts</code> &middot; <code>pnpm eval:brief-quality</code> over <code>samples/*.json</code></span>
+
+      <div class="callout warning">
+        <p><strong>The retrieval quality gate is red, and it is reported rather than tuned away.</strong> The floor is 0.50 macro recall@5 and measured recall is 0.222. I did not lower the floor to make it green.</p>
+      </div>
+
+      <h3>Retrieval: what the wider golden set exposed</h3>
+      <p>The golden set is 23 cases &mdash; <strong>18 scored</strong> cases carrying <strong>56 hand-checked relevance labels</strong>, plus <strong>5</strong> that must return nothing because the requester is unauthorized. Three cases also carry <code>forbiddenEvidenceIds</code>: evidence a specific reader must never be handed, such as a sensitive-pricing note for a persona without that grant. Returning one counts as permission leakage exactly like answering a denied request. Leakage is 0 across all 23; the 5 denied cases retrieved 0 rows each.</p>
+      <p>The macro means cover the 18 scored cases only. The denied cases are excluded, because their correct answer is an empty list and scoring them 1.0 would flatter the number.</p>
+      <p>An earlier three-case version of this set scored 0.50 recall. That was not a better retriever &mdash; it was a smaller set whose handful of labels happened to be the lexically obvious Slack rows. Widening it exposed two specific defects:</p>
+      <ul>
+        <li><strong>No Gong transcript chunk reaches the top 5 in any case.</strong> Not one, across all 23. Transcript windows are indexed, chunked and citable &mdash; the shipped briefs cite them &mdash; but the ranked hybrid never surfaces one in the evaluated top 5.</li>
+        <li><strong>The returned set is nearly identical across unrelated queries for the same opportunity.</strong> The ranked hybrid fuses the caller's query with six fixed per-section queries, so the caller's own words carry roughly a seventh of the fusion mass. That is a defensible design for assembling a standard evidence pack for a brief, which is what the product does, and it is poor at answering a specific question, which is what this evaluation asks.</li>
+      </ul>
+      <p>Eight of the 18 scored cases return zero relevant evidence at k=5. I would not describe this retriever as good; I would describe it as one that assembles a consistent evidence pack and does not yet answer targeted questions, with a measurement that says exactly that.</p>
+      <span class="src"><code>evals/golden-retrieval.json</code>, <code>evals/reports/retrieval.json</code>, <code>scripts/evaluate.ts</code> (<code>RECALL_FLOOR</code>), <code>packages/core/src/application/evidence/retriever.ts</code> (<code>sectionQueries</code>), and the retrieval-gate paragraph in <code>README.md</code></span>
+
+      <h3>Brief quality: six invariants, all passing</h3>
+      <p><code>pnpm eval:brief-quality</code> checks six invariants over each shipped brief: no cited stakeholder silently dropped, no discarded-content marker, citations spanning more than one source family, required sections populated, no internal identifier leaking into user-facing copy, and no warning contradicting the brief around it. All three briefs pass with zero violations, each citing five distinct source types &mdash; conversation, CRM, policy, pricing and Slack &mdash; and each carrying five mapped stakeholders. The same invariants are unit-tested against the real validation pass with no model and no database.</p>
+      <span class="src"><code>scripts/brief-quality.ts</code>, <code>tests/unit/brief-quality.test.ts</code>, <code>tests/unit/brief-grounding.test.ts</code></span>
+
+      <h3>Where the output is thin</h3>
+      <p>These are visible in the shipped artifacts and I would rather name them than let a reviewer find them.</p>
+      <ul>
+        <li><strong>One recommended next action per brief.</strong> All three shipped briefs produced exactly one. The assignment asks for prioritized next actions, plural; one is not much of a priority list.</li>
+        <li><strong>Missing Information came back empty.</strong> The restricted brief's Missing Information section reads "None", which is almost certainly wrong for a deal with an unapproved discount and undocumented exception handling.</li>
+        <li><strong>Stakeholder goals and concerns are empty.</strong> The map identifies five people with roles, influence and relationship, but their per-person goals and concerns are all "None".</li>
+        <li><strong>Confidence is not calibrated.</strong> Every claim carries confidence 1.00 and the overall figure is 1.00. That field is a model self-report in the schema; no calibration measurement exists, so I read it as "not measured", not as "high confidence".</li>
+        <li><strong>Two warnings fired on the restricted brief and both are correct:</strong> <code>CONCESSION_NOT_APPROVED</code> (critical) and <code>INSUFFICIENT_CLAIM_SUPPORT</code> (warning, meaning no single cited unit supported the complete material relation). The system caught them; it did not resolve them.</li>
+      </ul>
+      <span class="src"><code>samples/restricted-opportunity-brief.txt</code>, <code>samples/{normal,expansion,restricted}-opportunity-brief.json</code>, <code>packages/core/src/domain/briefs/schema.ts</code></span>
+
+      <h3>Not measured at all</h3>
+      <p>Latency percentiles under load. Cost in currency &mdash; token counts are recorded per run, but never converted. Load and soak behaviour. Adversarial prompt-injection results at scale. And the one that matters most commercially: whether a seller who used the brief prepared better. No human-usefulness evaluation exists.</p>
+
+      <h3>An earlier measurement I disproved</h3>
+      <p>An earlier version of the Slack impact report concluded that Slack evidence was retrieved, ranked and prompted but never reached a finalized brief. That was an accurate measurement of the code at the time. Two fixes falsified it: one capped the Gong-transcript candidate window so transcripts stopped crowding Slack out of the prompt context, and one fixed a prose safety filter that was matching <code>role:</code> without a word boundary &mdash; every Slack row carries an <code>authorRole:</code> field, so claims quoting a Slack update were being discarded as instruction-like text. The report was rewritten against the current code and says so.</p>
+      <span class="src"><code>samples/slack-impact-comparison.md</code> &mdash; "What this replaces"</span>
+
+      <div class="notes">
+        <h4>Speaker notes · 2:00</h4>
+        <p>Two evaluations, both in CI, and I am going to lead with the failing one because it is the interesting one.</p>
+        <p>Retrieval. Twenty-three cases: eighteen scored, carrying fifty-six hand-checked relevance labels, plus five that must return nothing because the requester is not authorized. Measured macro recall at five is zero point two two two, against a floor of zero point five. That gate is red. I want to be direct about this: I did not lower the floor to make it green, and I did not quietly drop the cases it fails.</p>
+        <p>What is worth your time is why it went red. An earlier version of this set had three cases and scored exactly zero point five. That was not a better retriever &mdash; it was a smaller set whose few labels happened to be the lexically obvious Slack rows. Widening it exposed two real defects. First, no Gong transcript chunk reaches the top five in any of the twenty-three cases. Not one. Transcripts are indexed, chunked and citable, and the shipped briefs do cite them, but the ranked hybrid never surfaces one in the evaluated top five. Second, the returned set is nearly the same across completely unrelated queries on the same opportunity, and I know why: the hybrid fuses the caller's query with six fixed per-section queries, so the caller's own words carry roughly a seventh of the fusion mass. That is actually a defensible design for what the product does, which is assemble a standard evidence pack for a brief. It is a bad design for answering a specific question, which is what this evaluation asks. Eight of the eighteen scored cases return nothing relevant at all.</p>
+        <p>The number that is not red is permission leakage: zero, across all twenty-three. The five denied cases retrieved nothing, and three of the scored cases also carry forbidden-evidence labels &mdash; a sensitive pricing note for a persona without that grant, for instance &mdash; and returning one of those counts as leakage exactly like answering a denied request. Still zero.</p>
+        <p>Brief quality is six invariants over the shipped briefs &mdash; no dropped stakeholder, citations spanning more than one source family, required sections populated, no internal IDs in prose, no warning that contradicts the brief around it. All three pass with zero violations, five source types each.</p>
+        <p>Now what is thin, and I would rather say it than have you find it. Every brief produced exactly one recommended next action; the assignment asks for a prioritized list, and one item is not a list. Missing Information came back as "None" on a deal that has an unapproved discount and undocumented exception handling, which I do not believe. The stakeholder map names five people with roles and influence but their individual goals and concerns are empty. And every claim carries confidence one point zero &mdash; that is a self-reported field in the schema with no calibration behind it, so I treat it as not measured rather than as high confidence.</p>
+        <p>What I have not measured at all: latency under load, cost in actual currency, soak behaviour, injection resistance at scale, and whether any of this actually helps a seller prepare better. That last one is the one I would want to fix first, and it needs sellers, not code.</p>
+        <p>One more thing, because I think it says more than the passing numbers. An earlier version of my Slack impact report concluded that Slack evidence never reached the finished brief. That was true when I measured it. Two bugs caused it &mdash; transcripts were crowding Slack out of the prompt window, and a safety filter was matching "role" without a word boundary, so every claim quoting a Slack update, which all carry an authorRole field, was being thrown away as instruction-like text. I fixed both, re-ran it, and rewrote the report to say what it now measures and what it replaces.</p>
+      </div>
+    </section>
+
+    <section id="production">
+      <div class="section-head">
+        <div class="section-number">05 · What breaks in production</div>
+        <span class="budget-tag">12:00 &ndash; 14:00</span>
+      </div>
+      <h2>A strong recovery core, an incomplete operating envelope.</h2>
+      <p>The recovery story is genuinely built: checkpointed state in Postgres, worker leases that expire, idempotent commands, version checks so two workers cannot commit conflicting state. What is missing is almost everything around it.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Area</th><th>What holds today</th><th>What breaks first in production</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Scalability</strong></td><td>API and worker are separate; a queue absorbs bursts; each run is bounded in search and model work.</td><td>Nothing has been load- or soak-tested, so I do not know where it falls over. Exact vector search is fine at this corpus size; at millions of rows in one authorized scope it needs an ANN index &mdash; but total row count alone is not the trigger, since permission filtering can leave a small authorized subset where exact search is both faster and safer.</td></tr>
+            <tr><td><strong>High availability</strong></td><td>Lease expiry and checkpoint resume; idempotent commands; optimistic version checks.</td><td>Single Postgres and single Redis. No standby, no failover drill, no restore drill, no defined recovery-point or recovery-time target, no rehearsed schema-migration rollout against live workers.</td></tr>
+            <tr><td><strong>Monitoring</strong></td><td>Every run leaves a durable timeline; health endpoints report dependency reachability.</td><td>Nothing is exported. No metrics or trace pipeline, no dashboards, no alerts on queue depth or dead letters or provider failure, no service-level objectives, no runbooks. Today someone has to know to go and look.</td></tr>
+            <tr><td><strong>Secrets</strong></td><td>Server-side only, never sent to the browser; startup validation refuses invalid config; common secret fields redacted from logs.</td><td>Long-lived keys in environment files. No secret manager or workload identity, no rotation, no access audit, no rehearsed revocation path for a leaked provider key.</td></tr>
+            <tr><td><strong>Cost</strong></td><td>Bounded attempts and deadlines, capped context and output tokens, actual token counts persisted per run.</td><td>Token counts are never converted to money. No per-team budget, no spend alert, no anomaly detection, and no measured model routing &mdash; the model choice is currently a configuration decision, not an evaluated one.</td></tr>
+            <tr><td><strong>Model dependence</strong></td><td>One gateway for every provider call, schema-constrained output where the provider supports it, provider-library retries disabled in favour of controlled ones, bounded schema repairs, provider failover allowed while still requiring the requested parameters.</td><td>Output quality is tied to whichever model is configured, and I have not measured quality across models &mdash; so a provider or version change is an unquantified quality change. The provider is also a hard external dependency: it can be slow, rate-limit, or drift, and there is no cached or degraded mode that still produces a useful brief.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <span class="src">Full assessment, area by area, in <a href="technical-overview.html#production">the technical overview's production-readiness section</a>. Gateway behaviour is documented in <code>README.md</code>.</span>
+
+      <div class="callout warning">
+        <p><strong>The gap I would close first.</strong> Not scalability &mdash; monitoring. The system already records everything an operator would need, and none of it leaves the database. That is the cheapest large improvement available and it is a prerequisite for trusting any of the others.</p>
+      </div>
+
+      <div class="notes">
+        <h4>Speaker notes · 2:00</h4>
+        <p>What would break. I want to be specific rather than list generic risks.</p>
+        <p>The recovery core is real. State is checkpointed in Postgres, worker leases expire so a dead worker's run gets picked up, commands are idempotent, and version checks stop two workers committing conflicting state. If a process dies mid-run you do not lose the brief and you do not re-ask for approvals. I would stand behind that part.</p>
+        <p>The operating envelope around it is not there. Scalability: I have separated the API from the worker and bounded each run, but I have never load-tested or soak-tested it, so I genuinely do not know where it falls over &mdash; and I would rather say that than guess a number. Vector search is exact today, which is right at this corpus size; at millions of rows in one authorized scope it needs an approximate index, though I would check what a user's permission filter actually leaves before assuming that, because exact search over a small authorized subset can be both faster and safer.</p>
+        <p>High availability: one Postgres, one Redis, no standby, and no failover or restore drill. Backups you have not restored are not backups.</p>
+        <p>Monitoring is the honest gap, and it is the one I would close first. The system already records everything an operator would want &mdash; every run leaves a full timeline &mdash; and none of it is exported anywhere. No dashboards, no alerts on queue depth or provider failures, no service objectives, no runbooks. Right now someone has to already suspect a problem to find one.</p>
+        <p>Secrets are server-side and redacted from logs, but they are long-lived keys in environment files. Production needs a secret manager or workload identity, rotation, and a revocation path you have rehearsed.</p>
+        <p>Cost: I record real token counts per run and never convert them to money. There is no budget, no spend alert, no anomaly detection. And model routing is a configuration decision, not a measured one &mdash; I have not compared quality and price per agent task, so I am not going to claim cost-aware routing that I did not evaluate.</p>
+        <p>Last, model dependence. Quality is tied to whichever model is configured, and I have not measured quality across models, so a provider or version change is an unquantified quality change. There is also no degraded mode &mdash; if the provider is down there is no cached path that still gives the seller something useful. For a tool people rely on before a negotiation, that is a real gap.</p>
+      </div>
+    </section>
+
+    <section id="close">
+      <div class="section-head">
+        <div class="section-number">06 · Close</div>
+        <span class="budget-tag">14:00 &ndash; 15:00</span>
+      </div>
+      <h2>What I would build next, in that order.</h2>
+      <ol>
+        <li><strong>Export the telemetry.</strong> The data already exists; nothing else can be trusted until someone can see it.</li>
+        <li><strong>Fix the thin output.</strong> More than one next action, a Missing Information section that is actually populated, and stakeholder goals and concerns that are filled in. That is prompt and validation work on top of a pipeline that already grounds correctly.</li>
+        <li><strong>Get the retrieval gate green honestly.</strong> The 23-case set has already located the two defects &mdash; transcript chunks never reaching the top 5, and the caller's query carrying about a seventh of the fusion mass. Weight the caller's query properly, then re-measure rather than re-baseline.</li>
+        <li><strong>Calibrate or remove the confidence number.</strong> A self-reported 1.00 on every claim is worse than no number, because a reader will believe it.</li>
+        <li><strong>Put it in front of sellers.</strong> Everything above is measurable without them; whether the brief actually helps is not.</li>
+      </ol>
+
+      <div class="notes">
+        <h4>Speaker notes · 1:00</h4>
+        <p>To close. What I would do next, in order. First, export the telemetry &mdash; the data is already being recorded and nobody can see it, and that blocks trusting anything else. Second, fix the thin output: more than one next action, a Missing Information section that actually says something, stakeholder goals filled in. That is prompt and validation work on a pipeline that already grounds correctly, so it is cheap. Third, get the retrieval gate green honestly &mdash; the wider golden set has already told me exactly what is wrong, so weight the caller's query properly and re-measure, rather than moving the floor. Fourth, either calibrate the confidence number or take it out, because a self-reported one-point-oh on every claim is worse than no number at all &mdash; people believe it. And fifth, put it in front of actual sellers, because every other item on that list I can measure on my own and that one I cannot.</p>
+        <p>The thing I would most want you to take away is the shape of the trust boundary: permissions are checked before retrieval and again before generation, the agents hold no tools so they cannot go around that, what needs approval is decided by policy code rather than by a model, and every claim is re-verified against frozen evidence before it reaches the person reading it. That is what I would want if I were the account owner walking into the room. Happy to go deeper on any of it.</p>
+      </div>
+    </section>
+
+    <section id="fallback">
+      <div class="section-head">
+        <div class="section-number">07 · Contingency</div>
+        <span class="budget-tag grey">Not in the 15:00</span>
+      </div>
+      <h2>If the live call is slow or fails.</h2>
+      <p>Only Scenario A is live. Every other scenario already reads a checked-in artifact, so a provider outage costs at most one scenario &mdash; and that scenario has a recorded twin.</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h4>Rule 1 &middot; Set the expectation first</h4>
+          <p>Before pressing Generate, say the number: "the shipped runs took about thirty seconds." A wait that was announced is a demonstration; the same wait unannounced is a failure.</p>
+        </div>
+        <div class="card">
+          <h4>Rule 2 &middot; Hard cutoff at 06:15</h4>
+          <p>If the run has not finished 105 seconds into Scenario A, stop waiting and switch. Do not narrate a spinner into the next section's time.</p>
+        </div>
+        <div class="card">
+          <h4>Rule 3 &middot; Never restart it on stage</h4>
+          <p>Leave the failed run open. It is evidence: a failed run is a recorded state with a durable event trail, and the fallback becomes a demonstration of the failure handling.</p>
+        </div>
+        <div class="card">
+          <h4>Rule 4 &middot; Say what happened</h4>
+          <p>"That is a provider timeout, which is exactly why the run is checkpointed and the failure is recorded rather than swallowed. Here is the same brief from a run I recorded on the thirty-first."</p>
+        </div>
+      </div>
+
+      <h3>The substitute for each scenario</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>If this fails</th><th>Fall back to</th><th>What it still proves</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>A ·</strong> live OPP-1001 generation</td>
+              <td><code>samples/normal-opportunity-brief.txt</code> for reading, <code>samples/normal-opportunity-brief.json</code> for structure, and the <code>authorizedNormalOpportunity</code> block of <code>samples/manifest.json</code> for provenance &mdash; run ID, provider, generation and embedding model, 5 calls, 32,409 tokens, start and end timestamps.</td>
+              <td>That a live provider produced it: <code>samples/manifest.json</code> records <code>liveLlmVerified: true</code>, and the trace carries per-call provider attempts with real token counts.</td>
+            </tr>
+            <tr>
+              <td><strong>B ·</strong> approvals UI or personas</td>
+              <td><code>samples/restricted-approval-flow.json</code> &mdash; it records all four requirements, their eligible approvers, the dependency, the step-by-step progression with quorum counts, and the export refused with 404 while <code>awaiting_approval</code>.</td>
+              <td>The whole approval mechanism, in more detail than the UI shows.</td>
+            </tr>
+            <tr>
+              <td><strong>C ·</strong> the denial path</td>
+              <td><code>samples/denied-access.json</code> plus the <code>deniedAccessNoLeak</code> block of <code>samples/manifest.json</code>, which asserts no account name, no source name, no counts, no evidence metadata.</td>
+              <td>The denial is opaque and the leak check is explicit rather than eyeballed.</td>
+            </tr>
+            <tr>
+              <td><strong>D ·</strong> anything</td>
+              <td><code>samples/slack-impact.html</code> &mdash; already a static offline file with no dependencies.</td>
+              <td>Everything scenario D was going to show.</td>
+            </tr>
+            <tr>
+              <td><strong>The whole app</strong> (database, Docker, network)</td>
+              <td><code>samples/index.html</code> as the demo, walked in the same order, then <code>docs/technical-overview.html</code> for the architecture and lifecycle diagrams.</td>
+              <td>All four required scenarios, from artifacts a real provider produced. Say plainly that the live call is unavailable rather than implying the runs are live.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout danger">
+        <p><strong>Do not claim a replayed run is live.</strong> If the fallback is used, say so in the same sentence as the substitute. Every one of these artifacts came from a real provider run and is worth showing on its own terms; presenting one as live would be the only thing in this presentation that is not true.</p>
+      </div>
+
+      <div class="notes">
+        <h4>Speaker notes · only if needed</h4>
+        <p>If it hangs: "That is taking longer than the thirty seconds I promised, so let me not spend your time on a spinner. I am going to leave that run open, because a stalled run is itself a recorded state &mdash; you can see the phase it reached and the durable events behind it &mdash; and I will show you the same brief from a run I recorded on the thirty-first of August. Same pipeline, same provider, real tokens; the manifest records the run ID, the model, five calls and thirty-two thousand tokens. What I am about to show you is a replay, and I want to be clear about that."</p>
+      </div>
+    </section>
+
+    <section id="sources">
+      <div class="section-head">
+        <div class="section-number">08 · Provenance</div>
+        <span class="budget-tag grey">Reference</span>
+      </div>
+      <h2>Where every number on this page came from.</h2>
+      <p>Nothing here is estimated or illustrative. If a figure is not in this table, it is not in the presentation.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Claim</th><th>Source in this repository</th></tr></thead>
+          <tbody>
+            <tr><td>ACV $4,217,500 / $2,384,000 / $1,879,000; stages; restricted and approval flags</td><td><code>fixtures/cato/salesforce/opportunities.tsv</code></td></tr>
+            <tr><td>Six users, five source types, per-user sensitivity flags; Harper Noor scoped to ACC-2001 and <code>salesforce,gong</code></td><td><code>fixtures/cato/policies/access_permissions.tsv</code></td></tr>
+            <tr><td>18% discount / &minus;8% uplift <code>pending_deal_desk</code>; 12% / &minus;3% <code>pending_legal_and_manager</code></td><td><code>fixtures/cato/pricing/pricing_notes.tsv</code></td></tr>
+            <tr><td>Approval rules: &gt;10% Deal Desk, &gt;15% adds sales leader, negative uplift, liability cap, restricted language, concession language</td><td><code>fixtures/cato/policies/deal_desk_policy.md</code></td></tr>
+            <tr><td>Four agents; specialists run concurrently</td><td><code>packages/core/src/application/agents/</code></td></tr>
+            <tr><td>Agents hold no tools (<code>AgentContext</code> exposes no repository, transport or tool handle); <code>currentScope</code> recomputed per run</td><td><code>packages/core/src/application/agents/contracts.ts</code></td></tr>
+            <tr><td>Ten run states, exhaustive transition table, <code>finalizing</code> accepts only complete or fail</td><td><code>packages/core/src/domain/runs/state-machine.ts</code></td></tr>
+            <tr><td>RRF at <code>k = 60</code>; reliability and recency adjustments capped at &plusmn;0.02; policy exempt from age penalty</td><td><code>packages/core/src/application/evidence/rrf.ts</code>, <code>retriever.ts</code></td></tr>
+            <tr><td>Per-source chunking, including six-turn transcript windows with one-turn overlap</td><td><code>packages/core/src/application/evidence/chunk.ts</code></td></tr>
+            <tr><td>Claim validation against the frozen manifest; unsupported claims dropped</td><td><code>packages/core/src/application/agents/validation.ts</code></td></tr>
+            <tr><td>Confidence is a model-supplied schema field with no calibration</td><td><code>packages/core/src/domain/briefs/schema.ts</code></td></tr>
+            <tr><td>Run durations 32.6s / 29.0s / 31.3s; 5 model calls and ~32k tokens per run; <code>liveLlmVerified: true</code>; denied-access leak check</td><td><code>samples/manifest.json</code></td></tr>
+            <tr><td>Four approval requirements, four decisions, four distinct approvers, <code>depends_on</code> ordering, seven policy triggers, export 404 before quorum</td><td><code>samples/restricted-approval-flow.json</code></td></tr>
+            <tr><td>Approver identities USR-5006 Iris Wynn and USR-5008 Tomas Reed (not present in the permissions fixture)</td><td><code>packages/core/src/domain/briefs/policy.ts</code>, <code>apps/web/src/features/personas/demo-personas.ts</code></td></tr>
+            <tr><td>33 trace spans across 13 span kinds; 15 durable events</td><td><code>samples/restricted-run-trace.json</code>, <code>samples/restricted-run-events.json</code></td></tr>
+            <tr><td>404 with <code>{"code":"NOT_FOUND"}</code> for the unauthorized requester</td><td><code>samples/denied-access.json</code></td></tr>
+            <tr><td>Citation format <code>source=&lt;file&gt;, &lt;id&gt;=&lt;value&gt;</code>; one next action; Missing Information "None"; empty stakeholder goals; confidence 1.00; <code>CONCESSION_NOT_APPROVED</code> and <code>INSUFFICIENT_CLAIM_SUPPORT</code></td><td><code>samples/restricted-opportunity-brief.txt</code></td></tr>
+            <tr><td>Slack impact: 3 claims outside Source Evidence cite Slack, 4 badged sections, 0 without; SLK-9009 rank 1 at fusion score 0.139; SLK-9003 withheld from Maya as <code>sensitive_pricing</code>; the falsified earlier measurement</td><td><code>samples/slack-impact-comparison.md</code>, <code>samples/slack-impact-comparison.json</code></td></tr>
+            <tr><td>9 generated updates, 3 per opportunity, 3 context kinds; 2 calls, 5,825 tokens, native schema, reviewed</td><td><code>fixtures/cato/slack/generation.json</code>, <code>fixtures/cato/slack/account_team_updates.tsv</code></td></tr>
+            <tr><td>23 golden cases: 18 scored with 56 relevance labels, 5 denied, 3 carrying <code>forbiddenEvidenceIds</code>; macro precision@5 0.133, macro recall@5 0.222, permission leakage 0, denied cases retrieved 0, 8 of 18 scored cases at zero recall, 0 transcript chunks in any top 5</td><td><code>evals/golden-retrieval.json</code>, <code>evals/reports/retrieval.json</code></td></tr>
+            <tr><td>Denied cases excluded from the macro means; forbidden evidence counted as leakage; CI enforces a 0.50 recall floor and zero leakage, and the gate is currently red</td><td><code>scripts/evaluate.ts</code>, <code>README.md</code></td></tr>
+            <tr><td>The caller's query is fused with six fixed per-section queries</td><td><code>packages/core/src/application/evidence/retriever.ts</code> (<code>sectionQueries</code>)</td></tr>
+            <tr><td>Six brief-quality invariants, 0 violations across 3 briefs, 5 source types and 5 stakeholders each</td><td><code>scripts/brief-quality.ts</code> (<code>pnpm eval:brief-quality</code>), <code>tests/unit/brief-quality.test.ts</code></td></tr>
+            <tr><td>Model gateway behaviour: schema-constrained output, provider retries disabled, bounded repairs and deadlines, failover with required parameters</td><td><code>README.md</code></td></tr>
+            <tr><td>Production-readiness gaps by area</td><td><code>docs/technical-overview.html</code> §07</td></tr>
+            <tr><td>Demo scenarios, personas and expected proof as shipped in the app</td><td><code>apps/web/src/routes/walkthrough.tsx</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Deliverable E of the Strategic Deal Intelligence Assistant submission. Self-contained: no external assets, no network access, works offline. Companion documents: <a href="technical-overview.html">technical overview</a> (deliverable C) and <a href="../samples/index.html">sample run artifacts</a> (deliverable D).</p>
+  </footer>
+
+  <script>
+    (() => {
+      const sections = [
+        { id: 'value', label: 'Business value', start: 0, end: 90 },
+        { id: 'design', label: 'Design choices', start: 90, end: 270 },
+        { id: 'demo', label: 'Live demo · A authorized brief', start: 270, end: 390 },
+        { id: 'demo', label: 'Live demo · B approval routing', start: 390, end: 495 },
+        { id: 'demo', label: 'Live demo · C denied access', start: 495, end: 540 },
+        { id: 'demo', label: 'Live demo · D Slack impact', start: 540, end: 600 },
+        { id: 'evaluation', label: 'Evaluation results', start: 600, end: 720 },
+        { id: 'production', label: 'What breaks in production', start: 720, end: 840 },
+        { id: 'close', label: 'Close', start: 840, end: 900 }
+      ];
+      const bar = document.getElementById('clock');
+      const time = document.getElementById('clock-time');
+      const now = document.getElementById('clock-now');
+      const toggle = document.getElementById('clock-toggle');
+      const reset = document.getElementById('clock-reset');
+      if (!bar || !time || !now || !toggle || !reset) return;
+      bar.hidden = false;
+
+      let elapsed = 0;
+      let timer = null;
+
+      const format = (total) => {
+        const sign = total < 0 ? '-' : '';
+        const abs = Math.abs(Math.floor(total));
+        return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+      };
+
+      const render = () => {
+        time.textContent = format(elapsed);
+        bar.classList.toggle('over', elapsed > 900);
+        if (elapsed > 900) {
+          now.innerHTML = `<strong>Over by ${format(elapsed - 900)}.</strong> Stop and hand to questions.`;
+          return;
+        }
+        const current = sections.find((entry) => elapsed >= entry.start && elapsed < entry.end);
+        if (!current) {
+          now.innerHTML = 'Not started. You should be in: <strong>Business value</strong>.';
+          return;
+        }
+        now.innerHTML = `You should be in: <strong>${current.label}</strong> · ${format(current.end - elapsed)} left in it.`;
+      };
+
+      toggle.addEventListener('click', () => {
+        if (timer !== null) {
+          clearInterval(timer);
+          timer = null;
+          toggle.textContent = 'Resume';
+          return;
+        }
+        timer = setInterval(() => { elapsed += 1; render(); }, 1000);
+        toggle.textContent = 'Pause';
+      });
+
+      reset.addEventListener('click', () => {
+        if (timer !== null) clearInterval(timer);
+        timer = null;
+        elapsed = 0;
+        toggle.textContent = 'Start';
+        render();
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
