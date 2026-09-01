@@ -15,7 +15,7 @@ This pnpm monorepo builds a negotiation-preparation brief for a seller from synt
 
 ## Technical overview
 
-Open the self-contained [technical overview](docs/technical-overview.html) for the architecture, actual Drizzle ERD, request lifecycle, design rationale, security notes, Slack-fixture provenance, and production-readiness assessment. It has no external assets and works offline.
+Open the self-contained [technical overview](docs/technical-overview.html) for the architecture, agent roles, request lifecycle, design rationale, security notes, Slack-fixture provenance, and production-readiness assessment. It has no external assets and works offline.
 
 ## Prerequisites
 
@@ -106,10 +106,26 @@ pnpm build
 > [!WARNING]
 > **Stop any app server on port 3000 before running `pnpm test:e2e`.** Playwright is configured with `reuseExistingServer` outside CI, so if anything is already listening on `:3000` it silently tests against *that* server instead of starting its own with persona bootstrapping enabled. The symptom is misleading: every login-dependent test fails on `/login?returnTo=…` rather than reporting a port conflict. Check with `lsof -nP -iTCP:3000 -sTCP:LISTEN` and stop the process first.
 
-The deterministic retrieval evaluation is also available:
+Two evaluations run alongside the test suites. Both are wired into CI.
 
 ```bash
-pnpm tsx scripts/evaluate.ts retrieval
+pnpm eval:deterministic    # golden-retrieval recall and permission leakage
+pnpm eval:brief-quality    # brief-quality invariants over samples/*.json
+```
+
+`eval:brief-quality` measures whether a produced brief is usable by the reviewer who reads it:
+that no cited stakeholder is silently dropped, that citations span more than one source family,
+that the required sections are populated, that no internal identifier appears in user-facing copy,
+and that no warning contradicts the brief around it. The rules themselves are unit tested in
+`tests/unit/brief-quality.test.ts`, and `tests/unit/brief-grounding.test.ts` holds the same
+invariants against the real validation pass with no model and no database.
+
+A live-LLM tier runs the same invariants against a brief a real provider produces, travelling the
+full production workflow against a database it creates and drops. It spends real tokens, so it is
+opt-in and never part of CI:
+
+```bash
+BRIEF_QUALITY_LIVE=1 AI_PROVIDER=openrouter OPENROUTER_API_KEY=... pnpm eval:brief-quality:live
 ```
 
 ## Model providers and environment

@@ -1,4 +1,9 @@
-import type { DealWorkspaceView, RecommendedActionView, StakeholderView } from '@slacato/contracts';
+import type {
+  DealBriefView,
+  DealWorkspaceView,
+  RecommendedActionView,
+  StakeholderView
+} from '@slacato/contracts';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -21,6 +26,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { formatDealAmount } from '@/features/deals/deal-format';
+import { cn } from '@/lib/utils';
 
 const sectionOrder = [
   'dealSnapshot',
@@ -33,6 +39,64 @@ const sectionOrder = [
   'sourceEvidence',
   'confidenceAndReviewWarnings'
 ] as const;
+
+type EvidenceIndex = ReadonlyMap<string, DealWorkspaceView['evidence'][number]>;
+
+/** Maps an authorized evidence id to the footnote number it carries everywhere on this page. */
+type CitationNumbering = ReadonlyMap<string, number>;
+
+/**
+ * Lists the evidence ids a brief cites, in the order the page renders them.
+ *
+ * Stakeholder, action, and warning citations come before their section's own citation row because
+ * that is where they sit in the DOM, so reading the page top to bottom meets the numbers in
+ * ascending order.
+ */
+function briefCitationOrder(brief: DealBriefView): string[] {
+  return sectionOrder.flatMap((id) => [
+    ...(id === 'stakeholderMap'
+      ? brief.stakeholders.flatMap((stakeholder) => stakeholder.citationIds)
+      : []),
+    ...(id === 'recommendedNextActions'
+      ? brief.actions.flatMap((action) => action.citationIds)
+      : []),
+    ...(id === 'confidenceAndReviewWarnings'
+      ? brief.warnings.flatMap((warning) => warning.citationIds)
+      : []),
+    ...brief.sections[id].citationIds
+  ]);
+}
+
+/**
+ * Gives every cited record one number that means the same source everywhere on the page.
+ *
+ * Citations used to be rendered as their full label next to each claim, which buried the prose
+ * under a wall of near-identical chips. A footnote number only works if `[3]` is the same record
+ * in the generated brief, in the deterministic snapshot, and in the reference list, so the number
+ * is assigned once here in first-citation order over the briefs actually rendered — never from the
+ * deprecated `workspace.brief` alias, which would walk one of them twice.
+ */
+function buildCitationNumbering(
+  briefs: readonly DealBriefView[],
+  evidence: EvidenceIndex
+): CitationNumbering {
+  const numbering = new Map<string, number>();
+  for (const citationId of briefs.flatMap(briefCitationOrder)) {
+    if (numbering.has(citationId) || !evidence.has(citationId)) continue;
+    numbering.set(citationId, numbering.size + 1);
+  }
+  return numbering;
+}
+
+/** Resolves cited ids to the authorized evidence records still readable by this requester. */
+function resolveCitations(
+  citationIds: readonly string[],
+  evidence: EvidenceIndex
+): DealWorkspaceView['evidence'][number][] {
+  return citationIds
+    .map((id) => evidence.get(id))
+    .filter((item): item is DealWorkspaceView['evidence'][number] => item !== undefined);
+}
 
 /** Presents the source-backed deal brief, metrics, recommendations, and linked evidence to the seller. */
 export function DealBrief({
@@ -48,6 +112,12 @@ export function DealBrief({
 }>): React.JSX.Element {
   const { deal, sourceSnapshot, generatedOutput } = workspace;
   const evidence = new Map(workspace.evidence.map((item) => [item.id, item]));
+  const numbering = buildCitationNumbering(
+    generatedOutput === null
+      ? [sourceSnapshot.evidenceOverview]
+      : [generatedOutput.content, sourceSnapshot.evidenceOverview],
+    evidence
+  );
   return (
     <article data-deal-main className="min-w-0">
       <Button asChild variant="link" className="min-h-11 px-0">
@@ -113,9 +183,11 @@ export function DealBrief({
           <WorkspaceContent
             brief={sourceSnapshot.evidenceOverview}
             evidence={evidence}
+            numbering={numbering}
             selectedEvidenceId={selectedEvidenceId}
             onEvidence={onEvidence}
             sourceCues
+            carriesTourAnchor
           />
         </section>
       ) : (
@@ -140,8 +212,10 @@ export function DealBrief({
             <WorkspaceContent
               brief={generatedOutput.content}
               evidence={evidence}
+              numbering={numbering}
               selectedEvidenceId={selectedEvidenceId}
               onEvidence={onEvidence}
+              carriesTourAnchor
             />
           </section>
 
@@ -167,6 +241,7 @@ export function DealBrief({
               <WorkspaceContent
                 brief={sourceSnapshot.evidenceOverview}
                 evidence={evidence}
+                numbering={numbering}
                 selectedEvidenceId={selectedEvidenceId}
                 onEvidence={onEvidence}
                 sourceCues
@@ -180,23 +255,38 @@ export function DealBrief({
   );
 }
 
-/** Renders brief workspace sections with evidence citation controls. */
+/** Renders brief workspace sections with numbered evidence citation markers. */
 function WorkspaceContent({
   brief,
   evidence,
+  numbering,
   selectedEvidenceId,
   onEvidence,
   sourceCues = false,
-  qualifyHeadings = false
+  qualifyHeadings = false,
+  carriesTourAnchor = false
 }: Readonly<{
   brief: DealWorkspaceView['brief'];
-  evidence: ReadonlyMap<string, DealWorkspaceView['evidence'][number]>;
+  evidence: EvidenceIndex;
+  /** Page-wide footnote numbers, so the same record reads as the same `[n]` in every section. */
+  numbering: CitationNumbering;
   selectedEvidenceId: string | null;
   onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
   sourceCues?: boolean;
   /** Distinguishes these headings from an identically titled generated brief on the same page.
    *  Only meaningful when both views render together; alone it just corrupts the accessible name. */
   qualifyHeadings?: boolean;
+  /**
+   * Marks this as the brief a guided-tour step means when it names a section.
+   *
+   * Set on exactly one view per page: the generated brief when there is one, the deterministic
+   * snapshot when it is the only brief rendered. Both views emit the same nine section ids, so
+   * without this the tour's Source Evidence anchor matched twice and resolved by DOM order --
+   * always to the generated brief, even while the step's copy described the other one, which sits
+   * thousands of pixels lower inside a closed disclosure. Anchoring only the view a reader is
+   * actually looking at makes the step frame something real in both states.
+   */
+  carriesTourAnchor?: boolean;
 }>): React.JSX.Element {
   return (
     <div>
@@ -207,7 +297,13 @@ function WorkspaceContent({
         return (
           <section
             key={id}
-            data-tour={id === 'sourceEvidence' ? 'slack-evidence' : undefined}
+            data-tour={
+              id === 'sourceEvidence'
+                ? carriesTourAnchor
+                  ? 'slack-evidence'
+                  : 'snapshot-source-evidence'
+                : undefined
+            }
             className="border-b py-8"
             aria-labelledby={`${brief.status}-${id}`}
           >
@@ -228,11 +324,25 @@ function WorkspaceContent({
                 )}
               </div>
             </div>
+            {section.accountTeamUpdateImpact && (
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {describeAccountTeamUpdateImpact(
+                  accountTeamUpdateIds(section.citationIds, evidence)
+                )}
+              </p>
+            )}
             <div className="mt-4 grid gap-3 text-sm leading-6 sm:text-base">
               {section.paragraphs.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
               ))}
             </div>
+            {isEmptySection(section, id) && (
+              <p className="mt-4 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                {sourceCues
+                  ? 'No authorized records populate this section.'
+                  : 'This section is empty. The generated output carried nothing here, so treat it as unanswered rather than as nothing to review.'}
+              </p>
+            )}
             {section.items.length > 0 && (
               <ul className="mt-4 grid gap-2 pl-5 text-sm leading-6 marker:text-primary sm:text-base">
                 {section.items.map((item) => (
@@ -240,22 +350,105 @@ function WorkspaceContent({
                 ))}
               </ul>
             )}
-            {id === 'stakeholderMap' && <Stakeholders stakeholders={brief.stakeholders} />}
-            {id === 'recommendedNextActions' && (
-              <Actions actions={brief.actions} sourceCues={sourceCues} />
+            {id === 'stakeholderMap' && (
+              <Stakeholders
+                stakeholders={brief.stakeholders}
+                evidence={evidence}
+                numbering={numbering}
+                selectedEvidenceId={selectedEvidenceId}
+                onEvidence={onEvidence}
+              />
             )}
-            {id === 'confidenceAndReviewWarnings' && <Warnings warnings={brief.warnings} />}
-            <CitationControls
-              citationIds={section.citationIds}
-              evidence={evidence}
-              selectedEvidenceId={selectedEvidenceId}
-              onEvidence={onEvidence}
-            />
+            {id === 'recommendedNextActions' && (
+              <Actions
+                actions={brief.actions}
+                evidence={evidence}
+                numbering={numbering}
+                selectedEvidenceId={selectedEvidenceId}
+                onEvidence={onEvidence}
+                sourceCues={sourceCues}
+              />
+            )}
+            {id === 'confidenceAndReviewWarnings' && (
+              <Warnings
+                warnings={brief.warnings}
+                evidence={evidence}
+                numbering={numbering}
+                selectedEvidenceId={selectedEvidenceId}
+                onEvidence={onEvidence}
+              />
+            )}
+            {id === 'sourceEvidence' && (
+              <CitationReferenceList
+                citationIds={briefCitationOrder(brief)}
+                numbering={numbering}
+                evidence={evidence}
+                selectedEvidenceId={selectedEvidenceId}
+                onEvidence={onEvidence}
+              />
+            )}
+            {/* Source Evidence closes with the numbered reference list above, which is the same
+                citations spelled out in full; repeating them as bare markers says nothing more. */}
+            {id !== 'sourceEvidence' && (
+              <SectionCitations
+                citationIds={section.citationIds}
+                evidence={evidence}
+                numbering={numbering}
+                selectedEvidenceId={selectedEvidenceId}
+                onEvidence={onEvidence}
+              />
+            )}
           </section>
         );
       })}
     </div>
   );
+}
+
+/** Names the authorized account-team updates behind a set of citations, in the order they are cited. */
+function accountTeamUpdateIds(citationIds: readonly string[], evidence: EvidenceIndex): string[] {
+  return citationIds
+    .map((citationId) => evidence.get(citationId))
+    .filter((item) => item?.sourceType === 'slack')
+    .map((item) => item?.stableId ?? '')
+    .filter((stableId) => stableId.length > 0);
+}
+
+/**
+ * Explains the "Account-team update impact" badge in place.
+ *
+ * The badge answers "did the generated Slack-style chatter move this?" but not "which chatter?",
+ * which is the only form a reviewer can check. Naming the cited update ids turns the badge into a
+ * claim the reader can verify against the evidence list a few lines below.
+ */
+function describeAccountTeamUpdateImpact(updateIds: readonly string[]): string {
+  if (updateIds.length === 0)
+    return 'Badged because this section cites a generated account-team update the requester is authorized to read.';
+  const single = updateIds.length === 1;
+  const label = single ? 'account-team update' : 'account-team updates';
+  const consequence = single ? 'that citation is' : 'those citations are';
+  return `Badged because this section cites ${label} ${updateIds.join(', ')}. Without the requester's Slack grant ${consequence} never retrieved and the badge is absent.`;
+}
+
+/** Appends the cited update ids to an inline impact label, or nothing when none are resolvable. */
+function citedUpdateSuffix(citationIds: readonly string[], evidence: EvidenceIndex): string {
+  const updateIds = accountTeamUpdateIds(citationIds, evidence);
+  return updateIds.length === 0 ? '' : ` \u00b7 ${updateIds.join(', ')}`;
+}
+
+/**
+ * Reports whether a section would render as a bare heading with nothing beneath it.
+ *
+ * The stakeholder and next-action sections carry their own empty states, and every other section
+ * that always emits a paragraph is unaffected. This covers the rest, so an empty section reads as
+ * a gap the reviewer must chase rather than as blank space they can skip.
+ */
+function isEmptySection(
+  section: DealWorkspaceView['brief']['sections'][keyof DealWorkspaceView['brief']['sections']],
+  id: (typeof sectionOrder)[number]
+): boolean {
+  if (id === 'stakeholderMap' || id === 'recommendedNextActions') return false;
+  return section.paragraphs.length === 0 && section.items.length === 0;
 }
 
 /** Shows one labeled deal metric in the brief summary. */
@@ -275,46 +468,184 @@ function Metric({
   );
 }
 
-/** Lets the seller open the authorized evidence cited by a brief section. */
-function CitationControls({
-  citationIds,
-  evidence,
+/**
+ * Opens one cited record from a compact numbered marker.
+ *
+ * The number is only a handle: the accessible name and the hover title still carry the full,
+ * verbatim `citationLabel`, which is the one citation format this product shows, and the label
+ * itself is spelled out in the Source Evidence reference list every marker points at.
+ */
+function CitationMarker({
+  citation,
+  number,
   selectedEvidenceId,
   onEvidence
 }: Readonly<{
-  citationIds: readonly string[];
-  evidence: ReadonlyMap<string, DealWorkspaceView['evidence'][number]>;
+  citation: DealWorkspaceView['evidence'][number];
+  number: number | undefined;
   selectedEvidenceId: string | null;
   onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
+}>): React.JSX.Element {
+  const selected = selectedEvidenceId === citation.id;
+  return (
+    <Button
+      type="button"
+      size="xs"
+      variant={selected ? 'default' : 'outline'}
+      className="h-7 min-w-9 px-1.5 font-medium tabular-nums"
+      title={citation.citationLabel}
+      aria-label={`Open evidence: ${citation.citationLabel}`}
+      aria-pressed={selected}
+      onClick={(event) => onEvidence(citation.id, event.currentTarget)}
+    >
+      {`[${number ?? '?'}]`}
+    </Button>
+  );
+}
+
+/** Renders the numbered markers that tie one piece of content back to the records behind it. */
+function CitationMarkers({
+  citationIds,
+  evidence,
+  numbering,
+  selectedEvidenceId,
+  onEvidence,
+  label,
+  className
+}: Readonly<{
+  citationIds: readonly string[];
+  evidence: EvidenceIndex;
+  numbering: CitationNumbering;
+  selectedEvidenceId: string | null;
+  onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
+  /** Names what these citations support, so a bare `[3]` is never the whole accessible context. */
+  label: string;
+  className?: string;
 }>): React.JSX.Element | null {
-  const citations = citationIds
-    .map((id) => evidence.get(id))
-    .filter((item): item is DealWorkspaceView['evidence'][number] => item !== undefined);
+  // Ascending order, so a row of footnotes reads as a range rather than as the arbitrary order the
+  // generator happened to attach them in.
+  const citations = resolveCitations(citationIds, evidence).sort(
+    (first, second) => (numbering.get(first.id) ?? 0) - (numbering.get(second.id) ?? 0)
+  );
   if (citations.length === 0) return null;
   return (
-    <ul data-tour="citations" className="mt-5 flex flex-wrap gap-2" aria-label="Section citations">
+    <ul className={cn('flex flex-wrap items-center gap-1', className)} aria-label={label}>
       {citations.map((citation) => (
-        <li key={citation.id} className="max-w-full">
-          <Button
-            type="button"
-            variant={selectedEvidenceId === citation.id ? 'secondary' : 'outline'}
-            className="h-auto min-h-11 max-w-full justify-start whitespace-normal break-words text-left text-xs"
-            aria-label={`Open evidence: ${citation.citationLabel}`}
-            aria-pressed={selectedEvidenceId === citation.id}
-            onClick={(event) => onEvidence(citation.id, event.currentTarget)}
-          >
-            {citation.citationLabel}
-          </Button>
+        <li key={citation.id}>
+          <CitationMarker
+            citation={citation}
+            number={numbering.get(citation.id)}
+            selectedEvidenceId={selectedEvidenceId}
+            onEvidence={onEvidence}
+          />
         </li>
       ))}
     </ul>
   );
 }
 
+/**
+ * Closes a section with the numbered sources behind it.
+ *
+ * This row replaced a wrapping wall of full-label buttons that pushed the prose off the screen and
+ * repeated the same long strings in every section. It keeps the guided tour's `citations` anchor,
+ * now framing a labeled row rather than an unexplained pile of chips.
+ */
+function SectionCitations({
+  citationIds,
+  evidence,
+  numbering,
+  selectedEvidenceId,
+  onEvidence
+}: Readonly<{
+  citationIds: readonly string[];
+  evidence: EvidenceIndex;
+  numbering: CitationNumbering;
+  selectedEvidenceId: string | null;
+  onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
+}>): React.JSX.Element | null {
+  if (resolveCitations(citationIds, evidence).length === 0) return null;
+  return (
+    <div
+      data-tour="citations"
+      className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 border-t pt-4"
+    >
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Sources
+      </span>
+      <CitationMarkers
+        citationIds={citationIds}
+        evidence={evidence}
+        numbering={numbering}
+        selectedEvidenceId={selectedEvidenceId}
+        onEvidence={onEvidence}
+        label="Section citations"
+      />
+    </div>
+  );
+}
+
+/**
+ * Spells out every citation this brief makes, in number order, with its full label.
+ *
+ * This is where the labels moved to when the markers became numbers, so Source Evidence is the
+ * complete, checkable list every `[n]` in this brief resolves against. The numbers are the page's,
+ * so the list can legitimately skip one the other brief on the page cites and this one does not.
+ */
+function CitationReferenceList({
+  citationIds,
+  numbering,
+  evidence,
+  selectedEvidenceId,
+  onEvidence
+}: Readonly<{
+  citationIds: readonly string[];
+  numbering: CitationNumbering;
+  evidence: EvidenceIndex;
+  selectedEvidenceId: string | null;
+  onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
+}>): React.JSX.Element | null {
+  const entries = [...new Set(citationIds)]
+    .map((id) => ({ number: numbering.get(id), citation: evidence.get(id) }))
+    .filter(
+      (entry): entry is { number: number; citation: DealWorkspaceView['evidence'][number] } =>
+        entry.citation !== undefined && entry.number !== undefined
+    )
+    .sort((first, second) => first.number - second.number);
+  if (entries.length === 0) return null;
+  return (
+    <ol className="mt-5 grid gap-2" aria-label="Numbered source evidence">
+      {entries.map(({ number, citation }) => (
+        <li key={citation.id} className="flex min-w-0 items-start gap-3">
+          <CitationMarker
+            citation={citation}
+            number={number}
+            selectedEvidenceId={selectedEvidenceId}
+            onEvidence={onEvidence}
+          />
+          <span className="min-w-0 break-words pt-1 text-sm leading-6 text-muted-foreground">
+            {citation.citationLabel}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /** Presents authorized stakeholder details in layouts suited to desktop and mobile screens. */
 function Stakeholders({
-  stakeholders
-}: Readonly<{ stakeholders: readonly StakeholderView[] }>): React.JSX.Element {
+  stakeholders,
+  evidence,
+  numbering,
+  selectedEvidenceId,
+  onEvidence
+}: Readonly<{
+  stakeholders: readonly StakeholderView[];
+  evidence: EvidenceIndex;
+  numbering: CitationNumbering;
+  selectedEvidenceId: string | null;
+  onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
+}>): React.JSX.Element {
   if (stakeholders.length === 0)
     return (
       <p className="mt-5 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -344,6 +675,15 @@ function Stakeholders({
                   <span className="block text-xs text-muted-foreground">
                     {stakeholder.title ?? 'Title not recorded'}
                   </span>
+                  <CitationMarkers
+                    citationIds={stakeholder.citationIds}
+                    evidence={evidence}
+                    numbering={numbering}
+                    selectedEvidenceId={selectedEvidenceId}
+                    onEvidence={onEvidence}
+                    label={`Citations for ${stakeholder.name}`}
+                    className="mt-2"
+                  />
                 </TableCell>
                 <TableCell>{stakeholder.role}</TableCell>
                 <TableCell>{stakeholder.influence}</TableCell>
@@ -363,6 +703,15 @@ function Stakeholders({
         {stakeholders.map((stakeholder) => (
           <li key={stakeholder.name} className="rounded-lg border p-4">
             <strong>{stakeholder.name}</strong>
+            <CitationMarkers
+              citationIds={stakeholder.citationIds}
+              evidence={evidence}
+              numbering={numbering}
+              selectedEvidenceId={selectedEvidenceId}
+              onEvidence={onEvidence}
+              label={`Citations for ${stakeholder.name}`}
+              className="mt-2"
+            />
             <dl className="mt-3 grid gap-2 text-sm">
               <Fact label="Title" value={stakeholder.title ?? 'Not recorded'} />
               <Fact label="Role" value={stakeholder.role} />
@@ -381,9 +730,17 @@ function Stakeholders({
 /** Presents source-backed recommended actions in layouts suited to desktop and mobile screens. */
 function Actions({
   actions,
+  evidence,
+  numbering,
+  selectedEvidenceId,
+  onEvidence,
   sourceCues = false
 }: Readonly<{
   actions: readonly RecommendedActionView[];
+  evidence: EvidenceIndex;
+  numbering: CitationNumbering;
+  selectedEvidenceId: string | null;
+  onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
   sourceCues?: boolean;
 }>): React.JSX.Element {
   if (actions.length === 0)
@@ -416,9 +773,18 @@ function Actions({
                   {action.action}
                   {action.accountTeamUpdateImpact && (
                     <span className="mt-1 block text-xs font-medium text-attention-foreground">
-                      Account-team update impact
+                      Account-team update impact{citedUpdateSuffix(action.citationIds, evidence)}
                     </span>
                   )}
+                  <CitationMarkers
+                    citationIds={action.citationIds}
+                    evidence={evidence}
+                    numbering={numbering}
+                    selectedEvidenceId={selectedEvidenceId}
+                    onEvidence={onEvidence}
+                    label="Action citations"
+                    className="mt-2"
+                  />
                 </TableCell>
                 <TableCell>{action.owner ?? 'Not assigned'}</TableCell>
                 <TableCell>{action.priority}</TableCell>
@@ -435,9 +801,18 @@ function Actions({
             <strong>{action.action}</strong>
             {action.accountTeamUpdateImpact && (
               <p className="mt-2 text-xs font-semibold text-attention-foreground">
-                Account-team update impact
+                Account-team update impact{citedUpdateSuffix(action.citationIds, evidence)}
               </p>
             )}
+            <CitationMarkers
+              citationIds={action.citationIds}
+              evidence={evidence}
+              numbering={numbering}
+              selectedEvidenceId={selectedEvidenceId}
+              onEvidence={onEvidence}
+              label="Action citations"
+              className="mt-2"
+            />
             <dl className="mt-3 grid gap-2 text-sm">
               <Fact label="Owner" value={action.owner ?? 'Not assigned'} />
               <Fact label="Priority" value={action.priority} />
@@ -453,8 +828,18 @@ function Actions({
 
 /** Highlights confidence and review warnings attached to the brief. */
 function Warnings({
-  warnings
-}: Readonly<{ warnings: DealWorkspaceView['brief']['warnings'] }>): React.JSX.Element | null {
+  warnings,
+  evidence,
+  numbering,
+  selectedEvidenceId,
+  onEvidence
+}: Readonly<{
+  warnings: DealWorkspaceView['brief']['warnings'];
+  evidence: EvidenceIndex;
+  numbering: CitationNumbering;
+  selectedEvidenceId: string | null;
+  onEvidence: (evidenceId: string, trigger: HTMLButtonElement) => void;
+}>): React.JSX.Element | null {
   if (warnings.length === 0) return null;
   return (
     <ul className="mt-5 grid gap-3">
@@ -472,9 +857,18 @@ function Warnings({
             <p className="mt-1 leading-6">{warning.message}</p>
             {warning.accountTeamUpdateImpact && (
               <p className="mt-2 text-xs font-semibold text-attention-foreground">
-                Account-team update impact
+                Account-team update impact{citedUpdateSuffix(warning.citationIds, evidence)}
               </p>
             )}
+            <CitationMarkers
+              citationIds={warning.citationIds}
+              evidence={evidence}
+              numbering={numbering}
+              selectedEvidenceId={selectedEvidenceId}
+              onEvidence={onEvidence}
+              label="Warning citations"
+              className="mt-2"
+            />
           </div>
         </li>
       ))}

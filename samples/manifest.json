@@ -1,6 +1,6 @@
 {
   "deliverable": "Deliverable D: Sample run artifacts",
-  "generatedAt": "2026-08-31T06:00:14.428Z",
+  "generatedAt": "2026-08-31T19:39:31.124Z",
   "database": "slacato_samples",
   "liveLlmVerified": true,
   "scenarios": {
@@ -14,22 +14,50 @@
         "name": "Northstar Foods Cooperative - Global Access Renewal"
       },
       "provenance": {
-        "runId": "run_fd58beab2fab37d7595481091a5fe84f9ed616c11a26b8ed312ceb9b03866c0a",
+        "runId": "run_4f76c467976b09e19507103a23b5ad689b241ab39c3cc0e1b1b1f488bc460a89",
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
         "embeddingModel": "openai/text-embedding-3-small",
         "tokenUsage": {
           "calls": 5,
-          "inputTokens": 25266,
-          "outputTokens": 7093,
-          "totalTokens": 32359
+          "inputTokens": 23513,
+          "outputTokens": 8896,
+          "totalTokens": 32409
         },
-        "runStartedAt": "2026-08-31T05:40:53.065Z",
-        "runCompletedAt": "2026-08-31T05:41:16.197Z"
+        "runStartedAt": "2026-08-31T19:30:46.599Z",
+        "runCompletedAt": "2026-08-31T19:31:19.173Z"
       },
       "files": [
         "normal-opportunity-brief.json",
         "normal-opportunity-brief.txt"
+      ]
+    },
+    "authorizedExpansionOpportunity": {
+      "persona": {
+        "userId": "USR-5002",
+        "name": "Owen Patel"
+      },
+      "opportunity": {
+        "id": "OPP-1002",
+        "name": "Meridian Appliances Group - Factory Connectivity Expansion"
+      },
+      "provenance": {
+        "runId": "run_768cb55a96a0d13ce8df3e42a818082a97227b72521bc055308990635117fb82",
+        "provider": "openrouter",
+        "generationModel": "google/gemini-3.5-flash-lite",
+        "embeddingModel": "openai/text-embedding-3-small",
+        "tokenUsage": {
+          "calls": 5,
+          "inputTokens": 22757,
+          "outputTokens": 8593,
+          "totalTokens": 31350
+        },
+        "runStartedAt": "2026-08-31T19:31:29.330Z",
+        "runCompletedAt": "2026-08-31T19:31:58.352Z"
+      },
+      "files": [
+        "expansion-opportunity-brief.json",
+        "expansion-opportunity-brief.txt"
       ]
     },
     "restrictedApprovalSensitiveOpportunity": {
@@ -42,18 +70,24 @@
         "name": "Eclipse BioMaterials Ltd - Restricted Renewal and Data Protection"
       },
       "provenance": {
-        "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
+        "runId": "run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668",
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
         "embeddingModel": "openai/text-embedding-3-small",
         "tokenUsage": {
           "calls": 5,
-          "inputTokens": 25255,
-          "outputTokens": 8730,
-          "totalTokens": 33985
+          "inputTokens": 21934,
+          "outputTokens": 10413,
+          "totalTokens": 32347
         },
-        "runStartedAt": "2026-08-31T05:58:48.644Z",
-        "runCompletedAt": "2026-08-31T05:59:22.724Z"
+        "runStartedAt": "2026-08-31T19:35:43.781Z",
+        "runCompletedAt": "2026-08-31T19:36:15.032Z"
+      },
+      "approvalQuorum": {
+        "requirements": 4,
+        "decisions": 4,
+        "distinctApprovers": 4,
+        "exportRefusedBeforeQuorum": true
       },
       "files": [
         "restricted-opportunity-brief.json",
@@ -80,21 +114,33 @@
         "denied-access.json"
       ]
     },
+    "slackEvidenceImpact": {
+      "description": "Required demo scenario: how the generated Slack-style updates affect the brief, evidenced by an authorization-scope A/B pair and the Slack citations the finalized briefs carry.",
+      "runsUsed": 4,
+      "withSlackRunId": "run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668",
+      "withoutSlackRunId": "run_ea1c3ed1a0de789547e8adf408f7f1b340df41b65e83dd669e15ab381a4d7e23",
+      "finding": "On OPP-1003 the authorized Slack updates reach the finalized brief and shape it: 3 claim(s) outside Source Evidence cite a Slack update, and the reviewer-facing workspace marks 4 section(s) as account-team-update impacted. Revoking only the requester's slack read grant removes every Slack entry from retrieval and leaves 0 such claim(s).",
+      "files": [
+        "slack-impact.html",
+        "slack-impact-comparison.json",
+        "slack-impact-comparison.md"
+      ]
+    },
     "traceAndLogExamples": {
-      "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
+      "runId": "run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668",
       "provenance": {
-        "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
+        "runId": "run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668",
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
         "embeddingModel": "openai/text-embedding-3-small",
         "tokenUsage": {
           "calls": 5,
-          "inputTokens": 25255,
-          "outputTokens": 8730,
-          "totalTokens": 33985
+          "inputTokens": 21934,
+          "outputTokens": 10413,
+          "totalTokens": 32347
         },
-        "runStartedAt": "2026-08-31T05:58:48.644Z",
-        "runCompletedAt": "2026-08-31T05:59:22.724Z"
+        "runStartedAt": "2026-08-31T19:35:43.781Z",
+        "runCompletedAt": "2026-08-31T19:36:15.032Z"
       },
       "requiredSpanKinds": [
         "model_call",
@@ -109,40 +155,20 @@
         "restricted-run-trace.json",
         "restricted-run-events.json"
       ]
-    },
-    "slackImpactDemonstration": {
-      "description": "Mandatory Data-Generation Subtask demonstration: with/without Slack authorization-scope comparison for OPP-1001/USR-5001, plus a secondary OPP-1002/USR-5002 check and a cross-reference to the OPP-1003 restricted run above.",
-      "addedAt": "2026-08-31T06:30:00.000Z",
-      "persona": {
-        "userId": "USR-5001",
-        "name": "Maya Levin"
-      },
-      "opportunity": {
-        "id": "OPP-1001",
-        "name": "Northstar Foods Cooperative - Global Access Renewal"
-      },
-      "runsUsed": 4,
-      "withoutSlackMechanism": "Scoped can_read=false revocation of permission_grants row 'grant:USR-5001:ACC-2001:slack' in the slacato_samples database, restored after the run. Not a fixture edit.",
-      "provenance": {
-        "withSlackRunId": "run_a12bd817a6d8a3746358cc958a7c66af329782cf1ecb5273402d7e8bfd660103",
-        "withoutSlackRunId": "run_1ed98d7135fdf21c62052f9bcf78582d8ffd7f8992d218df0493cd73e390dbd4",
-        "provider": "openrouter",
-        "generationModel": "google/gemini-3.5-flash-lite",
-        "embeddingModel": "openai/text-embedding-3-small"
-      },
-      "finding": "Slack evidence was retrieved, authorized, ranked competitively, and included in full in every specialist's context on every attempt, and was extracted into one validated, cited claim by the Conversation Intelligence Agent on one attempt -- but no live run produced a finalized brief with a Slack citation, because the Negotiation Strategy Agent re-synthesizes final brief sections from the shared evidence pool rather than forwarding upstream specialist claims. See slack-impact-comparison.json for the full stage-by-stage diagnosis.",
-      "files": [
-        "slack-impact-comparison.json",
-        "slack-impact-comparison.md"
-      ]
     }
   },
   "reproduction": {
-    "command": "pnpm tsx scripts/export-sample-artifacts.ts <normal-run-id> <restricted-run-id> [api-base]",
+    "commands": [
+      "pnpm tsx scripts/generate-sample-runs.ts --api=<api-base> --approval-capture=samples/restricted-approval-flow.json OPP-1003",
+      "pnpm tsx scripts/generate-sample-runs.ts --api=<api-base> OPP-1001 OPP-1002",
+      "pnpm tsx scripts/slack-impact-comparison.ts <with-slack-run-id> <without-slack-run-id>",
+      "pnpm tsx scripts/render-slack-impact-visual.ts",
+      "pnpm tsx scripts/export-sample-artifacts.ts <normal-run-id> <expansion-run-id> <restricted-run-id> [api-base]"
+    ],
     "prerequisites": [
-      "Source .env and override DATABASE_URL to the dedicated slacato_samples database.",
-      "Run the API against the same database for the fresh denied-access HTTP capture.",
-      "Both supplied runs must already be finalized live-provider runs."
+      "Source .env and override DATABASE_URL to the dedicated slacato_samples database, then migrate, ingest, and index it.",
+      "Run the API and the worker against that same database with a live AI_PROVIDER.",
+      "The three supplied runs must already be finalized live-provider runs, and the approval capture and Slack comparison must have been written first."
     ]
   }
 }

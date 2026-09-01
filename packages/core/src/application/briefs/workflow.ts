@@ -28,6 +28,8 @@ import {
 } from '../../domain/shared/errors.js';
 import type { RunId } from '../../domain/shared/ids.js';
 import type { AgentContext, StrategyArtifacts } from '../agents/contracts.js';
+import { withoutSelfContradictoryWarnings } from '../agents/validation.js';
+import type { OpaqueDenialRecorder } from '../deals/contracts.js';
 import type { WorkflowCommand } from '../workflow/command-queue.js';
 import type {
   RunLifecycleStore,
@@ -49,7 +51,7 @@ export type DealBriefRetrievalContext = Readonly<{
   evidence?: AgentContext['evidence'];
 }>;
 
-export interface DealBriefAccessControl {
+export interface DealBriefAccessControl extends OpaqueDenialRecorder {
   authorizeStart(
     input: Readonly<{ requestedBy: string; opportunityId: string }>
   ): Promise<Readonly<{ allowed: false }> | Readonly<{ allowed: true; accountId: string }>>;
@@ -65,7 +67,6 @@ export interface DealBriefAccessControl {
       payload: DealBrief;
     }>
   ): Promise<ApprovalRequirement>;
-  recordOpaqueDenial(event: Readonly<Record<string, unknown>>): Promise<void>;
 }
 export interface DealBriefWorkflowServices {
   retrieve(run: WorkflowRun, invocationId: string): Promise<DealBriefRetrievalContext>;
@@ -286,7 +287,13 @@ function mergeSpecialistReviewWarnings(
   brief: DealBrief,
   artifacts: readonly Readonly<{ reviewWarnings?: readonly ReviewWarning[] }>[]
 ): DealBrief {
-  const specialistWarnings = artifacts.flatMap((artifact) => artifact.reviewWarnings ?? []);
+  // Specialist warnings reach the reviewer without passing through validateDealBrief, so the
+  // self-contradiction guard has to be applied on this path too: a specialist that reports a
+  // person absent must not sit beside a brief presenting that same person as a cited stakeholder.
+  const specialistWarnings = withoutSelfContradictoryWarnings(
+    artifacts.flatMap((artifact) => artifact.reviewWarnings ?? []),
+    brief.stakeholderMap.stakeholders.map((stakeholder) => stakeholder.name)
+  );
   const validClaimIds = retainedClaimIds(brief);
   const specialistKeys = new Set(
     specialistWarnings.map(
@@ -400,6 +407,28 @@ export function assertApprovableBrief(value: unknown): DealBrief {
   return parsed;
 }
 
+/**
+ * Reports whether a start request produced a run or attached to one that already existed.
+ *
+ * `runs_one_active_opportunity_uq` permits one active run per opportunity, so a second start is
+ * answered with the run already in flight. That is the correct concurrency behaviour, but silently
+ * returning it makes the product claim it started work it did not start - and because
+ * `awaiting_approval` is a resting state, the reused run can be minutes old and already finished.
+ * Naming the outcome lets the caller say which of the three things actually happened.
+ */
+export type StartDealBriefOutcome = Readonly<{
+  /** Identifies the run the caller should now follow. */
+  runId: RunId;
+  /**
+   * States how the caller arrived at that run.
+   *
+   * `created` started fresh work. `replayed` re-answered this caller's own identical request.
+   * `joined` attached to an unrelated active run for the same opportunity - the only case where
+   * the caller asked for new work and did not get it.
+   */
+  disposition: 'created' | 'replayed' | 'joined';
+}>;
+
 /** Starts authorized deal-brief runs while enforcing idempotency and active-run reuse. */
 export class StartDealBrief {
   /** Provides persistence, access control, and the selected generation model. */
@@ -408,8 +437,8 @@ export class StartDealBrief {
     private readonly access: DealBriefAccessControl,
     private readonly model: Readonly<{ provider: string; model: string }>
   ) {}
-  /** Authorizes and starts a deal-brief run, returning an existing run when appropriate. */
-  public async execute(input: StartDealBriefCommand): Promise<RunId> {
+  /** Authorizes and starts a deal-brief run, reporting whether an existing run was reused. */
+  public async execute(input: StartDealBriefCommand): Promise<StartDealBriefOutcome> {
     if (input.idempotencyKey.trim().length === 0)
       throw new DomainValidationError('Idempotency key is required');
     const runId = stableId(
@@ -423,11 +452,7 @@ export class StartDealBrief {
       opportunityId: input.opportunityId
     });
     if (!authorization.allowed) {
-      await this.access.recordOpaqueDenial({
-        type: 'deal_brief_start_denied',
-        actorId: input.requestedBy,
-        reason: 'forbidden'
-      });
+      await this.access.recordOpaqueDenial({ actorId: input.requestedBy, reason: 'forbidden' });
       throw new AuthorizationDeniedError('DealBrief start denied');
     }
     const requestHash = hashApprovalPayload({
@@ -446,12 +471,16 @@ export class StartDealBrief {
     if (replay !== undefined) {
       if (replay.startRequestHash !== requestHash)
         throw new DomainConflictError('Start idempotency key is bound to a different command');
-      return replay.id;
+      return { runId: replay.id, disposition: 'replayed' };
     }
     const active = await this.store.findActiveRun(scope);
-    if (active !== undefined) return active.id;
+    if (active !== undefined) return { runId: active.id, disposition: 'joined' };
+    // The store resolves the same conflict itself, under an advisory lock, by returning the run
+    // already active for the opportunity instead of raising. So the branch taken here says nothing
+    // about what happened - only the identity of the run that came back does. A run whose id is not
+    // the one this request would have minted is a run this request did not start.
     try {
-      return (
+      const started = (
         await this.store.startRun({
           id: runId,
           opportunityId: scope.opportunityId,
@@ -465,11 +494,12 @@ export class StartDealBrief {
           budget: { scope: runId, maxCalls: 24, deadlineMs: 600_000 }
         })
       ).id;
+      return { runId: started, disposition: started === runId ? 'created' : 'joined' };
     } catch (error) {
       if (!(error instanceof DomainConflictError)) throw error;
       const concurrent = await this.store.findActiveRun(scope);
       if (concurrent === undefined) throw error;
-      return concurrent.id;
+      return { runId: concurrent.id, disposition: 'joined' };
     }
   }
 }
@@ -490,11 +520,7 @@ export class RegenerateDealBrief {
       opportunityId: run.opportunityId
     });
     if (!authorized.allowed || run.requestedBy !== input.requestedBy) {
-      await this.access.recordOpaqueDenial({
-        type: 'deal_brief_regeneration_denied',
-        actorId: input.requestedBy,
-        reason: 'forbidden'
-      });
+      await this.access.recordOpaqueDenial({ actorId: input.requestedBy, reason: 'forbidden' });
       throw new AuthorizationDeniedError('DealBrief regeneration denied');
     }
     const requestHash = hashApprovalPayload({
@@ -539,11 +565,7 @@ export class CancelDealBrief {
       opportunityId: run.opportunityId
     });
     if (!authorization.allowed || run.requestedBy !== input.requestedBy) {
-      await this.access.recordOpaqueDenial({
-        type: 'deal_brief_cancellation_denied',
-        actorId: input.requestedBy,
-        reason: 'forbidden'
-      });
+      await this.access.recordOpaqueDenial({ actorId: input.requestedBy, reason: 'forbidden' });
       throw new AuthorizationDeniedError('DealBrief cancellation denied');
     }
     if (['completed', 'rejected', 'failed', 'cancelled'].includes(run.status))

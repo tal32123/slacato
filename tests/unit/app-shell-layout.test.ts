@@ -25,8 +25,24 @@ vi.mock('@/api/session', () => ({
   selectPersonaSession: () => Promise.resolve(),
   sessionRuntime: {
     finishTransition: () => undefined,
-    registerOverlayCloser: () => () => undefined
+    registerOverlayCloser: () => () => undefined,
+    generation: 0,
+    accepts: () => true,
+    reconcileAuthoritativeSession: () => Promise.resolve()
   },
+  queryKeys: {
+    session: ['session'],
+    personas: ['personas'],
+    readiness: ['readiness'],
+    csrf: (version: string) => ['csrf', version],
+    scoped: (version: string, resource: string) => ['scoped', version, resource]
+  },
+  SessionInvalidatedError: class SessionInvalidatedError extends Error {},
+  sessionQueryOptions: () => ({
+    queryKey: ['session'],
+    queryFn: () => Promise.resolve({ authenticated: false }),
+    retry: false
+  }),
   readinessQueryOptions: () => ({
     queryKey: ['readiness'],
     queryFn: () => Promise.resolve(READY_HEALTH),

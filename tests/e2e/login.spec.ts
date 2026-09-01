@@ -63,16 +63,33 @@ test('login and denial routes remain usable on a narrow mobile viewport', async 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
   await page.goto('/unauthorized');
-  await expect(page.getByRole('heading', { name: 'Sign in to continue' })).toBeVisible();
+  await expect(page).toHaveURL('/login?returnTo=%2Fdeals');
+  await expect(page.getByRole('heading', { name: 'Choose your demo persona' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
   await page.goto('/forbidden');
   await expect(page.getByRole('heading', { name: 'This workspace is not available' })).toBeVisible();
 });
 
 test('preserves a safe intended destination through the unauthenticated route', async ({ page }) => {
-  await page.goto('/');
-  await expect(page).toHaveURL('/unauthorized?returnTo=%2F');
-  await page.getByRole('link', { name: 'Choose a persona' }).click();
-  await expect(page).toHaveURL('/login?returnTo=%2F');
+  await page.goto('/diagnostics');
+  await expect(page).toHaveURL('/login?returnTo=%2Fdiagnostics');
+  await expect(page.getByRole('heading', { name: 'Choose your demo persona' })).toBeVisible();
+  await page.getByRole('button', { name: /Continue as Maya Levin/ }).click();
+  await expect(page).toHaveURL('/diagnostics');
+});
+
+test('never carries a hostile returnTo off the application origin', async ({ page }) => {
+  for (const hostile of ['//evil.com', 'https://evil.com', 'http://evil.com/deals']) {
+    await page.goto(`/unauthorized?returnTo=${encodeURIComponent(hostile)}`);
+    expect(new URL(page.url()).origin).toBe('http://127.0.0.1:4173');
+    expect(page.url()).not.toContain('evil.com');
+    await expect(page).toHaveURL('/login?returnTo=%2Fdeals');
+  }
+
+  await page.getByRole('button', { name: /Continue as Maya Levin/ }).click();
+  await expect(page).toHaveURL('/deals');
+  expect(new URL(page.url()).origin).toBe('http://127.0.0.1:4173');
 });
 
 test('retries canonical persona loading after a recoverable API failure', async ({ page }) => {

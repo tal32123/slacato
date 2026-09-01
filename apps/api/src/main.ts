@@ -7,6 +7,7 @@ import {
   DecideApproval,
   type ReadinessDependencies,
   RegenerateDealBrief,
+  ResetSandbox,
   StartDealBrief
 } from '@slacato/core';
 import {
@@ -24,11 +25,13 @@ import {
   PostgresEventStore,
   PostgresRunEventQuery,
   PostgresRunQueryRepository,
+  PostgresSandboxResetStore,
   PostgresSessionRegistry,
   PostgresWorkflowStore,
   resolveConfiguredProvider,
   resolveProviderModels,
-  resolveProviderRuntimeFacts
+  resolveProviderRuntimeFacts,
+  resolveSandboxResetPolicy
 } from '@slacato/infrastructure';
 import type { ErrorRequestHandler } from 'express';
 import { json } from 'express';
@@ -113,6 +116,18 @@ export async function createApiApplication(
   const dealQueries = new PostgresDealQueryRepository(database);
   const runQueries = new PostgresRunQueryRepository(database);
   const approvalQueries = new PostgresApprovalQueryRepository(database);
+  // A destructive capability is composed in only where configuration explicitly designated this
+  // database a sandbox. Everywhere else the module is never built, so the routes never exist and
+  // the interface has no capability to discover.
+  const sandboxPolicy = resolveSandboxResetPolicy(env);
+  const sandboxOptions = sandboxPolicy.enabled
+    ? {
+        resetSandbox: new ResetSandbox(
+          new PostgresSandboxResetStore(database, sandboxPolicy.database),
+          workflowAccess
+        )
+      }
+    : undefined;
   const app = await NestFactory.create<NestExpressApplication>(
     AppModule.register(
       {
@@ -139,13 +154,15 @@ export async function createApiApplication(
         approvalAuthorities: new PostgresApprovalAuthorityQuery(database)
       },
       {
-        repository: dealQueries
+        repository: dealQueries,
+        denials: workflowAccess
       },
       new PostgresBriefExportService(database),
       {
         readiness,
         ...(redis === undefined ? {} : { close: () => redis.close() })
-      }
+      },
+      sandboxOptions
     ),
     { bodyParser: false }
   );

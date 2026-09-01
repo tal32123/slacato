@@ -1,144 +1,331 @@
 {
-  "deliverable": "Mandatory Data-Generation Subtask: Slack-style evidence impact demonstration",
-  "generatedAt": "2026-08-31T06:30:00.000Z",
+  "deliverable": "Required demo scenario: how the generated Slack-style updates affect the brief, including at least one cited generated update",
+  "generatedAt": "2026-08-31T19:37:41.807Z",
   "database": "slacato_samples",
   "liveLlmVerified": true,
-  "summary": "Four live OpenRouter runs across two authorized opportunities and one authorization-scope A/B pair show that generated Slack-style evidence is correctly ingested, permissioned, retrieved, and ranked into the model's context on every attempt, and was extracted into a validated, cited claim by the Conversation Intelligence Agent on one attempt -- but that claim did not survive the Negotiation Strategy Agent's independent re-synthesis into the shipped Deal Brief sections. No live run produced a finalized brief with a Slack citation. This file documents the with/without retrieval-level difference and the exact pipeline stage where Slack evidence drops out, with no fabricated content.",
+  "summary": "On OPP-1003 the authorized Slack updates reach the finalized brief and shape it: 3 claim(s) outside Source Evidence cite a Slack update, and the reviewer-facing workspace marks 4 section(s) as account-team-update impacted. Revoking only the requester's slack read grant removes every Slack entry from retrieval and leaves 0 such claim(s).",
+  "runsUsed": 4,
   "method": {
-    "opportunityUnderTest": "OPP-1001",
-    "persona": { "userId": "USR-5001", "name": "Maya Levin", "role": "Account Owner" },
-    "withoutSlackMechanism": "Ran the standard live pipeline twice, back-to-back, with only the requester's authorization scope changed between runs. For the 'without Slack' run, permission_grants row id 'grant:USR-5001:ACC-2001:slack' was updated to can_read=false directly in the slacato_samples scratch database (never the slacato or slacato_e2e databases, and never fixtures/cato/policies/access_permissions.tsv), then restored to can_read=true immediately after the run completed. packages/infrastructure/src/worker/postgres-deal-brief-workflow-services.ts calls readPermissionGrants(requestedBy, accountId) fresh at retrieval time for every run and feeds the result into authorizeOpportunity() (packages/core/src/domain/permissions/authorize.ts), so the revoked grant deterministically removed 'slack' from that run's AccessScope.sourceTypes and therefore from buildEvidencePlan's admitted source types (packages/core/src/application/evidence/retriever.ts) for that run only. This is an authorization-scope toggle on scratch data, not a fixture edit or hand-edited artifact.",
-    "runsPerformed": 4,
-    "runsWithSlackAuthorized": 3,
-    "runsWithoutSlackAuthorized": 1
+    "opportunityUnderTest": "OPP-1003",
+    "persona": {
+      "userId": "USR-5003",
+      "name": "Nora Chen"
+    },
+    "withoutSlackMechanism": "The 'without Slack' run was produced by setting can_read = false on the permission_grants row 'grant:USR-5003:ACC-2003:slack' in the slacato_samples scratch database, running the same pipeline, and restoring the grant immediately afterwards. Permission grants are read fresh on every run, so this changes only that run's authorization scope. No fixture and no generated artifact was edited.",
+    "sourceTypeResolution": "Every source type reported here is resolved by joining the cited evidence id to the run evidence manifest, never from the brief's own sourceType field.",
+    "reviewerVisibleImpactRule": "apps/api/src/modules/deals/deal-workspace.mapper.ts marks a section accountTeamUpdateImpact when one of the section's cited evidence ids is an authorized Slack record; the web workspace renders that as the \"Account-team update impact\" badge."
   },
   "runs": {
-    "withSlackAttempt1": {
-      "runId": "run_146b87cf024fa2b9294f372a16dc4ac34b29d41c65e23a9f1dc64fcc448af30d",
-      "opportunityId": "OPP-1001",
-      "requestedBy": "USR-5001",
+    "withSlack": {
+      "runId": "run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668",
+      "opportunityId": "OPP-1003",
+      "requestedBy": {
+        "userId": "USR-5003",
+        "name": "Nora Chen"
+      },
       "provenance": {
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
-        "usedCalls": 6,
-        "inputTokens": 35869,
-        "outputTokens": 8784
+        "calls": 5,
+        "inputTokens": 21934,
+        "outputTokens": 10413,
+        "finalizedAt": "2026-08-31T19:36:15.032Z"
       },
-      "slackEvidenceRetrieved": { "evidenceId": "slack:SLK-9002:0", "rank": 13, "ofEntries": 27, "fusionScore": 0.14212831377219542, "includedCharacters": 285 },
-      "slackClaimedBySpecialist": false,
-      "slackCitedInFinalBrief": false,
-      "note": "Slack evidence retrieved and admitted into every specialist's context but not used in any extracted claim; this attempt's brief also had degraded quality (empty stakeholderMap and sourceEvidence, five hallucinated stakeholder names pruned by validation) unrelated to Slack."
-    },
-    "withSlackAttempt2": {
-      "runId": "run_a12bd817a6d8a3746358cc958a7c66af329782cf1ecb5273402d7e8bfd660103",
-      "opportunityId": "OPP-1001",
-      "requestedBy": "USR-5001",
-      "startedAt": "2026-08-31T06:17:27.666Z",
-      "completedAt": "2026-08-31T06:18:02.699Z",
-      "provenance": {
-        "provider": "openrouter",
-        "generationModel": "google/gemini-3.5-flash-lite",
-        "usedCalls": 5,
-        "inputTokens": 25230,
-        "outputTokens": 5336
-      },
-      "slackEvidenceRetrieved": { "evidenceId": "slack:SLK-9002:0", "rank": 13, "ofEntries": 27, "fusionScore": 0.14212831377219542, "includedCharacters": 285 },
-      "evidenceContextComposition": {
-        "totalIncludedCharacters": 22670,
+      "retrieval": {
+        "entries": 22,
         "bySourceType": {
-          "gong_transcript": { "count": 18, "characters": 19184, "shareOfContext": 0.846 },
-          "salesforce": { "count": 7, "characters": 2817, "shareOfContext": 0.124 },
-          "policy": { "count": 1, "characters": 384, "shareOfContext": 0.017 },
-          "slack": { "count": 1, "characters": 285, "shareOfContext": 0.0126 }
-        }
+          "slack": 3,
+          "salesforce": 7,
+          "pricing": 2,
+          "gong_summary": 3,
+          "policy": 1,
+          "gong_transcript": 6
+        },
+        "missingSourceTypes": [],
+        "slackEntries": [
+          {
+            "evidenceId": "slack:SLK-9009:0",
+            "rank": 1,
+            "fusionScore": 0.13866177171274668,
+            "includedCharacters": 330,
+            "updateText": "updateId: SLK-9009\nopportunityId: OPP-1003\naccountId: ACC-2003\nupdateDate: 2026-05-18\nchannel: Internal Chat\nauthorRole: Deal Desk Manager\nsyntheticNotice: true\nsourceAccessLevel: sensitive_pricing\nupdateText: Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+          },
+          {
+            "evidenceId": "slack:SLK-9007:0",
+            "rank": 7,
+            "fusionScore": 0.05884290475083315,
+            "includedCharacters": 287,
+            "updateText": "updateId: SLK-9007\nopportunityId: OPP-1003\naccountId: ACC-2003\nupdateDate: 2026-05-03\nchannel: Slack\nauthorRole: Security Engineer\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: Data protection controls and segmentation models are fully accepted by the security architect."
+          },
+          {
+            "evidenceId": "slack:SLK-9008:0",
+            "rank": 11,
+            "fusionScore": 0.04503676470588235,
+            "includedCharacters": 278,
+            "updateText": "updateId: SLK-9008\nopportunityId: OPP-1003\naccountId: ACC-2003\nupdateDate: 2026-05-11\nchannel: Email\nauthorRole: Compliance Officer\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: Exception handling procedures requested by the research team are still undocumented."
+          }
+        ]
       },
-      "slackClaimedBySpecialist": {
-        "agent": "conversation",
-        "claimId": "claim_8",
-        "confidence": 0.9,
-        "statement": "We still need the final owner matrix and success metrics confirmed by the client stakeholders.",
-        "citation": { "id": "citation_20c3cc59eee981c77d5bf142e3d0d4f5953dbae6", "evidenceId": "slack:SLK-9002:0", "locator": "slack/account_team_updates.tsv#SLK-9002#chunk-0" },
-        "validationOutcome": "kept (not listed among this artifact's INSUFFICIENT_CLAIM_SUPPORT claims: claim_1, claim_4, claim_6)"
-      },
-      "slackCitedInFinalBrief": false,
-      "droppedAtStage": "negotiation-strategy synthesis",
-      "note": "The Negotiation Strategy Agent (Main agent) does not forward the Conversation Agent's claim list verbatim into buyerGoalsAndBusinessDrivers / missingInformation / negotiationState -- it re-derives its own smaller set of claims from the shared evidence pool with new claim IDs and re-written statements. In this run it selected claim_goal_1 (gong_transcript:CALL-008:transcript:0) and claim_driver_1 (gong_transcript:CALL-001:transcript:0), and did not carry claim_8 (slack:SLK-9002:0) forward. missingInformation in the final brief is populated only from claims that FAILED validation (claim_neg_2, claim_stk_1..5), so a well-supported but unselected claim like claim_8 has no path into that section either."
+      "brief": {
+        "sourceEvidenceSlackCitations": [
+          {
+            "evidenceId": "slack:SLK-9009:0",
+            "summary": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+          },
+          {
+            "evidenceId": "slack:SLK-9007:0",
+            "summary": "Data protection controls and segmentation models are fully accepted by the security architect."
+          },
+          {
+            "evidenceId": "slack:SLK-9008:0",
+            "summary": "Exception handling procedures requested by the research team are still undocumented."
+          }
+        ],
+        "claimsOutsideSourceEvidenceCitingSlack": [
+          {
+            "path": "executiveSummary.claims[0]",
+            "claimId": "claim_es_01",
+            "statement": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations.",
+            "evidenceId": "slack:SLK-9009:0",
+            "updateText": "updateId: SLK-9009\nopportunityId: OPP-1003\naccountId: ACC-2003\nupdateDate: 2026-05-18\nchannel: Internal Chat\nauthorRole: Deal Desk Manager\nsyntheticNotice: true\nsourceAccessLevel: sensitive_pricing\nupdateText: Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+          },
+          {
+            "path": "buyerGoalsAndBusinessDrivers.claims[1]",
+            "claimId": "claim_bg_02",
+            "statement": "Data protection controls and segmentation models are fully accepted by the security architect.",
+            "evidenceId": "slack:SLK-9007:0",
+            "updateText": "updateId: SLK-9007\nopportunityId: OPP-1003\naccountId: ACC-2003\nupdateDate: 2026-05-03\nchannel: Slack\nauthorRole: Security Engineer\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: Data protection controls and segmentation models are fully accepted by the security architect."
+          },
+          {
+            "path": "negotiationState.claims[1]",
+            "claimId": "claim_ns_02",
+            "statement": "Exception handling procedures requested by the research team are still undocumented.",
+            "evidenceId": "slack:SLK-9008:0",
+            "updateText": "updateId: SLK-9008\nopportunityId: OPP-1003\naccountId: ACC-2003\nupdateDate: 2026-05-11\nchannel: Email\nauthorRole: Compliance Officer\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: Exception handling procedures requested by the research team are still undocumented."
+          }
+        ],
+        "sectionsShapedBySlack": [
+          "executiveSummary",
+          "buyerGoalsAndBusinessDrivers",
+          "negotiationState"
+        ],
+        "executiveSummaryNarrative": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+      }
     },
-    "withoutSlackAuthorized": {
-      "runId": "run_1ed98d7135fdf21c62052f9bcf78582d8ffd7f8992d218df0493cd73e390dbd4",
-      "opportunityId": "OPP-1001",
-      "requestedBy": "USR-5001",
-      "startedAt": "2026-08-31T06:18:37.790Z",
-      "completedAt": "2026-08-31T06:19:00.996Z",
-      "authorizationChange": "permission_grants row 'grant:USR-5001:ACC-2001:slack' set can_read=false for the duration of this run only, then restored.",
+    "withoutSlack": {
+      "runId": "run_ea1c3ed1a0de789547e8adf408f7f1b340df41b65e83dd669e15ab381a4d7e23",
+      "opportunityId": "OPP-1003",
+      "requestedBy": {
+        "userId": "USR-5003",
+        "name": "Nora Chen"
+      },
       "provenance": {
         "provider": "openrouter",
         "generationModel": "google/gemini-3.5-flash-lite",
-        "usedCalls": 5,
-        "inputTokens": 25021,
-        "outputTokens": 5607
+        "calls": 6,
+        "inputTokens": 42071,
+        "outputTokens": 17299,
+        "finalizedAt": "2026-08-31T19:34:27.826Z"
       },
-      "slackEvidenceRetrieved": null,
-      "evidenceContextComposition": {
-        "totalIncludedCharacters": 23002,
+      "retrieval": {
+        "entries": 22,
         "bySourceType": {
-          "gong_transcript": { "count": 18, "characters": 19184, "shareOfContext": 0.834 },
-          "salesforce": { "count": 7, "characters": 2817, "shareOfContext": 0.122 },
-          "gong_summary": { "count": 1, "characters": 617, "shareOfContext": 0.027 },
-          "policy": { "count": 1, "characters": 384, "shareOfContext": 0.017 }
-        }
+          "salesforce": 7,
+          "pricing": 2,
+          "gong_summary": 6,
+          "policy": 1,
+          "gong_transcript": 6
+        },
+        "missingSourceTypes": [],
+        "slackEntries": []
       },
-      "slackCitedInFinalBrief": false,
-      "note": "With Slack unauthorized, rank 13/27 (previously slack:SLK-9002:0) is filled by gong_transcript:CALL-008:transcript:2, and gong_summary:CALL-005:summary:0 enters the pool for the first time at rank 19. This is the concrete, mechanical retrieval-level difference the authorization-scope toggle produces."
-    },
-    "secondaryOpportunityCheck": {
-      "runId": "run_44e478b849208e8f607c1cd73e9a6b4b076be2298794c5e51d561e8d5352acdd",
-      "opportunityId": "OPP-1002",
-      "requestedBy": "USR-5002",
-      "provenance": {
-        "provider": "openrouter",
-        "generationModel": "google/gemini-3.5-flash-lite",
-        "usedCalls": 5,
-        "inputTokens": 25305,
-        "outputTokens": 4687
-      },
-      "slackEvidenceRetrieved": { "evidenceId": "slack:SLK-9005:0", "rank": 16, "fusionScore": 0.11127565446543716, "includedCharacters": 279 },
-      "slackClaimedBySpecialist": false,
-      "slackCitedInFinalBrief": false,
-      "purpose": "Ran on a second opportunity/persona pair (not a re-roll of OPP-1001) to check whether the drop-out pattern was specific to OPP-1001's evidence mix. It was not: Slack was retrieved and authorized but not selected by any specialist agent on this opportunity either."
+      "brief": {
+        "sourceEvidenceSlackCitations": [],
+        "claimsOutsideSourceEvidenceCitingSlack": [],
+        "sectionsShapedBySlack": [],
+        "executiveSummaryNarrative": "Internal buyer group has conflicting priorities."
+      }
     }
   },
-  "crossReferenceFromShippedSamples": {
-    "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
-    "opportunityId": "OPP-1003",
-    "requestedBy": "USR-5003",
-    "shippedIn": ["restricted-run-trace.json", "restricted-opportunity-brief.json"],
-    "slackEvidenceRetrieved": { "evidenceId": "slack:SLK-9009:0", "rank": 13, "ofEntries": 27, "fusionScore": 0.14706523883949968, "includedCharacters": 330 },
-    "slackClaimedBySpecialist": false,
-    "slackCitedInFinalBrief": false,
-    "note": "Consistent with the new runs: retrieved and authorized, dropped at the Conversation Intelligence Agent's own extraction step this time (never reached any specialist_artifacts row), never surfaced as a citation."
-  },
-  "pipelineDiagnosis": {
-    "stages": [
-      { "stage": "ingested", "result": "yes", "evidence": "9 rows in fixtures/cato/slack/account_team_updates.tsv, chunked and embedded alongside every other source type." },
-      { "stage": "authorized", "result": "yes, and correctly scoped", "evidence": "USR-5001/USR-5002/USR-5003 all carry 'slack' in permission_grants; revoking the grant for one run deterministically removed slack from that run's retrieval pool with no other change." },
-      { "stage": "retrieved and ranked", "result": "yes, competitively", "evidence": "In 3 of 3 with-Slack live runs, the single admitted Slack chunk (sourceLimits caps Slack at 2 per section query, and gong_transcript is uncapped) landed at rank 13-16 of ~27 with a fusion score (0.111-0.147) inside the same band as many gong_transcript entries (0.13-0.17)." },
-      { "stage": "prompted", "result": "yes, in full", "evidence": "included_characters for the Slack row was always its full chunk size (279-330 chars, never truncated to 0), confirmed present in the same evidence pool handed to every specialist agent." },
-      { "stage": "claimed by a specialist", "result": "yes, once out of 3 with-Slack runs performed for this demonstration", "evidence": "run_a12bd817...: Conversation Intelligence Agent emitted claim_8 (confidence 0.9) citing slack:SLK-9002:0 verbatim from the Slack row's own text." },
-      { "stage": "validated", "result": "yes, for that one claim", "evidence": "claim_8 was not among the artifact's INSUFFICIENT_CLAIM_SUPPORT claims; pruneClaims() kept it as supported." },
-      { "stage": "carried into the final Deal Brief", "result": "no, in all 4 with-Slack runs observed (3 performed for this demonstration plus the pre-existing shipped OPP-1003 run)", "evidence": "The Negotiation Strategy Agent re-synthesizes buyerGoalsAndBusinessDrivers, negotiationState, and recommendedNextActions directly from the shared evidence pool with its own new claim IDs and statements, rather than forwarding upstream specialist claims verbatim. In every observed run it selected only Salesforce/Gong-sourced claims for those sections; missingInformation is populated only from claims that FAILED validation, so a supported-but-unselected claim like claim_8 has no path into any final section either." }
+  "reviewerVisibleImpact": {
+    "capturedFrom": "GET /api/deals/OPP-1003 as USR-5003",
+    "latestRunUpdatedAt": "2026-08-31T19:36:15.032Z",
+    "matchesWithSlackRun": true,
+    "badgedSections": [
+      "executiveSummary",
+      "buyerGoalsAndBusinessDrivers",
+      "negotiationState",
+      "sourceEvidence"
     ],
-    "rootCause": "Volume asymmetry, not a permission or retrieval defect. buildEvidencePlan (packages/core/src/application/evidence/retriever.ts) caps slack at Math.min(input.limit, 2) per section query while leaving gong_transcript uncapped ('gong_transcript: input.limit'). For OPP-1001 this yields 18 gong_transcript chunks (84.6% of the 22,670-character evidence context) against 1 slack chunk (1.26%). The generation-model agents (Conversation Intelligence and Negotiation Strategy) are given the full pool and choose what to write about; a single short update sitting among 18 same-topic transcript chunks is a plausible candidate to be extracted at all (it was, once) but a hard one for the downstream synthesis step to prioritize over its higher-volume neighbors.",
-    "whatWouldChangeThis": "Raising the per-source slack cap relative to gong_transcript in buildEvidencePlan's sourceLimits, or having the Negotiation Strategy Agent's prompt explicitly require representation from every authorized source type with retrieved evidence (not just the highest-scoring cluster), would give Slack updates a materially better chance of being cited in the shipped brief without changing retrieval or permissions."
+    "allSections": {
+      "dealSnapshot": false,
+      "executiveSummary": true,
+      "buyerGoalsAndBusinessDrivers": true,
+      "stakeholderMap": false,
+      "negotiationState": true,
+      "recommendedNextActions": false,
+      "missingInformation": false,
+      "sourceEvidence": true,
+      "confidenceAndReviewWarnings": false
+    }
   },
-  "reproduction": {
-    "withSlackCommand": "pnpm tsx drive.ts USR-5001 OPP-1001",
-    "withoutSlackCommand": "Using any Postgres client against slacato_samples: update permission_grants set can_read=false where id='grant:USR-5001:ACC-2001:slack'; pnpm tsx drive.ts USR-5001 OPP-1001; then restore can_read=true",
-    "prerequisites": [
-      "Source .env and override DATABASE_URL to the dedicated slacato_samples database.",
-      "Run the API and worker against the same database with SLACATO_BOOTSTRAP=1.",
-      "Approve the resulting evidence_review approval subject (category triggered by the LEGAL_REVIEW_REQUIRED warning) before the run can finalize.",
-      "Never apply the can_read toggle to the slacato or slacato_e2e databases."
-    ]
-  }
+  "supportingRuns": [
+    {
+      "runId": "run_4f76c467976b09e19507103a23b5ad689b241ab39c3cc0e1b1b1f488bc460a89",
+      "opportunityId": "OPP-1001",
+      "requestedBy": {
+        "userId": "USR-5001",
+        "name": "Maya Levin"
+      },
+      "provenance": {
+        "provider": "openrouter",
+        "generationModel": "google/gemini-3.5-flash-lite",
+        "calls": 5,
+        "inputTokens": 23513,
+        "outputTokens": 8896,
+        "finalizedAt": "2026-08-31T19:31:19.173Z"
+      },
+      "retrieval": {
+        "entries": 22,
+        "bySourceType": {
+          "slack": 2,
+          "gong_summary": 3,
+          "salesforce": 7,
+          "pricing": 2,
+          "gong_transcript": 7,
+          "policy": 1
+        },
+        "missingSourceTypes": [],
+        "slackEntries": [
+          {
+            "evidenceId": "slack:SLK-9002:0",
+            "rank": 1,
+            "fusionScore": 0.1375417327880085,
+            "includedCharacters": 285,
+            "updateText": "updateId: SLK-9002\nopportunityId: OPP-1001\naccountId: ACC-2001\nupdateDate: 2026-05-05\nchannel: Email\nauthorRole: Account Manager\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: We still need the final owner matrix and success metrics confirmed by the client stakeholders."
+          },
+          {
+            "evidenceId": "slack:SLK-9001:0",
+            "rank": 3,
+            "fusionScore": 0.08742625480855372,
+            "includedCharacters": 280,
+            "updateText": "updateId: SLK-9001\nopportunityId: OPP-1001\naccountId: ACC-2001\nupdateDate: 2026-05-01\nchannel: Slack\nauthorRole: Solutions Architect\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: The regional plants rollout model aligns well with our standard deployment framework."
+          }
+        ]
+      },
+      "brief": {
+        "sourceEvidenceSlackCitations": [
+          {
+            "evidenceId": "slack:SLK-9002:0",
+            "summary": "We still need the final owner matrix and success metrics confirmed by the client stakeholders."
+          },
+          {
+            "evidenceId": "slack:SLK-9001:0",
+            "summary": "The regional plants rollout model aligns well with our standard deployment framework."
+          }
+        ],
+        "claimsOutsideSourceEvidenceCitingSlack": [
+          {
+            "path": "stakeholderMap.claims[0]",
+            "claimId": "claim_stk_gap_1",
+            "statement": "We still need the final owner matrix and success metrics confirmed by the client stakeholders.",
+            "evidenceId": "slack:SLK-9002:0",
+            "updateText": "updateId: SLK-9002\nopportunityId: OPP-1001\naccountId: ACC-2001\nupdateDate: 2026-05-05\nchannel: Email\nauthorRole: Account Manager\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: We still need the final owner matrix and success metrics confirmed by the client stakeholders."
+          }
+        ],
+        "sectionsShapedBySlack": [
+          "stakeholderMap"
+        ],
+        "executiveSummaryNarrative": "Northstar confirmed renewal intent while asking for a clearer rollout model across regional plants."
+      }
+    },
+    {
+      "runId": "run_768cb55a96a0d13ce8df3e42a818082a97227b72521bc055308990635117fb82",
+      "opportunityId": "OPP-1002",
+      "requestedBy": {
+        "userId": "USR-5002",
+        "name": "Owen Patel"
+      },
+      "provenance": {
+        "provider": "openrouter",
+        "generationModel": "google/gemini-3.5-flash-lite",
+        "calls": 5,
+        "inputTokens": 22757,
+        "outputTokens": 8593,
+        "finalizedAt": "2026-08-31T19:31:58.352Z"
+      },
+      "retrieval": {
+        "entries": 22,
+        "bySourceType": {
+          "gong_summary": 5,
+          "salesforce": 7,
+          "slack": 2,
+          "gong_transcript": 6,
+          "pricing": 1,
+          "policy": 1
+        },
+        "missingSourceTypes": [],
+        "slackEntries": [
+          {
+            "evidenceId": "slack:SLK-9005:0",
+            "rank": 3,
+            "fusionScore": 0.10482877266983302,
+            "includedCharacters": 279,
+            "updateText": "updateId: SLK-9005\nopportunityId: OPP-1002\naccountId: ACC-2002\nupdateDate: 2026-05-08\nchannel: Email\nauthorRole: Support Manager\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: Training gaps for night-shift staff during troubleshooting workflows remain unaddressed."
+          },
+          {
+            "evidenceId": "slack:SLK-9004:0",
+            "rank": 4,
+            "fusionScore": 0.08957915072928242,
+            "includedCharacters": 285,
+            "updateText": "updateId: SLK-9004\nopportunityId: OPP-1002\naccountId: ACC-2002\nupdateDate: 2026-05-02\nchannel: Slack\nauthorRole: Customer Success Lead\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: Initial pilot results confirm positive latency and policy consistency across operations."
+          }
+        ]
+      },
+      "brief": {
+        "sourceEvidenceSlackCitations": [
+          {
+            "evidenceId": "slack:SLK-9005:0",
+            "summary": "Training gaps for night-shift staff during troubleshooting workflows remain unaddressed."
+          },
+          {
+            "evidenceId": "slack:SLK-9004:0",
+            "summary": "Initial pilot results confirm positive latency and policy consistency across operations."
+          }
+        ],
+        "claimsOutsideSourceEvidenceCitingSlack": [
+          {
+            "path": "stakeholderMap.claims[0]",
+            "claimId": "claim_stakeholder_map_1",
+            "statement": "Training gaps for night-shift staff during troubleshooting workflows remain unaddressed.",
+            "evidenceId": "slack:SLK-9005:0",
+            "updateText": "updateId: SLK-9005\nopportunityId: OPP-1002\naccountId: ACC-2002\nupdateDate: 2026-05-08\nchannel: Email\nauthorRole: Support Manager\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: Training gaps for night-shift staff during troubleshooting workflows remain unaddressed."
+          },
+          {
+            "path": "negotiationState.claims[1]",
+            "claimId": "claim_neg_2",
+            "statement": "Initial pilot results confirm positive latency and policy consistency across operations.",
+            "evidenceId": "slack:SLK-9004:0",
+            "updateText": "updateId: SLK-9004\nopportunityId: OPP-1002\naccountId: ACC-2002\nupdateDate: 2026-05-02\nchannel: Slack\nauthorRole: Customer Success Lead\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: Initial pilot results confirm positive latency and policy consistency across operations."
+          },
+          {
+            "path": "negotiationState.claims[2]",
+            "claimId": "claim_neg_3",
+            "statement": "Training gaps for night-shift staff during troubleshooting workflows remain unaddressed.",
+            "evidenceId": "slack:SLK-9005:0",
+            "updateText": "updateId: SLK-9005\nopportunityId: OPP-1002\naccountId: ACC-2002\nupdateDate: 2026-05-08\nchannel: Email\nauthorRole: Support Manager\nsyntheticNotice: true\nsourceAccessLevel: standard\nupdateText: Training gaps for night-shift staff during troubleshooting workflows remain unaddressed."
+          }
+        ],
+        "sectionsShapedBySlack": [
+          "stakeholderMap",
+          "negotiationState"
+        ],
+        "executiveSummaryNarrative": "Executive buyer linked expansion decision to measurable proof outcomes and staged payment terms."
+      }
+    }
+  ],
+  "files": [
+    "slack-impact-comparison.json",
+    "slack-impact-comparison.md"
+  ]
 }

@@ -48,9 +48,13 @@ function normalize(value: string): string {
     .replace(/(?:[$€£]\s*)?\b\d[\d,.]*(?:\s*%)?/gu, canonicalNumber);
 }
 
-/** Rejects generated prose that resembles instructions or prompt-control markers. */
+/** Rejects generated prose that resembles instructions or prompt-control markers.
+ *
+ * The chat-role marker is anchored on a word boundary. Without it, `role\s*:` also matched the
+ * ordinary field labels that authorized evidence uses - `authorRole:` on every Slack account-team
+ * update - so quoting a Slack record was treated as prompt injection and the claim was discarded. */
 function safeGeneratedProse(value: string): boolean {
-  return !/(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|role\s*:/i.test(
+  return !/(?:BEGIN|END)_UNTRUSTED|\b[A-Z0-9]+_SENTINEL\b|ignore (?:all |the |any )?(?:previous|prior|system)|system prompt|(?:call|invoke|use) (?:a |the )?tool|\brole\s*:/i.test(
     value
   );
 }
@@ -65,6 +69,29 @@ function containsBounded(haystack: string, needle: string): boolean {
   return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(needle)}(?![\\p{L}\\p{N}])`, 'u').test(
     haystack
   );
+}
+
+/** Matches a material anchor, allowing a fused proper-noun run to be stated as two record fields.
+ *
+ * `materialAnchors` extracts a run of capitalized words as one anchor, so "Legal Counsel Amara
+ * Quinn" becomes a single string that a structured record can never contain contiguously: the
+ * record states `title: Legal Counsel` and `fullName: Amara Quinn` on separate lines. Requiring
+ * contiguity there tests transcription, not grounding. A fused run of three or more words is
+ * therefore also satisfied when it splits in two at some point and both halves appear in the same
+ * evidence text; every word still has to be present, and one- or two-word anchors stay exact. */
+function containsAnchor(haystack: string, anchor: string): boolean {
+  if (containsBounded(haystack, anchor)) return true;
+  const words = anchor.split(' ');
+  // Two words stay exact: splitting a personal name would let any two records supply its halves.
+  if (words.length < 3) return false;
+  for (let split = 1; split < words.length; split += 1) {
+    if (
+      containsBounded(haystack, words.slice(0, split).join(' ')) &&
+      containsBounded(haystack, words.slice(split).join(' '))
+    )
+      return true;
+  }
+  return false;
 }
 
 /** Extracts material names, dates, amounts, quoted text, and business terms from a claim. */
@@ -256,7 +283,7 @@ function explicitStakeholderClassificationSupported(assertion: string, support: 
   ).test(normalizedAssertion(support));
 }
 
-type StructuredField = Readonly<{ name: string; value: string }>;
+type StructuredField = Readonly<{ name: string; label: string; value: string }>;
 
 /** Converts a code-owned camelCase field name to its normalized display label. */
 function structuredFieldDisplayName(value: string): string {
@@ -269,7 +296,13 @@ function structuredFields(value: string): readonly StructuredField[] {
     const match = /^([a-z][A-Za-z0-9]*):\s+(.+)$/su.exec(line.trim());
     return match?.[1] === undefined || match[2] === undefined
       ? []
-      : [{ name: structuredFieldDisplayName(match[1]), value: match[2].trim() }];
+      : [
+          {
+            name: structuredFieldDisplayName(match[1]),
+            label: normalize(match[1]),
+            value: match[2].trim()
+          }
+        ];
   });
 }
 
@@ -286,25 +319,111 @@ function structuredFieldAssertionSupported(assertion: string, support: string): 
   );
 }
 
-/** Allows complete structured field values to be reordered only inside one evidence record. */
+/**
+ * Verbs of being, holding, or attribution that link two stated field values without asserting a
+ * fact of their own. A record that pairs `fullName: Elena Voss` with `title: Chief Information
+ * Security Officer` already grounds "Elena Voss holds the title Chief Information Security
+ * Officer"; only the copula differs. This is a closed set of contentless words, not a set of
+ * accepted sentence shapes: it constrains which words may be skipped, never how a claim is
+ * phrased, and every word carrying claim content still has to come from a cited field value.
+ */
+const STRUCTURED_ATTRIBUTION_TERMS = new Set(
+  [
+    'has',
+    'have',
+    'had',
+    'hold',
+    'holds',
+    'held',
+    'holding',
+    'serve',
+    'serves',
+    'served',
+    'act',
+    'acts',
+    'acted',
+    'work',
+    'works',
+    'worked',
+    'list',
+    'lists',
+    'listed',
+    'record',
+    'records',
+    'recorded',
+    'state',
+    'states',
+    'stated',
+    'show',
+    'shows',
+    'shown',
+    'name',
+    'names',
+    'named',
+    'identify',
+    'identifies',
+    'identified'
+  ].map((word) => stem(normalize(word)))
+);
+const MAX_STRUCTURED_LINK_TERMS = 3;
+
+/** Allows complete structured field values to be reordered only inside one evidence record.
+ *
+ * Between two field values the assertion may also spend a small number of contentless linking
+ * terms: an attribution verb, or a term from the record's own field labels. Without that, an
+ * exactly faithful restatement failed on its connective alone - "X holds the title Y" was rejected
+ * while "X is Y" passed, because `is` happens to be a stop word and `holds` does not - which made
+ * survival depend on the model's phrasing rather than on the evidence. */
 function structuredRecordAssertionSupported(assertion: string, support: string): boolean {
   const assertionTerms = paraphraseTerms(assertion);
   const fields = structuredFields(support)
     .map((field) => ({ ...field, terms: paraphraseTerms(field.value) }))
     .filter((field) => field.terms.length > 0);
+  // A field label is text the cited record already contains, in either its camelCase form or its
+  // display form, so consuming one adds no unsupported content and is not charged to the budget.
+  const labelTerms = new Set(
+    fields.flatMap((field) => [...paraphraseTerms(field.name), ...paraphraseTerms(field.label)])
+  );
   const matches = (offset: number, terms: readonly string[]): boolean =>
     terms.every((term, index) => assertionTerms[offset + index] === term);
-  const visit = (offset: number, used: ReadonlySet<number>): boolean => {
+  const visit = (offset: number, used: ReadonlySet<number>, linked: number): boolean => {
     if (offset === assertionTerms.length) return used.size >= 2;
     for (const [index, field] of fields.entries()) {
       if (used.has(index) || !matches(offset, field.terms)) continue;
       const next = new Set(used);
       next.add(index);
-      if (visit(offset + field.terms.length, next)) return true;
+      if (visit(offset + field.terms.length, next, linked)) return true;
     }
-    return false;
+    const term = assertionTerms[offset];
+    if (term === undefined) return false;
+    if (labelTerms.has(term)) return visit(offset + 1, used, linked);
+    return (
+      linked < MAX_STRUCTURED_LINK_TERMS &&
+      STRUCTURED_ATTRIBUTION_TERMS.has(term) &&
+      visit(offset + 1, used, linked + 1)
+    );
   };
-  return assertionTerms.length > 0 && visit(0, new Set<number>());
+  return assertionTerms.length > 0 && visit(0, new Set<number>(), 0);
+}
+
+/** Recognizes a claim that quotes a run of complete, consecutive lines of its cited record.
+ *
+ * Models quote structured records this way constantly - the whole record, or just the two lines
+ * naming a person and their title. Such a claim satisfies no single line and no field partition,
+ * so it used to be discarded even though a verbatim quotation is the strongest grounding there is;
+ * one live run lost all five stakeholders to it. Only contiguous complete lines qualify, which is
+ * why this cannot assemble a relation the record does not already print. */
+function verbatimRecordSpan(assertion: string, support: string): boolean {
+  const lines = support
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return false;
+  const target = normalizedAssertion(assertion);
+  for (let start = 0; start < lines.length; start += 1)
+    for (let end = start + 2; end <= lines.length; end += 1)
+      if (normalizedAssertion(lines.slice(start, end).join(' ')) === target) return true;
+  return false;
 }
 
 /** Accepts exact local support plus tightly bounded, same-unit transformations. */
@@ -339,14 +458,17 @@ function unitRelatesToAssertion(assertion: string, unit: string): boolean {
   return [...terms].every((term) => unitTerms.has(term));
 }
 
+/** Splits one evidence excerpt into the individual statements used for support checks. */
+function contentUnits(content: string): readonly string[] {
+  return content
+    .split(/\n+|(?<=[.!?])\s+/u)
+    .map((unit) => unit.trim())
+    .filter(Boolean);
+}
+
 /** Splits cited evidence into the individual statements used for support checks. */
 function evidenceUnits(evidence: readonly AgentEvidenceRecord[]): readonly string[] {
-  return evidence.flatMap((record) =>
-    record.content
-      .split(/\n+|(?<=[.!?])\s+/u)
-      .map((unit) => unit.trim())
-      .filter(Boolean)
-  );
+  return evidence.flatMap((record) => contentUnits(record.content));
 }
 
 /** Detects whether nearby evidence language explicitly negates a material claim anchor. */
@@ -358,8 +480,18 @@ function explicitlyNegates(content: string, anchor: string): boolean {
   ).exec(normalized);
   const at = match?.index ?? -1;
   if (at < 0) return false;
-  const prefix = normalized.slice(Math.max(0, at - 80), at);
-  return /\b(?:not|no|never|denied|declined|rejected|without)\b/.test(prefix);
+  // Only a negation that actually attaches to the anchor counts. Scanning 80 characters back
+  // crossed clause boundaries, so "We will not support expansion, said Chief Information Security
+  // Officer Elena Voss" was read as negating Elena Voss rather than the expansion, and the
+  // resulting "contradicted" verdict throws instead of dropping. The window is now the words
+  // immediately before the anchor within its own clause.
+  const clause =
+    normalized
+      .slice(0, at)
+      .split(/[,;:.!?()\u2014\u2013]|\n/u)
+      .at(-1) ?? '';
+  const adjacent = (clause.match(/[\p{L}\p{N}%$€£-]+/gu) ?? []).slice(-3);
+  return adjacent.some((word) => /^(?:not|no|never|denied|declined|rejected|without)$/.test(word));
 }
 
 const CONTRADICTORY_PREDICATES = [
@@ -385,8 +517,14 @@ const POSITIVE_INTENT =
   /\b(?:need(?:s|ed)?|want(?:s|ed)?|support(?:s|ed)?|prefer(?:s|red)?|accept(?:s|ed)?|approv(?:e|es|ed)|agree(?:s|d)?|request(?:s|ed)?|commit(?:s|ted)?|advocat(?:e|es|ed)|endors(?:e|es|ed)|allow(?:s|ed)?|include(?:s|d)?|enable(?:s|d)?|require(?:s|d)?)\b/i;
 const NEGATIVE_INTENT =
   /\b(?:oppos(?:e|es|ed)|reject(?:s|ed)?|refus(?:e|es|ed)|declin(?:e|es|ed)|object(?:s|ed)?|resist(?:s|ed)?|block(?:s|ed)?|den(?:y|ies|ied)|avoid(?:s|ed)?|cancel(?:s|led)?|prohibit(?:s|ed)?|exclude(?:s|d)?|disable(?:s|d)?)\b/i;
-const NEGATED_MATERIAL_PREDICATE =
-  /\b(?:not|never|no longer|cannot|can't|won't|doesn't|didn't)\b(?:\s+\S+){0,3}\s+(?:need|want|support|prefer|accept|approve|agree|request|commit|allow|include|enable|require)\w*\b/i;
+/** The material predicate verbs whose negation parity is compared between a claim and evidence. */
+const MATERIAL_PREDICATE_VERBS =
+  'need|want|support|prefer|accept|approve|agree|request|commit|allow|include|enable|require';
+const MATERIAL_PREDICATE = new RegExp(`\\b(?:${MATERIAL_PREDICATE_VERBS})\\w*\\b`, 'i');
+const NEGATED_MATERIAL_PREDICATE = new RegExp(
+  `\\b(?:not|never|no longer|cannot|can't|won't|doesn't|didn't)\\b(?:\\s+\\S+){0,3}\\s+(?:${MATERIAL_PREDICATE_VERBS})\\w*\\b`,
+  'i'
+);
 
 /** Detects opposing intent or business predicates between a claim and its evidence. */
 function hasPredicateContradiction(statement: string, evidence: string): boolean {
@@ -401,7 +539,14 @@ function hasPredicateContradiction(statement: string, evidence: string): boolean
     (statementNegative && !statementPositive && evidencePositive && !evidenceNegative)
   )
     return true;
+  // The negation-parity rule compares how a claim and its evidence stand on one material predicate.
+  // Without requiring the claim to assert such a predicate at all, it fired on any claim whose
+  // evidence merely contained a negated one: "Elena Voss is Chief Information Security Officer"
+  // was ruled *contradicted* by the record naming her, because a different sentence in it reads
+  // "will not support expansion". A claim cannot contradict a predicate it never makes, and
+  // "contradicted" throws rather than drops, so this took the whole artifact with it.
   if (
+    MATERIAL_PREDICATE.test(statement) &&
     NEGATED_MATERIAL_PREDICATE.test(statement) !== NEGATED_MATERIAL_PREDICATE.test(evidence) &&
     (POSITIVE_INTENT.test(statement) || POSITIVE_INTENT.test(evidence))
   )
@@ -422,6 +567,20 @@ function hasPredicateContradiction(statement: string, evidence: string): boolean
     ([left, right]) =>
       (containsBounded(normalizedStatement, left) && containsBounded(normalizedEvidence, right)) ||
       (containsBounded(normalizedStatement, right) && containsBounded(normalizedEvidence, left))
+  );
+}
+
+/** Reports contradiction only from the evidence statements that relate to an assertion's subject.
+ *
+ * A retrieved CRM record bundles many independent fields into one excerpt. Evaluating the whole
+ * excerpt at once let a single unrelated field decide unrelated claims: a contact whose `notes`
+ * read "will not support expansion" tripped the negation-parity rule for every claim citing that
+ * contact, silently deleting even her name and title. The unit-level contradiction gate already
+ * requires `unitRelatesToAssertion` before rejecting a claim; this applies the same requirement on
+ * the whole-record path, so evidence that genuinely negates the claim still rejects it. */
+function contradictedByRelatedUnit(statement: string, support: string): boolean {
+  return contentUnits(support).some(
+    (unit) => unitRelatesToAssertion(statement, unit) && hasPredicateContradiction(statement, unit)
   );
 }
 
@@ -481,25 +640,37 @@ export function assessClaimSupport(
       reason: 'Cited evidence explicitly negates a material anchor.'
     };
   }
-  const missing = anchors.filter((anchor) => !containsBounded(combined, anchor));
+  const missing = anchors.filter((anchor) => !containsAnchor(combined, anchor));
   if (missing.length > 0)
     return {
       claimId: claim.id,
       support: 'insufficient',
-      reason: `Material anchors are absent: ${missing.join(', ')}`
+      // Scoped to this claim's own citation on purpose. Phrased as an absolute absence, the same
+      // sentence surfaced as a brief-level warning that contradicted a stakeholder the brief was
+      // presenting as supported, because one weak claim about a person says nothing about another.
+      reason: `One cited record does not state: ${displayableAnchors(missing)}`
     };
   const completeRelationSupported = (
     support: string,
-    atomsSupported: (assertion: string, evidence: string) => boolean
+    atomsSupported: (assertion: string, evidence: string) => boolean,
+    contradicts: (assertion: string, evidence: string) => boolean
   ): boolean =>
-    anchors.every((anchor) => containsBounded(normalize(support), anchor)) &&
+    anchors.every((anchor) => containsAnchor(normalize(support), anchor)) &&
     materialPredicatesSupported(claim.statement, support) &&
-    !hasPredicateContradiction(claim.statement, support) &&
+    !contradicts(claim.statement, support) &&
     atomsSupported(claim.statement, support);
   if (
-    !units.some((unit) => completeRelationSupported(unit, textAtomsSupported)) &&
+    !units.some((unit) =>
+      completeRelationSupported(unit, textAtomsSupported, hasPredicateContradiction)
+    ) &&
     !citedEvidence.some((record) =>
-      completeRelationSupported(record.content, structuredRecordAssertionSupported)
+      completeRelationSupported(
+        record.content,
+        (assertion, support) =>
+          verbatimRecordSpan(assertion, support) ||
+          structuredRecordAssertionSupported(assertion, support),
+        contradictedByRelatedUnit
+      )
     )
   )
     return {
@@ -556,6 +727,33 @@ function pruneClaims(
   return { kept, insufficient };
 }
 
+/** Renders rejected anchors as reviewer-readable text, withholding anything identifier-shaped. */
+function displayableAnchors(anchors: readonly string[]): string {
+  const readable = anchors.filter(
+    (anchor) => anchor.length <= 80 && /^[\p{L}\p{N}][\p{L}\p{N} .,'%$€£-]*$/u.test(anchor)
+  );
+  return readable.length === 0 ? 'one material detail of the claim' : readable.join(', ');
+}
+
+/** Restates a rejection reason as follow-up a reviewer can act on, naming no internal identifier.
+ *
+ * The previous wording asked the reviewer to "Verify evidence for claim claim_stk_elena", naming a
+ * claim that by construction no longer exists in the brief they are holding. */
+function reviewerFollowUp(reason: string): string {
+  const anchors = /^One cited record does not state: (.+)$/u.exec(reason)?.[1];
+  if (anchors !== undefined) return `Confirm against the authorized sources: ${anchors}.`;
+  if (reason.includes('no authorized citations'))
+    return 'Confirm the source for a generated statement that carried no authorized citation.';
+  if (reason.includes('unsafe instruction-like prose'))
+    return 'Review a generated statement that was rejected as unsafe prose.';
+  return 'Confirm a generated statement that its cited record did not support in full.';
+}
+
+/** Collects the distinct reviewer follow-ups implied by a set of rejected claims. */
+function reviewerFollowUps(claims: readonly RejectedClaim[]): readonly string[] {
+  return [...new Set(claims.map(({ assessment }) => reviewerFollowUp(assessment.reason)))];
+}
+
 /** Converts unsupported claim assessments into actionable review warnings. */
 function supportWarnings(claims: readonly RejectedClaim[]): readonly ReviewWarning[] {
   return claims.map(({ assessment, claim }) => ({
@@ -564,6 +762,27 @@ function supportWarnings(claims: readonly RejectedClaim[]): readonly ReviewWarni
     message: assessment.reason,
     claimIds: [claim.id]
   }));
+}
+
+/** Wording that asserts something is missing, unsupported, or otherwise absent. */
+const ABSENCE_ASSERTION =
+  /\b(?:absent|missing|unsupported|not supported|no support|lacks|lacking|insufficient|without support|no evidence|unavailable)\b/i;
+
+/** Drops warnings that report a person absent while the same brief presents them as supported.
+ *
+ * A brief that lists Amara Quinn as a cited stakeholder and then warns that "legal counsel amara
+ * quinn" is absent cannot be acted on: whichever half is wrong, the reviewer cannot tell which.
+ * The generated warning is the half with no evidence behind it, so it is the half that is removed;
+ * genuinely unsupported claims still produce their own claim-scoped warnings. */
+export function withoutSelfContradictoryWarnings(
+  warnings: readonly ReviewWarning[],
+  supportedNames: readonly string[]
+): readonly ReviewWarning[] {
+  return warnings.filter((warning) => {
+    if (!ABSENCE_ASSERTION.test(warning.message)) return true;
+    const message = normalize(warning.message);
+    return !supportedNames.some((name) => containsBounded(message, normalize(name)));
+  });
 }
 
 /** Keeps generated warnings in order while adding required local warnings within schema limits. */
@@ -741,6 +960,11 @@ const COMMERCIAL_COMMITMENT =
   /\b(?:discount|concession|concede|credit|rebate|waiver|waive|refund|price reduction|free of charge)\b/i;
 const UNSAFE_CUSTOMER_FACING_ACTION =
   /\b(?:promise|guarantee|bypass|conceal|mislead|fabricate|disclose|reveal|leak)\b/i;
+/** Names the approval or review process that owns a commercial term, rather than settling it. */
+const NAMES_APPROVAL_PROCESS = /\b(?:approval|review|deal desk)\b/i;
+/** Verbs that would settle a commercial term rather than route it. */
+const GRANTS_COMMERCIAL_TERM =
+  /\b(?:offer|grant|concede|waive|give|extend|apply|honou?r|provide|accept|approve)\w*\b/i;
 
 /** Recognizes approved language that explicitly communicates evidence uncertainty. */
 function isExplicitUncertainty(value: string): boolean {
@@ -790,24 +1014,43 @@ function safeInformationRequest(value: string): boolean {
 
 /** Accepts bounded internal workflow actions that make no customer-facing or commercial commitment.
  *
- * The action text is forward-looking and is deliberately not evidence-verified (only its rationale
- * is), so this gate is a negative safety filter rather than a sentence-template allowlist. An
- * allowlist of literal phrasings silently deleted every deal-specific recommendation a real model
- * produced, which emptied the section the brief exists to deliver. Commercial commitments are
- * rejected here and remain the approval flow's responsibility. */
-function safeRecommendationAction(value: string): boolean {
+ * The safety filters below - prompt-injection prose, length, commercial commitments, and unsafe
+ * customer-facing verbs - apply to every action and are the point of this gate. The remaining
+ * checks are shape heuristics that stand in for grounding when nothing grounds the text: an action
+ * has to read as one bounded internal instruction so that a subordinate clause cannot smuggle in a
+ * fact no evidence supports. When the action text is itself supported by a retained claim, that
+ * substitute is unnecessary and actively harmful - the deal's own recorded next step, "Send revised
+ * order form and migration success plan by 2026-04-28", was deleted from live briefs purely because
+ * "send" is absent from the verb list, which is grading phrasing rather than evidence. A grounded
+ * action therefore skips the shape heuristics and keeps every safety filter. Commercial commitments
+ * are rejected on both paths and remain the approval flow's responsibility. */
+function safeRecommendationAction(value: string, claims: readonly Claim[]): boolean {
   const normalized = value.trim();
   if (!safeGeneratedProse(normalized)) return false;
   if (safeInformationRequest(normalized)) return true;
   if (normalized.length > MAX_RECOMMENDATION_ACTION_CHARACTERS) return false;
-  // A forward-looking instruction, not a narrative: one sentence, opening on an internal verb.
-  if (!INTERNAL_ACTION_VERB.test(normalized)) return false;
+  // Pricing and concessions belong to the deterministic approval policy, never to raw actions. The
+  // one exception is an action that hands the term to that policy rather than settling it: OPP-1003
+  // records "Route discount, liability language, and restricted data access request for approval by
+  // 2026-05-14" as its own next step, and rejecting it emptied Recommended Next Actions in two of
+  // three live runs. Naming the approval or review process that owns the term, together with the
+  // absence of any verb that would grant it, is what separates the two: "Schedule internal review
+  // for discount and liability language" is admitted, while "Offer a 15% discount", "Approve the
+  // 15% discount", and "Confirm the 15% discount with the customer" are all still rejected.
+  if (
+    COMMERCIAL_COMMITMENT.test(normalized) &&
+    !(NAMES_APPROVAL_PROCESS.test(normalized) && !GRANTS_COMMERCIAL_TERM.test(normalized))
+  )
+    return false;
+  if (UNSAFE_CUSTOMER_FACING_ACTION.test(normalized)) return false;
+  // One action is one instruction, however well grounded its text is: a multi-sentence passage
+  // copied out of a transcript or a Slack thread is a status narrative, not something to execute.
   if ((normalized.match(/[.!?](?=\s|$)/g) ?? []).length > 1) return false;
+  if (assertionSupported(normalized, claims)) return true;
+  // A forward-looking instruction, not a narrative: opening on an internal verb.
+  if (!INTERNAL_ACTION_VERB.test(normalized)) return false;
   // Subordinate clauses smuggle unverified facts into text nothing grounds.
   if (UNGROUNDED_FACTUAL_CONNECTIVE.test(normalized)) return false;
-  // Pricing and concessions belong to the deterministic approval policy, never to raw actions.
-  if (COMMERCIAL_COMMITMENT.test(normalized)) return false;
-  if (UNSAFE_CUSTOMER_FACING_ACTION.test(normalized)) return false;
   return true;
 }
 
@@ -858,9 +1101,7 @@ export function validateConversationArtifact(
     objections: parsed.objections.filter((assertion) => assertionSupported(assertion, result.kept)),
     claims: result.kept,
     missingContext: boundedWithDeterministic(parsed.missingContext.filter(safeInformationRequest), [
-      ...result.insufficient.map(
-        ({ assessment }) => `Verify evidence for claim ${assessment.claimId}.`
-      ),
+      ...reviewerFollowUps(result.insufficient),
       ...(unsupportedAssertions.length === 0 ? [] : ['Verify unsupported conversation details.'])
     ]),
     reviewWarnings: mergeReviewWarnings(parsed.reviewWarnings, warnings, validClaimIds)
@@ -921,7 +1162,7 @@ export function validateStakeholderArtifact(
     claims: top.kept,
     stakeholders: supportedStakeholders.map(withoutInsufficient),
     coverageGaps: boundedWithDeterministic(parsed.coverageGaps.filter(safeInformationRequest), [
-      ...insufficient.map(({ assessment }) => `Verify evidence for claim ${assessment.claimId}.`),
+      ...reviewerFollowUps(insufficient),
       ...(unsupportedStakeholders.length === 0 ? [] : ['Verify unsupported stakeholder records.'])
     ]),
     reviewWarnings: mergeReviewWarnings(parsed.reviewWarnings, warnings, validClaimIds)
@@ -1003,7 +1244,7 @@ export function validateDealBrief(
     insufficient.push(...result.insufficient);
     if (
       result.kept.length === 0 ||
-      !safeRecommendationAction(action.action) ||
+      !safeRecommendationAction(action.action, result.kept) ||
       !assertionSupported(action.rationale, result.kept)
     )
       return [];
@@ -1054,12 +1295,22 @@ export function validateDealBrief(
     if (
       localClaims.length === 0 ||
       !assertionSupported(summary.summary, localClaims) ||
-      summary.sourceType !== expectedSourceType ||
-      source.eventDate === undefined ||
-      !summary.capturedAt.startsWith(source.eventDate)
+      summary.sourceType !== expectedSourceType
     )
       return [];
-    return [{ ...summary, claims: localClaims }];
+    // capturedAt is code-owned: stamped from the cited record's own event date, never trusted
+    // from the model, and omitted when the record has none. Requiring a match instead deleted
+    // every policy document, pricing note, and Salesforce account or opportunity row from Source
+    // Evidence, because those records carry no capture event and so could never satisfy it.
+    const { capturedAt, ...rest } = summary;
+    void capturedAt;
+    return [
+      {
+        ...rest,
+        ...(source.eventDate === undefined ? {} : { capturedAt: `${source.eventDate}T00:00:00Z` }),
+        claims: localClaims
+      }
+    ];
   });
   const summaryWasReplaced =
     !isExplicitUncertainty(parsed.executiveSummary.narrative) &&
@@ -1200,10 +1451,14 @@ export function validateDealBrief(
               : { owner: item.owner })
           })),
         [
-          ...insufficient.map(({ assessment }) => ({
-            question: `Verify evidence for claim ${assessment.claimId}.`,
-            whyItMatters: assessment.reason
-          })),
+          ...[
+            ...new Map(
+              insufficient.map(({ assessment }) => [
+                reviewerFollowUp(assessment.reason),
+                assessment.reason
+              ])
+            )
+          ].map(([question, whyItMatters]) => ({ question, whyItMatters })),
           ...(nakedAssertions.length === 0
             ? []
             : [
@@ -1222,7 +1477,10 @@ export function validateDealBrief(
     confidenceAndReviewWarnings: {
       ...parsed.confidenceAndReviewWarnings,
       warnings: mergeReviewWarnings(
-        parsed.confidenceAndReviewWarnings.warnings,
+        withoutSelfContradictoryWarnings(
+          parsed.confidenceAndReviewWarnings.warnings,
+          supportedStakeholders.map((stakeholder) => stakeholder.name)
+        ),
         warnings,
         validClaimIds
       )
@@ -1230,6 +1488,20 @@ export function validateDealBrief(
   });
   const sourceTypeCount = new Set(evidence.map((record) => record.sourceType)).size;
   const richEvidence = evidence.length >= 5 || sourceTypeCount >= 3;
+  // Losing every proposed stakeholder is a correctable generation fault, not a finished brief: it
+  // means each identity claim quoted a title or a record id without naming the person it belongs
+  // to, so nothing tied either to the other. Reporting it as an error routes it to the agent's
+  // repair attempt, where the model can re-mint the claims, instead of silently shipping a brief
+  // with an empty Stakeholder Map beside Source Evidence citing those same contact records.
+  if (
+    richEvidence &&
+    parsed.stakeholderMap.stakeholders.length > 0 &&
+    supportedStakeholders.length === 0
+  )
+    throw new DomainValidationError('No generated stakeholder is supported by its cited evidence', {
+      proposedStakeholders: parsed.stakeholderMap.stakeholders.length,
+      hint: 'Give each stakeholder one claim naming the person in full and restating their title exactly as the cited record states it.'
+    });
   const substantiveSectionCount = countSubstantiveBriefSections(validated);
   if (richEvidence && substantiveSectionCount < MIN_SUBSTANTIVE_BRIEF_SECTIONS)
     throw new DomainValidationError(

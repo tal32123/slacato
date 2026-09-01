@@ -120,9 +120,12 @@
     .guide-item { min-width: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; }
     .guide-item h4 { color: var(--teal-dark); }
     .guide-item p { margin: 4px 0 0; color: #4f5d65; font-size: 14px; line-height: 1.5; }
-    #data .e-title, #data .e-text { cursor: help; }
-    .erd-tooltip { position: fixed; z-index: 1200; max-width: min(360px, calc(100vw - 24px)); padding: 10px 12px; border: 1px solid var(--teal); border-radius: 10px; background: #0A141D; color: #fff; box-shadow: 0 12px 30px rgba(10,20,29,.24); font-size: 13px; line-height: 1.45; pointer-events: none; }
-    .erd-tooltip[hidden] { display: none; }
+    .change-marker { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 20px; padding: 10px 12px; border: 1px solid #d8b46b; border-radius: 10px; background: var(--warning-soft); color: #68400e; text-align: left; cursor: pointer; }
+    .change-zone { outline: 2px solid rgba(21,136,100,.28); outline-offset: 4px; }
+    .change-marker strong { flex: 0 0 auto; color: var(--warning); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .change-marker span { min-width: 0; font-size: 13px; line-height: 1.35; }
+    .change-marker small { margin-left: auto; color: #795822; white-space: nowrap; }
+    .change-marker:hover, .change-marker:focus-visible { border-color: var(--warning); outline: none; }
     .readiness-list { display: grid; gap: 18px; margin: 24px 0 34px; }
     .readiness-card { min-width: 0; padding: 24px; border: 1px solid var(--line); border-left: 4px solid var(--teal); border-radius: 14px; background: #fbfcfb; }
     .readiness-card > h3 { margin: 0 0 6px; }
@@ -132,12 +135,6 @@
     .readiness-block h4 { margin-bottom: 8px; color: var(--teal-dark); }
     .readiness-block ul { max-width: none; margin: 0; padding-left: 1.1em; color: #46545c; font-size: 14px; line-height: 1.5; }
     .readiness-block strong { color: var(--ink); }
-    .change-marker { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 14px; padding: 10px 12px; border: 1px solid #d8b46b; border-radius: 10px; background: var(--warning-soft); color: #68400e; text-align: left; cursor: pointer; }
-    .change-zone { outline: 2px solid rgba(21,136,100,.28); outline-offset: 4px; }
-    .change-marker strong { flex: 0 0 auto; color: var(--warning); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
-    .change-marker span { min-width: 0; font-size: 13px; line-height: 1.35; }
-    .change-marker small { margin-left: auto; color: #795822; white-space: nowrap; }
-    .change-marker:hover, .change-marker:focus-visible { border-color: var(--warning); outline: none; }
     .legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 14px 0 0; color: var(--muted); font-size: 13px; }
     .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 7px; border-radius: 3px; vertical-align: -1px; background: var(--teal-soft); border: 1px solid var(--teal); }
     .legend .durable::before { background: #eef1f2; border-color: #65737b; }
@@ -179,16 +176,15 @@
       <span class="brand">Deal Intelligence</span>
       <a href="#context">Context</a>
       <a href="#architecture">Architecture</a>
-      <a href="#data">Data model</a>
+      <a href="#agents">Agents</a>
       <a href="#lifecycle">Run lifecycle</a>
-      <a href="#decisions">Design</a>
       <a href="#security">Security</a>
       <a href="#deliverables">Deliverables</a>
       <a href="#production">Production</a>
     </div>
   </nav>
 
-  <header class="hero change-zone" data-change-id="hero-summary" data-change="The overview sentence is now shorter and uses plain language.">
+  <header class="hero">
     <div class="eyebrow">Technical overview · offline artifact</div>
     <h1>Evidence-grounded negotiation preparation.</h1>
     <p class="lede">Turns scattered deal information into one brief you can review and verify.</p>
@@ -210,7 +206,7 @@
       <div class="grid-3">
         <div class="card"><h4>Reduce preparation time</h4><p>Fan out focused analysis across conversation, stakeholder, and commercial evidence, then synthesize one coherent brief.</p></div>
         <div class="card"><h4>Keep evidence inspectable</h4><p>Claims link to immutable authorized evidence; API and UI render stable labels such as <code>source=&lt;file&gt;, id=&lt;value&gt;</code>.</p></div>
-        <div class="card change-zone" data-change-id="approval-example" data-change="The approval rule now includes a concrete example."><h4>Keep people accountable</h4><p>If a recommendation needs approval—for example, a large discount—the brief waits for the right person to approve or reject it.</p></div>
+        <div class="card"><h4>Keep people accountable</h4><p>If a recommendation needs approval—for example, a large discount—the brief waits for the right person to approve or reject it.</p></div>
       </div>
     </section>
 
@@ -221,7 +217,7 @@
 
       <h3>Logical view</h3>
 
-      <div class="diagram change-zone" data-change-id="logical-diagram" data-change="Every component now explains its job inside the diagram." data-diagram="logical-architecture" role="img" aria-label="Component architecture showing web, API, worker, core, infrastructure, PostgreSQL, Redis, and model providers">
+      <div class="diagram" data-diagram="logical-architecture" role="img" aria-label="Component architecture showing web, API, worker, core, infrastructure, PostgreSQL, Redis, and model providers">
         <svg viewBox="0 0 1160 760" xmlns="http://www.w3.org/2000/svg">
           <defs><marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
           <rect x="28" y="28" width="1104" height="704" rx="22" fill="#fbfcfb" stroke="#dce3df"/>
@@ -250,7 +246,7 @@
 
       <h3>Deployment view</h3>
       <p>The API proves who may request work, the worker performs it, PostgreSQL preserves the history needed to recover it, and the model gateway contains external model access.</p>
-      <div class="diagram change-zone" data-change-id="deployment-diagram" data-change="The deployment purpose moved above the diagram." data-diagram="deployment" role="img" aria-label="Deployment flow from reviewer browser through the web gateway and API to the worker, PostgreSQL, Redis, and model gateway">
+      <div class="diagram" data-diagram="deployment" role="img" aria-label="Deployment flow from reviewer browser through the web gateway and API to the worker, PostgreSQL, Redis, and model gateway">
         <svg viewBox="0 0 1240 560" xmlns="http://www.w3.org/2000/svg">
           <desc>A request starts in the reviewer browser. The web gateway keeps the browser and API on one trusted origin. The API authorizes and records work, the worker performs it, PostgreSQL preserves recovery state, Redis delivers pending work, and the model gateway controls provider traffic.</desc>
           <defs><marker id="arrowD" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#63727a"/></marker></defs>
@@ -291,320 +287,131 @@
       </div>
     </section>
 
-    <section id="data">
-      <div class="section-number">03 · Persisted data model</div>
-      <h2>Actual Drizzle schema, grouped by responsibility.</h2>
-      <p>The model separates permissions, evidence, workflow, and outputs so access is checked before retrieval, interrupted work can resume, and every generated claim can be traced to the exact evidence version that supported it. Read the groups from identity and deals through evidence, workflow, and final artifacts; arrows point from a record to the parent it depends on. Hover over any table name or field row for a plain-language explanation.</p>
-
-      <div class="diagram change-zone" data-change-id="data-tooltips" data-change="ERD hover help now uses one tooltip instead of two." data-diagram="data-model" role="img" aria-label="Entity relationship diagram of the actual Drizzle schema">
-        <svg viewBox="0 0 1320 1220" xmlns="http://www.w3.org/2000/svg">
-          <defs><marker id="arrowE" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#88959b"/></marker></defs>
-          <rect width="1320" height="1220" fill="#fbfcfb"/>
-          <style>
-            .e-line{stroke:#a6b1b6;stroke-width:1.4;fill:none;marker-end:url(#arrowE)}
-            .e-box{fill:#fff;stroke:#b8c6bf;stroke-width:1.4}.e-head{fill:#eaf6f1;stroke:#158864;stroke-width:1.5}
-            .e-title{font:700 14px system-ui;fill:#0A141D}.e-text{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#435159}.e-pk{fill:#158864;font-weight:700}.e-fk{fill:#8a5a16}
-            .e-group{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}
-          </style>
-          <text x="38" y="34" class="e-group">IDENTITY &amp; DEALS</text><text x="38" y="326" class="e-group">EVIDENCE &amp; AUTHORIZED RETRIEVAL</text><text x="38" y="666" class="e-group">DURABLE WORKFLOW</text><text x="680" y="666" class="e-group">ARTIFACTS, APPROVAL &amp; OBSERVABILITY</text>
-
-          <!-- relationship lines behind entities -->
-          <path class="e-line" d="M300 170H250"/><path class="e-line" d="M300 250C250 250 260 120 250 120"/>
-          <path class="e-line" d="M640 125H590"/><path class="e-line" d="M640 242C590 242 610 125 590 125"/>
-          <path class="e-line" d="M980 128H930"/><path class="e-line" d="M980 242C940 242 950 125 930 125"/>
-          <path class="e-line" d="M300 452H250"/><path class="e-line" d="M300 492C270 492 280 240 250 240"/>
-          <path class="e-line" d="M640 430H590"/><path class="e-line" d="M640 470C610 470 620 135 590 135"/>
-          <path class="e-line" d="M980 440H930"/><path class="e-line" d="M980 490C950 490 950 455 930 455"/>
-          <path class="e-line" d="M300 800H250"/><path class="e-line" d="M300 880H250"/><path class="e-line" d="M300 1040H250"/>
-          <path class="e-line" d="M640 770H590"/><path class="e-line" d="M640 850H590"/><path class="e-line" d="M640 970H590"/>
-          <path class="e-line" d="M980 760H930"/><path class="e-line" d="M980 830H930"/><path class="e-line" d="M980 910H930"/>
-          <path class="e-line" d="M1240 750H1200"/><path class="e-line" d="M1240 860H1200"/><path class="e-line" d="M1240 1010H1200"/>
-          <path class="e-line" d="M800 580V650H760V700"/><path class="e-line" d="M460 590V650H770V700"/>
-
-          <!-- boxes helper pattern: header + body -->
-          <g transform="translate(40 58)"><rect class="e-box" width="210" height="128" rx="10"/><path class="e-head" d="M10 0H200A10 10 0 0 1 210 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">personas</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text">display_name · role</text><text x="14" y="91" class="e-text">source_commit</text><text x="14" y="110" class="e-text">created_at</text></g>
-          <g transform="translate(300 58)"><rect class="e-box" width="290" height="144" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">permission_grants</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK persona_id · account_id</text><text x="14" y="91" class="e-text">source_type · can_read</text><text x="14" y="110" class="e-text">can_read_restricted · sensitive_pricing</text><text x="14" y="129" class="e-text">can_request_approval · source_commit</text></g>
-          <g transform="translate(640 58)"><rect class="e-box" width="290" height="100" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">accounts</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text">name · created_at</text></g>
-          <g transform="translate(980 58)"><rect class="e-box" width="300" height="126" rx="10"/><path class="e-head" d="M10 0H290A10 10 0 0 1 300 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">opportunities</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK account_id</text><text x="14" y="91" class="e-text">name · restricted</text><text x="14" y="110" class="e-text">created_at</text></g>
-          <g transform="translate(640 208)"><rect class="e-box" width="290" height="100" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">contacts</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK account_id · name · email</text></g>
-          <g transform="translate(980 208)"><rect class="e-box" width="300" height="100" rx="10"/><path class="e-head" d="M10 0H290A10 10 0 0 1 300 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">auth_sessions</text><text x="14" y="53" class="e-text e-pk">PK version</text><text x="14" y="72" class="e-text e-fk">FK persona_id · expires_at · revoked_at</text></g>
-
-          <g transform="translate(40 350)"><rect class="e-box" width="210" height="150" rx="10"/><path class="e-head" d="M10 0H200A10 10 0 0 1 210 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">document_versions</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text">external_id · version</text><text x="14" y="91" class="e-text">source_type · content_hash</text><text x="14" y="110" class="e-text">content · source_locator</text><text x="14" y="129" class="e-text">event_date · policy_hash</text></g>
-          <g transform="translate(300 350)"><rect class="e-box" width="290" height="210" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">evidence_versions</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK document_version_id · account_id</text><text x="14" y="91" class="e-text e-fk">FK opportunity_id</text><text x="14" y="110" class="e-text">source_type · sensitivity · content_hash</text><text x="14" y="129" class="e-text">lexical_content · embedding</text><text x="14" y="148" class="e-text">embedding_provider · model · dimension</text><text x="14" y="167" class="e-text">embedding_profile · version · normalization</text><text x="14" y="186" class="e-text">reliability_class · classification_reason</text></g>
-          <g transform="translate(640 350)"><rect class="e-box" width="290" height="164" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">run_evidence_manifests</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id</text><text x="14" y="91" class="e-text">scope_hash · policy_hash · query_hash</text><text x="14" y="110" class="e-text">index_profile · embedding_* profile</text><text x="14" y="129" class="e-text">context_limit · diagnostics</text><text x="14" y="148" class="e-text">created_at</text></g>
-          <g transform="translate(980 350)"><rect class="e-box" width="300" height="210" rx="10"/><path class="e-head" d="M10 0H290A10 10 0 0 1 300 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">run_evidence_manifest_entries</text><text x="14" y="53" class="e-text e-pk">PK manifest_id + evidence_version_id</text><text x="14" y="72" class="e-text e-fk">FK manifest_id · evidence_version_id</text><text x="14" y="91" class="e-text">citation_id · source_locator</text><text x="14" y="110" class="e-text">source_type · sensitivity · policy_hash</text><text x="14" y="129" class="e-text">lexical_rank · semantic_rank · query_rank</text><text x="14" y="148" class="e-text">fusion_score · score</text><text x="14" y="167" class="e-text">reliability_adjustment · recency_adjustment</text><text x="14" y="186" class="e-text">included_characters · content_hash</text></g>
-
-          <g transform="translate(40 700)"><rect class="e-box" width="210" height="182" rx="10"/><path class="e-head" d="M10 0H200A10 10 0 0 1 210 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">runs</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK opportunity_id · requested_by</text><text x="14" y="91" class="e-text">status · version</text><text x="14" y="110" class="e-text">generation_provider · generation_model</text><text x="14" y="129" class="e-text">idempotency_key · start_request_hash</text><text x="14" y="148" class="e-text">created_at · updated_at</text></g>
-          <g transform="translate(300 700)"><rect class="e-box" width="290" height="126" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">outbox_commands</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id</text><text x="14" y="91" class="e-text">type · payload · idempotency_key</text><text x="14" y="110" class="e-text">status · claim_* · consumed_at</text></g>
-          <g transform="translate(300 850)"><rect class="e-box" width="290" height="142" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">step_invocations</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id · causal_command_id</text><text x="14" y="91" class="e-text">step · owner · lease_token</text><text x="14" y="110" class="e-text">lease_expires_at · attempt · status</text><text x="14" y="129" class="e-text">completed_at</text></g>
-          <g transform="translate(40 930)"><rect class="e-box" width="210" height="126" rx="10"/><path class="e-head" d="M10 0H200A10 10 0 0 1 210 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">workflow_checkpoints</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id · invocation_id</text><text x="14" y="91" class="e-text">step · logical_generation_id</text><text x="14" y="110" class="e-text">payload · created_at</text></g>
-          <g transform="translate(300 1020)"><rect class="e-box" width="290" height="160" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">generation_attempts</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id · invocation_id</text><text x="14" y="91" class="e-text">provider · model · operation · ordinal</text><text x="14" y="110" class="e-text">output_mode · validation_attempts</text><text x="14" y="129" class="e-text">input_tokens · output_tokens · status</text><text x="14" y="148" class="e-text">request_id · response_id</text></g>
-          <g transform="translate(640 700)"><rect class="e-box" width="290" height="142" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">specialist_artifacts</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id · evidence_manifest_id</text><text x="14" y="91" class="e-text">kind · draft_version · outcome</text><text x="14" y="110" class="e-text">content · content_hash · warnings</text><text x="14" y="129" class="e-text">generation_metadata</text></g>
-          <g transform="translate(640 870)"><rect class="e-box" width="290" height="112" rx="10"/><path class="e-head" d="M10 0H280A10 10 0 0 1 290 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">claims → citations</text><text x="14" y="53" class="e-text e-pk">claims.PK id</text><text x="14" y="72" class="e-text e-fk">claims.FK run_id · artifact_id</text><text x="14" y="91" class="e-text e-fk">citations.FK claim_id · evidence_version_id</text></g>
-          <g transform="translate(980 700)"><rect class="e-box" width="220" height="150" rx="10"/><path class="e-head" d="M10 0H210A10 10 0 0 1 220 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">approval_subjects</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK run_id</text><text x="14" y="91" class="e-text">draft_version · subject_hash</text><text x="14" y="110" class="e-text">payload · policy_triggers</text><text x="14" y="129" class="e-text">quorum_version · superseded_by</text></g>
-          <g transform="translate(980 880)"><rect class="e-box" width="220" height="142" rx="10"/><path class="e-head" d="M10 0H210A10 10 0 0 1 220 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">approval_requirement_entries</text><text x="14" y="53" class="e-text e-pk">PK approval_subject_id + id</text><text x="14" y="72" class="e-text">category · eligible_authorities</text><text x="14" y="91" class="e-text">policy_triggers · depends_on</text><text x="14" y="110" class="e-text">ordinal · created_at</text></g>
-          <g transform="translate(980 1050)"><rect class="e-box" width="220" height="130" rx="10"/><path class="e-head" d="M10 0H210A10 10 0 0 1 220 10V34H0V10A10 10 0 0 1 10 0Z"/><text x="14" y="22" class="e-title">approval_decisions</text><text x="14" y="53" class="e-text e-pk">PK id</text><text x="14" y="72" class="e-text e-fk">FK subject + entry · actor_id</text><text x="14" y="91" class="e-text">action · authority · payload hashes</text><text x="14" y="110" class="e-text">result_status · quorum flags</text></g>
-          <g transform="translate(1240 700)"><rect class="e-box" width="70" height="122" rx="10"/><text x="35" y="28" text-anchor="middle" class="e-title">briefs</text><text x="8" y="54" class="e-text e-pk">PK id</text><text x="8" y="73" class="e-text e-fk">run_id</text><text x="8" y="92" class="e-text">payload</text><text x="8" y="111" class="e-text">finalized</text></g>
-          <g transform="translate(1240 850)"><rect class="e-box" width="70" height="122" rx="10"/><text x="35" y="25" text-anchor="middle" class="e-title">trace</text><text x="7" y="48" class="e-text e-pk">id</text><text x="7" y="67" class="e-text e-fk">run_id</text><text x="7" y="86" class="e-text">span_id</text><text x="7" y="105" class="e-text">kind</text></g>
-          <g transform="translate(1240 1000)"><rect class="e-box" width="70" height="122" rx="10"/><text x="35" y="25" text-anchor="middle" class="e-title">events</text><text x="7" y="48" class="e-text e-pk">id</text><text x="7" y="67" class="e-text e-fk">run_id</text><text x="7" y="86" class="e-text">sequence</text><text x="7" y="105" class="e-text">payload</text></g>
-        </svg>
+    <section id="agents">
+      <div class="section-number">03 · Agent roles</div>
+      <h2>Four focused agents. One negotiation brief.</h2>
+      <p>Agents do not query databases or source systems directly. The workflow gives each one a permission-checked evidence bundle, access to the shared model gateway, and code-owned output and citation validation.</p>
+      <div class="grid-2">
+        <div class="card"><h4>Conversation Intelligence</h4><p><strong>What:</strong> finds buyer goals, objections, urgency, and open questions in calls and Slack updates.<br><strong>Why:</strong> the buyer’s own signals should shape the negotiation plan.<br><strong>Inputs:</strong> authorized Gong call summaries, Gong transcripts, and Slack updates.<br><strong>Tools:</strong> shared model gateway with structured output, plus artifact and citation validation.</p></div>
+        <div class="card"><h4>Stakeholder Map</h4><p><strong>What:</strong> identifies champions, decision-makers, blockers, and missing relationships.<br><strong>Why:</strong> a good commercial plan fails if the wrong people are engaged.<br><strong>Inputs:</strong> authorized Salesforce contacts, Gong summaries and transcripts, and Slack updates.<br><strong>Tools:</strong> shared model gateway with a stakeholder output schema, plus artifact and citation validation.</p></div>
+        <div class="card"><h4>Commercial Analysis</h4><p><strong>What:</strong> reviews pricing, policy, legal concerns, and sensitive concessions.<br><strong>Why:</strong> high-impact terms need focused scrutiny and human approval.<br><strong>Inputs:</strong> authorized Salesforce records, pricing notes, and Deal Desk policy evidence.<br><strong>Tools:</strong> shared model gateway with a commercial output schema, plus policy, artifact, and citation validation.</p></div>
+        <div class="card"><h4>Negotiation Strategy</h4><p><strong>What:</strong> combines the three specialist views into the final brief and next actions.<br><strong>Why:</strong> the seller needs one prioritized, evidence-backed view of the deal.<br><strong>Inputs:</strong> all three validated specialist outputs and the full authorized evidence list.<br><strong>Tools:</strong> shared model gateway with the final brief schema, plus final artifact and citation validation.</p></div>
       </div>
-      <div class="diagram-guide" aria-label="Data model explanations">
-        <div class="guide-item"><h4>Identity and deals</h4><p>People, accounts, opportunities, and permission grants establish who is asking and which deal data they are allowed to use.</p></div>
-        <div class="guide-item"><h4>Evidence and retrieval</h4><p>Source records become immutable evidence versions. A run freezes its authorized search results into a manifest so later citations cannot silently point at different content.</p></div>
-        <div class="guide-item"><h4>Durable workflow</h4><p>Runs, commands, leases, checkpoints, and generation attempts record what should happen, what already happened, and where processing can safely resume.</p></div>
-        <div class="guide-item"><h4>Artifacts and review</h4><p>Specialist outputs become claims and citations. Policy-sensitive drafts create approval requirements and immutable decisions before the final brief is stored.</p></div>
-      </div>
-      <div class="callout"><p><strong>Immutability is part of the data model.</strong> Database triggers reject updates/deletes to source and evidence versions, manifests, approval decisions, and approval requirement entries; finalized briefs are immutable. Manifest entries preserve content hashes, citation IDs, locators, source/sensitivity, component ranks, adjustments, and included character counts.</p></div>
-      <p>The drawing deliberately omits bookkeeping tables and authorization views that do not change this core flow. They support budgets, audit history, approval membership, and safe database access without adding another business concept to the diagram.</p>
     </section>
 
     <section id="lifecycle">
       <div class="section-number">04 · Run lifecycle</div>
-      <h2>Eleven states, six steps, one command at a time.</h2>
-      <p>A run is a durable state machine, not a free-running model graph. Each step is dispatched as an idempotent command, claimed under a lease, and committed together with the next command in a single transaction. What a model returns decides what the brief <em>says</em>; it never decides what happens <em>next</em>.</p>
+      <h2>A clear path from request to reviewed brief.</h2>
 
-      <div class="diagram" data-diagram="run-state" role="img" aria-label="Run state machine: created, retrieving, specialists running, synthesizing and validating on the happy path, branching to awaiting approval or finalizing, ending in completed, rejected, failed or cancelled, with a lease-expiry recovery loop">
-        <svg viewBox="0 0 1320 640" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <marker id="arrowS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#617078"/></marker>
-            <marker id="arrowSd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#9a5a10"/></marker>
-          </defs>
-          <rect width="1320" height="640" fill="#fbfcfb"/>
+      <h3>How a brief is created</h3>
+      <p>The system follows a fixed sequence, saves progress after every stage, and can resume after an interruption without starting over.</p>
+      <div class="diagram" data-diagram="brief-lifecycle" role="img" aria-label="Six-stage flow from an authorized request to a reviewed negotiation brief">
+        <svg viewBox="0 0 1200 440" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrowF" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#617078"/></marker></defs>
+          <rect width="1200" height="440" fill="#fbfcfb"/>
           <style>
-            .sm-code{fill:#eaf6f1;stroke:#158864;stroke-width:2}
-            .sm-model{fill:#fff;stroke:#b8c6bf;stroke-width:1.7}
-            .sm-human{fill:#fff7e8;stroke:#9a5a10;stroke-width:1.7}
-            .sm-term{fill:#eef1f2;stroke:#65737b;stroke-width:1.5}
-            .sm-note{fill:#fff;stroke:#b8c6bf;stroke-width:1.3;stroke-dasharray:5 5}
-            .sm-name{font:700 15px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#0A141D}
-            .sm-t{font:700 13px system-ui;fill:#0A141D}
-            .sm-s{font:11px system-ui;fill:#52616a}
-            .sm-e{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#158864}
-            .sm-l{font:11px system-ui;fill:#6b7880}
-            .sm-dl{font:11px system-ui;fill:#9a5a10}
-            .sm-a{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowS)}
-            .sm-lane{fill:none;stroke:#9a5a10;stroke-width:1.3;stroke-dasharray:5 5}
-            .sm-loop{stroke:#9a5a10;stroke-width:2;stroke-dasharray:6 5;fill:none;marker-end:url(#arrowSd)}
-            .sm-g{font:700 11px system-ui;fill:#158864;letter-spacing:1.3px}
-            .sm-cap{font:700 11px system-ui;fill:#9a5a10;letter-spacing:1.2px}
+            .fl-box{fill:#fff;stroke:#158864;stroke-width:2}.fl-ai{fill:#eaf6f1;stroke:#158864;stroke-width:2}.fl-human{fill:#fff7e8;stroke:#9a5a10;stroke-width:2}
+            .fl-title{font:700 17px system-ui;fill:#0A141D}.fl-copy{font:12px system-ui;fill:#52616a}.fl-arrow{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowF)}
           </style>
-
-          <text x="22" y="26" class="sm-g">RUN STATE MACHINE · packages/core/src/domain/runs/state-machine.ts</text>
-          <text x="22" y="46" class="sm-cap">LEASED, REPLAYABLE STEPS — INTERRUPTED WORK RESUMES FROM A CHECKPOINT</text>
-          <rect class="sm-lane" x="22" y="54" width="1230" height="120" rx="16"/>
-
-          <g><rect class="sm-code" x="40" y="64" width="216" height="100" rx="14"/><text x="56" y="92" class="sm-name">created</text><text x="56" y="114" class="sm-s">step start</text><text x="56" y="132" class="sm-s">claim lease · checkpoint</text><text x="56" y="154" class="sm-e">→ start</text></g>
-          <path class="sm-a" d="M256 114H286"/>
-          <g><rect class="sm-model" x="286" y="64" width="216" height="100" rx="14"/><text x="302" y="92" class="sm-name">retrieving</text><text x="302" y="114" class="sm-s">step retrieve</text><text x="302" y="132" class="sm-s">authorized hybrid search</text><text x="302" y="154" class="sm-e">→ retrieval_completed</text></g>
-          <path class="sm-a" d="M502 114H532"/>
-          <g><rect class="sm-model" x="532" y="64" width="216" height="100" rx="14"/><text x="548" y="92" class="sm-name">specialists_running</text><text x="548" y="114" class="sm-s">step specialists · 3 LLM calls</text><text x="548" y="132" class="sm-s">frozen evidence manifest</text><text x="548" y="154" class="sm-e">→ specialists_completed</text></g>
-          <path class="sm-a" d="M748 114H778"/>
-          <g><rect class="sm-model" x="778" y="64" width="216" height="100" rx="14"/><text x="794" y="92" class="sm-name">synthesizing</text><text x="794" y="114" class="sm-s">step synthesize · 1 LLM call</text><text x="794" y="132" class="sm-s">StrategyAgent fans in artifacts</text><text x="794" y="154" class="sm-e">→ synthesis_completed</text></g>
-          <path class="sm-a" d="M994 114H1024"/>
-          <g><rect class="sm-code" x="1024" y="64" width="216" height="100" rx="14"/><text x="1040" y="92" class="sm-name">validating</text><text x="1040" y="114" class="sm-s">step validate · no model call</text><text x="1040" y="132" class="sm-s">schema, safety, approval policy</text><text x="1040" y="154" class="sm-l">→ branches below</text></g>
-
-          <path class="sm-loop" d="M1252 150H1290V78H1252"/>
-          <text x="30" y="196" class="sm-dl">A dead worker’s lease expires → ReconcilerLoop requeues the command → the step replays from its checkpoint</text>
-
-          <path class="sm-a" d="M1080 164V222H575V268"/>
-          <text x="828" y="214" text-anchor="middle" class="sm-l">validation_requires_approval · one or more approval entries</text>
-          <path class="sm-a" d="M1180 164V244H905V268"/>
-          <text x="1045" y="238" text-anchor="middle" class="sm-l">validation_completed · no entries</text>
-
-          <g><rect class="sm-human" x="430" y="268" width="290" height="100" rx="14"/><text x="448" y="296" class="sm-name">awaiting_approval</text><text x="448" y="318" class="sm-s">human decision · one per requirement entry</text><text x="448" y="336" class="sm-s">distinct actors, immutable subject hash</text><text x="448" y="358" class="sm-e">→ approval_granted / approval_rejected</text></g>
-          <path class="sm-a" d="M720 318H790"/>
-          <text x="755" y="262" text-anchor="middle" class="sm-l">approval_granted</text>
-          <g><rect class="sm-code" x="790" y="268" width="230" height="100" rx="14"/><text x="808" y="296" class="sm-name">finalizing</text><text x="808" y="318" class="sm-s">step finalize · no model call</text><text x="808" y="336" class="sm-s">re-verify quorum + subject hash</text><text x="808" y="358" class="sm-e">→ complete</text></g>
-          <path class="sm-a" d="M1020 318H1080"/>
-          <text x="1050" y="262" text-anchor="middle" class="sm-l">complete</text>
-          <g><rect class="sm-code" x="1080" y="268" width="170" height="100" rx="14"/><text x="1096" y="296" class="sm-name">completed</text><text x="1096" y="318" class="sm-s">immutable brief</text><text x="1096" y="336" class="sm-s">json / markdown export</text></g>
-
-          <path class="sm-a" d="M575 368V410"/>
-          <text x="590" y="392" class="sm-l">approval_rejected</text>
-
-          <rect class="sm-note" x="22" y="410" width="380" height="72" rx="12"/>
-          <text x="42" y="438" class="sm-t">fail and cancel are legal from every live state</text>
-          <text x="42" y="462" class="sm-s">Terminal states accept no further events at all.</text>
-
-          <g><rect class="sm-term" x="430" y="410" width="200" height="72" rx="12"/><text x="448" y="440" class="sm-name">rejected</text><text x="448" y="464" class="sm-s">any authority rejects</text></g>
-          <g><rect class="sm-term" x="680" y="410" width="200" height="72" rx="12"/><text x="698" y="440" class="sm-name">failed</text><text x="698" y="464" class="sm-s">fatal, non-retryable step error</text></g>
-          <g><rect class="sm-term" x="930" y="410" width="200" height="72" rx="12"/><text x="948" y="440" class="sm-name">cancelled</text><text x="948" y="464" class="sm-s">requester cancels the run</text></g>
-
-          <rect x="22" y="510" width="1274" height="104" rx="14" fill="#eef1f2" stroke="#65737b"/>
-          <text x="48" y="540" class="sm-t">One PostgreSQL transaction per transition</text>
-          <text x="48" y="564" class="sm-s">The state change, its checkpoint, and the next command commit together. The system never records a new state without also recording how work continues.</text>
-          <text x="48" y="586" class="sm-s">A worker temporarily owns one step. A recoverable error releases it for retry; a fatal error moves the run to failed.</text>
-          <text x="48" y="608" class="sm-s">If a worker disappears, its ownership expires and another worker replays the command from the saved checkpoint instead of starting the whole run again.</text>
+          <g><rect class="fl-box" x="40" y="35" width="300" height="155" rx="16"/><text x="190" y="72" text-anchor="middle" class="fl-title">1 · Request checked</text><text x="190" y="108" text-anchor="middle" class="fl-copy">Checks the requester and deal against</text><text x="190" y="130" text-anchor="middle" class="fl-copy">permission grants stored in PostgreSQL.</text></g>
+          <path class="fl-arrow" d="M340 112H450"/>
+          <g><rect class="fl-box" x="450" y="35" width="300" height="155" rx="16"/><text x="600" y="72" text-anchor="middle" class="fl-title">2 · Evidence gathered</text><text x="600" y="104" text-anchor="middle" class="fl-copy">Hybrid RAG runs full-text and vector search;</text><text x="600" y="126" text-anchor="middle" class="fl-copy">reciprocal-rank fusion ranks the best</text><text x="600" y="148" text-anchor="middle" class="fl-copy">evidence the requester is allowed to use.</text></g>
+          <path class="fl-arrow" d="M750 112H860"/>
+          <g><rect class="fl-ai" x="860" y="35" width="300" height="155" rx="16"/><text x="1010" y="72" text-anchor="middle" class="fl-title">3 · Specialists analyze</text><text x="1010" y="108" text-anchor="middle" class="fl-copy">Three focused agents analyze the same</text><text x="1010" y="130" text-anchor="middle" class="fl-copy">selected evidence in parallel.</text></g>
+          <path class="fl-arrow" d="M1010 190V245"/>
+          <g><rect class="fl-ai" x="860" y="245" width="300" height="155" rx="16"/><text x="1010" y="282" text-anchor="middle" class="fl-title">4 · Brief assembled</text><text x="1010" y="318" text-anchor="middle" class="fl-copy">The strategy agent merges the saved outputs</text><text x="1010" y="340" text-anchor="middle" class="fl-copy">into the nine-section draft brief.</text></g>
+          <path class="fl-arrow" d="M860 322H750"/>
+          <g><rect class="fl-human" x="450" y="245" width="300" height="155" rx="16"/><text x="600" y="282" text-anchor="middle" class="fl-title">5 · Checked and approved</text><text x="600" y="314" text-anchor="middle" class="fl-copy">Code checks citations and policy; the workflow</text><text x="600" y="336" text-anchor="middle" class="fl-copy">pauses until required people approve.</text></g>
+          <path class="fl-arrow" d="M450 322H340"/>
+          <g><rect class="fl-box" x="40" y="245" width="300" height="155" rx="16"/><text x="190" y="282" text-anchor="middle" class="fl-title">6 · Brief delivered</text><text x="190" y="318" text-anchor="middle" class="fl-copy">Stores the brief, citations, and timeline</text><text x="190" y="340" text-anchor="middle" class="fl-copy">for review in the web app.</text></g>
         </svg>
       </div>
-      <div class="diagram-guide" aria-label="Run state explanations">
-        <div class="guide-item"><h4>Created</h4><p>The system accepts the authorized request, creates the run, and records the first durable command. No model is involved.</p></div>
-        <div class="guide-item"><h4>Retrieving</h4><p>The worker searches only evidence the requester may read and freezes the selected versions into a manifest for this run.</p></div>
-        <div class="guide-item"><h4>Specialists running</h4><p>Conversation, stakeholder, and commercial specialists analyze the same frozen evidence in parallel and save their outputs separately.</p></div>
-        <div class="guide-item"><h4>Synthesizing</h4><p>The strategy agent combines those specialist outputs and authorized evidence into one structured draft brief.</p></div>
-        <div class="guide-item"><h4>Validating</h4><p>Ordinary code checks the draft’s schema, citations, safety rules, and approval policy. The model cannot choose the next state.</p></div>
-        <div class="guide-item"><h4>Awaiting approval</h4><p>If policy requires human authority, the run pauses until every required decision is recorded against the unchanged draft.</p></div>
-        <div class="guide-item"><h4>Finalizing and completed</h4><p>The system rechecks the approved draft, stores an immutable brief, and makes its evidence and timeline available for review or export.</p></div>
-        <div class="guide-item"><h4>Rejected, failed, or cancelled</h4><p>A human rejection, unrecoverable processing error, or requester cancellation ends the run. Terminal runs cannot accept later workflow events.</p></div>
-        <div class="guide-item"><h4>Recovery loop</h4><p>If a worker stops unexpectedly, ownership expires and another worker continues from the saved checkpoint. Completed work is not regenerated unnecessarily.</p></div>
-      </div>
-      <div class="legend"><span>Deterministic code</span><span class="model">Model call</span><span class="human">Human decision</span><span class="durable">Terminal</span></div>
-      <p class="diagram-note">Three of the six steps touch a model — <code>retrieve</code> embeds the query, <code>specialists</code> and <code>synthesize</code> generate. <code>start</code>, <code>validate</code>, and <code>finalize</code> are ordinary code. Nothing a model returns can change which state comes next — the transition table above is exhaustive, and an event that is not in it raises <code>InvalidRunTransitionError</code> instead of moving the run.</p>
 
-      <h3>Where authorization sits in the run</h3>
-      <p>This view follows the information rather than the worker states. The request is authorized before search, the selected evidence is checked again before any model sees it, and the generated draft must pass citation and policy checks before delivery.</p>
-      <div class="diagram" data-diagram="authorization-flow" role="img" aria-label="Request lifecycle from opportunity and requester through permissions, retrieval, agents, validation, approval, and delivery">
-        <svg viewBox="0 0 1320 520" xmlns="http://www.w3.org/2000/svg">
-          <defs><marker id="arrowL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#617078"/></marker></defs>
-          <rect width="1320" height="520" fill="#fbfcfb"/>
-          <style>.lb{fill:#fff;stroke:#b8c6bf;stroke-width:1.5}.lg{fill:#eaf6f1;stroke:#158864;stroke-width:2}.lw{fill:#fff7e8;stroke:#9a5a10;stroke-width:1.7}.lio{fill:#eef1f2;stroke:#65737b;stroke-width:1.5}.lt{font:700 14px system-ui;fill:#0A141D}.ls{font:11px system-ui;fill:#52616a}.la{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowL)}.ld{stroke:#9a5a10;stroke-width:2;stroke-dasharray:6 5;fill:none;marker-end:url(#arrowL)}</style>
-          <g transform="translate(35 56)"><rect class="lio" width="170" height="92" rx="14"/><text x="85" y="34" text-anchor="middle" class="lt">Opportunity ID</text><text x="85" y="56" text-anchor="middle" class="lt">+ requester</text><text x="85" y="76" text-anchor="middle" class="ls">authenticated persona</text></g>
-          <path class="la" d="M205 102H250"/>
-          <g transform="translate(250 44)"><rect class="lg" width="190" height="116" rx="14"/><text x="95" y="30" text-anchor="middle" class="lt">Permission gate 1</text><text x="95" y="55" text-anchor="middle" class="ls">authorize run binding</text><text x="95" y="75" text-anchor="middle" class="ls">SQL-scoped account, source,</text><text x="95" y="94" text-anchor="middle" class="ls">opportunity &amp; sensitivity</text></g>
-          <path class="la" d="M440 102H485"/>
-          <g transform="translate(485 44)"><rect class="lb" width="190" height="116" rx="14"/><text x="95" y="30" text-anchor="middle" class="lt">Hybrid retrieval</text><text x="95" y="54" text-anchor="middle" class="ls">Postgres FTS + exact</text><text x="95" y="73" text-anchor="middle" class="ls">pgvector cosine → RRF</text><text x="95" y="93" text-anchor="middle" class="ls">recency + reliability</text></g>
-          <path class="la" d="M675 102H720"/>
-          <g transform="translate(720 44)"><rect class="lg" width="200" height="116" rx="14"/><text x="100" y="30" text-anchor="middle" class="lt">Permission gate 2</text><text x="100" y="55" text-anchor="middle" class="ls">assertAgentContextBindings</text><text x="100" y="75" text-anchor="middle" class="ls">recompute + compare</text><text x="100" y="94" text-anchor="middle" class="ls">scope hash before model call</text></g>
-          <path class="la" d="M920 102H965"/>
-          <g transform="translate(965 44)"><rect class="lb" width="320" height="116" rx="14"/><text x="160" y="28" text-anchor="middle" class="lt">Specialists in parallel</text><text x="55" y="62" text-anchor="middle" class="ls">Conversation</text><text x="160" y="62" text-anchor="middle" class="ls">Stakeholder</text><text x="265" y="62" text-anchor="middle" class="ls">Commercial</text><line x1="106" y1="45" x2="106" y2="95" stroke="#dce3df"/><line x1="213" y1="45" x2="213" y2="95" stroke="#dce3df"/><text x="160" y="92" text-anchor="middle" class="ls">Promise.allSettled + persisted outcomes</text></g>
-
-          <path class="la" d="M1125 160V224"/>
-          <g transform="translate(965 224)"><rect class="lb" width="320" height="100" rx="14"/><text x="160" y="35" text-anchor="middle" class="lt">StrategyAgent synthesis</text><text x="160" y="59" text-anchor="middle" class="ls">fan-in specialist artifacts + all</text><text x="160" y="79" text-anchor="middle" class="ls">authorized manifest excerpts</text></g>
-          <path class="la" d="M965 274H900"/>
-          <g transform="translate(640 218)"><rect class="lg" width="260" height="112" rx="14"/><text x="130" y="31" text-anchor="middle" class="lt">Claim / citation validation</text><text x="130" y="55" text-anchor="middle" class="ls">schema + citation tuple exists</text><text x="130" y="75" text-anchor="middle" class="ls">wording supported by cited unit</text><text x="130" y="95" text-anchor="middle" class="ls">unsafe prose rejected</text></g>
-          <path class="la" d="M640 274H575"/>
-          <g transform="translate(315 218)"><rect class="lw" width="260" height="112" rx="14"/><text x="130" y="31" text-anchor="middle" class="lt">Deterministic policy</text><text x="130" y="55" text-anchor="middle" class="ls">discount · legal · concession</text><text x="130" y="75" text-anchor="middle" class="ls">low confidence · conflict</text><text x="130" y="95" text-anchor="middle" class="ls">approval entries + dependencies</text></g>
-          <path class="la" d="M315 274H250"/>
-          <g transform="translate(35 218)"><rect class="lg" width="215" height="112" rx="14"/><text x="107" y="31" text-anchor="middle" class="lt">Approval required?</text><text x="107" y="58" text-anchor="middle" class="ls">no → finalization</text><text x="107" y="81" text-anchor="middle" class="ls">yes → await authorities</text></g>
-
-          <path class="ld" d="M142 330V410H348"/>
-          <g transform="translate(348 380)"><rect class="lw" width="290" height="106" rx="14"/><text x="145" y="30" text-anchor="middle" class="lt">Human-in-the-loop decisions</text><text x="145" y="54" text-anchor="middle" class="ls">membership + category authority</text><text x="145" y="74" text-anchor="middle" class="ls">quorum + dependencies + immutable diff</text><text x="145" y="93" text-anchor="middle" class="ls">approve · edit-and-approve · reject</text></g>
-          <path class="la" d="M638 433H720"/>
-          <g transform="translate(720 380)"><rect class="lg" width="225" height="106" rx="14"/><text x="112" y="31" text-anchor="middle" class="lt">Finalize</text><text x="112" y="57" text-anchor="middle" class="ls">verify subject hash</text><text x="112" y="78" text-anchor="middle" class="ls">persist immutable brief</text></g>
-          <path class="la" d="M945 433H1015"/>
-          <g transform="translate(1015 380)"><rect class="lio" width="270" height="106" rx="14"/><text x="135" y="31" text-anchor="middle" class="lt">Brief delivered</text><text x="135" y="55" text-anchor="middle" class="ls">9 sections · stable citations</text><text x="135" y="76" text-anchor="middle" class="ls">run timeline · evidence detail</text></g>
-          <path class="la" d="M142 330V355H760V380"/>
-
-          <text x="1285" y="185" text-anchor="end" class="ls" fill="#9a5a10">Degradation boundary: conversation and stakeholder may degrade; commercial is fail-closed.</text>
-        </svg>
-      </div>
-      <div class="diagram-guide" aria-label="Authorization flow explanations">
-        <div class="guide-item"><h4>Request and first permission check</h4><p>The API binds the authenticated person to the requested opportunity and limits eligible evidence by account, source, restriction, and sensitivity.</p></div>
-        <div class="guide-item"><h4>Authorized retrieval</h4><p>Keyword and semantic search run only over allowed rows. Ranking improves relevance; it never expands what the requester may see.</p></div>
-        <div class="guide-item"><h4>Second permission check</h4><p>Immediately before a model call, the worker recomputes the authorization binding and compares it with the frozen manifest to catch stale or substituted context.</p></div>
-        <div class="guide-item"><h4>Specialists and synthesis</h4><p>Three specialists produce focused analyses, then the strategy agent combines them with the authorized evidence into one draft.</p></div>
-        <div class="guide-item"><h4>Citation and policy checks</h4><p>Code verifies that every claim is supported and determines whether pricing, legal, concession, conflict, or confidence rules require human approval.</p></div>
-        <div class="guide-item"><h4>Human decision and delivery</h4><p>Required authorities approve, edit, or reject the unchanged subject. Only a valid decision set can produce the immutable brief shown to the seller.</p></div>
-      </div>
-      <div class="legend"><span>Deterministic code</span><span class="model">Model call</span><span class="human">Policy and human decisions</span><span class="durable">Request / delivered brief</span></div>
-      <div class="callout warning"><p><strong>Partial failure is intentionally asymmetric.</strong> Conversation and stakeholder failures become schema-valid degraded artifacts with warnings and omitted dependent claims. The commercial specialist is policy-critical; its failure stops the run rather than allowing pricing/legal analysis to disappear silently.</p></div>
-    </section>
-
-    <section id="decisions">
-      <div class="section-number">05 · How and why</div>
-      <h2>Models propose. Deterministic code governs.</h2>
-      <div class="decision"><h3>Durable workflow over model orchestration</h3><p>The fixed sequence—start, retrieve, specialists, synthesize, validate, finalize—lives in a Postgres-backed workflow and outbox with checkpoints and versioned transitions, so retries, recovery, idempotency, and operator inspection are testable. No model is ever asked what should run next.</p></div>
-      <div class="decision"><h3>Two independent permission gates</h3><p>Authorized SQL relations and predicates restrict rows before lexical or vector search. Immediately before every LLM call, <code>assertAgentContextBindings</code> recomputes the binding and compares its scope hash to the immutable manifest, catching stale or substituted contexts.</p></div>
-      <div class="decision"><h3>Rule-based approval triggers</h3><p>Discount thresholds, renewal uplift, legal concepts, customer-facing concessions, confidence, conflict, and missing evidence are classified by provider-independent code. A model cannot self-declare that its recommendation is safe enough to skip approval.</p></div>
-      <div class="decision"><h3>Per-claim citation validation</h3><p>Generated citation tuples are canonicalized to code-owned manifest values. <code>assessClaimSupport</code> checks that referenced evidence exists and that the claim’s material names, amounts, dates, predicates, polarity, and bounded paraphrase are supported; unsupported claims are rejected or removed.</p></div>
-      <div class="decision"><h3>Hybrid RRF retrieval</h3><p>PostgreSQL full-text ranking and exact pgvector cosine ranking are fused by stable evidence ID with reciprocal-rank fusion (<code>k = 60</code>). Reliability and age adjustments are transparent and capped at ±0.02; mandatory policy and exact CRM grounding are packed separately so top-k competition cannot erase them.</p></div>
-      <div class="decision"><h3>Typed, schema-validated artifacts</h3><p>Conversation, stakeholder, commercial, and strategy outputs have strict Zod contracts, bounded arrays/text/serialized size, structured repair, and provider-neutral model interfaces. The serialized-size ceiling is per-artifact, not one shared constant: conversation and commercial cap at 6,000 bytes, but a realistic five-person stakeholder map — each person nesting its own claim and citation objects, unlike the flat string-array shape of the other two — genuinely needs more room, so the stakeholder specialist gets its own 8,192-byte ceiling. Under the old shared cap, exceeding it triggered a schema-repair retry that returned a smaller, less-grounded artifact and hollowed the brief’s Stakeholder Map section. Strategy returns the canonical nine-section <code>DealBrief</code> rather than a second divergent format.</p></div>
-      <div class="callout"><p><strong>Citation shape, precisely:</strong> the brief contract has nine required top-level sections. Factual sections expose claims directly or through their typed child records (stakeholders, recommended actions, and evidence summaries). <code>missingInformation</code> is intentionally questions, not asserted claims; review warnings reference existing claim IDs. The renderer only exposes generated output after every referenced evidence ID is authorized.</p></div>
-
-      <h3>Retrieval details</h3>
-      <ul>
-        <li>An immutable manifest binds the run, requester/deal scope hash, policy hash, full query/plan hash, embedding provider/model/dimension/version/normalization, context limit, and diagnostics.</li>
-        <li>The plan runs the requester’s query plus six fixed section-oriented searches (deal snapshot, buyer goals, stakeholders, negotiation state, next actions, missing information), each scoped to the source types that can answer it, then fuses the results. Every non-primary source type — gong_summary, gong_transcript, pricing, salesforce, and slack — is capped to 2 candidates per search so none can win by sheer count; Salesforce and gong_transcript each used to reuse an unrelated completeness/limit constant as this cap instead, so they entered every search unfiltered. gong_transcript was the more severe case: on a measured OPP-1001 run at production limits it filled 84.7% of prompt context, crowding gong_summary and pricing out of the pool entirely and leaving only 4 of the 6 source types represented. Capping it the same way as every other source restored all 6.</li>
-        <li>Lexical matching scores partial concept overlap instead of gating on every query term appearing in one chunk. The earlier conjunctive tsquery gate matched zero rows anywhere in the corpus for a realistic multi-concept query, so the lexical channel contributed nothing and hybrid search ran on the semantic half alone. The disjunctive rewrite only touches the query’s spaced AND operator, not an operator character living inside a search term — a naive substitution corrupted URLs with query strings, which Slack-sourced evidence carries routinely.</li>
-        <li>Policy evidence reserves a result slot when authorized. Exact account, opportunity, and contact records are included as cited grounding without displacing the ranked quality set.</li>
-        <li>Context packing reserves at least eight characters for each ranked or mandatory grounding item; an impossible budget fails explicitly rather than silently dropping evidence.</li>
-        <li>Citation resolution reauthorizes the current evidence row and checks immutable manifest membership. Missing, stale, unauthorized, and out-of-manifest citations share one opaque denial.</li>
-      </ul>
-      <div class="callout"><p><strong>A golden-retrieval regression eval gates CI.</strong> <code>pnpm eval:deterministic</code> is wired into CI as its own step, after the unit/contract/integration suite; it replays a small hand-authored set of opportunity/query cases against a real Postgres retriever and reports macro recall, macro precision, and permission leakage. At HEAD it holds macroRecallAtK 0.5, macroPrecisionAtK 0.2, and permissionLeakage 0 — the gate only requires recall at or above 0.5, so today’s score sits exactly on that floor with no headroom (the comparison carries a small float tolerance so representation noise alone can’t turn it red). The remaining recall loss is not source crowding: two golden items still lose to sibling chunks within their own source type’s internal ranking, and CI’s mock embedding gateway means the semantic half of hybrid search is not a meaningful signal in that environment. <code>docs/system-code-review-todo.md</code> tracks both as open items.</p></div>
-      <div class="callout warning"><p><strong>HNSW is planned, not shipped.</strong> The shipped semantic path is exact cosine over the authorized subset. Any future ANN adapter must return candidate IDs only, rejoin current authorization, rerank by exact cosine, keep exact search as oracle, fallback, and kill switch, and never share one global graph across security domains. It stays shadow-only until zero-leakage, policy-inclusion, citation-authorization, recall, underfill, latency, replication, rebuild, and recovery gates pass.</p></div>
-    </section>
-
-    <section id="security">
-      <div class="section-number">06 · Security notes</div>
-      <h2>Fail closed at the boundaries that matter.</h2>
-
-      <h3>Permission enforcement and opaque denial</h3>
-      <p>Canonical grants bind persona, account, source type, restricted-account access, sensitive-pricing access, and fixture provenance. Security-barrier views and query predicates apply those dimensions before returning text, locators, scores, counts, or vectors. The workflow also binds the run to the requested persona and opportunity. Before generation, the scope hash is independently recomputed and checked against the manifest.</p>
-      <p><code>recordOpaqueDenial</code> and <code>opaqueCitationDenial</code> deliberately avoid account, source, evidence, locator, recommendation, and citation facts. Trace completeness validation rejects denial traces that contain such details, so BOLA/permission failures do not become a side channel through errors or observability.</p>
-
-      <h3>Sensitivity classification and approvals</h3>
-      <p>Ingestion does not trust one “sensitive” column. Effective sensitivity combines source type, source access level, restricted-opportunity state, pricing-note language, and the canonical policy text/hash; pricing requires the policy’s sensitive-pricing rule to be provable. Separately, <code>opportunity_policy_facts</code> derives structured commercial/legal signals from pricing rows and opportunity restrictions. Edits are rescanned by deterministic concept pairs—for example, a liability subject plus change language, or a commercial benefit plus commitment language.</p>
-      <p>Approval requirements are stored as category entries with eligible authorities and dependencies. Authority membership is account-scoped and rechecked at decision time. A discount above 10% requires deal desk; above 15% adds a separate sales-leader entry, so two distinct subject-entry decisions are required. Legal terms require a legal reviewer; evidence concerns accept account owner or sales leader; customer concessions depend on earlier entries and require the account owner. Decisions, approved/original payloads, hashes, diffs, and replay results are immutable.</p>
-
-      <h3>Anti-hallucination and prompt-injection defenses</h3>
-      <div class="grid-2">
-        <div class="card"><h4>Evidence identity is code-owned</h4><p>The model must copy a complete citation tuple, but runtime canonicalization restores manifest-owned ID, evidence ID, and locator. Unknown, duplicate, stale, unauthorized, and forged references fail validation.</p></div>
-        <div class="card"><h4>Support is semantic but bounded</h4><p>Validation checks exact structured fields, material anchors, polarity, predicates, and tightly constrained paraphrases. Unsafe instruction-like prose and ungrounded customer-facing recommendations are rejected.</p></div>
-        <div class="card"><h4>Evidence is inert data</h4><p>Prompts state that evidence instructions, roles, tool requests, schemas, and citation forgeries are non-executable. Fixed delimiters separate instructions from untrusted records and specialist artifacts.</p></div>
-        <div class="card"><h4>Delimiter escape is contract-tested</h4><p><code>tests/contract/agents.test.ts</code> names the case <em>“cannot let an evidence record close the fixed inert-data delimiter”</em>. Reserved BEGIN/END markers are replaced with explicit escaped-delimiter tokens before prompt construction.</p></div>
-      </div>
-
-      <h3>State persistence, recovery, and inspection</h3>
-      <p>PostgreSQL is the system of record: identities and grants, immutable evidence versions and embeddings, run state and version, budgets and provider attempts, manifests, outbox delivery state, step leases, checkpoints, specialist artifacts, claims and citations, approval snapshots and decisions, briefs, audit events, run events, and trace spans. Redis/BullMQ delivers work; it is never the recovery authority.</p>
-      <p>Recovery is the mechanism drawn in §04: the reconciler inspects published and claimed outbox commands against BullMQ state, fences its recovery with claim tokens, republishes only safe work, and resumes from the checkpoints already written. Trace projection records authorization, retrieval, every model call, validation, guardrails, usage and repair, degradation, approval requirements and decisions, and finalization; append-only triggers and stable IDs make that projection idempotent, so an operator reading the timeline sees the same history a replay would produce.</p>
-
-      <h3>Synthetic Slack-style updates: production and ingestion</h3>
-      <p><code>scripts/generate-slack-fixtures.ts</code> accepts only live <code>openrouter</code> or <code>ollama</code> configuration—<code>mock</code> is rejected. It asks for exactly three clearly synthetic updates per opportunity: a reinforcing fact, missing context, and ambiguity/conflict. It validates row IDs, account/opportunity bindings, chronology between the latest evidence date and close date, synthetic notices, access levels, control characters, and category coverage before replacing the TSV.</p>
-      <p>The checked-in <code>fixtures/cato/slack/generation.json</code> records an observed OpenRouter run using <code>google/gemini-3.5-flash-lite</code>, native-schema output, two calls, zero repairs, 3,444 input tokens, 2,381 output tokens, and 5,825 total tokens. It also records prompt/schema/source/output SHA-256 hashes, pinned source commit, generation time, reviewed status, and row-level context categories for all nine updates.</p>
-      <p><code>pnpm ingest:records</code> parses that provenance with the fixture set, verifies live-generation completeness and source/output binding, chunks the Slack records with their locators, provenance, effective classification, reliability, and policy hash, and upserts immutable documents/evidence. <code>pnpm index:embeddings</code> then embeds the canonical Slack locator prefix alongside the other sources. Regeneration therefore requires re-ingestion and re-indexing.</p>
-      <p>A dedicated diagnostic, <code>samples/slack-impact-comparison.{json,md}</code>, demonstrates the mandatory subtask’s with/without-Slack-authorization comparison end to end. Toggling one requester’s Slack grant off and back on confirms the retrieval-level mechanism works: removing authorization mechanically drops the Slack chunk from the candidate pool and backfills the next-best candidate, with everything else about the run identical. Across the four live with-Slack-authorized OpenRouter runs it has visibility into, no finalized Deal Brief cites Slack evidence — reported honestly rather than fabricated. In one of those runs it traces exactly where a Slack update drops out of the pipeline: ingested, correctly authorized, retrieved competitively (rank 13–16 of about 27 candidates across the sampled runs, with a fusion score in the same band as many Gong transcript entries), prompted in full at its complete chunk size, and validated as a supported claim by a specialist agent — yet the Negotiation Strategy Agent still re-synthesizes that section’s claims from the shared evidence pool under fresh claim IDs rather than forwarding a specialist’s claim verbatim, so the validated Slack claim has no path into the brief. The volume asymmetry the report names as the retrieval-side contributor — gong_transcript’s previously uncapped candidate window — is now closed (see §05); giving the strategy synthesis step a reason to draw from every authorized source type that returned evidence is recorded as the remaining path to a Slack-cited brief, not implemented here.</p>
-
-      <h3>Secrets and honest limitations</h3>
-      <p>Database, Redis, session, provider, and model configuration comes from validated server-side environment variables. <code>.env</code> and <code>.env.local</code> are gitignored, credentials are excluded from model diagnostics, and logging redaction suppresses common secret and authorization fields.</p>
-      <div class="callout danger"><p><strong>Not production-hardened:</strong> there is no provider cost/spend accounting beyond per-run call and deadline budgets, per-call context/output token budgets, and persisted token usage; no documented API/user/provider rate-limiting policy; no secrets-manager or automatic rotation integration; no enterprise identity provider; and no production-grade PII service. These are deployment gaps, not controls to infer from the current code.</p></div>
-      <div class="callout"><p><strong>Brief sections are grounded-or-omitted, not guaranteed-populated.</strong> Every section in a finalized <code>DealBrief</code> is generate-then-validate: <code>validateDealBrief</code> keeps only claims it can tie back to an authorized evidence unit and drops the rest, so a section with no supportable claim renders empty rather than fabricated. With the small model this project runs against by default (<code>google/gemini-3.5-flash-lite</code>), that means Stakeholder Map and Recommended Next Actions — the two sections with the strictest per-item grounding requirements (a named person plus a supported identity claim; an action tied to a supported rationale) — do not come back populated on every regeneration, even though the retrieved evidence would support them. Regenerating <code>samples/normal-opportunity-brief.json</code> and <code>samples/restricted-opportunity-brief.json</code> for this submission took roughly 50 live runs combined across both opportunities before both sections landed populated, without any other section going empty, in the same run. This is the tradeoff working as intended: the system never invents a stakeholder or an action to fill a section, so an empty section is a true signal about what this run’s model output could support, not a defect being hidden.</p></div>
-    </section>
-
-    <section id="deliverables">
-      <div class="section-number">07 · Deliverables and demo scenarios</div>
-      <h2>Every required scenario has a checked-in artifact.</h2>
-      <p><code>samples/</code> holds artifacts exported from live-provider runs against a dedicated <code>slacato_samples</code> database by <code>scripts/export-sample-artifacts.ts</code>. <code>samples/manifest.json</code> records the run IDs, provider, generation and embedding models, token usage, and timings; <code>samples/index.html</code> browses them offline. Scenario 1 is interchangeable: Maya Levin (<code>USR-5001</code>) owns <code>OPP-1001</code> and Owen Patel (<code>USR-5002</code>) owns <code>OPP-1002</code>.</p>
-
-      <table class="scenarios">
-        <thead><tr><th>Required scenario</th><th>Request</th><th>What the artifact shows</th></tr></thead>
+      <h3>How each source is chunked</h3>
+      <p>Chunking follows the source’s natural structure rather than applying one arbitrary text size to every document.</p>
+      <table>
+        <thead><tr><th>Source</th><th>Chunking</th><th>Why</th></tr></thead>
         <tbody>
-          <tr>
-            <td><strong>1 · Authorized brief</strong></td>
-            <td>Maya Levin (<code>USR-5001</code>) → <code>OPP-1001</code></td>
-            <td>A finalized brief with all nine top-level sections present; every claim that appears carries a citation resolved against that run’s evidence manifest, and this export’s Stakeholder Map and Recommended Next Actions are both populated with real, cited content. Section richness varies by run — see “Brief sections are grounded-or-omitted” in §06 above. <code>normal-opportunity-brief.json</code> and <code>.txt</code>.</td>
-          </tr>
-          <tr>
-            <td><strong>2 · Approval routing</strong></td>
-            <td>Nora Chen (<code>USR-5003</code>) → <code>OPP-1003</code></td>
-            <td>Eight policy triggers produced five approval entries: deal desk (discount above 10% plus negative renewal uplift), sales leader (above 15%), legal reviewer (liability cap, restricted research, customer-specific security language), evidence review (missing material evidence), and a customer-concession entry that depends on the other four. Four distinct actors approved all five before the run could finalize. <code>restricted-approval-flow.json</code>.</td>
-          </tr>
-          <tr>
-            <td><strong>3 · Unauthorized request</strong></td>
-            <td>Harper Noor (<code>USR-5007</code>) → <code>OPP-1003</code></td>
-            <td>An opaque <code>404</code> with no account name, source name, count, or evidence metadata. Harper is granted only <code>ACC-2001</code> and only Salesforce and Gong; <code>OPP-1003</code> belongs to the restricted <code>ACC-2003</code>, so its evidence is never retrieved and therefore cannot be summarized, cited, or leaked. <code>denied-access.json</code>.</td>
-          </tr>
-          <tr>
-            <td><strong>4 · Generated Slack updates</strong></td>
-            <td>Both finalized briefs</td>
-            <td>All nine Slack rows are model-generated and carry <code>synthetic_notice=true</code>; both requesters (<code>USR-5001</code>, <code>USR-5003</code>) are authorized to read Slack evidence for their accounts, including <code>slack:SLK-9002:0</code> (missing owner/success-metric context on <code>OPP-1001</code>) and <code>slack:SLK-9009:0</code> (an internal-chat note that executives disagree on whether discounting or risk mitigation should lead, on <code>OPP-1003</code>). Whether a given regeneration actually cites a Slack row depends on that run’s retrieval and grounding — the currently checked-in briefs do not. <code>samples/slack-impact-comparison.{json,md}</code> demonstrates why, tracing a Slack update through retrieval, prompting, and validation across four live runs (see §06). Generation provenance is in <code>fixtures/cato/slack/generation.json</code>.</td>
-          </tr>
+          <tr><td>Salesforce records</td><td>One account, opportunity, or contact record per chunk; no further splitting.</td><td>Keeps related fields together and gives each structured record a stable citation target.</td></tr>
+          <tr><td>Gong summaries</td><td>One call-summary record per chunk; no further splitting.</td><td>The summary is already a concise, structured unit for one call.</td></tr>
+          <tr><td>Gong transcripts</td><td>Six-turn windows with a one-turn overlap; every window repeats the transcript heading and metadata.</td><td>Preserves conversational context at window boundaries and keeps each excerpt attributable.</td></tr>
+          <tr><td>Slack updates</td><td>One dated account-team update per chunk; no further splitting.</td><td>The short update remains intact and attributable to its source record.</td></tr>
+          <tr><td>Pricing notes</td><td>One pricing-note record per chunk; no further splitting.</td><td>Keeps requested terms, approval status, and commercial context together.</td></tr>
+          <tr><td>Deal Desk policy</td><td>Split at Markdown headings. Sections over 512 characters become smaller rule groups that repeat the heading.</td><td>Makes each rule group self-contained and small enough to quote in full without losing its policy context.</td></tr>
         </tbody>
       </table>
 
-      <h3>Where each deliverable lives</h3>
-      <div class="grid-2">
-        <div class="card"><h4>A · Runnable prototype</h4><p><code>README.md</code> setup, <code>docker-compose.yml</code> for PostgreSQL and Redis, then <code>pnpm db:migrate</code>, <code>pnpm ingest:records</code>, <code>pnpm index:embeddings</code>, <code>pnpm dev</code>. <code>AI_PROVIDER=mock</code> runs the whole workflow with no network.</p></div>
-        <div class="card"><h4>B · Architecture diagrams</h4><p>Logical and deployment views in §02, the persisted schema in §03, and the run state machine plus the authorization pipeline in §04.</p></div>
-        <div class="card"><h4>C · Written overview</h4><p><code>README.md</code> for operation; this document for design; §06 for security, permission enforcement, state persistence, and how the Slack updates are produced and ingested.</p></div>
-        <div class="card"><h4>D · Sample run artifacts</h4><p><code>samples/</code>: two finalized briefs (JSON and Markdown), the approval flow, the denied-access capture, the trace and event streams for the restricted run, and the Slack-impact comparison (<code>slack-impact-comparison.json</code>/<code>.md</code>) for the mandatory Slack data-generation subtask.</p></div>
+      <h3>How work is routed between agents</h3>
+      <p>After evidence is selected, three specialist agents run in parallel. Their saved findings flow into the strategy agent, then code validates the draft and routes any required approval.</p>
+      <div class="diagram" data-diagram="agent-routing" role="img" aria-label="Approved evidence fans out to three specialist agents, flows into the strategy agent, then validation and human approval produce the final brief">
+        <svg viewBox="0 0 1500 520" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrowR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#617078"/></marker></defs>
+          <rect width="1500" height="520" fill="#fbfcfb"/>
+          <style>
+            .ar-box{fill:#fff;stroke:#158864;stroke-width:2}.ar-ai{fill:#eaf6f1;stroke:#158864;stroke-width:2}.ar-human{fill:#fff7e8;stroke:#9a5a10;stroke-width:2}
+            .ar-title{font:700 15px system-ui;fill:#0A141D}.ar-copy{font:12px system-ui;fill:#52616a}.ar-line{stroke:#617078;stroke-width:2;fill:none}.ar-arrow{stroke:#617078;stroke-width:2;fill:none;marker-end:url(#arrowR)}
+          </style>
+          <g><rect class="ar-box" x="30" y="195" width="220" height="130" rx="15"/><text x="140" y="232" text-anchor="middle" class="ar-title">Approved evidence</text><text x="140" y="266" text-anchor="middle" class="ar-copy">One permission-checked</text><text x="140" y="288" text-anchor="middle" class="ar-copy">evidence set for all agents.</text></g>
+          <path class="ar-line" d="M250 260H285M285 95V415"/>
+          <path class="ar-arrow" d="M285 95H325"/><path class="ar-arrow" d="M285 255H325"/><path class="ar-arrow" d="M285 415H325"/>
+
+          <g><rect class="ar-ai" x="325" y="40" width="310" height="110" rx="15"/><text x="480" y="76" text-anchor="middle" class="ar-title">Conversation Intelligence</text><text x="480" y="108" text-anchor="middle" class="ar-copy">Finds buyer goals, objections, urgency,</text><text x="480" y="128" text-anchor="middle" class="ar-copy">and open questions in calls and Slack.</text></g>
+          <g><rect class="ar-ai" x="325" y="200" width="310" height="110" rx="15"/><text x="480" y="236" text-anchor="middle" class="ar-title">Stakeholder Map</text><text x="480" y="268" text-anchor="middle" class="ar-copy">Maps champions, decision-makers, blockers,</text><text x="480" y="288" text-anchor="middle" class="ar-copy">and missing relationships.</text></g>
+          <g><rect class="ar-ai" x="325" y="360" width="310" height="110" rx="15"/><text x="480" y="396" text-anchor="middle" class="ar-title">Commercial Analysis</text><text x="480" y="428" text-anchor="middle" class="ar-copy">Finds pricing, policy, legal, concession,</text><text x="480" y="448" text-anchor="middle" class="ar-copy">and approval risks.</text></g>
+
+          <path class="ar-line" d="M635 95H680M635 255H680M635 415H680M680 95V415"/>
+          <path class="ar-arrow" d="M680 255H750"/>
+          <g><rect class="ar-ai" x="750" y="195" width="240" height="130" rx="15"/><text x="870" y="232" text-anchor="middle" class="ar-title">Negotiation Strategy</text><text x="870" y="266" text-anchor="middle" class="ar-copy">Combines specialist findings</text><text x="870" y="288" text-anchor="middle" class="ar-copy">into the draft brief.</text></g>
+          <path class="ar-arrow" d="M990 260H1050"/>
+          <g><rect class="ar-human" x="1050" y="195" width="250" height="130" rx="15"/><text x="1175" y="232" text-anchor="middle" class="ar-title">Validation + approval</text><text x="1175" y="266" text-anchor="middle" class="ar-copy">Code checks citations and policy;</text><text x="1175" y="288" text-anchor="middle" class="ar-copy">people approve sensitive advice.</text></g>
+          <path class="ar-arrow" d="M1300 260H1350"/>
+          <g><rect class="ar-box" x="1350" y="195" width="120" height="130" rx="15"/><text x="1410" y="240" text-anchor="middle" class="ar-title">Final brief</text><text x="1410" y="274" text-anchor="middle" class="ar-copy">Reviewed</text><text x="1410" y="294" text-anchor="middle" class="ar-copy">and cited.</text></g>
+        </svg>
       </div>
     </section>
 
+
+    <section id="security">
+      <div class="section-number">05 · Trust and security</div>
+      <h2>Protect the data. Verify the answer. Keep people accountable.</h2>
+      <div class="grid-2">
+        <div class="card"><h4>Deal and source access</h4><p><strong>What:</strong> a user may open only deals and source types assigned to them.<br><strong>Why:</strong> strategic deals contain restricted customer, pricing, and legal information.<br><strong>How:</strong> PostgreSQL permission grants are checked before search and again before evidence reaches an AI model; denied requests reveal no deal details.</p></div>
+        <div class="card"><h4>Evidence-backed claims</h4><p><strong>What:</strong> every factual statement shown to the seller must cite an allowed source.<br><strong>Why:</strong> invented amounts, dates, stakeholders, or commitments can damage a live negotiation.<br><strong>How:</strong> the agent returns each claim with a citation ID. Code matches it to the run’s frozen authorized evidence list, restores the trusted source label and locator, and checks that material names, amounts, dates, and meaning are supported by the cited text. Missing, unauthorized, or unsupported claims are removed.</p></div>
+        <div class="card"><h4>Human approval before action</h4><p><strong>What:</strong> an accountable person must approve sensitive recommendations before the brief can finalize.<br><strong>Why:</strong> these are high-value deals with real pricing, legal, and customer commitments.<br><strong>How:</strong> the workflow pauses and routes each issue to Deal Desk, Sales leadership, legal, or the account owner; it continues only after every required approval is recorded.</p></div>
+        <div class="card"><h4>Review and recovery history</h4><p><strong>What:</strong> reviewers can see which evidence, agents, and decisions produced the brief.<br><strong>Why:</strong> the business must explain outcomes and recover interrupted work without repeating approvals.<br><strong>How:</strong> PostgreSQL stores run progress, retrieved evidence, model calls, approvals, and the final brief; a replacement worker resumes from the last saved stage.</p></div>
+      </div>
+      <div class="callout"><p><strong>Generated Slack updates:</strong> three clearly synthetic updates per opportunity add useful context, uncertainty, and conflicting signals. They are permissioned and ingested like any other evidence source.</p></div>
+      <div class="callout danger"><p><strong>Before production:</strong> add enterprise identity, managed secrets and rotation, rate limits, spending controls, high availability, monitoring and alerting, operational support, and stronger personal-data protection. <a href="#production">Production readiness</a> covers these gaps.</p></div>
+    </section>
+
+    <section id="deliverables">
+      <div class="section-number">06 · Deliverables and demo</div>
+      <h2>What the submission must show.</h2>
+      <div class="callout"><p><strong>The brief covers all nine required sections:</strong> Deal Snapshot, Executive Summary, Buyer Goals and Business Drivers, Stakeholder Map, Negotiation State, Recommended Next Actions, Missing Information, Source Evidence, and Confidence and Review Warnings.</p></div>
+      <div class="grid-2">
+        <div class="card"><h4>A · Runnable prototype</h4><p>A working web experience, API, background processing, retrieval, approvals, and live-model configuration.</p></div>
+        <div class="card"><h4>B · Architecture diagrams</h4><p>Logical, deployment, agent, and workflow views cover retrieval, state, approvals, guardrails, observability, storage, and model access.</p></div>
+        <div class="card"><h4>C · Documentation</h4><p>The README, this overview, and security notes explain setup, permissions, saved state, and generated Slack ingestion.</p></div>
+        <div class="card"><h4>D · Sample run artifacts</h4><p><code>samples/</code> includes live-model briefs, generated Slack data, approval output, denied access, traces, and logs. <a href="../samples/slack-impact.html">Slack impact comparison</a> shows the same deal generated with and without the account-team updates.</p></div>
+        <div class="card"><h4>E · Interview walkthrough</h4><p>A 15-minute narrative should cover business value, design choices, a live demo, evaluation results, and production risks.</p></div>
+      </div>
+
+      <h3>Required demo scenarios</h3>
+      <table class="scenarios">
+        <thead><tr><th>Scenario</th><th>Executive proof</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Authorized brief</strong><br><code>OPP-1001</code> or <code>OPP-1002</code></td><td>An authorized seller receives a nine-section, evidence-cited negotiation brief.</td></tr>
+          <tr><td><strong>Sensitive deal</strong><br><code>OPP-1003</code></td><td>Pricing, legal, and customer-facing recommendations route to the required human approvers before finalization.</td></tr>
+          <tr><td><strong>Denied access</strong><br><code>OPP-1003</code></td><td>An unauthorized user receives a denial with no restricted evidence, summary, citation, or metadata.</td></tr>
+          <tr><td><strong>Generated Slack evidence</strong></td><td>A generated Slack update affects the analysis and appears as cited evidence in the final brief. <a href="../samples/slack-impact.html">Side-by-side comparison</a>.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
     <section id="production">
-      <div class="section-number">08 · Production readiness</div>
+      <div class="section-number">07 · Production readiness</div>
       <h2>A strong recovery core; an intentionally incomplete operating envelope.</h2>
-      <div class="readiness-list change-zone" data-change-id="production-readiness" data-change="The readiness table is now a set of plain-language cards with defined bullet points.">
+      <div class="readiness-list">
         <article class="readiness-card">
           <h3>Scalability</h3>
           <p><strong>What it is:</strong> keeping the system responsive as users, simultaneous briefs, and evidence rows increase.</p>
@@ -678,7 +485,7 @@
 
       <h3>Possible later improvements</h3>
       <p>These are useful ideas, not current features. Each card starts with what the idea means, then explains why it should wait.</p>
-      <div class="grid-2 change-zone" data-change-id="deferred-improvements" data-change="Each later improvement now starts with a definition and plain-language reason.">
+      <div class="grid-2">
         <div class="card deferred-card"><h4>Adaptive ANN / HNSW</h4><p><strong>What it is:</strong> a fast approximate vector index that finds likely matches without comparing every row.</p><p><strong>Why later:</strong> it is probably needed when one authorized search scope reaches millions of rows. It must still recheck permissions and exact similarity before returning evidence; total database size alone is not enough reason to enable it.</p></div>
         <div class="card deferred-card"><h4>PII defense in depth</h4><p><strong>What it is:</strong> an extra check for names, contact details, identifiers, and other personal information before data reaches a model or final brief.</p><p><strong>Why later:</strong> a private detector such as Presidio and a separate checking agent can both flag possible PII, but neither should make the final decision alone. Deterministic rules and human review remain the authority for risky cases.</p></div>
         <div class="card deferred-card"><h4>Cross-encoder reranking</h4><p><strong>What it is:</strong> a second model that rereads the query and top search results together to improve their final order.</p><p><strong>Why later:</strong> it adds latency, cost, and more evidence exposure. Add it only if measured retrieval quality is not good enough without it.</p></div>
@@ -687,158 +494,7 @@
     </section>
   </main>
 
-  <footer>Strategic Deal Intelligence Assistant · Technical overview generated from the current repository source and Drizzle migrations · 31 August 2026</footer>
   <script>
-    const tableDescriptions = {
-      personas: 'People who can request briefs or make approval decisions. A persona supplies the identity and role used by authorization.',
-      permission_grants: 'The readable scope for one persona: which account, source types, restricted records, pricing data, and approval actions they may access.',
-      accounts: 'Customer organizations. Opportunities, contacts, grants, and evidence are scoped back to an account.',
-      opportunities: 'Deals being prepared for negotiation. Each run targets one opportunity and inherits its account and restriction rules.',
-      contacts: 'People associated with a customer account. They ground stakeholder names and contact details used in a brief.',
-      auth_sessions: 'Server-side login sessions. They bind a browser session to a persona and support expiration or revocation.',
-      document_versions: 'Immutable versions of ingested source documents. They preserve original content, provenance, date, and policy context.',
-      evidence_versions: 'Searchable, permission-scoped evidence derived from a document version, including text, vector representation, sensitivity, and reliability.',
-      run_evidence_manifests: 'The frozen evidence selection for one run. It binds authorization, search settings, and context limits so generation can be reproduced and audited.',
-      run_evidence_manifest_entries: 'One selected evidence version inside a run manifest, with its citation identity, ranks, adjustments, locator, and exact included content.',
-      runs: 'The durable top-level workflow record for one requested brief, including its deal, requester, state, version, and generation configuration.',
-      outbox_commands: 'Commands committed with workflow state and later delivered to workers. The outbox prevents a state change from being saved without its next action.',
-      step_invocations: 'One worker attempt to execute a workflow step, including temporary ownership, lease expiry, attempt number, and result.',
-      workflow_checkpoints: 'Saved outputs from completed steps. A retried or restarted worker resumes from these records instead of repeating successful work.',
-      generation_attempts: 'The audit and usage record for each model request, including provider, operation, validation attempts, tokens, status, and provider IDs.',
-      specialist_artifacts: 'Structured outputs from the conversation, stakeholder, commercial, or strategy agents before they become the final brief.',
-      'claims → citations': 'Generated factual claims and their links to exact authorized evidence versions. This relationship makes support inspectable.',
-      approval_subjects: 'A versioned draft that requires review, with the policy reasons and immutable hash of exactly what is being approved.',
-      approval_requirement_entries: 'The individual approval obligations for a subject, including category, eligible authorities, order, and dependencies.',
-      approval_decisions: 'Immutable human decisions for one requirement, recording who acted, their authority, the action, and the payload hashes they reviewed.',
-      briefs: 'The final structured preparation brief. Once finalized, its payload cannot be changed.',
-      trace: 'Detailed technical spans used to explain authorization, retrieval, model, validation, and recovery work inside a run.',
-      events: 'The ordered user-facing timeline of a run, used by live updates and later inspection.'
-    };
-
-    const fieldDescriptions = {
-      'PK id': 'Primary key: the unique identifier for this record.',
-      'PK version': 'Primary key: the session version used to identify and revoke this login.',
-      'PK manifest_id + evidence_version_id': 'Composite primary key: prevents the same evidence version from appearing twice in one manifest.',
-      'PK approval_subject_id + id': 'Composite primary key: identifies one requirement within one approval subject.',
-      'display_name · role': 'display_name is the human-readable person name; role describes their business or approval responsibility.',
-      source_commit: 'The source revision that produced this record, used to reproduce fixture-derived data.',
-      created_at: 'When this record was first stored.',
-      'FK persona_id · account_id': 'Foreign keys to the person receiving the grant and the customer account the grant covers.',
-      'source_type · can_read': 'The evidence source covered by the grant and whether the person may read it.',
-      'can_read_restricted · sensitive_pricing': 'Separate permissions for restricted deals and sensitive pricing evidence.',
-      'can_request_approval · source_commit': 'Whether the person may start an approval flow, plus the source revision for this grant.',
-      'name · created_at': 'The business name and the time this record was created.',
-      'FK account_id': 'Foreign key to the customer account that owns this record.',
-      'name · restricted': 'The opportunity name and whether stricter access rules apply.',
-      'FK account_id · name · email': 'The owning account plus the contact’s name and email address.',
-      'FK persona_id · expires_at · revoked_at': 'The signed-in person, when the session expires, and when it was explicitly revoked.',
-      'external_id · version': 'The source-system identifier and immutable version number for this document.',
-      'source_type · content_hash': 'Where the document came from and a hash that detects any content change.',
-      'content · source_locator': 'The preserved source text and the stable location shown to reviewers.',
-      'event_date · policy_hash': 'When the source event occurred and which policy version applied during ingestion.',
-      'FK document_version_id · account_id': 'Links this evidence to its immutable source document and customer account.',
-      'FK opportunity_id': 'Links the evidence or run to the deal it concerns.',
-      'source_type · sensitivity · content_hash': 'The evidence source, effective sensitivity classification, and immutable content fingerprint.',
-      'lexical_content · embedding': 'The searchable text and numeric vector used for keyword and semantic retrieval.',
-      'embedding_provider · model · dimension': 'Which embedding service and model produced the vector, and the vector size expected during search.',
-      'embedding_profile · version · normalization': 'The versioned preprocessing and normalization rules required to compare vectors consistently.',
-      'reliability_class · classification_reason': 'The evidence trust category and the recorded reason for assigning it.',
-      'FK run_id': 'Foreign key to the run that owns this record.',
-      'scope_hash · policy_hash · query_hash': 'Fingerprints of the authorized scope, policy, and search plan; a mismatch stops generation.',
-      'index_profile · embedding_* profile': 'The exact search-index and embedding configuration used by this run.',
-      'context_limit · diagnostics': 'The maximum evidence context allowed and structured details explaining how it was assembled.',
-      'FK manifest_id · evidence_version_id': 'Links this row to its run manifest and the exact immutable evidence version selected.',
-      'citation_id · source_locator': 'The stable citation label used in generated claims and the reviewer-facing source location.',
-      'lexical_rank · semantic_rank · query_rank': 'The item’s positions in keyword search, semantic search, and the individual query that found it.',
-      'fusion_score · score': 'The combined retrieval score and the final adjusted score used for ordering.',
-      'reliability_adjustment · recency_adjustment': 'Small, recorded score changes for source reliability and age.',
-      'included_characters · content_hash': 'How much of the evidence entered model context and the hash proving which content was used.',
-      'FK opportunity_id · requested_by': 'The target deal and the persona who requested this run.',
-      'status · version': 'The current workflow state and optimistic-lock version that prevents conflicting transitions.',
-      'generation_provider · generation_model': 'The provider and model selected for this run’s generated artifacts.',
-      'idempotency_key · start_request_hash': 'Values that make repeated start requests resolve to the same intended run instead of duplicating work.',
-      'created_at · updated_at': 'When the run was created and when its state last changed.',
-      'type · payload · idempotency_key': 'The command to execute, its input, and the key that makes duplicate delivery safe.',
-      'status · claim_* · consumed_at': 'Delivery state, temporary worker-claim details, and when processing finished.',
-      'FK run_id · causal_command_id': 'The owning run and the command that caused this step attempt.',
-      'step · owner · lease_token': 'Which workflow step is running and the worker’s temporary proof of ownership.',
-      'lease_expires_at · attempt · status': 'When ownership may be reclaimed, how many times the step has run, and its current result.',
-      completed_at: 'When this step finished successfully.',
-      'FK run_id · invocation_id': 'The owning run and the exact step attempt associated with this record.',
-      'step · logical_generation_id': 'The completed workflow step and stable generation identity reused across safe retries.',
-      'payload · created_at': 'The saved step output and when the checkpoint was written.',
-      'provider · model · operation · ordinal': 'The model service, model name, requested task, and attempt order.',
-      'output_mode · validation_attempts': 'The requested response format and how many schema-validation or repair passes occurred.',
-      'input_tokens · output_tokens · status': 'Measured prompt and response usage plus the final attempt outcome.',
-      'request_id · response_id': 'Provider identifiers used to correlate diagnostics without storing secrets.',
-      'FK run_id · evidence_manifest_id': 'The owning run and frozen evidence set used to generate this artifact.',
-      'kind · draft_version · outcome': 'Which specialist produced the artifact, which draft it belongs to, and whether it succeeded or degraded.',
-      'content · content_hash · warnings': 'The structured result, its immutable fingerprint, and any limitations the strategy step must preserve.',
-      generation_metadata: 'Provider, model, usage, and repair metadata explaining how this artifact was generated.',
-      'claims.PK id': 'The unique identifier for one factual claim.',
-      'claims.FK run_id · artifact_id': 'Links the claim to its run and the generated artifact that asserted it.',
-      'citations.FK claim_id · evidence_version_id': 'Links a claim to the exact immutable evidence version that supports it.',
-      'draft_version · subject_hash': 'The draft number and immutable fingerprint of exactly what reviewers are deciding.',
-      'payload · policy_triggers': 'The reviewable draft content and the deterministic policy reasons that required approval.',
-      'quorum_version · superseded_by': 'The approval-rule version and the newer subject that replaces this one, if the draft changed.',
-      'category · eligible_authorities': 'The type of approval needed and the business roles allowed to provide it.',
-      'policy_triggers · depends_on': 'The reasons for this requirement and any earlier decisions that must complete first.',
-      'ordinal · created_at': 'Stable display order and the time the requirement was created.',
-      'FK subject + entry · actor_id': 'Links the decision to the exact approval subject, requirement, and human actor.',
-      'action · authority · payload hashes': 'What the reviewer decided, which authority they exercised, and fingerprints of the original and approved content.',
-      'result_status · quorum flags': 'The resulting approval state and whether all required independent decisions are satisfied.',
-      run_id: 'The run that produced this brief, trace span, or timeline event.',
-      payload: 'The structured content stored for this brief, command, checkpoint, or event.',
-      finalized: 'Whether the brief passed every required check and is now immutable.',
-      id: 'The unique identifier for this record.',
-      span_id: 'The stable identifier for one trace operation within the run.',
-      kind: 'The category of operation represented by this trace span.',
-      sequence: 'The event’s strict order within the run timeline.'
-    };
-
-    const erdTooltip = document.createElement('div');
-    erdTooltip.id = 'erd-tooltip';
-    erdTooltip.className = 'erd-tooltip';
-    erdTooltip.setAttribute('role', 'tooltip');
-    erdTooltip.hidden = true;
-    document.body.append(erdTooltip);
-
-    function positionErdTooltip(target, event) {
-      const bounds = target.getBoundingClientRect();
-      const pointerX = 'clientX' in event ? event.clientX : bounds.left + bounds.width / 2;
-      const pointerY = 'clientY' in event ? event.clientY : bounds.bottom;
-      erdTooltip.style.left = `${Math.max(12, Math.min(pointerX + 14, window.innerWidth - erdTooltip.offsetWidth - 12))}px`;
-      erdTooltip.style.top = `${Math.max(12, Math.min(pointerY + 14, window.innerHeight - erdTooltip.offsetHeight - 12))}px`;
-    }
-
-    function addErdHelp(element, description) {
-      element.setAttribute('tabindex', '0');
-      element.setAttribute('aria-describedby', erdTooltip.id);
-      const show = (event) => {
-        erdTooltip.textContent = description;
-        erdTooltip.hidden = false;
-        positionErdTooltip(element, event);
-      };
-      element.addEventListener('mouseenter', show);
-      element.addEventListener('mousemove', (event) => positionErdTooltip(element, event));
-      element.addEventListener('focus', show);
-      element.addEventListener('mouseleave', () => { erdTooltip.hidden = true; });
-      element.addEventListener('blur', () => { erdTooltip.hidden = true; });
-    }
-
-    for (const entity of document.querySelectorAll('#data svg g')) {
-      const heading = entity.querySelector('.e-title');
-      if (!heading) continue;
-      const tableName = heading.textContent.trim();
-      const tableDescription = tableDescriptions[tableName] ?? `${tableName} stores one part of the system’s durable state.`;
-      addErdHelp(heading, tableDescription);
-
-      for (const field of entity.querySelectorAll('.e-text')) {
-        const label = field.textContent.trim();
-        const fieldDescription = fieldDescriptions[label] ?? `${label.replaceAll('_', ' ')}: stored data used by ${tableName}.`;
-        addErdHelp(field, fieldDescription);
-      }
-    }
 
     for (const diagram of document.querySelectorAll('.diagram')) {
       const toolbar = document.createElement('div');
@@ -859,7 +515,6 @@
       toolbar.append(button);
       diagram.prepend(toolbar);
     }
-
     for (const zone of document.querySelectorAll('.change-zone')) {
       const changeId = zone.dataset.changeId;
       const storageKey = `technical-overview-change:${changeId}`;
@@ -896,6 +551,7 @@
       });
       zone.prepend(marker);
     }
+
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;

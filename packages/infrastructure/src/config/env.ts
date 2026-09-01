@@ -10,7 +10,13 @@ const commonEnvironment = {
   REDIS_URL: z.string().url().default('redis://127.0.0.1:56379'),
   WEB_ORIGIN: exactOrigin.default('http://127.0.0.1:4173'),
   SESSION_SECRET: z.string().min(32),
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info')
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  // Absent means "no sandbox reset in this build". Only the exact literal `enabled` turns the
+  // capability on (see config/sandbox.ts), so a typo, an empty string, or a truthy-looking `1`
+  // leaves it off. The value is parsed as a free string rather than a literal on purpose: a
+  // mistyped opt-in should cost a missing button, not refuse to boot a running deployment.
+  SLACATO_SANDBOX_RESET: z.string().optional(),
+  SLACATO_SANDBOX_RESET_DATABASE: z.string().min(1).optional()
 };
 
 const mockEnvironment = z
@@ -72,6 +78,8 @@ const envKeys = [
   'WEB_ORIGIN',
   'SESSION_SECRET',
   'LOG_LEVEL',
+  'SLACATO_SANDBOX_RESET',
+  'SLACATO_SANDBOX_RESET_DATABASE',
   'AI_PROVIDER',
   'OLLAMA_API_KEY',
   'OLLAMA_BASE_URL',

@@ -1,36 +1,36 @@
 {
   "buyerGoalsAndBusinessDrivers": {
     "businessDrivers": [
-      "Values the platform but flagged sensitive research access controls as non-negotiable."
+      "Data protection controls and segmentation models are fully accepted by the security architect."
     ],
     "claims": [
       {
         "citations": [
           {
-            "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
-            "id": "citation_f1db274277df8cd977b001b3482f52f64177c84b",
-            "locator": "salesforce/contacts.tsv#CON-3011/opportunity/OPP-1003#chunk-0"
+            "evidenceId": "gong_summary:CALL-023:summary:0",
+            "id": "citation_6d0f5f973910d40e11a1b7b15af9196ed27a9618",
+            "locator": "gong/gong_call_summaries.tsv#CALL-023#chunk-0"
           }
         ],
         "confidence": 1,
-        "id": "claim_bg_1",
-        "statement": "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
+        "id": "claim_bg_01",
+        "statement": "Executives aligned on strategic need but disagreed on whether discount or risk mitigation should lead negotiation."
       },
       {
         "citations": [
           {
-            "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
-            "id": "citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee",
-            "locator": "salesforce/contacts.tsv#CON-3012/opportunity/OPP-1003#chunk-0"
+            "evidenceId": "slack:SLK-9007:0",
+            "id": "citation_39ca03d6d61fdb8bf87b697e3272ed75d2c32127",
+            "locator": "slack/account_team_updates.tsv#SLK-9007#chunk-0"
           }
         ],
         "confidence": 1,
-        "id": "claim_bg_2",
-        "statement": "Values the platform but flagged sensitive research access controls as non-negotiable."
+        "id": "claim_bg_02",
+        "statement": "Data protection controls and segmentation models are fully accepted by the security architect."
       }
     ],
     "goals": [
-      "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
+      "Executives aligned on strategic need but disagreed on whether discount or risk mitigation should lead negotiation."
     ]
   },
   "confidenceAndReviewWarnings": {
@@ -38,23 +38,16 @@
     "warnings": [
       {
         "claimIds": [
-          "claim_ns_3",
-          "claim_ns_4"
+          "claim_ac_01"
         ],
-        "code": "APPROVAL_REQUIRED",
-        "message": "Approval is required for this restricted opportunity before customer-facing concessions can be shared.",
+        "code": "CONCESSION_NOT_APPROVED",
+        "message": "Customer-facing concession language cannot be generated because the pricing recommendation approval status is pending.",
         "severity": "critical"
       },
       {
         "claimIds": [],
         "code": "INSUFFICIENT_CLAIM_SUPPORT",
         "message": "No single cited evidence unit supports the complete material relation.",
-        "severity": "warning"
-      },
-      {
-        "claimIds": [],
-        "code": "EXECUTIVE_DISAGREEMENT",
-        "message": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations.",
         "severity": "warning"
       }
     ]
@@ -65,14 +58,14 @@
       {
         "citations": [
           {
-            "evidenceId": "salesforce:ACC-2003:OPP-1003:account:0",
-            "id": "citation_02e28cbc6e6662124af57133f8475326dbae432b",
-            "locator": "salesforce/accounts.tsv#ACC-2003/opportunity/OPP-1003#chunk-0"
+            "evidenceId": "salesforce:OPP-1003:0",
+            "id": "citation_274f141f84ce630d610ef6246a9f498d04f97bd4",
+            "locator": "salesforce/opportunities.tsv#OPP-1003#chunk-0"
           }
         ],
         "confidence": 1,
-        "id": "claim_ds_1",
-        "statement": "Restricted account with sensitive pricing notes, legal constraints, and board-level cost pressure."
+        "id": "claim_ds_01",
+        "statement": "stage: 5.0 Negotiate"
       }
     ],
     "opportunityName": "Eclipse BioMaterials Ltd - Restricted Renewal and Data Protection",
@@ -83,183 +76,116 @@
       {
         "citations": [
           {
-            "evidenceId": "salesforce:OPP-1003:0",
-            "id": "citation_6114ccdd24bc29d042fba4922f273129d5329419",
-            "locator": "salesforce/opportunities.tsv#OPP-1003#chunk-0"
+            "evidenceId": "slack:SLK-9009:0",
+            "id": "citation_f735c84da94a78934e442361d4313f6d27160a59",
+            "locator": "slack/account_team_updates.tsv#SLK-9009#chunk-0"
           }
         ],
         "confidence": 1,
-        "id": "claim_es_1",
-        "statement": "Route discount, liability language, and restricted data access request for approval by 2026-05-14"
+        "id": "claim_es_01",
+        "statement": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
       }
     ],
-    "narrative": "Route discount, liability language, and restricted data access request for approval by 2026-05-14"
+    "narrative": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
   },
   "missingInformation": {
-    "items": [
-      {
-        "question": "Verify evidence for claim claim_st_16.",
-        "whyItMatters": "No single cited evidence unit supports the complete material relation."
-      },
-      {
-        "question": "Verify evidence for claim claim_st_6.",
-        "whyItMatters": "No single cited evidence unit supports the complete material relation."
-      },
-      {
-        "question": "Verify evidence for claim claim_st_12.",
-        "whyItMatters": "No single cited evidence unit supports the complete material relation."
-      },
-      {
-        "question": "Verify evidence for claim claim_st_15.",
-        "whyItMatters": "No single cited evidence unit supports the complete material relation."
-      },
-      {
-        "question": "Verify evidence for claim claim_ev_10.",
-        "whyItMatters": "No single cited evidence unit supports the complete material relation."
-      },
-      {
-        "question": "Verify evidence for claim claim_ev_11.",
-        "whyItMatters": "No single cited evidence unit supports the complete material relation."
-      }
-    ]
+    "items": []
   },
   "negotiationState": {
     "claims": [
       {
         "citations": [
           {
-            "evidenceId": "salesforce:OPP-1003:0",
-            "id": "citation_6114ccdd24bc29d042fba4922f273129d5329419",
-            "locator": "salesforce/opportunities.tsv#OPP-1003#chunk-0"
+            "evidenceId": "gong_summary:CALL-027:summary:0",
+            "id": "citation_a6a11350a1547c76d74b7f7c53129a572ebae5dd",
+            "locator": "gong/gong_call_summaries.tsv#CALL-027#chunk-0"
           }
         ],
         "confidence": 1,
-        "id": "claim_ns_1",
-        "statement": "Route discount, liability language, and restricted data access request for approval by 2026-05-14"
+        "id": "claim_ns_01",
+        "statement": "Final prep call identified approval gates for discount, liability language, and restricted-source use."
       },
       {
         "citations": [
           {
-            "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
-            "id": "citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee",
-            "locator": "salesforce/contacts.tsv#CON-3012/opportunity/OPP-1003#chunk-0"
+            "evidenceId": "slack:SLK-9008:0",
+            "id": "citation_5d2d1872d2be1d9e9c546ac450c0b10177f0b090",
+            "locator": "slack/account_team_updates.tsv#SLK-9008#chunk-0"
           }
         ],
         "confidence": 1,
-        "id": "claim_ns_2",
-        "statement": "Values the platform but flagged sensitive research access controls as non-negotiable."
-      },
-      {
-        "citations": [
-          {
-            "evidenceId": "policy:deal-desk-policy:OPP-1003:2",
-            "id": "citation_89220c1feb63bfbd470dff62aa8ee9ccd3ffad31",
-            "locator": "policies/deal_desk_policy.md#opportunity/OPP-1003#chunk-2"
-          }
-        ],
-        "confidence": 1,
-        "id": "claim_ns_3",
-        "statement": "Data retention, restricted research data, or customer-specific security language requires legal approval before it is shared externally."
-      },
-      {
-        "citations": [
-          {
-            "evidenceId": "policy:deal-desk-policy:OPP-1003:2",
-            "id": "citation_89220c1feb63bfbd470dff62aa8ee9ccd3ffad31",
-            "locator": "policies/deal_desk_policy.md#opportunity/OPP-1003#chunk-2"
-          }
-        ],
-        "confidence": 1,
-        "id": "claim_ns_4",
-        "statement": "Customer-facing concession language must not be generated unless the recommendation has an approved status."
-      },
-      {
-        "citations": [
-          {
-            "evidenceId": "policy:deal-desk-policy:OPP-1003:2",
-            "id": "citation_89220c1feb63bfbd470dff62aa8ee9ccd3ffad31",
-            "locator": "policies/deal_desk_policy.md#opportunity/OPP-1003#chunk-2"
-          }
-        ],
-        "confidence": 1,
-        "id": "claim_ns_5",
-        "statement": "Low-confidence recommendations, conflicting evidence, or missing source data must be routed to a human reviewer."
+        "id": "claim_ns_02",
+        "statement": "Exception handling procedures requested by the research team are still undocumented."
       }
     ],
-    "currentState": "Route discount, liability language, and restricted data access request for approval by 2026-05-14",
-    "leverage": [
-      "Values the platform but flagged sensitive research access controls as non-negotiable."
-    ],
+    "currentState": "Final prep call identified approval gates for discount, liability language, and restricted-source use.",
+    "leverage": [],
     "risks": [
-      "Data retention, restricted research data, or customer-specific security language requires legal approval before it is shared externally.",
-      "Customer-facing concession language must not be generated unless the recommendation has an approved status.",
-      "Low-confidence recommendations, conflicting evidence, or missing source data must be routed to a human reviewer."
+      "Exception handling procedures requested by the research team are still undocumented."
     ]
   },
   "recommendedNextActions": {
     "actions": [
       {
-        "action": "Schedule internal package comparison",
+        "action": "Schedule internal review for pricing packages.",
         "claims": [
           {
             "citations": [
               {
-                "evidenceId": "gong_transcript:CALL-027:transcript:3",
-                "id": "citation_e4fcfea46972cdfdd7fd58302a8461f97309156c",
-                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-3"
+                "evidenceId": "policy:deal-desk-policy:OPP-1003:2",
+                "id": "citation_30943d4bc05d195461dd50d9b3dc1addd0d2ac66",
+                "locator": "policies/deal_desk_policy.md#opportunity/OPP-1003#chunk-2"
               }
             ],
             "confidence": 1,
-            "id": "claim_act_1",
-            "statement": "So next action is internal package comparison with approval flags, not an external proposal."
+            "id": "claim_ac_01",
+            "statement": "Data retention, restricted research data, or customer-specific security language requires legal approval before it is shared externally."
           }
         ],
         "priority": "high",
-        "rationale": "So next action is internal package comparison with approval flags, not an external proposal."
+        "rationale": "Data retention, restricted research data, or customer-specific security language requires legal approval before it is shared externally."
       }
     ]
   },
   "sourceEvidence": {
     "evidence": [
       {
-        "capturedAt": "2026-04-26T00:00:00Z",
         "claims": [
           {
             "citations": [
               {
-                "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
-                "id": "citation_f1db274277df8cd977b001b3482f52f64177c84b",
-                "locator": "salesforce/contacts.tsv#CON-3011/opportunity/OPP-1003#chunk-0"
+                "evidenceId": "policy:deal-desk-policy:OPP-1003:2",
+                "id": "citation_30943d4bc05d195461dd50d9b3dc1addd0d2ac66",
+                "locator": "policies/deal_desk_policy.md#opportunity/OPP-1003#chunk-2"
               }
             ],
             "confidence": 1,
-            "id": "claim_ev_4",
-            "statement": "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
+            "id": "claim_ev_01",
+            "statement": "Data retention, restricted research data, or customer-specific security language requires legal approval before it is shared externally."
           }
         ],
-        "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
-        "sourceType": "crm",
-        "summary": "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
+        "evidenceId": "policy:deal-desk-policy:OPP-1003:2",
+        "sourceType": "policy",
+        "summary": "Data retention, restricted research data, or customer-specific security language requires legal approval before it is shared externally."
       },
       {
-        "capturedAt": "2026-04-25T00:00:00Z",
         "claims": [
           {
             "citations": [
               {
-                "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
-                "id": "citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee",
-                "locator": "salesforce/contacts.tsv#CON-3012/opportunity/OPP-1003#chunk-0"
+                "evidenceId": "salesforce:OPP-1003:0",
+                "id": "citation_274f141f84ce630d610ef6246a9f498d04f97bd4",
+                "locator": "salesforce/opportunities.tsv#OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_ev_5",
-            "statement": "Values the platform but flagged sensitive research access controls as non-negotiable."
+            "id": "claim_ev_02",
+            "statement": "opportunityId: OPP-1003"
           }
         ],
-        "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
+        "evidenceId": "salesforce:OPP-1003:0",
         "sourceType": "crm",
-        "summary": "Values the platform but flagged sensitive research access controls as non-negotiable."
+        "summary": "opportunityId: OPP-1003"
       },
       {
         "capturedAt": "2026-04-24T00:00:00Z",
@@ -268,18 +194,18 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3013:OPP-1003:contact:0",
-                "id": "citation_4a0c42ed879dc2884d6df8552cb4950c6a90971f",
+                "id": "citation_b6d9b98ac1318de9ff9d47ec7487cd28ff10e97f",
                 "locator": "salesforce/contacts.tsv#CON-3013/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_ev_6",
-            "statement": "Requests liability language changes and strict review before customer-facing concessions."
+            "id": "claim_ev_03",
+            "statement": "contactId: CON-3013"
           }
         ],
         "evidenceId": "salesforce:CON-3013:OPP-1003:contact:0",
         "sourceType": "crm",
-        "summary": "Requests liability language changes and strict review before customer-facing concessions."
+        "summary": "contactId: CON-3013"
       },
       {
         "capturedAt": "2026-04-26T00:00:00Z",
@@ -288,18 +214,77 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3014:OPP-1003:contact:0",
-                "id": "citation_6dbf463375bc8095ecbab6bb323d597766be4915",
+                "id": "citation_84a222aa1a88c5ffd8eeab082466a35031263553",
                 "locator": "salesforce/contacts.tsv#CON-3014/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_ev_7",
-            "statement": "Pressing for aggressive discount and shorter renewal term."
+            "id": "claim_ev_04",
+            "statement": "contactId: CON-3014"
           }
         ],
         "evidenceId": "salesforce:CON-3014:OPP-1003:contact:0",
         "sourceType": "crm",
-        "summary": "Pressing for aggressive discount and shorter renewal term."
+        "summary": "contactId: CON-3014"
+      },
+      {
+        "capturedAt": "2026-04-26T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
+                "id": "citation_6504fc6da85f941e1d8f9d8f125536f56f48226d",
+                "locator": "salesforce/contacts.tsv#CON-3011/opportunity/OPP-1003#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_05",
+            "statement": "contactId: CON-3011"
+          }
+        ],
+        "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
+        "sourceType": "crm",
+        "summary": "contactId: CON-3011"
+      },
+      {
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:ACC-2003:OPP-1003:account:0",
+                "id": "citation_8a7682cf2e56a7bcad2eb8104b855221a6bad7ad",
+                "locator": "salesforce/accounts.tsv#ACC-2003/opportunity/OPP-1003#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_06",
+            "statement": "accountId: ACC-2003"
+          }
+        ],
+        "evidenceId": "salesforce:ACC-2003:OPP-1003:account:0",
+        "sourceType": "crm",
+        "summary": "accountId: ACC-2003"
+      },
+      {
+        "capturedAt": "2026-04-25T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
+                "id": "citation_94d2887e11d4bfb6b1eadccb11ed0ce7692c6687",
+                "locator": "salesforce/contacts.tsv#CON-3012/opportunity/OPP-1003#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_07",
+            "statement": "contactId: CON-3012"
+          }
+        ],
+        "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
+        "sourceType": "crm",
+        "summary": "contactId: CON-3012"
       },
       {
         "capturedAt": "2026-04-23T00:00:00Z",
@@ -308,18 +293,116 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3015:OPP-1003:contact:0",
-                "id": "citation_9dca3c021ef98b2798c238b3ed1abff7c9ebcc8c",
+                "id": "citation_08f11813cd66f6b065f365e1e25238f42352de90",
                 "locator": "salesforce/contacts.tsv#CON-3015/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_ev_8",
-            "statement": "Needs evidence that research data workflows remain segmented by team."
+            "id": "claim_ev_08",
+            "statement": "contactId: CON-3015"
           }
         ],
         "evidenceId": "salesforce:CON-3015:OPP-1003:contact:0",
         "sourceType": "crm",
-        "summary": "Needs evidence that research data workflows remain segmented by team."
+        "summary": "contactId: CON-3015"
+      },
+      {
+        "capturedAt": "2026-05-18T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "slack:SLK-9009:0",
+                "id": "citation_f735c84da94a78934e442361d4313f6d27160a59",
+                "locator": "slack/account_team_updates.tsv#SLK-9009#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_09",
+            "statement": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+          }
+        ],
+        "evidenceId": "slack:SLK-9009:0",
+        "sourceType": "slack",
+        "summary": "Executive stakeholders disagree on whether aggressive discounting or risk mitigation should lead the final negotiations."
+      },
+      {
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "pricing:PN-4005:0",
+                "id": "citation_54649f4fe06ff52b315f43b00bfdceb564ad5a11",
+                "locator": "pricing/pricing_notes.tsv#PN-4005#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_10",
+            "statement": "pricingNoteId: PN-4005"
+          }
+        ],
+        "evidenceId": "pricing:PN-4005:0",
+        "sourceType": "pricing",
+        "summary": "pricingNoteId: PN-4005"
+      },
+      {
+        "capturedAt": "2026-04-13T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_summary:CALL-023:summary:0",
+                "id": "citation_6d0f5f973910d40e11a1b7b15af9196ed27a9618",
+                "locator": "gong/gong_call_summaries.tsv#CALL-023#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_11",
+            "statement": "callId: CALL-023"
+          }
+        ],
+        "evidenceId": "gong_summary:CALL-023:summary:0",
+        "sourceType": "conversation",
+        "summary": "callId: CALL-023"
+      },
+      {
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "pricing:PN-4004:0",
+                "id": "citation_dab13889d9ae2f22e410ecc107d34ee817da7a44",
+                "locator": "pricing/pricing_notes.tsv#PN-4004#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_12",
+            "statement": "pricingNoteId: PN-4004"
+          }
+        ],
+        "evidenceId": "pricing:PN-4004:0",
+        "sourceType": "pricing",
+        "summary": "pricingNoteId: PN-4004"
+      },
+      {
+        "capturedAt": "2026-05-03T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "slack:SLK-9007:0",
+                "id": "citation_39ca03d6d61fdb8bf87b697e3272ed75d2c32127",
+                "locator": "slack/account_team_updates.tsv#SLK-9007#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_13",
+            "statement": "Data protection controls and segmentation models are fully accepted by the security architect."
+          }
+        ],
+        "evidenceId": "slack:SLK-9007:0",
+        "sourceType": "slack",
+        "summary": "Data protection controls and segmentation models are fully accepted by the security architect."
       },
       {
         "capturedAt": "2026-04-27T00:00:00Z",
@@ -327,19 +410,139 @@
           {
             "citations": [
               {
-                "evidenceId": "gong_transcript:CALL-027:transcript:3",
-                "id": "citation_e4fcfea46972cdfdd7fd58302a8461f97309156c",
-                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-3"
+                "evidenceId": "gong_transcript:CALL-027:transcript:4",
+                "id": "citation_0b1dd866a8139a19bc9765b1115103c539a648c0",
+                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-4"
               }
             ],
             "confidence": 1,
-            "id": "claim_ev_9",
-            "statement": "So next action is internal package comparison with approval flags, not an external proposal."
+            "id": "claim_ev_14",
+            "statement": "# Transcript: CALL-027 - Approval path and negotiation prep"
           }
         ],
-        "evidenceId": "gong_transcript:CALL-027:transcript:3",
+        "evidenceId": "gong_transcript:CALL-027:transcript:4",
         "sourceType": "conversation",
-        "summary": "So next action is internal package comparison with approval flags, not an external proposal."
+        "summary": "# Transcript: CALL-027 - Approval path and negotiation prep"
+      },
+      {
+        "capturedAt": "2026-04-27T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_summary:CALL-027:summary:0",
+                "id": "citation_a6a11350a1547c76d74b7f7c53129a572ebae5dd",
+                "locator": "gong/gong_call_summaries.tsv#CALL-027#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_15",
+            "statement": "callId: CALL-027"
+          }
+        ],
+        "evidenceId": "gong_summary:CALL-027:summary:0",
+        "sourceType": "conversation",
+        "summary": "callId: CALL-027"
+      },
+      {
+        "capturedAt": "2026-05-11T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "slack:SLK-9008:0",
+                "id": "citation_5d2d1872d2be1d9e9c546ac450c0b10177f0b090",
+                "locator": "slack/account_team_updates.tsv#SLK-9008#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_16",
+            "statement": "Exception handling procedures requested by the research team are still undocumented."
+          }
+        ],
+        "evidenceId": "slack:SLK-9008:0",
+        "sourceType": "slack",
+        "summary": "Exception handling procedures requested by the research team are still undocumented."
+      },
+      {
+        "capturedAt": "2026-03-19T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-019:transcript:5",
+                "id": "citation_9d32893ba80a8640dbc32960f806500612db0225",
+                "locator": "gong/transcripts/OPP-1003_CALL-019.md#chunk-5"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_17",
+            "statement": "# Transcript: CALL-019 - Restricted renewal discovery"
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-019:transcript:5",
+        "sourceType": "conversation",
+        "summary": "# Transcript: CALL-019 - Restricted renewal discovery"
+      },
+      {
+        "capturedAt": "2026-04-27T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-027:transcript:2",
+                "id": "citation_b57e757c1b6d62c1b726c8185ada53b8e8166d25",
+                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-2"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_18",
+            "statement": "# Transcript: CALL-027 - Approval path and negotiation prep"
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-027:transcript:2",
+        "sourceType": "conversation",
+        "summary": "# Transcript: CALL-027 - Approval path and negotiation prep"
+      },
+      {
+        "capturedAt": "2026-04-27T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-027:transcript:1",
+                "id": "citation_cd01e14fbcb79410ab6b437726c0f91d23a08a4c",
+                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-1"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_19",
+            "statement": "# Transcript: CALL-027 - Approval path and negotiation prep"
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-027:transcript:1",
+        "sourceType": "conversation",
+        "summary": "# Transcript: CALL-027 - Approval path and negotiation prep"
+      },
+      {
+        "capturedAt": "2026-03-19T00:00:00Z",
+        "claims": [
+          {
+            "citations": [
+              {
+                "evidenceId": "gong_transcript:CALL-019:transcript:0",
+                "id": "citation_44bae1b9a5b7a29f43fab56317839ce79e732910",
+                "locator": "gong/transcripts/OPP-1003_CALL-019.md#chunk-0"
+              }
+            ],
+            "confidence": 1,
+            "id": "claim_ev_20",
+            "statement": "# Transcript: CALL-019 - Restricted renewal discovery"
+          }
+        ],
+        "evidenceId": "gong_transcript:CALL-019:transcript:0",
+        "sourceType": "conversation",
+        "summary": "# Transcript: CALL-019 - Restricted renewal discovery"
       }
     ]
   },
@@ -351,45 +554,29 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
-                "id": "citation_f1db274277df8cd977b001b3482f52f64177c84b",
+                "id": "citation_6504fc6da85f941e1d8f9d8f125536f56f48226d",
                 "locator": "salesforce/contacts.tsv#CON-3011/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_1",
-            "statement": "Priya Sato is the Chief Digital Officer."
+            "id": "claim_st_01",
+            "statement": "fullName: Priya Sato"
           },
           {
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3011:OPP-1003:contact:0",
-                "id": "citation_f1db274277df8cd977b001b3482f52f64177c84b",
+                "id": "citation_6504fc6da85f941e1d8f9d8f125536f56f48226d",
                 "locator": "salesforce/contacts.tsv#CON-3011/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_2",
-            "statement": "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
-          },
-          {
-            "citations": [
-              {
-                "evidenceId": "gong_transcript:CALL-027:transcript:3",
-                "id": "citation_e4fcfea46972cdfdd7fd58302a8461f97309156c",
-                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-3"
-              }
-            ],
-            "confidence": 1,
-            "id": "claim_st_3",
-            "statement": "If the internal package is clear, I can decide what to take to the board sponsor."
+            "id": "claim_st_02",
+            "statement": "title: Chief Digital Officer"
           }
         ],
-        "concerns": [
-          "If the internal package is clear, I can decide what to take to the board sponsor."
-        ],
-        "goals": [
-          "Pushing for renewal certainty but under board pressure to reduce run-rate spend."
-        ],
+        "concerns": [],
+        "goals": [],
         "influence": "high",
         "name": "Priya Sato",
         "organization": "Eclipse BioMaterials Ltd",
@@ -403,31 +590,29 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
-                "id": "citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee",
+                "id": "citation_94d2887e11d4bfb6b1eadccb11ed0ce7692c6687",
                 "locator": "salesforce/contacts.tsv#CON-3012/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_4",
-            "statement": "Mateo Ruan is the Head of Security."
+            "id": "claim_st_03",
+            "statement": "fullName: Mateo Ruan"
           },
           {
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3012:OPP-1003:contact:0",
-                "id": "citation_fcfdc56d8657c71d8f89c72a1862c9c8280f3aee",
+                "id": "citation_94d2887e11d4bfb6b1eadccb11ed0ce7692c6687",
                 "locator": "salesforce/contacts.tsv#CON-3012/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_5",
-            "statement": "Values the platform but flagged sensitive research access controls as non-negotiable."
+            "id": "claim_st_04",
+            "statement": "title: Head of Security"
           }
         ],
         "concerns": [],
-        "goals": [
-          "Values the platform but flagged sensitive research access controls as non-negotiable."
-        ],
+        "goals": [],
         "influence": "high",
         "name": "Mateo Ruan",
         "organization": "Eclipse BioMaterials Ltd",
@@ -441,45 +626,29 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3013:OPP-1003:contact:0",
-                "id": "citation_4a0c42ed879dc2884d6df8552cb4950c6a90971f",
+                "id": "citation_b6d9b98ac1318de9ff9d47ec7487cd28ff10e97f",
                 "locator": "salesforce/contacts.tsv#CON-3013/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_7",
-            "statement": "Leah Tan is the General Counsel."
+            "id": "claim_st_05",
+            "statement": "fullName: Leah Tan"
           },
           {
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3013:OPP-1003:contact:0",
-                "id": "citation_4a0c42ed879dc2884d6df8552cb4950c6a90971f",
+                "id": "citation_b6d9b98ac1318de9ff9d47ec7487cd28ff10e97f",
                 "locator": "salesforce/contacts.tsv#CON-3013/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_8",
-            "statement": "Requests liability language changes and strict review before customer-facing concessions."
-          },
-          {
-            "citations": [
-              {
-                "evidenceId": "gong_transcript:CALL-027:transcript:3",
-                "id": "citation_e4fcfea46972cdfdd7fd58302a8461f97309156c",
-                "locator": "gong/transcripts/OPP-1003_CALL-027.md#chunk-3"
-              }
-            ],
-            "confidence": 1,
-            "id": "claim_st_9",
-            "statement": "That is acceptable if the label is impossible to miss."
+            "id": "claim_st_06",
+            "statement": "title: General Counsel"
           }
         ],
-        "concerns": [
-          "That is acceptable if the label is impossible to miss."
-        ],
-        "goals": [
-          "Requests liability language changes and strict review before customer-facing concessions."
-        ],
+        "concerns": [],
+        "goals": [],
         "influence": "high",
         "name": "Leah Tan",
         "organization": "Eclipse BioMaterials Ltd",
@@ -493,31 +662,29 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3014:OPP-1003:contact:0",
-                "id": "citation_6dbf463375bc8095ecbab6bb323d597766be4915",
+                "id": "citation_84a222aa1a88c5ffd8eeab082466a35031263553",
                 "locator": "salesforce/contacts.tsv#CON-3014/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_10",
-            "statement": "Darin Holt is the Procurement Lead."
+            "id": "claim_st_07",
+            "statement": "fullName: Darin Holt"
           },
           {
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3014:OPP-1003:contact:0",
-                "id": "citation_6dbf463375bc8095ecbab6bb323d597766be4915",
+                "id": "citation_84a222aa1a88c5ffd8eeab082466a35031263553",
                 "locator": "salesforce/contacts.tsv#CON-3014/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_11",
-            "statement": "Pressing for aggressive discount and shorter renewal term."
+            "id": "claim_st_08",
+            "statement": "title: Procurement Lead"
           }
         ],
         "concerns": [],
-        "goals": [
-          "Pressing for aggressive discount and shorter renewal term."
-        ],
+        "goals": [],
         "influence": "medium",
         "name": "Darin Holt",
         "organization": "Eclipse BioMaterials Ltd",
@@ -531,31 +698,29 @@
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3015:OPP-1003:contact:0",
-                "id": "citation_9dca3c021ef98b2798c238b3ed1abff7c9ebcc8c",
+                "id": "citation_08f11813cd66f6b065f365e1e25238f42352de90",
                 "locator": "salesforce/contacts.tsv#CON-3015/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_13",
-            "statement": "Mei Arlen is the Research IT Manager."
+            "id": "claim_st_09",
+            "statement": "fullName: Mei Arlen"
           },
           {
             "citations": [
               {
                 "evidenceId": "salesforce:CON-3015:OPP-1003:contact:0",
-                "id": "citation_9dca3c021ef98b2798c238b3ed1abff7c9ebcc8c",
+                "id": "citation_08f11813cd66f6b065f365e1e25238f42352de90",
                 "locator": "salesforce/contacts.tsv#CON-3015/opportunity/OPP-1003#chunk-0"
               }
             ],
             "confidence": 1,
-            "id": "claim_st_14",
-            "statement": "Needs evidence that research data workflows remain segmented by team."
+            "id": "claim_st_10",
+            "statement": "title: Research IT Manager"
           }
         ],
         "concerns": [],
-        "goals": [
-          "Needs evidence that research data workflows remain segmented by team."
-        ],
+        "goals": [],
         "influence": "medium",
         "name": "Mei Arlen",
         "organization": "Eclipse BioMaterials Ltd",

@@ -3,9 +3,9 @@
 import { createElement } from 'react';
 import type { BriefSectionView, DealWorkspaceView } from '@slacato/contracts';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DealBrief } from '../../apps/web/src/features/briefs/deal-brief';
 
 const sectionTitles = {
@@ -77,15 +77,21 @@ function buildWorkspace(withGeneratedOutput: boolean): DealWorkspaceView {
   };
 }
 
-function renderBrief(workspace: DealWorkspaceView) {
+function renderBrief(
+  workspace: DealWorkspaceView,
+  options: Readonly<{
+    selectedEvidenceId?: string | null;
+    onEvidence?: (evidenceId: string, trigger: HTMLButtonElement) => void;
+  }> = {}
+) {
   return render(
     createElement(
       MemoryRouter,
       null,
       createElement(DealBrief, {
         workspace,
-        selectedEvidenceId: null,
-        onEvidence: () => undefined,
+        selectedEvidenceId: options.selectedEvidenceId ?? null,
+        onEvidence: options.onEvidence ?? (() => undefined),
         primaryAction: null
       })
     )
@@ -140,5 +146,388 @@ describe('DealBrief', () => {
 
     // Keyboard operability: the disclosure is a native, focusable summary element (not a div/span).
     expect(summary?.tagName).toBe('SUMMARY');
+  });
+
+  it('names an empty generated section instead of leaving a bare heading over blank space', () => {
+    const workspace = buildWorkspace(true);
+    const generated = workspace.generatedOutput;
+    if (generated === null) throw new Error('Generated output fixture is required');
+    const emptied = {
+      ...generated.content,
+      sections: {
+        ...generated.content.sections,
+        missingInformation: { ...generated.content.sections.missingInformation, paragraphs: [], items: [] },
+        buyerGoalsAndBusinessDrivers: {
+          ...generated.content.sections.buyerGoalsAndBusinessDrivers,
+          paragraphs: [],
+          items: []
+        }
+      }
+    };
+    const { container } = renderBrief({
+      ...workspace,
+      generatedOutput: { ...generated, content: emptied },
+      brief: emptied
+    } as DealWorkspaceView);
+
+    const notices = [...container.querySelectorAll('p')].filter((paragraph) =>
+      paragraph.textContent?.startsWith('This section is empty.')
+    );
+    expect(notices).toHaveLength(2);
+  });
+
+  it('names an empty deterministic section in the language of authorized records', () => {
+    const workspace = buildWorkspace(false);
+    const emptied = {
+      ...workspace.sourceSnapshot.evidenceOverview,
+      sections: {
+        ...workspace.sourceSnapshot.evidenceOverview.sections,
+        missingInformation: {
+          ...workspace.sourceSnapshot.evidenceOverview.sections.missingInformation,
+          paragraphs: [],
+          items: []
+        }
+      }
+    };
+    renderBrief({
+      ...workspace,
+      sourceSnapshot: { ...workspace.sourceSnapshot, evidenceOverview: emptied },
+      brief: emptied
+    } as DealWorkspaceView);
+
+    expect(screen.getByText('No authorized records populate this section.')).toBeInTheDocument();
+  });
+
+  // The "Account-team update impact" badge told a reviewer that generated Slack-style chatter moved
+  // a section, but not which update did it, which is the only part they can check. The badge now
+  // names the cited update ids, in the section body and on impacted actions and warnings alike.
+  it('names the cited account-team update behind an impact badge', () => {
+    const workspace = buildWorkspace(true);
+    const generated = workspace.generatedOutput;
+    if (generated === null) throw new Error('Generated output fixture is required');
+    const impacted = {
+      ...generated.content,
+      sections: {
+        ...generated.content.sections,
+        executiveSummary: {
+          ...generated.content.sections.executiveSummary,
+          citationIds: ['slack:SLK-9009:0', 'gong_summary:CALL-008:0'],
+          accountTeamUpdateImpact: true
+        }
+      },
+      actions: [
+        {
+          action: 'Confirm the discount position with Deal Desk',
+          owner: 'Nora Chen',
+          priority: 'high',
+          dueDate: null,
+          rationale: 'Executive stakeholders disagree on the lead concession.',
+          citationIds: ['slack:SLK-9009:0'],
+          accountTeamUpdateImpact: true
+        }
+      ]
+    };
+    renderBrief({
+      ...workspace,
+      generatedOutput: { ...generated, content: impacted },
+      brief: impacted,
+      evidence: [
+        {
+          id: 'slack:SLK-9009:0',
+          sourceType: 'slack',
+          sourcePath: 'slack/account_team_updates.tsv',
+          stableKey: 'update_id',
+          stableId: 'SLK-9009',
+          citationLabel: 'source=slack/account_team_updates.tsv, update_id=SLK-9009',
+          chunkId: 'slack:SLK-9009:0',
+          capturedAt: '2026-05-18T00:00:00.000Z',
+          content: 'updateText: Executive stakeholders disagree on the lead concession.'
+        },
+        {
+          id: 'gong_summary:CALL-008:0',
+          sourceType: 'gong_summary',
+          sourcePath: 'gong/gong_call_summaries.tsv',
+          stableKey: 'call_id',
+          stableId: 'CALL-008',
+          citationLabel: 'source=gong/gong_call_summaries.tsv, call_id=CALL-008',
+          chunkId: 'gong_summary:CALL-008:0',
+          capturedAt: '2026-05-12T00:00:00.000Z',
+          content: 'summary: Pricing pressure raised again.'
+        }
+      ]
+    } as DealWorkspaceView);
+
+    // The section says which update carried the badge, and does not name the co-cited call.
+    const explanation = screen.getByText(/Badged because this section cites account-team update/);
+    expect(explanation).toHaveTextContent('SLK-9009');
+    expect(explanation).not.toHaveTextContent('CALL-008');
+    // The impacted action carries the same identification, in both the table and the mobile list.
+    const actionLabels = screen.getAllByText(/Account-team update impact · SLK-9009/);
+    expect(actionLabels.length).toBeGreaterThan(0);
+  });
+
+  // Regression: both views render a section called Source Evidence, and both carried the same
+  // `data-tour="slack-evidence"` anchor. The guided tour resolves an anchor by DOM order, so its
+  // Slack step always framed the generated brief's copy while its wording described the source
+  // snapshot's -- thousands of pixels below, inside a closed disclosure, and never spotlit.
+  it('anchors the Slack tour step to the generated brief when there is one', () => {
+    const { container } = renderBrief(buildWorkspace(true));
+
+    const anchors = container.querySelectorAll('[data-tour="slack-evidence"]');
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0]?.getAttribute('aria-labelledby')).toBe('generated-sourceEvidence');
+    // The snapshot's own copy is still addressable, under a name no step confuses with the other.
+    expect(
+      container.querySelector('[data-tour="snapshot-source-evidence"]')?.getAttribute('aria-labelledby')
+    ).toBe('source_backed-sourceEvidence');
+  });
+
+  // Cancelling or resetting a run leaves the deal with no generated output, and the tour can also
+  // reach this step after "Continue without generating". Anchoring only the generated brief would
+  // leave the step with nothing to frame in exactly the state a pre-demo reset produces.
+  it('anchors the Slack tour step to the snapshot when that is the only brief on the page', () => {
+    const { container } = renderBrief(buildWorkspace(false));
+
+    const anchors = container.querySelectorAll('[data-tour="slack-evidence"]');
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0]?.getAttribute('aria-labelledby')).toBe('source_backed-sourceEvidence');
+    expect(container.querySelector('[data-tour="snapshot-source-evidence"]')).toBeNull();
+    // And it is genuinely on screen: rendered directly, not inside the collapsed disclosure the
+    // snapshot lives in whenever a generated brief is also present.
+    expect(anchors[0]?.closest('details')).toBeNull();
+  });
+});
+
+const gongLabel = 'source=gong/gong_call_summaries.tsv, call_id=CALL-008';
+const slackLabel = 'source=slack/account_team_updates.tsv, update_id=SLK-9009';
+const contactLabel = 'source=salesforce/contacts.tsv, contact_id=CON-3003';
+const citedEvidence: DealWorkspaceView['evidence'] = [
+  {
+    id: 'gong_summary:CALL-008:0',
+    sourceType: 'gong_summary',
+    sourcePath: 'gong/gong_call_summaries.tsv',
+    stableKey: 'call_id',
+    stableId: 'CALL-008',
+    citationLabel: gongLabel,
+    chunkId: 'gong_summary:CALL-008:0',
+    capturedAt: '2026-05-12T00:00:00.000Z',
+    content: 'summary: Pricing pressure raised again.'
+  },
+  {
+    id: 'slack:SLK-9009:0',
+    sourceType: 'slack',
+    sourcePath: 'slack/account_team_updates.tsv',
+    stableKey: 'update_id',
+    stableId: 'SLK-9009',
+    citationLabel: slackLabel,
+    chunkId: 'slack:SLK-9009:0',
+    capturedAt: '2026-05-18T00:00:00.000Z',
+    content: 'updateText: Executive stakeholders disagree on the lead concession.'
+  },
+  {
+    id: 'salesforce:CON-3003:0',
+    sourceType: 'salesforce',
+    sourcePath: 'salesforce/contacts.tsv',
+    stableKey: 'contact_id',
+    stableId: 'CON-3003',
+    citationLabel: contactLabel,
+    chunkId: 'salesforce:CON-3003:0',
+    capturedAt: '2026-05-02T00:00:00.000Z',
+    content: 'name: Elena Voss'
+  }
+];
+
+/**
+ * Builds a generated workspace whose sections, stakeholder, action, and warning all cite records,
+ * with the same two records cited from more than one place so numbering can be checked for reuse.
+ */
+function buildCitedWorkspace(): DealWorkspaceView {
+  const workspace = buildWorkspace(true);
+  const generated = workspace.generatedOutput;
+  if (generated === null) throw new Error('Generated output fixture is required');
+  const content = {
+    ...generated.content,
+    sections: {
+      ...generated.content.sections,
+      dealSnapshot: {
+        ...generated.content.sections.dealSnapshot,
+        citationIds: ['gong_summary:CALL-008:0']
+      },
+      executiveSummary: {
+        ...generated.content.sections.executiveSummary,
+        citationIds: ['slack:SLK-9009:0', 'gong_summary:CALL-008:0']
+      },
+      sourceEvidence: {
+        ...generated.content.sections.sourceEvidence,
+        citationIds: ['gong_summary:CALL-008:0', 'slack:SLK-9009:0', 'salesforce:CON-3003:0']
+      }
+    },
+    stakeholders: [
+      {
+        name: 'Elena Voss',
+        title: 'VP Operations',
+        role: 'Economic buyer',
+        influence: 'high',
+        relationship: 'neutral',
+        goals: ['Wants a clean renewal path'],
+        concerns: [],
+        citationIds: ['salesforce:CON-3003:0']
+      }
+    ],
+    actions: [
+      {
+        action: 'Confirm the discount position with Deal Desk',
+        owner: 'Nora Chen',
+        priority: 'high',
+        dueDate: null,
+        rationale: 'Executive stakeholders disagree on the lead concession.',
+        citationIds: ['slack:SLK-9009:0'],
+        accountTeamUpdateImpact: false
+      }
+    ],
+    warnings: [
+      {
+        severity: 'warning',
+        message: 'Pricing was discussed on one call only.',
+        citationIds: ['gong_summary:CALL-008:0'],
+        accountTeamUpdateImpact: false
+      }
+    ]
+  };
+  return {
+    ...workspace,
+    generatedOutput: { ...generated, content },
+    brief: content,
+    evidence: citedEvidence
+  } as DealWorkspaceView;
+}
+
+/** Reads the visible text of every marker that opens one given record. */
+function markersFor(label: string): string[] {
+  return screen
+    .getAllByRole('button', { name: `Open evidence: ${label}` })
+    .map((marker) => marker.textContent ?? '');
+}
+
+// The brief used to close every section with a wrapping row of full-width buttons, each printing
+// the whole `citationLabel`. The labels now live once in Source Evidence and everything else cites
+// them by a page-stable footnote number, so the prose is readable and `[3]` means one same record.
+describe('DealBrief citations', () => {
+  it('gives each cited record one number and reuses it everywhere that record is cited', () => {
+    renderBrief(buildCitedWorkspace());
+
+    // First-citation order over the rendered briefs: the deal snapshot cites the call, the
+    // executive summary introduces the Slack update, the stakeholder introduces the contact.
+    expect(new Set(markersFor(gongLabel))).toEqual(new Set(['[1]']));
+    expect(new Set(markersFor(slackLabel))).toEqual(new Set(['[2]']));
+    expect(new Set(markersFor(contactLabel))).toEqual(new Set(['[3]']));
+    // Each record is cited from several places, so reuse is what is actually being checked.
+    expect(markersFor(gongLabel).length).toBeGreaterThan(1);
+    expect(markersFor(slackLabel).length).toBeGreaterThan(1);
+  });
+
+  it('keeps the numbering stable across renders and shared with the deterministic snapshot', () => {
+    const base = buildCitedWorkspace();
+    // The snapshot cites a record the generated brief introduced, so the two briefs on one page
+    // are numbered together: `[2]` must mean the same Slack update inside the disclosure as above it.
+    const overview = base.sourceSnapshot.evidenceOverview;
+    const workspace = {
+      ...base,
+      sourceSnapshot: {
+        ...base.sourceSnapshot,
+        evidenceOverview: {
+          ...overview,
+          sections: {
+            ...overview.sections,
+            negotiationState: {
+              ...overview.sections.negotiationState,
+              citationIds: ['slack:SLK-9009:0']
+            }
+          }
+        }
+      }
+    } as DealWorkspaceView;
+
+    const { container } = renderBrief(workspace);
+    const snapshot = container.querySelector('details');
+    expect(snapshot).not.toBeNull();
+    expect(
+      within(snapshot as HTMLElement).getAllByRole('button', { name: `Open evidence: ${slackLabel}` })[0]
+    ).toHaveTextContent('[2]');
+    const rendered = markersFor(slackLabel);
+    cleanup();
+
+    // A footnote that churns between renders of the same workspace is not a citation.
+    renderBrief(workspace);
+    expect(markersFor(slackLabel)).toEqual(rendered);
+    expect(new Set(markersFor(gongLabel))).toEqual(new Set(['[1]']));
+  });
+
+  it('marks each stakeholder, action, and warning with the records behind it', () => {
+    renderBrief(buildCitedWorkspace());
+
+    // Desktop table and mobile card both carry the stakeholder's own citation.
+    const stakeholderMarkers = screen.getAllByRole('list', { name: 'Citations for Elena Voss' });
+    expect(stakeholderMarkers).toHaveLength(2);
+    for (const list of stakeholderMarkers)
+      expect(within(list).getByRole('button', { name: `Open evidence: ${contactLabel}` })).toHaveTextContent('[3]');
+
+    const actionMarkers = screen.getAllByRole('list', { name: 'Action citations' });
+    expect(actionMarkers).toHaveLength(2);
+    for (const list of actionMarkers)
+      expect(within(list).getByRole('button', { name: `Open evidence: ${slackLabel}` })).toHaveTextContent('[2]');
+
+    const warningMarkers = screen.getAllByRole('list', { name: 'Warning citations' });
+    expect(warningMarkers).toHaveLength(1);
+    expect(
+      within(warningMarkers[0]).getByRole('button', { name: `Open evidence: ${gongLabel}` })
+    ).toHaveTextContent('[1]');
+  });
+
+  it('spells the full citation labels out once, as the numbered Source Evidence list', () => {
+    const { container } = renderBrief(buildCitedWorkspace());
+
+    const references = screen.getAllByRole('list', { name: 'Numbered source evidence' })[0];
+    const entries = within(references).getAllByRole('listitem');
+    expect(entries.map((entry) => entry.textContent)).toEqual([
+      `[1]${gongLabel}`,
+      `[2]${slackLabel}`,
+      `[3]${contactLabel}`
+    ]);
+    // The verbatim label is the only citation format shown; nothing invents a second one.
+    const sourceEvidence = container.querySelector('[data-tour="slack-evidence"]');
+    expect(within(sourceEvidence as HTMLElement).getAllByText(gongLabel)).toHaveLength(1);
+    // And no marker prints a label any more -- that pile of long chips is what got replaced.
+    for (const button of container.querySelectorAll('button'))
+      expect(button.textContent).not.toContain('source=');
+  });
+
+  it('keeps the guided tour anchor on a labeled row of section sources', () => {
+    const { container } = renderBrief(buildCitedWorkspace());
+
+    const anchors = [...container.querySelectorAll('[data-tour="citations"]')];
+    expect(anchors.length).toBeGreaterThan(0);
+    for (const anchor of anchors) {
+      expect(anchor.textContent).toContain('Sources');
+      expect(anchor.querySelectorAll('button').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('opens the record a marker cites and shows which one is selected', () => {
+    const onEvidence = vi.fn();
+    const { unmount } = renderBrief(buildCitedWorkspace(), { onEvidence });
+
+    fireEvent.click(screen.getAllByRole('button', { name: `Open evidence: ${slackLabel}` })[0]);
+
+    expect(onEvidence).toHaveBeenCalledTimes(1);
+    expect(onEvidence.mock.calls[0][0]).toBe('slack:SLK-9009:0');
+    expect(onEvidence.mock.calls[0][1]).toBeInstanceOf(HTMLButtonElement);
+    unmount();
+
+    renderBrief(buildCitedWorkspace(), { selectedEvidenceId: 'slack:SLK-9009:0' });
+    for (const marker of screen.getAllByRole('button', { name: `Open evidence: ${slackLabel}` }))
+      expect(marker).toHaveAttribute('aria-pressed', 'true');
+    for (const marker of screen.getAllByRole('button', { name: `Open evidence: ${gongLabel}` }))
+      expect(marker).toHaveAttribute('aria-pressed', 'false');
   });
 });

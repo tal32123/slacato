@@ -12,6 +12,7 @@ import {
   decideApprovalRequirement,
   extractEditedPolicySignals,
   hashApprovalPayload,
+  type OpaqueDenialEvent,
   validateDealBrief
 } from '@slacato/core';
 import type { DatabaseClient } from '../client.js';
@@ -58,28 +59,18 @@ export class PostgresDealBriefAccessControl implements DealBriefAccessControl {
     return rows.map(({ authority }) => authority);
   }
 
-  /** Records an opaque audit trail for a denied access attempt. */
-  public async recordOpaqueDenial(event: Readonly<Record<string, unknown>>): Promise<void> {
-    const actorId = typeof event.actorId === 'string' ? event.actorId : null;
-    const runId = typeof event.runId === 'string' ? event.runId : undefined;
-    await this.database.sql.begin(async (sql) => {
-      await sql`insert into audit_events (id, actor_id, type, payload) values
-        (${`audit_${crypto.randomUUID()}`}, ${actorId}, 'deal_brief_access_denied', '{"reason":"forbidden"}'::jsonb)`;
-      if (runId === undefined) return;
-      const denialAttemptId = crypto.randomUUID();
-      const denialRunId = `denial_${hashApprovalPayload({ runId, actorId, denialAttemptId })}`;
-      const traceId = `trace_${hashApprovalPayload(denialRunId)}`;
-      const spanId = `span_${hashApprovalPayload({ denialRunId, kind: 'authorization_lookup', denialAttemptId })}`;
-      await sql`insert into trace_spans (id, trace_id, span_id, run_id, parent_id, step, attempt, kind, status, payload, started_at, ended_at)
-        values (${spanId}, ${traceId}, ${spanId}, ${denialRunId}, null, 'authorization', 1, 'authorization_lookup', 'denied',
-          ${JSON.stringify({
-            decision: 'denied',
-            correlationHash: hashApprovalPayload({ denialRunId, actorId }),
-            reasonCode: 'forbidden',
-            readKinds: ['opportunity', 'account', 'requester', 'permissions'],
-            readCount: 4
-          })}::jsonb, now(), now())`;
-    });
+  /**
+   * Records an opaque audit trail for a denied access attempt.
+   *
+   * The row names the actor and nothing else. It carries no run, opportunity, account, source, or
+   * count, and every denial - whichever operation was refused, and whether or not the target record
+   * exists - produces a byte-identical row apart from its id, actor, and timestamp. `audit_events`
+   * has no read path in the API, so a denial can never be read back by the persona it refused.
+   */
+  public async recordOpaqueDenial(event: OpaqueDenialEvent): Promise<void> {
+    await this.database.sql`insert into audit_events (id, actor_id, type, payload) values
+      (${`audit_${crypto.randomUUID()}`}, ${event.actorId}, 'deal_brief_access_denied',
+        ${JSON.stringify({ reason: event.reason })}::jsonb)`;
   }
 
   /** Validates an edited approval payload and determines its approval requirement. */

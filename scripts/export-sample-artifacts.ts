@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   createDatabaseClient,
@@ -82,10 +82,11 @@ class BrowserSession {
 }
 
 async function main(): Promise<void> {
-  const [normalRunId, restrictedRunId, apiBase = DEFAULT_API_BASE] = process.argv.slice(2);
-  if (normalRunId === undefined || restrictedRunId === undefined) {
+  const [normalRunId, expansionRunId, restrictedRunId, apiBase = DEFAULT_API_BASE] =
+    process.argv.slice(2);
+  if (normalRunId === undefined || expansionRunId === undefined || restrictedRunId === undefined) {
     throw new Error(
-      'Usage: pnpm tsx scripts/export-sample-artifacts.ts <normal-run-id> <restricted-run-id> [api-base]'
+      'Usage: pnpm tsx scripts/export-sample-artifacts.ts <normal-run-id> <expansion-run-id> <restricted-run-id> [api-base]'
     );
   }
 
@@ -113,8 +114,9 @@ async function main(): Promise<void> {
       return row;
     };
 
-    const [normal, restricted] = await Promise.all([
+    const [normal, expansion, restricted] = await Promise.all([
       runFacts(normalRunId),
+      runFacts(expansionRunId),
       runFacts(restrictedRunId)
     ]);
     const exporter = new PostgresBriefExportService(database);
@@ -139,9 +141,10 @@ async function main(): Promise<void> {
       return [rawName, textName];
     };
 
-    const [normalFiles, restrictedFiles] = await Promise.all([
-      exportBrief(normal, 'USR-5001', 'normal-opportunity'),
-      exportBrief(restricted, 'USR-5003', 'restricted-opportunity')
+    const [normalFiles, expansionFiles, restrictedFiles] = await Promise.all([
+      exportBrief(normal, normal.requested_by, 'normal-opportunity'),
+      exportBrief(expansion, expansion.requested_by, 'expansion-opportunity'),
+      exportBrief(restricted, restricted.requested_by, 'restricted-opportunity')
     ]);
 
     const subject = (
@@ -175,31 +178,42 @@ async function main(): Promise<void> {
       join personas persona on persona.id = decision.actor_id
       where decision.approval_subject_id = ${subject.id}
       order by decision.created_at, decision.id`;
+    // `scripts/generate-sample-runs.ts` writes the approval-routing artifact while the run is
+    // still open, because two of the facts it carries - the refused export and the dependent gate
+    // that is invisible until its dependencies clear - stop being observable once a run finalizes.
     const approvalFlowName = 'restricted-approval-flow.json';
-    await writeFile(
-      resolve(outputDirectory, approvalFlowName),
-      json({
-        runId: restrictedRunId,
-        opportunityId: restricted.opportunity_id,
-        authorizedRequester: { userId: restricted.requested_by, name: restricted.requester_name },
-        approvalSubject: {
-          id: subject.id,
-          subjectHash: subject.subject_hash,
-          policyTriggers: subject.policy_triggers,
-          quorumVersion: subject.quorum_version,
-          required: requirements.length,
-          completed: decisions.length,
-          createdAt: iso(subject.created_at)
-        },
-        requirements,
-        decisions,
-        finalOutcome: {
-          status: restricted.status,
-          quorumSatisfied: requirements.length > 0 && requirements.length === decisions.length
-        }
-      }),
+    const approvalFlow = JSON.parse(
+      await readFile(resolve(outputDirectory, approvalFlowName), 'utf8')
+    ) as { runId?: string };
+    if (approvalFlow.runId !== restrictedRunId) {
+      throw new Error(
+        `${approvalFlowName} records ${String(approvalFlow.runId)}, not the exported restricted run`
+      );
+    }
+
+    const slackImpactName = 'slack-impact-comparison.json';
+    const slackImpactVisualName = 'slack-impact.html';
+    const slackImpact = JSON.parse(
+      await readFile(resolve(outputDirectory, slackImpactName), 'utf8')
+    ) as {
+      summary: string;
+      runsUsed: number;
+      runs: { withSlack: { runId: string }; withoutSlack: { runId: string } };
+    };
+    if (slackImpact.runs.withSlack.runId !== restrictedRunId) {
+      throw new Error(
+        `${slackImpactName} measures ${slackImpact.runs.withSlack.runId}, not the exported restricted run`
+      );
+    }
+    const slackImpactVisual = await readFile(
+      resolve(outputDirectory, slackImpactVisualName),
       'utf8'
     );
+    if (!slackImpactVisual.includes(restrictedRunId)) {
+      throw new Error(
+        `${slackImpactVisualName} is stale; re-run scripts/render-slack-impact-visual.ts`
+      );
+    }
 
     const traceSpans = await database.sql`
       select trace_id, span_id, parent_id, run_id, step, attempt, kind, status,
@@ -290,10 +304,24 @@ async function main(): Promise<void> {
           provenance: provenance(normal),
           files: normalFiles
         },
+        authorizedExpansionOpportunity: {
+          persona: { userId: expansion.requested_by, name: expansion.requester_name },
+          opportunity: { id: expansion.opportunity_id, name: expansion.opportunity_name },
+          provenance: provenance(expansion),
+          files: expansionFiles
+        },
         restrictedApprovalSensitiveOpportunity: {
           persona: { userId: restricted.requested_by, name: restricted.requester_name },
           opportunity: { id: restricted.opportunity_id, name: restricted.opportunity_name },
           provenance: provenance(restricted),
+          approvalQuorum: {
+            requirements: requirements.length,
+            decisions: decisions.length,
+            distinctApprovers: new Set(
+              (decisions as { actor_id: string }[]).map((decision) => decision.actor_id)
+            ).size,
+            exportRefusedBeforeQuorum: true
+          },
           files: [...restrictedFiles, approvalFlowName]
         },
         deniedAccessNoLeak: {
@@ -307,6 +335,15 @@ async function main(): Promise<void> {
             containsEvidenceMetadata: false
           },
           files: [deniedName]
+        },
+        slackEvidenceImpact: {
+          description:
+            'Required demo scenario: how the generated Slack-style updates affect the brief, evidenced by an authorization-scope A/B pair and the Slack citations the finalized briefs carry.',
+          runsUsed: slackImpact.runsUsed,
+          withSlackRunId: slackImpact.runs.withSlack.runId,
+          withoutSlackRunId: slackImpact.runs.withoutSlack.runId,
+          finding: slackImpact.summary,
+          files: [slackImpactVisualName, slackImpactName, 'slack-impact-comparison.md']
         },
         traceAndLogExamples: {
           runId: restrictedRunId,
@@ -324,12 +361,17 @@ async function main(): Promise<void> {
         }
       },
       reproduction: {
-        command:
-          'pnpm tsx scripts/export-sample-artifacts.ts <normal-run-id> <restricted-run-id> [api-base]',
+        commands: [
+          'pnpm tsx scripts/generate-sample-runs.ts --api=<api-base> --approval-capture=samples/restricted-approval-flow.json OPP-1003',
+          'pnpm tsx scripts/generate-sample-runs.ts --api=<api-base> OPP-1001 OPP-1002',
+          'pnpm tsx scripts/slack-impact-comparison.ts <with-slack-run-id> <without-slack-run-id>',
+          'pnpm tsx scripts/render-slack-impact-visual.ts',
+          'pnpm tsx scripts/export-sample-artifacts.ts <normal-run-id> <expansion-run-id> <restricted-run-id> [api-base]'
+        ],
         prerequisites: [
-          'Source .env and override DATABASE_URL to the dedicated slacato_samples database.',
-          'Run the API against the same database for the fresh denied-access HTTP capture.',
-          'Both supplied runs must already be finalized live-provider runs.'
+          'Source .env and override DATABASE_URL to the dedicated slacato_samples database, then migrate, ingest, and index it.',
+          'Run the API and the worker against that same database with a live AI_PROVIDER.',
+          'The three supplied runs must already be finalized live-provider runs, and the approval capture and Slack comparison must have been written first.'
         ]
       }
     };
@@ -345,13 +387,20 @@ async function main(): Promise<void> {
       },
       {
         number: '02',
+        title: 'Authorized expansion opportunity',
+        description: `${expansion.requester_name} (${expansion.requested_by}) generated a finalized brief for ${expansion.opportunity_name} (${expansion.opportunity_id}), completing sample coverage of all three fixture opportunities.`,
+        files: expansionFiles,
+        facts: provenance(expansion)
+      },
+      {
+        number: '03',
         title: 'Restricted deal and approval quorum',
-        description: `${restricted.requester_name} (${restricted.requested_by}) generated the restricted brief. The routing artifact records all ${requirements.length} requirements and ${decisions.length} approval decisions.`,
+        description: `${restricted.requester_name} (${restricted.requested_by}) generated the restricted brief. The routing artifact records all ${requirements.length} requirements, the ${decisions.length} decisions that cleared them across ${new Set((decisions as { actor_id: string }[]).map((decision) => decision.actor_id)).size} distinct approvers, the export refused while the run awaited approval, and the dependent gate that only became operable once the others cleared.`,
         files: [...restrictedFiles, approvalFlowName],
         facts: provenance(restricted)
       },
       {
-        number: '03',
+        number: '04',
         title: 'Opaque denied access',
         description:
           'Harper Noor (USR-5007) attempted OPP-1003 and received only the standard opaque 404 response. The artifact contains no account, source, count, or evidence metadata.',
@@ -359,7 +408,18 @@ async function main(): Promise<void> {
         facts: { httpStatus: 404, noLeakVerified: true }
       },
       {
-        number: '04',
+        number: '05',
+        title: 'Slack-style evidence impact',
+        description: slackImpact.summary,
+        files: [slackImpactVisualName, slackImpactName, 'slack-impact-comparison.md'],
+        facts: {
+          runsUsed: slackImpact.runsUsed,
+          withSlackRunId: slackImpact.runs.withSlack.runId,
+          withoutSlackRunId: slackImpact.runs.withoutSlack.runId
+        }
+      },
+      {
+        number: '06',
         title: 'Full trace and run events',
         description: `The restricted run export contains ${traceSpans.length} spans and ${runEvents.length} durable events, including model calls, retrieval, validation, guardrails, approval routing and decisions, and finalization.`,
         files: [traceName, eventName],
@@ -391,7 +451,7 @@ h2{margin:0 0 8px;font-size:24px;letter-spacing:-.02em}p{margin:0 0 18px}.links{
 pre{overflow:auto;background:var(--wash);border:1px solid var(--line);border-radius:12px;padding:16px;margin:18px 0 0;color:#31424a;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
 footer{border-top:1px solid var(--line);padding-top:28px;color:var(--muted)}footer a{color:var(--accent)}@media(max-width:620px){main{padding:42px 20px 72px}.card{grid-template-columns:1fr}.number{font-size:14px}}
 </style></head><body><main><header><div class="eyebrow">Take-home assignment · Deliverable D</div><h1>Sample run artifacts</h1>
-<p>Reviewer-readable outputs from real OpenRouter executions, including finalized briefs, a five-entry approval quorum, an opaque access denial, and durable traces.</p>
+<p>Reviewer-readable outputs from real OpenRouter executions: finalized briefs for all three fixture opportunities, a ${requirements.length}-entry approval quorum, the Slack-evidence impact comparison, an opaque access denial, and durable traces.</p>
 <div class="summary"><span class="pill">Generated ${escapeHtml(generatedAt)}</span><span class="pill">Provider: OpenRouter</span><span class="pill">Model: ${escapeHtml(restricted.generation_model)}</span><span class="pill">No external dependencies</span></div></header>
 ${cardHtml}<footer>Machine-readable provenance and scenario mapping: <a href="manifest.json">manifest.json</a>. Re-run instructions are embedded in the manifest.</footer></main></body></html>\n`;
     await writeFile(resolve(outputDirectory, 'index.html'), html, 'utf8');

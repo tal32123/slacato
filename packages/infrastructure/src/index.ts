@@ -1,5 +1,15 @@
 export { type Env, envSchema, parseEnv } from './config/env.js';
 export { loadRuntimeEnv } from './config/runtime-env.js';
+export {
+  assertResettableDatabase,
+  DEMO_DATABASES,
+  databaseNameFrom,
+  isRecognizedLocalDemoDatabase,
+  RESET_OVERRIDE_ENV,
+  RESET_OVERRIDE_FLAG,
+  resolveSandboxResetPolicy,
+  type SandboxResetPolicy
+} from './config/sandbox.js';
 export { createDatabaseClient, type DatabaseClient } from './db/client.js';
 export { PostgresApprovalAuthorityQuery } from './db/queries/approval-authority-query.js';
 export { PostgresApprovalQueryRepository } from './db/queries/approval-query.js';
@@ -16,6 +26,11 @@ export {
   PostgresCanonicalPersonaDirectory
 } from './db/repositories/persona-directory.js';
 export { PostgresProviderAttemptLedger } from './db/repositories/provider-attempt-ledger.js';
+export {
+  PostgresSandboxResetStore,
+  RUN_SCOPED_TABLES,
+  SANDBOX_PRESERVED_TABLES
+} from './db/repositories/sandbox-reset.js';
 export { PostgresSessionRegistry } from './db/repositories/session-registry.js';
 export { PostgresWorkflowStore } from './db/repositories/workflow-store.js';
 export { PostgresEventStore, PostgresRunEventQuery } from './events/postgres-event-store.js';

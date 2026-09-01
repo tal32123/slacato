@@ -27,9 +27,12 @@
     "db:ensure": "tsx scripts/ensure-e2e-database.ts",
     "fixtures:fetch": "tsx scripts/fetch-fixtures.ts",
     "fixtures:slack": "tsx scripts/generate-slack-fixtures.ts",
+    "demo:reset": "tsx scripts/reset-demo.ts",
     "ingest:records": "tsx scripts/ingest.ts",
     "index:embeddings": "tsx scripts/index-embeddings.ts",
-    "eval:deterministic": "tsx scripts/evaluate.ts retrieval"
+    "eval:deterministic": "tsx scripts/evaluate.ts retrieval",
+    "eval:brief-quality": "tsx scripts/brief-quality.ts",
+    "eval:brief-quality:live": "tsx scripts/brief-quality-live.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

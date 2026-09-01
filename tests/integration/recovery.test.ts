@@ -1,6 +1,6 @@
 import postgres from 'postgres';
 import { afterAll, describe, expect, it } from 'vitest';
-import { hashApprovalPayload, type StartRunInput, type WorkflowCommand } from '@slacato/core';
+import { DomainConflictError, hashApprovalPayload, type StartRunInput, type WorkflowCommand } from '@slacato/core';
 import { createDatabaseClient } from '@slacato/infrastructure/db/client';
 import { PostgresWorkflowStore } from '@slacato/infrastructure/db/repositories/workflow-store';
 import { OutboxDispatcherLoop } from '@slacato/infrastructure/queue/outbox-dispatcher';
@@ -71,6 +71,25 @@ describe('durable recovery regressions', () => {
     const second = await store.claimStep({ runId: run.runId as never, step: 'synthesize', invocationId: id('invocation'), causalCommandId: next.id, owner: 'b', leaseMs: 10_000 });
     expect(first).toBeDefined();
     expect(second).toBeUndefined();
+  });
+
+  // The dispatcher adds the BullMQ job before it commits the row's 'published' status, so a worker
+  // can be delivered a command whose row is still 'pending' or 'claimed'. Declining that delivery
+  // silently retires it - the processor reads a declined claim as work another worker owns and
+  // completes the job, whose stable ID is retained, so nothing ever redelivers it and the run stalls
+  // for good. The conflict is what makes BullMQ redeliver once the row catches up.
+  it('rejects a delivery whose causal command row is not durably published yet', async () => {
+    const run = await seededRun(); const next = command(run.runId);
+    await store.startRun({ id: run.runId as never, opportunityId: run.opportunityId as never, requestedBy: run.userId as never, status: 'created', generationProvider: 'mock', generationModel: 'mock-chat', idempotencyKey: next.idempotencyKey, startRequestHash: id('hash'), command: next });
+    const claim = { runId: run.runId as never, step: 'start', invocationId: id('invocation'), causalCommandId: next.id, owner: 'worker', leaseMs: 10_000 };
+    await expect(store.claimStep(claim)).rejects.toBeInstanceOf(DomainConflictError);
+    await database.sql`update outbox_commands set status = 'claimed', claim_owner = 'dispatcher', claim_token = 'token', claim_expires_at = now() + interval '30 seconds' where id = ${next.id}`;
+    await expect(store.claimStep(claim)).rejects.toBeInstanceOf(DomainConflictError);
+    await database.sql`update outbox_commands set status = 'published', published_at = now() where id = ${next.id}`;
+    expect(await store.claimStep(claim)).toBeDefined();
+    // This file shares DATABASE_URL, and the reconciler regression above scans every unconsumed
+    // published row in one bounded batch, so a command left stranded here would compete with it.
+    await database.sql`update outbox_commands set consumed_at = now() where id = ${next.id}`;
   });
 
   it('consumes and completes the causal lease at the approval boundary', async () => {

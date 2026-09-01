@@ -29,8 +29,11 @@ import {
   readinessHealthSchema,
   runDetailResponseSchema,
   runListResponseSchema,
+  SANDBOX_RESET_CONFIRMATION,
+  type SandboxResetReportView,
   type StartBriefRequest,
   type StartBriefResponse,
+  sandboxResetReportSchema,
   startBriefRequestSchema,
   startBriefResponseSchema
 } from '@slacato/contracts';
@@ -38,6 +41,18 @@ import {
 interface WireSchema<T> {
   parse(input: unknown): T;
 }
+
+/**
+ * What the server did with a Generate Brief request, reported in the `X-Run-Disposition` header.
+ *
+ * `created` started new work. `replayed` re-answered this caller's own identical request.
+ * `joined` attached the request to a run that was ALREADY in flight for the opportunity: the user
+ * asked for a new brief and did not get one, and the interface has to say so rather than let them
+ * believe the run they land on is theirs. It travels in a header because the response body's
+ * contract is `.strict()` and cannot carry the field.
+ */
+const RUN_DISPOSITIONS = ['created', 'joined', 'replayed'] as const;
+export type RunDisposition = (typeof RUN_DISPOSITIONS)[number];
 
 /** Represents a failed API request with the status and safe error code the interface can act on. */
 export class ApiError extends Error {
@@ -50,19 +65,33 @@ export class ApiError extends Error {
   }
 }
 
-/** Sends a credentialed API request and validates its successful response against the expected contract. */
-export async function requestJson<T>(
+/**
+ * Sends a credentialed API request, validates the body, and hands back the response itself.
+ *
+ * Nearly every call wants only the body, which is what `requestJson` returns. This exists for the
+ * few endpoints that report something in a header the strict body contract cannot carry.
+ */
+async function requestJsonResponse<T>(
   schema: WireSchema<T>,
   path: string,
   init: RequestInit = {}
-): Promise<T> {
+): Promise<{ data: T; response: Response }> {
   const response = await fetch(path, { ...init, credentials: 'include' });
   if (!response.ok) {
     const body = await response.json().catch((): undefined => undefined);
     const parsed = authErrorResponseSchema.safeParse(body);
     throw new ApiError(response.status, parsed.success ? parsed.data.code : undefined);
   }
-  return schema.parse(await response.json());
+  return { data: schema.parse(await response.json()), response };
+}
+
+/** Sends a credentialed API request and validates its successful response against the expected contract. */
+export async function requestJson<T>(
+  schema: WireSchema<T>,
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  return (await requestJsonResponse(schema, path, init)).data;
 }
 
 /** Loads the current signed-in session for the interface. */
@@ -147,15 +176,23 @@ export function fetchRunDetail(
 }
 
 /** Starts a source-backed brief-generation run for a deal. */
-export function startBrief(
+export async function startBrief(
   input: StartBriefRequest,
   csrfToken: string
-): Promise<StartBriefResponse> {
-  return requestJson(startBriefResponseSchema, '/api/runs/deal-brief', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-    body: JSON.stringify(startBriefRequestSchema.parse(input))
-  });
+): Promise<StartBriefResponse & { disposition: RunDisposition | undefined }> {
+  const { data, response } = await requestJsonResponse(
+    startBriefResponseSchema,
+    '/api/runs/deal-brief',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify(startBriefRequestSchema.parse(input))
+    }
+  );
+  const reported = response.headers.get('X-Run-Disposition');
+  // An unrecognised or absent value stays `undefined` rather than being guessed at: the interface
+  // says nothing before it says something wrong about whether work actually started.
+  return { ...data, disposition: RUN_DISPOSITIONS.find((known) => known === reported) };
 }
 
 /** Cancels an in-progress brief-generation run. */
@@ -164,6 +201,30 @@ export function cancelRun(runId: string, csrfToken: string): Promise<CancelRunRe
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: '{}'
+  });
+}
+
+/**
+ * Loads what a sandbox reset would erase, and by answering at all, that resets are available here.
+ *
+ * A deployment that was not designated a sandbox never registers these routes, and a persona
+ * without standing to reset is refused as 404 by the same rule that hides an unauthorized deal.
+ * Both arrive as a failed request, which is why the interface treats any failure here as "this
+ * capability does not exist for you" and renders no control - rather than a disabled one that
+ * advertises a destructive action the caller cannot have.
+ */
+export function fetchSandboxReset(
+  signal: AbortSignal | undefined
+): Promise<SandboxResetReportView> {
+  return requestJson(sandboxResetReportSchema, '/api/sandbox/reset', { signal });
+}
+
+/** Erases the sandbox and reports what was removed and what was kept. */
+export function resetSandbox(csrfToken: string): Promise<SandboxResetReportView> {
+  return requestJson(sandboxResetReportSchema, '/api/sandbox/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify({ confirmation: SANDBOX_RESET_CONFIRMATION })
   });
 }
 

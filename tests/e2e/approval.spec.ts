@@ -68,7 +68,14 @@ const payload = {
       evidenceId,
       sourceType: 'crm',
       summary: 'The renewal is ready for a documented commercial review.',
-      capturedAt: '2026-08-29T00:00:00.000Z',
+      // capturedAt is code-owned: validateDealBrief discards whatever the payload carries and
+      // re-stamps it from the cited evidence row's own event_date as `<date>T00:00:00Z` (see
+      // packages/core/src/application/agents/validation.ts). edit_and_approve re-grounds the
+      // submitted payload and requires the result to hash-equal it, so this fixture -- which is
+      // written straight into approval_subjects by SQL, never through the grounding pass a real
+      // brief goes through -- has to already be in that canonical form. Spelling the same instant
+      // as `...T00:00:00.000Z` re-stamps to a different string and 400s the edit.
+      capturedAt: '2026-08-29T00:00:00Z',
       claims: [{
         id: `claim_source_${suffix}`,
         statement: 'The renewal is ready for a documented commercial review.',
@@ -285,7 +292,10 @@ test('partial quorum remains awaiting until a distinct authorized persona satisf
   const finalApprove = page.getByRole('button', { name: 'Approve unchanged' });
   await finalApprove.focus();
   await page.keyboard.press('Enter');
-  const success = page.getByRole('status');
+  // The app shell keeps its "Loading destination" live region permanently mounted so assistive
+  // technology announces it, which means a bare status role matches two elements whenever a
+  // navigation is in flight. Scope every status assertion by its text.
+  const success = page.getByRole('status').filter({ hasText: 'Decision recorded' });
   await expect(success).toContainText('Approval quorum is satisfied');
   await expect(success).toBeFocused();
   await expect(page.getByText('Finalizing', { exact: true })).toBeVisible();
@@ -305,11 +315,16 @@ test('edit and approve validates semantic fields, reflows at 320px and 200%-equi
     'Negotiation state', 'Recommended next actions', 'Missing information',
     'Authorized evidence summaries', 'Confidence and review warnings'
   ]) await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  // Section prose and the claims backing it can carry the same sentence - a claim statement is
+  // often the goal or risk it supports, verbatim - so assert the text is present, not that it is
+  // present exactly once.
   await expect(page.getByText(payload.executiveSummary.narrative, { exact: true }).first()).toBeVisible();
   await expect(
-    page.getByText(payload.buyerGoalsAndBusinessDrivers.goals[0] ?? '', { exact: true })
+    page.getByText(payload.buyerGoalsAndBusinessDrivers.goals[0] ?? '', { exact: true }).first()
   ).toBeVisible();
-  await expect(page.getByText(payload.negotiationState.currentState, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(payload.negotiationState.currentState, { exact: true }).first()
+  ).toBeVisible();
   const edit = page.getByRole('button', { name: 'Edit and approve' });
   await edit.focus();
   await page.keyboard.press('Enter');
@@ -373,7 +388,7 @@ test('reject is terminal, duplicate action is disabled, and history remains insp
   const confirm = page.getByRole('button', { name: 'Confirm rejection' });
   await confirm.focus();
   await page.keyboard.press('Space');
-  const rejectionStatus = page.getByRole('status');
+  const rejectionStatus = page.getByRole('status').filter({ hasText: 'run was rejected' });
   await expect(rejectionStatus).toContainText('run was rejected');
   await expect(rejectionStatus).toBeFocused();
   await expect(page.getByText('Rejected', { exact: true }).first()).toBeVisible();

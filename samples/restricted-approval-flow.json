@@ -1,13 +1,14 @@
 {
-  "runId": "run_508dd2d57d6bc452b6c56ae7d10cdccbfdd813de9e0a68975cbac3555b5af2f7",
+  "runId": "run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668",
   "opportunityId": "OPP-1003",
+  "opportunityName": "Eclipse BioMaterials Ltd - Restricted Renewal and Data Protection",
   "authorizedRequester": {
     "userId": "USR-5003",
     "name": "Nora Chen"
   },
   "approvalSubject": {
-    "id": "approval_subject_f65208b74ec8eef34278c52972a8cc97e5abab81de5a1f67f7d9d3d2df05b98e",
-    "subjectHash": "43567f98ddbc29c5adddf1d9ab51e86c6a1d0e33cab00cf014bdcdd0cd043dee",
+    "id": "approval_subject_cc7397871539696372b88f1c5120099067ecc105b05f344a8ec68f39e35a2c11",
+    "subjectHash": "f3c04fe0bfb7b93aaaa7356ded7035bbaa0eab85b7aeb22cca0d3d985ff3e7a4",
     "policyTriggers": [
       "discount_above_10_percent",
       "negative_renewal_uplift",
@@ -15,13 +16,12 @@
       "liability_cap_change",
       "restricted_research_language",
       "customer_specific_security_language",
-      "missing_material_evidence",
       "customer_facing_concession_language"
     ],
     "quorumVersion": "deal-brief-approval-v1",
-    "required": 5,
-    "completed": 5,
-    "createdAt": "2026-08-31T05:59:15.685Z"
+    "required": 4,
+    "completed": 4,
+    "createdAt": "2026-08-31T19:36:13.028Z"
   },
   "requirements": [
     {
@@ -36,7 +36,15 @@
       ],
       "depends_on": [],
       "ordinal": 0,
-      "created_at": "2026-08-31 05:59:15.685336+00"
+      "eligibleApprovers": [
+        {
+          "userId": "USR-5005",
+          "name": "Rina Vale",
+          "role": "Deal Desk Approver",
+          "authority": "deal_desk",
+          "isRunRequester": false
+        }
+      ]
     },
     {
       "entry_id": "approval:commercial_discount:sales_leader",
@@ -49,7 +57,15 @@
       ],
       "depends_on": [],
       "ordinal": 1,
-      "created_at": "2026-08-31 05:59:15.685336+00"
+      "eligibleApprovers": [
+        {
+          "userId": "USR-5008",
+          "name": "Tomas Reed",
+          "role": "Restricted Sales Leader",
+          "authority": "sales_leader",
+          "isRunRequester": false
+        }
+      ]
     },
     {
       "entry_id": "approval:legal_terms:legal_reviewer",
@@ -64,21 +80,15 @@
       ],
       "depends_on": [],
       "ordinal": 2,
-      "created_at": "2026-08-31 05:59:15.685336+00"
-    },
-    {
-      "entry_id": "approval:evidence_review:account_owner-or-sales_leader",
-      "category": "evidence_review",
-      "required_authorities": [
-        "account_owner",
-        "sales_leader"
-      ],
-      "policy_triggers": [
-        "missing_material_evidence"
-      ],
-      "depends_on": [],
-      "ordinal": 3,
-      "created_at": "2026-08-31 05:59:15.685336+00"
+      "eligibleApprovers": [
+        {
+          "userId": "USR-5006",
+          "name": "Iris Wynn",
+          "role": "Legal Reviewer",
+          "authority": "legal_reviewer",
+          "isRunRequester": false
+        }
+      ]
     },
     {
       "entry_id": "approval:customer_concession:account_owner",
@@ -92,11 +102,172 @@
       "depends_on": [
         "approval:commercial_discount:deal_desk",
         "approval:commercial_discount:sales_leader",
-        "approval:legal_terms:legal_reviewer",
-        "approval:evidence_review:account_owner-or-sales_leader"
+        "approval:legal_terms:legal_reviewer"
       ],
-      "ordinal": 4,
-      "created_at": "2026-08-31 05:59:15.685336+00"
+      "ordinal": 3,
+      "eligibleApprovers": [
+        {
+          "userId": "USR-5003",
+          "name": "Nora Chen",
+          "role": "Restricted Account Owner",
+          "authority": "account_owner",
+          "isRunRequester": true
+        }
+      ]
+    }
+  ],
+  "exportBeforeQuorum": {
+    "attemptedAt": "2026-08-31T19:36:14.000Z",
+    "actorId": "USR-5003",
+    "request": "GET /api/runs/run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668/export/json",
+    "httpStatus": 404,
+    "response": {
+      "code": "NOT_FOUND",
+      "message": "The requested resource was not found."
+    },
+    "runStatusAtAttempt": "awaiting_approval"
+  },
+  "progression": [
+    {
+      "step": 1,
+      "operableBefore": {
+        "USR-5005": [
+          "approval:commercial_discount:deal_desk (as deal_desk)"
+        ],
+        "USR-5006": [
+          "approval:legal_terms:legal_reviewer (as legal_reviewer)"
+        ],
+        "USR-5008": [
+          "approval:commercial_discount:sales_leader (as sales_leader)"
+        ]
+      },
+      "decision": {
+        "entryId": "approval:commercial_discount:deal_desk",
+        "category": "commercial_discount",
+        "requiredAuthorities": [
+          "deal_desk"
+        ],
+        "actor": {
+          "userId": "USR-5005",
+          "authority": "deal_desk"
+        },
+        "action": "approve_unchanged",
+        "quorumBefore": {
+          "completed": 0,
+          "required": 4
+        }
+      },
+      "result": {
+        "status": "awaiting_approval",
+        "runVersion": 6,
+        "approvalSubjectId": "approval_subject_cc7397871539696372b88f1c5120099067ecc105b05f344a8ec68f39e35a2c11",
+        "entryId": "approval:commercial_discount:deal_desk",
+        "approvedSubjectHash": "f3c04fe0bfb7b93aaaa7356ded7035bbaa0eab85b7aeb22cca0d3d985ff3e7a4",
+        "quorumSatisfied": false,
+        "replayed": false
+      }
+    },
+    {
+      "step": 2,
+      "operableBefore": {
+        "USR-5006": [
+          "approval:legal_terms:legal_reviewer (as legal_reviewer)"
+        ],
+        "USR-5008": [
+          "approval:commercial_discount:sales_leader (as sales_leader)"
+        ]
+      },
+      "decision": {
+        "entryId": "approval:legal_terms:legal_reviewer",
+        "category": "legal_terms",
+        "requiredAuthorities": [
+          "legal_reviewer"
+        ],
+        "actor": {
+          "userId": "USR-5006",
+          "authority": "legal_reviewer"
+        },
+        "action": "approve_unchanged",
+        "quorumBefore": {
+          "completed": 1,
+          "required": 4
+        }
+      },
+      "result": {
+        "status": "awaiting_approval",
+        "runVersion": 7,
+        "approvalSubjectId": "approval_subject_cc7397871539696372b88f1c5120099067ecc105b05f344a8ec68f39e35a2c11",
+        "entryId": "approval:legal_terms:legal_reviewer",
+        "approvedSubjectHash": "f3c04fe0bfb7b93aaaa7356ded7035bbaa0eab85b7aeb22cca0d3d985ff3e7a4",
+        "quorumSatisfied": false,
+        "replayed": false
+      }
+    },
+    {
+      "step": 3,
+      "operableBefore": {
+        "USR-5008": [
+          "approval:commercial_discount:sales_leader (as sales_leader)"
+        ]
+      },
+      "decision": {
+        "entryId": "approval:commercial_discount:sales_leader",
+        "category": "commercial_discount",
+        "requiredAuthorities": [
+          "sales_leader"
+        ],
+        "actor": {
+          "userId": "USR-5008",
+          "authority": "sales_leader"
+        },
+        "action": "approve_unchanged",
+        "quorumBefore": {
+          "completed": 2,
+          "required": 4
+        }
+      },
+      "result": {
+        "status": "awaiting_approval",
+        "runVersion": 8,
+        "approvalSubjectId": "approval_subject_cc7397871539696372b88f1c5120099067ecc105b05f344a8ec68f39e35a2c11",
+        "entryId": "approval:commercial_discount:sales_leader",
+        "approvedSubjectHash": "f3c04fe0bfb7b93aaaa7356ded7035bbaa0eab85b7aeb22cca0d3d985ff3e7a4",
+        "quorumSatisfied": false,
+        "replayed": false
+      }
+    },
+    {
+      "step": 4,
+      "operableBefore": {
+        "USR-5003": [
+          "approval:customer_concession:account_owner (as account_owner)"
+        ]
+      },
+      "decision": {
+        "entryId": "approval:customer_concession:account_owner",
+        "category": "customer_concession",
+        "requiredAuthorities": [
+          "account_owner"
+        ],
+        "actor": {
+          "userId": "USR-5003",
+          "authority": "account_owner"
+        },
+        "action": "approve_unchanged",
+        "quorumBefore": {
+          "completed": 3,
+          "required": 4
+        }
+      },
+      "result": {
+        "status": "finalizing",
+        "runVersion": 9,
+        "approvalSubjectId": "approval_subject_cc7397871539696372b88f1c5120099067ecc105b05f344a8ec68f39e35a2c11",
+        "entryId": "approval:customer_concession:account_owner",
+        "approvedSubjectHash": "f3c04fe0bfb7b93aaaa7356ded7035bbaa0eab85b7aeb22cca0d3d985ff3e7a4",
+        "quorumSatisfied": true,
+        "replayed": false
+      }
     }
   ],
   "decisions": [
@@ -107,24 +278,11 @@
       "action": "approve_unchanged",
       "actor_id": "USR-5005",
       "actor_name": "Rina Vale",
-      "rationale": "Reviewed for the sample submission artifact set.",
+      "rationale": "Reviewed as deal_desk for the sample artifact set.",
       "result_run_version": 6,
       "result_status": "awaiting_approval",
       "result_quorum_satisfied": false,
-      "created_at": "2026-08-31 05:59:16.915+00"
-    },
-    {
-      "entry_id": "approval:commercial_discount:sales_leader",
-      "category": "commercial_discount",
-      "authority": "sales_leader",
-      "action": "approve_unchanged",
-      "actor_id": "USR-5008",
-      "actor_name": "Tomas Reed",
-      "rationale": "Reviewed for the sample submission artifact set.",
-      "result_run_version": 7,
-      "result_status": "awaiting_approval",
-      "result_quorum_satisfied": false,
-      "created_at": "2026-08-31 05:59:18.209+00"
+      "created_at": "2026-08-31 19:36:14.045+00"
     },
     {
       "entry_id": "approval:legal_terms:legal_reviewer",
@@ -133,24 +291,24 @@
       "action": "approve_unchanged",
       "actor_id": "USR-5006",
       "actor_name": "Iris Wynn",
-      "rationale": "Reviewed for the sample submission artifact set.",
+      "rationale": "Reviewed as legal_reviewer for the sample artifact set.",
+      "result_run_version": 7,
+      "result_status": "awaiting_approval",
+      "result_quorum_satisfied": false,
+      "created_at": "2026-08-31 19:36:14.089+00"
+    },
+    {
+      "entry_id": "approval:commercial_discount:sales_leader",
+      "category": "commercial_discount",
+      "authority": "sales_leader",
+      "action": "approve_unchanged",
+      "actor_id": "USR-5008",
+      "actor_name": "Tomas Reed",
+      "rationale": "Reviewed as sales_leader for the sample artifact set.",
       "result_run_version": 8,
       "result_status": "awaiting_approval",
       "result_quorum_satisfied": false,
-      "created_at": "2026-08-31 05:59:19.489+00"
-    },
-    {
-      "entry_id": "approval:evidence_review:account_owner-or-sales_leader",
-      "category": "evidence_review",
-      "authority": "account_owner",
-      "action": "approve_unchanged",
-      "actor_id": "USR-5003",
-      "actor_name": "Nora Chen",
-      "rationale": "Reviewed for the sample submission artifact set.",
-      "result_run_version": 9,
-      "result_status": "awaiting_approval",
-      "result_quorum_satisfied": false,
-      "created_at": "2026-08-31 05:59:20.778+00"
+      "created_at": "2026-08-31 19:36:14.139+00"
     },
     {
       "entry_id": "approval:customer_concession:account_owner",
@@ -159,15 +317,21 @@
       "action": "approve_unchanged",
       "actor_id": "USR-5003",
       "actor_name": "Nora Chen",
-      "rationale": "Reviewed for the sample submission artifact set.",
-      "result_run_version": 10,
+      "rationale": "Reviewed as account_owner for the sample artifact set.",
+      "result_run_version": 9,
       "result_status": "finalizing",
       "result_quorum_satisfied": true,
-      "created_at": "2026-08-31 05:59:22.064+00"
+      "created_at": "2026-08-31 19:36:14.184+00"
     }
   ],
   "finalOutcome": {
     "status": "completed",
-    "quorumSatisfied": true
+    "quorumSatisfied": true,
+    "finalizedExport": {
+      "request": "GET /api/runs/run_182ba7edfee9fc9ef08598b8058ba429ac2efb2531c275cc400417725e111668/export/json",
+      "httpStatus": 200,
+      "contentLength": 16647,
+      "attemptedAt": "2026-08-31T19:36:16.235Z"
+    }
   }
 }

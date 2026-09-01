@@ -14,7 +14,7 @@ import {
 } from '../../apps/web/src/components/guided-tour';
 import { LoginRoute } from '../../apps/web/src/routes/login';
 
-const STORAGE_KEY = 'slacato.guided-tour.v2';
+const STORAGE_KEY = 'slacato.guided-tour.v3';
 const stepCount = tourSteps.length;
 
 const READY_HEALTH = {
@@ -39,7 +39,20 @@ vi.mock('@/api/client', () => ({
 vi.mock('@/api/session', () => ({
   safeDestination: () => '/deals',
   selectPersonaSession: () => Promise.resolve(),
-  sessionRuntime: { finishTransition: () => undefined },
+  sessionRuntime: { finishTransition: () => undefined, generation: 0, accepts: () => true, reconcileAuthoritativeSession: () => Promise.resolve() },
+  queryKeys: {
+    session: ['session'],
+    personas: ['personas'],
+    readiness: ['readiness'],
+    csrf: (version: string) => ['csrf', version],
+    scoped: (version: string, resource: string) => ['scoped', version, resource]
+  },
+  SessionInvalidatedError: class SessionInvalidatedError extends Error {},
+  sessionQueryOptions: () => ({
+    queryKey: ['session'],
+    queryFn: () => Promise.resolve({ authenticated: false }),
+    retry: false
+  }),
   readinessQueryOptions: () => ({
     queryKey: ['readiness'],
     queryFn: () => Promise.resolve(readinessResult),
@@ -54,7 +67,7 @@ function LocationProbe(): React.JSX.Element {
 
 function TourHarness({
   initialPath = '/settings',
-  target = 'login-personas',
+  target = 'persona-USR-5001',
   withTarget = true,
   manualNavTo,
   withBackgroundControl = false
@@ -80,7 +93,7 @@ function TourHarness({
           ? createElement(
               'div',
               { 'data-testid': 'tour-target', 'data-tour': target },
-              createElement('button', null, target === 'login-personas' ? 'Continue as Maya Levin' : 'Target control')
+              createElement('button', null, target === 'persona-USR-5001' ? 'Continue as Maya Levin' : 'Target control')
             )
           : null,
         withBackgroundControl ? createElement('button', null, 'Background persona') : null,
@@ -113,7 +126,8 @@ describe('guided tour steps', () => {
     const routes = tourSteps.map((step) => step.route);
     const scenarios = new Set(tourSteps.map((step) => step.scenario));
 
-    expect(targets[0]).toBe('login-personas');
+    expect(targets[0]).toBe('persona-USR-5001');
+    expect(tourSteps[0].action).toBe('login-personas');
     expect(targets.at(-1)).toBe('diagnostics');
     // Scenario 1: an authorized owner generates and inspects a brief for OPP-1001.
     expect(routes).toContain('/deals/OPP-1001');
@@ -137,14 +151,19 @@ describe('guided tour steps', () => {
   it('waits for the user on every step that needs a real product action', () => {
     const gated = tourSteps.filter((step) => step.requiresInteraction === true);
 
+    // Each persona switch is two real clicks -- pick the person, then apply the change -- so it is
+    // two steps, each spotlighting exactly the one control it asks for.
     expect(gated.map((step) => step.target)).toEqual([
-      'login-personas',
+      'persona-USR-5001',
       'generate-brief',
-      'settings-personas',
+      'persona-USR-5003',
+      'settings-apply-persona',
       'generate-brief',
-      'settings-personas',
+      'persona-USR-5005',
+      'settings-apply-persona',
       'approval-decision',
-      'settings-personas'
+      'persona-USR-5007',
+      'settings-apply-persona'
     ]);
     for (const step of gated) expect(step.waitingFor).toBeTruthy();
   });
@@ -197,19 +216,41 @@ describe('GuidedTour', () => {
     expect(screen.getByText(`Step 1 of ${stepCount}`)).toBeInTheDocument();
   });
 
-  it('resets saved progress when the launcher is opened', async () => {
+  // Regression: leaving the tour used to discard the position it had just saved. `close()`
+  // persisted the step reached, but the launcher's `open()` called `settle(0)` -- and because
+  // closing also sets `dismissed`, hiding the invitation banner, the launcher was the only way
+  // back and it always restarted at `/login`. Mid-demo that cost thirteen steps, two persona
+  // switches and a recorded approval decision.
+  it('resumes at the saved step when the launcher reopens a closed tour', async () => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ active: false, stepIndex: 4, dismissed: true }));
-    render(createElement(TourHarness));
+    render(createElement(TourHarness, { initialPath: '/deals/OPP-1001', target: 'citations' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start guided tour' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: `Resume guided tour at step 5 of ${stepCount}` })
+    );
 
-    await waitFor(() => expect(screen.getByLabelText('current location')).toHaveTextContent('/login'));
+    expect(await screen.findByText(`Step 5 of ${stepCount}`)).toBeInTheDocument();
+    // `dismissed` records a decision about the invitation banner, not about the tour, so resuming
+    // must not quietly reinstate the banner the user turned off.
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? 'null')).toEqual({
       active: true,
-      stepIndex: 0,
-      dismissed: false
+      stepIndex: 4,
+      dismissed: true
     });
+  });
+
+  it('offers "Start over" as a deliberate choice once resuming is what leaving does', async () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ active: true, stepIndex: 4, dismissed: true }));
+    render(createElement(TourHarness, { initialPath: '/deals/OPP-1001', target: 'citations' }));
+    expect(await screen.findByText(`Step 5 of ${stepCount}`)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start over' }));
+
+    await waitFor(() => expect(screen.getByLabelText('current location')).toHaveTextContent('/login'));
     expect(screen.getByText(`Step 1 of ${stepCount}`)).toBeInTheDocument();
+    // Step one has nowhere further back to go, so the control retires rather than sitting there
+    // as a no-op.
+    expect(screen.queryByRole('button', { name: 'Start over' })).not.toBeInTheDocument();
   });
 
   it('resumes on Deals at step two after login advances the persisted tour', async () => {
@@ -230,7 +271,12 @@ describe('GuidedTour', () => {
   });
 
   it('routes itself to the step destination when a persona change resumes the tour', async () => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ active: true, stepIndex: 7, dismissed: false }));
+    // Derived, not hardcoded: the step list is edited often enough that a fixed index silently
+    // starts testing a different step instead of failing.
+    const stepIndex = tourSteps.findIndex(
+      (step) => step.target === 'generate-brief' && step.route === '/deals/OPP-1003'
+    );
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ active: true, stepIndex, dismissed: false }));
     render(createElement(TourHarness, { initialPath: '/settings', target: 'generate-brief' }));
 
     await waitFor(() => expect(screen.getByLabelText('current location')).toHaveTextContent('/deals/OPP-1003'));
@@ -287,7 +333,7 @@ describe('GuidedTour', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Start guided tour' }));
       await act(() => vi.advanceTimersByTimeAsync(50));
       const target = document.createElement('button');
-      target.dataset.tour = 'login-personas';
+      target.dataset.tour = 'persona-USR-5001';
       target.textContent = 'Delayed persona choices';
       document.getElementById('main-content')!.append(target);
       await act(async () => Promise.resolve());
@@ -423,7 +469,7 @@ describe('GuidedTour', () => {
     expect(screen.getByText(`Step 2 of ${stepCount}`)).toBeInTheDocument();
   });
 
-  it('resets fully to step one when the launcher is clicked while a tour is already running', async () => {
+  it('holds the current step when the launcher is pressed while a tour is already running', async () => {
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({ active: true, stepIndex: 5, dismissed: false })
@@ -435,11 +481,13 @@ describe('GuidedTour', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Start guided tour' }));
 
-    await waitFor(() => expect(screen.getByLabelText('current location')).toHaveTextContent('/login'));
-    expect(screen.getByText(`Step 1 of ${stepCount}`)).toBeInTheDocument();
+    // The launcher resumes; it no longer doubles as an unlabelled reset that throws away a
+    // position the user never asked to lose.
+    await waitFor(() => expect(screen.getByLabelText('current location')).toHaveTextContent('/deals/OPP-1001'));
+    expect(screen.getByText(`Step 6 of ${stepCount}`)).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? 'null')).toEqual({
       active: true,
-      stepIndex: 0,
+      stepIndex: 5,
       dismissed: false
     });
   });
@@ -567,60 +615,73 @@ describe('GuidedTour', () => {
     expect(document.activeElement).not.toBe(background);
   });
 
-  it('positions the tooltip clear of a spotlighted target near the top of a short viewport', async () => {
+  /**
+   * Drives the real component with a mocked target rectangle and asserts where the dialog lands.
+   *
+   * The earlier version of these tests keyed its rectangle mock on `data-tour="login-personas"`,
+   * a target name the tour stopped using, so the mock never fired and both tests only ever
+   * measured jsdom's all-zero rectangles. They key on the harness's actual target now.
+   */
+  async function placeDialogWithTargetRect(
+    rect: Readonly<{ top: number; height: number }>,
+    viewportHeight: number
+  ): Promise<{ side: 'top' | 'bottom'; offset: string; maxHeight: string }> {
     const originalRect = HTMLElement.prototype.getBoundingClientRect;
     const originalInnerHeight = window.innerHeight;
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: viewportHeight });
     HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
-      if (this.dataset?.tour === 'login-personas') {
+      if (this.dataset?.tour === 'persona-USR-5001')
         return {
-          top: 100, left: 0, right: 200, bottom: 140, width: 200, height: 40, x: 0, y: 100,
-          toJSON: () => ({})
+          top: rect.top, left: 0, right: 200, bottom: rect.top + rect.height, width: 200,
+          height: rect.height, x: 0, y: rect.top, toJSON: () => ({})
         } as DOMRect;
-      }
       return originalRect.call(this);
     };
-
     try {
       render(createElement(TourHarness));
       fireEvent.click(screen.getByRole('button', { name: 'Start guided tour' }));
       const dialog = await screen.findByRole('dialog', { name: 'Sign in as the deal owner' });
-
-      // The target sits in the top half of a 700px-tall viewport, so the tooltip must move to the
-      // bottom instead of the old hardcoded `top-4`, which would render directly over it.
-      await waitFor(() => expect(dialog).toHaveClass('bottom-4'));
-      expect(dialog).not.toHaveClass('top-4');
+      // The dialog is placed twice: once before the target is measured (the unanchored default),
+      // then again from the measured rectangle. Only the second placement is under test, and the
+      // spotlight ring renders only once a rectangle exists -- so wait for the ring, not for the
+      // dialog to merely carry some offset.
+      await waitFor(() => expect(document.querySelector('.ring-4')).not.toBeNull());
+      return {
+        side: dialog.style.top === '' ? 'bottom' : 'top',
+        offset: dialog.style.top === '' ? dialog.style.bottom : dialog.style.top,
+        maxHeight: dialog.style.maxHeight
+      };
     } finally {
       HTMLElement.prototype.getBoundingClientRect = originalRect;
       Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight });
     }
+  }
+
+  it('drops the dialog below a spotlighted target sitting near the top of a short viewport', async () => {
+    const placed = await placeDialogWithTargetRect({ top: 100, height: 40 }, 700);
+
+    expect(placed.side).toBe('bottom');
+    expect(placed.offset).toBe('16px');
   });
 
-  it('positions the tooltip above a spotlighted target near the bottom of the viewport', async () => {
-    const originalRect = HTMLElement.prototype.getBoundingClientRect;
-    const originalInnerHeight = window.innerHeight;
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
-    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
-      if (this.dataset?.tour === 'login-personas') {
-        return {
-          top: 600, left: 0, right: 200, bottom: 640, width: 200, height: 40, x: 0, y: 600,
-          toJSON: () => ({})
-        } as DOMRect;
-      }
-      return originalRect.call(this);
-    };
+  it('lifts the dialog above a spotlighted target sitting near the bottom of the viewport', async () => {
+    const placed = await placeDialogWithTargetRect({ top: 600, height: 40 }, 700);
 
-    try {
-      render(createElement(TourHarness));
-      fireEvent.click(screen.getByRole('button', { name: 'Start guided tour' }));
-      const dialog = await screen.findByRole('dialog', { name: 'Sign in as the deal owner' });
+    expect(placed.side).toBe('top');
+    expect(placed.offset).toBe('16px');
+  });
 
-      await waitFor(() => expect(dialog).toHaveClass('top-4'));
-      expect(dialog).not.toHaveClass('bottom-4');
-    } finally {
-      HTMLElement.prototype.getBoundingClientRect = originalRect;
-      Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight });
-    }
+  // Regression: at 390x844 the login persona card's centre lands on 422 and half the viewport is
+  // also 422, so the old "is the centre past the midpoint?" test answered false, pinned the
+  // dialog to the bottom edge, and laid it straight over "Continue as Maya Levin" -- on a step
+  // that requires that very click and therefore offers no Next.
+  it('never covers a target whose centre lands exactly on the viewport midpoint', async () => {
+    const placed = await placeDialogWithTargetRect({ top: 402, height: 40 }, 844);
+
+    // Spotlight box: top 394, bottom 450. Above it lie 394px, below it 394px -- a genuine tie the
+    // rule has to break without ever letting the dialog reach the target.
+    expect(placed.side).toBe('top');
+    expect(Number.parseInt(placed.maxHeight, 10) + 16).toBeLessThanOrEqual(394);
   });
 });
 

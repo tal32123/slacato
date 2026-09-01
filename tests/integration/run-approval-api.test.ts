@@ -255,6 +255,10 @@ describe.sequential('run and approval query APIs', () => {
         idempotencyKey: `reader-start-${suffix}`,
       }).expect(201);
     expect(start.body).toEqual({ runId: ids.run });
+    // The caller asked for a new brief and was handed the run already in flight. The body cannot
+    // say so - it is a strict shared contract - so the header has to, or the product silently
+    // claims to have started work it did not start.
+    expect(start.headers['x-run-disposition']).toBe('joined');
     expect((await reader.agent.get('/api/runs').set(browserHeaders).expect(200)).body.runs)
       .toEqual(expect.arrayContaining([expect.objectContaining({ runId: ids.run })]));
     await reader.agent.get(`/api/runs/${ids.run}/detail`).set(browserHeaders).expect(200);

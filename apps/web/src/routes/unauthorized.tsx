@@ -1,30 +1,15 @@
-import { LogIn, Shield } from 'lucide-react';
-import { Link, useLocation } from 'react-router';
-import { Button } from '@/components/ui/button';
+import { type LogIn, Shield } from 'lucide-react';
+import type { LoaderFunctionArgs } from 'react-router';
+import { redirect } from 'react-router';
+import { safeDestination } from '@/api/session';
 
-/** Explains that sign-in is required and offers a safe route back into the product. */
-export function UnauthorizedRoute(): React.JSX.Element {
-  const location = useLocation();
-  const returnTo = new URLSearchParams(location.search).get('returnTo');
-  const safeReturnTo =
-    returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : undefined;
-  const loginTarget =
-    safeReturnTo === undefined
-      ? '/login'
-      : `/login?${new URLSearchParams({ returnTo: safeReturnTo }).toString()}`;
-  return (
-    <AccessState
-      eyebrow="Session required"
-      title="Sign in to continue"
-      detail="Choose one of the canonical demo personas to enter SlaCato. Your original destination stays out of the URL unless it is a safe application path."
-      icon={LogIn}
-      action={
-        <Button asChild>
-          <Link to={loginTarget}>Choose a persona</Link>
-        </Button>
-      }
-    />
-  );
+/**
+ * Sends the legacy sign-in interstitial straight to the login page so an unauthenticated visit
+ * never costs an extra page and click. Bookmarks and stale links keep working.
+ */
+export function unauthorizedLoader({ request }: LoaderFunctionArgs): Response {
+  const returnTo = safeDestination(new URL(request.url).searchParams.get('returnTo'), '/deals');
+  return redirect(`/login?returnTo=${encodeURIComponent(returnTo)}`);
 }
 
 /** Presents a consistent access-state message with its recommended next action. */

@@ -194,11 +194,38 @@ describe('authorized deal API projection', () => {
     expect(allowedText).not.toContain('pricing_notes.tsv');
     expect(allowedText).not.toContain('account_team_updates.tsv');
 
+    const auditedBefore = await seedDatabase<{ count: number }[]>`
+      select count(*)::int count from audit_events where actor_id = 'USR-5007'`;
+
     for (const opportunityId of ['OPP-1003', 'OPP-does-not-exist']) {
       const denied = await harper.get(`/api/deals/${opportunityId}`).set(browserHeaders).expect(403);
       expect(denied.body).toEqual({ code: 'FORBIDDEN', message: 'Request could not be authorized' });
       expect(JSON.stringify(denied.body)).not.toContain(opportunityId);
     }
+
+    // The tour tells a reviewer the denial is audited. It is - and the record proves the refusal
+    // happened without describing what was refused, so a restricted deal and a deal that does not
+    // exist leave rows nothing can tell apart.
+    const denialAudit = await seedDatabase<{
+      run_id: string | null;
+      actor_id: string;
+      type: string;
+      payload: unknown;
+    }[]>`select run_id, actor_id, type, payload from audit_events
+      where actor_id = 'USR-5007' order by created_at`;
+    expect(denialAudit).toHaveLength((auditedBefore[0]?.count ?? 0) + 2);
+    const denialRow = { run_id: null, actor_id: 'USR-5007', type: 'deal_brief_access_denied', payload: { reason: 'forbidden' } };
+    expect(denialAudit.slice(-2)).toEqual([denialRow, denialRow]);
+    expect(JSON.stringify(denialAudit.slice(-2))).not.toMatch(
+      /OPP-1003|OPP-does-not-exist|ACC-2003|Northstar|restricted|evidence|slack|pricing/i
+    );
+
+    // A denial audit is only non-disclosing while nothing can read it back. No API surfaces
+    // audit_events at all, so the persona it refused cannot reach its own denial record.
+    const auditReadPaths = await seedDatabase<{ count: number }[]>`
+      select count(*)::int count from information_schema.view_table_usage
+      where table_name = 'audit_events'`;
+    expect(auditReadPaths[0]?.count).toBe(0);
   });
 
   it('does not project Salesforce list fields or non-restricted source grants across authorization scopes', async () => {

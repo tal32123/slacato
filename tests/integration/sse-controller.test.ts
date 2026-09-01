@@ -723,11 +723,12 @@ describe.sequential('authorized raw run SSE', () => {
     await database.sql`insert into permission_grants
       (id, persona_id, account_id, source_type, can_read, can_read_restricted, can_request_approval, can_approve, sensitive_pricing, source_commit)
       values ('grant-denial-retry', ${stranger.userId}, 'ACC-DENIAL', 'salesforce', true, false, true, false, false, ${CANONICAL_FIXTURE_COMMIT})`;
-    const allowedRunId = await start.execute({
+    const { runId: allowedRunId, disposition } = await start.execute({
       opportunityId: 'OPP-DENIAL',
       requestedBy: stranger.userId,
       idempotencyKey: 'denied-trace'
     });
+    expect(disposition).toBe('created');
     expect(allowedRunId).toMatch(/^run_/);
     const allowedSpans = await publisher.tracesForRun(allowedRunId);
     expect(allowedSpans).toEqual([

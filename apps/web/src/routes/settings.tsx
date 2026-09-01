@@ -17,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { demoPersonaPurpose, groupDemoPersonas } from '@/features/personas/demo-personas';
+import { ResetSandboxCard } from '@/features/sandbox/reset-sandbox-card';
 import { cn } from '@/lib/utils';
 import { throwProtectedLoaderError } from './loader-security';
 
@@ -149,6 +150,7 @@ export function SettingsRoute(): React.JSX.Element {
                 return (
                   <label
                     key={persona.userId}
+                    data-tour={`persona-${persona.userId}`}
                     className={cn(
                       'relative flex min-h-20 cursor-pointer items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/50',
                       selected === persona.userId && 'border-primary ring-2 ring-ring/20'
@@ -159,7 +161,16 @@ export function SettingsRoute(): React.JSX.Element {
                       name="persona"
                       value={persona.userId}
                       checked={selected === persona.userId}
-                      onChange={() => setSelected(persona.userId)}
+                      onChange={() => {
+                        setSelected(persona.userId);
+                        // Selecting a persona is only half of a switch. Reporting it lets the tour
+                        // move its spotlight onto "Use selected persona" instead of leaving that
+                        // button behind the dimmed backdrop where it cannot be clicked. The report
+                        // names the persona: every radio here shares one group, so an arrow key
+                        // moves focus AND selection to a sibling the spotlight never offered, and
+                        // an anonymous report would advance the step with the wrong person chosen.
+                        advanceGuidedTour(`persona-selected:${persona.userId}`);
+                      }}
                       className="mt-1 size-5 accent-primary"
                     />
                     <span className="min-w-0">
@@ -184,7 +195,7 @@ export function SettingsRoute(): React.JSX.Element {
           );
           return (
             <>
-              <div data-tour="settings-personas">
+              <div>
                 <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                   <div>
                     <h2 id="persona-heading" className="text-xl font-semibold">
@@ -196,6 +207,7 @@ export function SettingsRoute(): React.JSX.Element {
                     </p>
                   </div>
                   <Button
+                    data-tour="settings-apply-persona"
                     className="min-h-11"
                     disabled={
                       saving || selected === session.persona.userId || csrf.data === undefined
@@ -272,6 +284,10 @@ export function SettingsRoute(): React.JSX.Element {
             </Button>
           </CardContent>
         </Card>
+
+        {/* Renders itself only where the server designated a sandbox and this persona may clear
+            it, so an ordinary deployment shows no destructive control here at all. */}
+        <ResetSandboxCard sessionVersion={session.version} />
       </section>
     </div>
   );

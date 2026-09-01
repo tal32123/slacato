@@ -66,6 +66,27 @@ export type EvidenceScope = Readonly<{
   restrictedOpportunity: boolean;
 }>;
 
+/** Describes one refused request in terms that identify the actor but never the target. */
+export type OpaqueDenialEvent = Readonly<{
+  /** Identifies the persona whose request was refused. */
+  actorId: string;
+  /** States why the request was refused, in terms that describe no protected record. */
+  reason: 'forbidden';
+}>;
+
+/**
+ * Records that a request was refused, without recording what it was refused access to.
+ *
+ * A denial audit exists to prove the refusal happened, not to describe the protected record. The
+ * event therefore carries only the actor and an opaque reason: no account, opportunity, source, or
+ * count, and no signal distinguishing "exists but forbidden" from "does not exist". Implementations
+ * must keep that property, because the audit trail outlives the request that produced it.
+ */
+export interface OpaqueDenialRecorder {
+  /** Appends one non-disclosing audit record for a refused request. */
+  recordOpaqueDenial(event: OpaqueDenialEvent): Promise<void>;
+}
+
 /** Supplies persona-authorized deal workspaces, runs, and evidence to query handlers. */
 export interface DealQueryRepository {
   /** Lists deals authorized by a live Salesforce source grant for the persona. */

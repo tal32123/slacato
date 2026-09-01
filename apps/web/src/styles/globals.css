@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/*
+ * This product ships one palette and declares `color-scheme: light`; there is no dark theme and no
+ * dark set of tokens. Tailwind v4's default `dark` variant is `prefers-color-scheme: dark`, so the
+ * `dark:` utilities that came with the shadcn primitives were firing on a dark-mode operating
+ * system and painting themselves over the light tokens -- an outline control such as the deal
+ * list's "Open" button picked up `dark:bg-input/30`, tinting it while the rest of the page stayed
+ * light. Binding the variant to a `.dark` class instead makes those utilities inert until such a
+ * theme actually exists, so the app renders identically whatever the viewer's system preference is.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --color-background: var(--background);
@@ -64,6 +75,10 @@
 }
 html {
   background: var(--background);
+  /* Reserve the classic-scrollbar gutter permanently. Without it, a route whose content is shorter
+     than the viewport removes the scrollbar and every centred column slides sideways by its width
+     the moment the page is opened. No effect where the platform uses overlay scrollbars. */
+  scrollbar-gutter: stable;
 }
 body {
   min-width: 0;

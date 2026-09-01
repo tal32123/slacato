@@ -19,13 +19,13 @@ import { RoutePending } from './routes/route-pending';
 import { RunRoute, runLoader } from './routes/run';
 import { RunsRoute, runsLoader } from './routes/runs';
 import { SettingsRoute, settingsLoader } from './routes/settings';
-import { UnauthorizedRoute } from './routes/unauthorized';
+import { unauthorizedLoader } from './routes/unauthorized';
 import { WalkthroughRoute } from './routes/walkthrough';
 import './styles/globals.css';
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute />, errorElement: <RouteErrorBoundary root /> },
-  { path: '/unauthorized', element: <UnauthorizedRoute /> },
+  { path: '/unauthorized', loader: unauthorizedLoader, element: <RoutePending /> },
   { path: '/forbidden', element: <ForbiddenRoute /> },
   {
     id: 'protected-root',
