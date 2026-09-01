@@ -442,6 +442,7 @@ describe('GuidedTour', () => {
    * cannot be capped away is the means to leave, so the footer sits outside the scrolling region.
    */
   it('keeps the step controls reachable when the dialog is capped shorter than its content', async () => {
+    const step2Body = tourSteps[1].body;
     const originalRect = HTMLElement.prototype.getBoundingClientRect;
     const originalInnerHeight = window.innerHeight;
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
@@ -463,14 +464,21 @@ describe('GuidedTour', () => {
       const dialog = await screen.findByRole('dialog');
       await waitFor(() => expect(document.querySelector('.ring-4')).not.toBeNull());
 
-      // The cap is doing its job.
-      expect(Number.parseInt(dialog.style.maxHeight, 10)).toBeLessThan(dialog.scrollHeight);
+      // The cap is doing its job: the dialog is held to the space above the target rather than
+      // given the whole viewport. (jsdom performs no layout, so this asserts the cap, not the
+      // overflow it causes in a real browser.)
+      const capped = Number.parseInt(dialog.style.maxHeight, 10);
+      expect(capped).toBeLessThan(700 - 16 * 2);
 
-      // ...and the controls are still outside whatever it clipped.
-      const footer = screen.getByRole('button', { name: /Next/ }).closest('div');
-      const scroller = footer?.closest('[data-tour-dialog-scroll="true"]');
-      expect(scroller).toBeNull();
-      expect(screen.getByRole('button', { name: 'Skip tour' })).toBeInTheDocument();
+      // Whatever that cap clips, it cannot be the way out of the step: the prose scrolls, the
+      // controls do not live in the scrolling region at all.
+      const scroller = dialog.querySelector('[data-tour-dialog-scroll="true"]');
+      expect(scroller).not.toBeNull();
+      expect(scroller?.contains(screen.getByText(step2Body))).toBe(true);
+      for (const control of ['Next', 'Back', 'Skip tour'])
+        expect(scroller?.contains(screen.getByRole('button', { name: new RegExp(control) }))).toBe(
+          false
+        );
     } finally {
       HTMLElement.prototype.getBoundingClientRect = originalRect;
       Object.defineProperty(window, 'innerHeight', {
