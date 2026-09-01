@@ -83,6 +83,16 @@ function describeRunGate(
       notice: `Waiting for this run to finish — it is ${readableRunStatus(detail.status)} right now.`
     };
   if (narrated.includes(detail.status)) return { waiting: false };
+  // Failure is named rather than folded into the generic outcome notice below. That notice sends
+  // the reviewer on with "the next steps describe a run that reached one of those", which reads as
+  // a promise that the explanation is coming -- and the steps that follow narrate a brief this run
+  // never produced, so nothing explains it until the diagnostics step at the very end.
+  if (detail.status === 'failed')
+    return {
+      waiting: false,
+      notice:
+        'This run failed, so it produced no brief for the next steps to read. Outside the spotlight, this page carries the "Run failed safely" notice above and the persisted timeline below, which record the phase it stopped in. Demo Diagnostics reports the dependency checks — index, model, database — so it accounts for a failure of that shape and reads healthy for one that generated or validated badly. You can continue, or start another run from the deal first.'
+    };
   return {
     waiting: false,
     notice: `This run settled as "${readableRunStatus(detail.status)}" rather than ${readableOutcomes(narrated)}. You can continue; the next steps describe a run that reached one of those.`
@@ -163,11 +173,11 @@ export const tourSteps: readonly [TourStep, ...TourStep[]] = [
     narratedRunOutcomes: ['completed', 'awaiting_approval']
   },
   {
-    target: 'citations',
+    target: 'ai-brief',
     route: '/deals/OPP-1001',
     scenario: 'Scenario 1 \u00b7 Authorized brief',
     title: 'Check the brief against its sources',
-    body: 'Each claim carries citations back to the exact authorized record it came from. Select one to read the excerpt. Citations are re-authorized on open, so a citation can never become a side door into data the current persona may not read.'
+    body: 'The spotlight is on AI Brief: open it, and every generated section closes with the numbered sources behind it. Select a number to read the authorized excerpt it resolves to. Citations are re-authorized on open, so a citation can never become a side door into data the current persona may not read. If the run produced no brief, this tab stays disabled \u2014 the run\u2019s own page records where it stopped, and Demo Diagnostics reports whether a dependency was the cause.'
   },
   {
     target: 'slack-evidence',

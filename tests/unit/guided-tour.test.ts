@@ -132,7 +132,7 @@ describe('guided tour steps', () => {
     // Scenario 1: an authorized owner generates and inspects a brief for OPP-1001.
     expect(routes).toContain('/deals/OPP-1001');
     expect(targets).toContain('generate-brief');
-    expect(targets).toContain('citations');
+    expect(targets).toContain('ai-brief');
     // Scenario 2: the restricted deal routes through authority-scoped approvals.
     expect(routes).toContain('/deals/OPP-1003');
     expect(targets).toContain('approvals');
