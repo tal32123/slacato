@@ -78,8 +78,15 @@ function approvalBrief(label: string) {
 // Bounded by elapsed time rather than by a poll count, and it sleeps between reads. Spinning on
 // setImmediate issued thousands of queries per second against the same database and event loop the
 // BullMQ processor needs to make progress, so on a loaded runner the poll budget ran out before the
-// work it was waiting for could happen - the wait starved its own subject.
-async function waitFor<T>(read: () => Promise<T | undefined>, timeoutMs = 20_000): Promise<T> {
+// work it was waiting for could happen - the wait starved its own subject. Each wait is labelled and
+// dumps the durable state it gave up on, because "nothing was observed" alone cost a full CI cycle
+// per attempt to place: three waits share this helper and they fail for different reasons.
+let diagnose: (() => Promise<string>) | undefined;
+async function waitFor<T>(
+  read: () => Promise<T | undefined>,
+  label = 'unlabelled',
+  timeoutMs = 20_000
+): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const value = await read();
@@ -89,7 +96,9 @@ async function waitFor<T>(read: () => Promise<T | undefined>, timeoutMs = 20_000
     setTimeout(resolve, 25);
     await promise;
   }
-  throw new Error('Durable workflow state was not observed');
+  throw new Error(
+    `Durable workflow state was not observed [${label}] ${diagnose === undefined ? '' : await diagnose()}`
+  );
 }
 
 afterAll(async () => {
@@ -225,12 +234,39 @@ describe('production DealBrief seams', () => {
       .send({ opportunityId: opportunity, idempotencyKey: `start-${suffix}` })
       .expect(201);
     const runId = started.body.runId as string;
+    // A stalled wait used to report only that nothing was observed, which names no seam. Dumping the
+    // run, every outbox row beside its BullMQ job, and the step invocations identifies the stranded
+    // command directly: a row that is published but unconsumed whose job is already completed, with
+    // no invocation naming it, is a delivery the worker declined and then retired.
+    diagnose = async () => {
+      const rows = await admin<
+        { id: string; status: string; consumed_at: Date | null; payload: { step?: string } }[]
+      >`select id, status, consumed_at, payload from outbox_commands
+        where run_id = ${runId} order by created_at`;
+      const commands: unknown[] = [];
+      for (const row of rows) {
+        const job = await queue?.queue.getJob(row.id);
+        commands.push({
+          step: row.payload.step,
+          row: row.status,
+          consumed: row.consumed_at !== null,
+          job: job === undefined ? 'absent' : await job.getState()
+        });
+      }
+      const run = await store.getRun(runId as never);
+      return JSON.stringify({
+        run: { status: run?.status, version: run?.version, errorCode: run?.errorCode },
+        commands,
+        invocations: await admin`select step, status, causal_command_id from step_invocations
+          where run_id = ${runId} order by created_at`
+      });
+    };
     const waiting = await waitFor(async () => {
       const current = await store.getRun(runId as never);
       if (current?.status === 'failed')
         throw new Error(`Workflow failed: ${current.errorCode}: ${current.errorMessage}`);
       return current?.status === 'awaiting_approval' ? current : undefined;
-    });
+    }, 'initial-awaiting-approval');
     expect(waiting.status).toBe('awaiting_approval');
     expect(retrievalCalls.get(runId)).toBe(2);
     expect(strategyCalls.get(runId)).toBe(1);
@@ -287,7 +323,7 @@ describe('production DealBrief seams', () => {
       return current?.status === 'awaiting_approval' && current.version > waiting.version
         ? current
         : undefined;
-    });
+    }, 'regenerated-awaiting-approval');
     const regeneratedSubject = await store.getApprovalSubject({ runId: runId as never });
     const regeneratedEntry = regeneratedSubject?.entries[0];
     if (regeneratedSubject === undefined || regeneratedEntry === undefined)
@@ -337,10 +373,12 @@ describe('production DealBrief seams', () => {
       .send(approvalCommand)
       .expect(201);
     expect(approvalReplay.body).toEqual({ ...approvalResult.body, replayed: true });
-    const completed = await waitFor(async () =>
-      (await store.getRun(runId as never))?.status === 'completed'
-        ? store.getRun(runId as never)
-        : undefined
+    const completed = await waitFor(
+      async () =>
+        (await store.getRun(runId as never))?.status === 'completed'
+          ? store.getRun(runId as never)
+          : undefined,
+      'completed'
     );
     expect(completed.status).toBe('completed');
     expect(strategyCalls.get(runId)).toBe(2);

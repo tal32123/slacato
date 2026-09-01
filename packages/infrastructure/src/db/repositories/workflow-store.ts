@@ -655,10 +655,24 @@ export class PostgresWorkflowStore implements WorkflowStore {
     const expires = new Date(now.getTime() + input.leaseMs);
     return this.database.sql.begin(async (sql) => {
       await sql`select pg_advisory_xact_lock(hashtext(${`${input.runId}:${input.step}`}))`;
-      const commandRows = await sql<
-        { id: string }[]
-      >`select id from outbox_commands where id = ${input.causalCommandId} and run_id = ${input.runId} and status = 'published' and consumed_at is null for update`;
-      if (commandRows.length !== 1) return undefined;
+      // The dispatcher adds the BullMQ job before it commits the row's 'published' status, so a
+      // worker can receive a command whose row is still 'pending' or 'claimed'. Declining that
+      // delivery by returning undefined retires it in silence: ProcessDealBriefStep reads a declined
+      // claim as work another worker owns and completes the job, BullMQ retains the completed job
+      // under its stable command ID, and BullMqCommandQueue.publish never redelivers a job that
+      // already exists - so the run stalls until a reconciler pass reopens it, or forever wherever
+      // none runs. Raising a conflict instead redelivers the command after BullMQ's backoff, by
+      // which time the row is published. Every other status keeps the silent skip: those deliveries
+      // are genuinely obsolete, not in flight.
+      const causalCommand = (
+        await sql<
+          { id: string; status: string }[]
+        >`select id, status from outbox_commands where id = ${input.causalCommandId} and run_id = ${input.runId} and consumed_at is null for update`
+      )[0];
+      if (causalCommand === undefined) return undefined;
+      if (causalCommand.status === 'pending' || causalCommand.status === 'claimed')
+        throw new DomainConflictError('Causal command delivery is not durably published yet');
+      if (causalCommand.status !== 'published') return undefined;
       const causalLease = (
         await sql<
           Pick<InvocationRow, 'step' | 'lease_expires_at'>[]
