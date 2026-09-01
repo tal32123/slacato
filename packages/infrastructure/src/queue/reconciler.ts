@@ -1,7 +1,10 @@
 import { type CommandQueue, DomainConflictError, type WorkflowCommand } from '@slacato/core';
+import type { Logger } from 'pino';
 import type { DatabaseClient } from '../db/client.js';
 import { persistTraceProjection } from '../db/repositories/workflow-store.js';
 import { projectWorkflowTrace } from '../db/repositories/workflow-trace-projector.js';
+import { logger } from '../logging/logger.js';
+import { reportLoopFailure } from '../logging/loop-telemetry.js';
 import type { CommandInspection } from './bullmq.js';
 
 /** Queue capabilities needed to recover every live-command state without stranding a durable claim. */
@@ -260,12 +263,13 @@ export class ReconcilerLoop {
   private timer: NodeJS.Timeout | undefined;
   private stopping = false;
   private running = false;
+  private consecutiveFailures = 0;
   /** Configures bounded polling for command reconciliation. */
   public constructor(
     private readonly reconciler: PostgresCommandReconciler,
     private readonly pollMs = 5_000,
     private readonly batchSize = 25,
-    private readonly onTransientError: () => void = () => {}
+    private readonly telemetry: Logger = logger
   ) {}
   /** Starts reconciliation polling when the loop is not already active. */
   public start(): void {
@@ -280,12 +284,21 @@ export class ReconcilerLoop {
   /** Runs one reconciliation pass and schedules the next poll with bounded failure backoff. */
   private async tick(): Promise<void> {
     this.running = true;
+    const startedAt = Date.now();
     let delay = this.pollMs;
     try {
       await this.reconciler.reconcile(this.batchSize);
-    } catch {
+      this.consecutiveFailures = 0;
+    } catch (error) {
       delay = Math.min(this.pollMs * 2, 30_000);
-      this.onTransientError();
+      this.consecutiveFailures += 1;
+      reportLoopFailure(this.telemetry, {
+        event: 'command_reconciler_loop_failed',
+        errorCode: 'COMMAND_RECONCILE_LOOP_FAILED',
+        error,
+        durationMs: Date.now() - startedAt,
+        consecutiveFailures: this.consecutiveFailures
+      });
     } finally {
       this.running = false;
     }
